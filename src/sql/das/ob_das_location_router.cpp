@@ -1000,7 +1000,7 @@ int ObDASLocationRouter::nonblock_get_candi_tablet_locations(const ObDASTableLoc
                                                              const ObIArray<ObTabletID> &tablet_ids,
                                                              const ObIArray<ObObjectID> &partition_ids,
                                                              const ObIArray<ObObjectID> &first_level_part_ids,
-                                                             ObIArray<ObCandiTabletLoc> &candi_tablet_locs)
+                                                             ObCandiTabletLocIArray &candi_tablet_locs)
 {
   int ret = OB_SUCCESS;
   NG_TRACE(get_location_cache_begin);

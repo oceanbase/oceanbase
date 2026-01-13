@@ -31,7 +31,8 @@ public:
         outfile_name_(),
         field_str_(),
         line_str_(),
-        user_vars_(),
+        select_exprs_(plan.get_allocator()),
+        user_vars_(plan.get_allocator()),
         closed_cht_(),
         is_optional_(true),
         is_single_(true),
@@ -43,7 +44,7 @@ public:
         is_overwrite_(false),
         external_properties_(),
         external_partition_(),
-        alias_names_()
+        alias_names_(plan.get_allocator())
   {
   }
   virtual ~ObLogSelectInto() {}
@@ -210,8 +211,8 @@ private:
   common::ObObj outfile_name_;
   common::ObObj field_str_;
   common::ObObj line_str_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> select_exprs_;
-  common::ObSEArray<common::ObString, 16, common::ModulePageAllocator, true> user_vars_;
+  ObSqlArray<ObRawExpr*> select_exprs_;
+  ObSqlArray<common::ObString> user_vars_;
   common::ObObj closed_cht_;
   bool is_optional_;
   bool is_single_;
@@ -223,7 +224,7 @@ private:
   bool is_overwrite_;
   common::ObString external_properties_;
   common::ObString external_partition_;
-  common::ObSEArray<common::ObString, 8, common::ModulePageAllocator, true> alias_names_;
+  ObSqlArray<common::ObString> alias_names_;
 };
 }
 }

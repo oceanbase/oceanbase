@@ -1229,7 +1229,7 @@ int ObTableLocation::init_table_location_with_column_ids(ObSqlSchemaGuard &schem
     ObResolverParams resolver_ctx;
     ObRawExprFactory expr_factory(allocator_);
     ObStmtFactory stmt_factory(allocator_);
-    TableItem table_item;
+    TableItem table_item(allocator_);
     resolver_ctx.allocator_  = &allocator_;
     resolver_ctx.schema_checker_ = &schema_checker;
     resolver_ctx.session_info_ = session_info;
@@ -1643,6 +1643,7 @@ int ObTableLocation::calculate_partition_ids_by_rows2(ObSQLSessionInfo &session_
     sql_schema_guard.set_schema_guard(&schema_guard);
     exec_ctx.set_sql_ctx(&sql_ctx);
     exec_ctx.set_my_session(&session_info);
+    exec_ctx.set_use_temp_expr_ctx_cache(true);
     ObDASTabletMapper tablet_mapper;
     if (OB_UNLIKELY(is_virtual_table(table_id))) {
       ret = OB_NOT_SUPPORTED;
@@ -1741,6 +1742,7 @@ int ObTableLocation::calculate_partition_ids_by_rowkey(ObSQLSessionInfo &session
     sql_schema_guard.set_schema_guard(&schema_guard);
     exec_ctx.set_my_session(&session_info);
     exec_ctx.set_sql_ctx(&sql_ctx);
+    exec_ctx.set_use_temp_expr_ctx_cache(true);
     ObDASTabletMapper tablet_mapper;
     LinkExecCtxGuard link_guard(session_info, exec_ctx);
     if (is_non_partition_optimized_ && table_id == loc_meta_.ref_table_id_) {

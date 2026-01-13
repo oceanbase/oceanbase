@@ -243,12 +243,15 @@ static const int IVF_SQ_TBL_WITH_ROWKEY_CNT = 2;
 static const int IVF_PQ_TBL_WITH_ROWKEY_CNT = 2;
 struct ObVecIndexInfo
 {
-  ObVecIndexInfo()
+  ObVecIndexInfo(common::ObIAllocator &allocator)
   : sort_key_(),
     topk_limit_expr_(nullptr),
     topk_offset_expr_(nullptr),
     target_vec_column_(nullptr),
     vec_id_column_(nullptr),
+    aux_table_id_(allocator),
+    aux_table_column_(allocator),
+    extra_info_columns_(allocator),
     main_table_tid_(OB_INVALID_ID),
     vec_type_(ObVecIndexType::VEC_INDEX_INVALID),
     selectivity_(0),
@@ -332,9 +335,9 @@ struct ObVecIndexInfo
   ObColumnRefRawExpr *target_vec_column_;
   ObColumnRefRawExpr *vec_id_column_;
   // add all aux tid into array
-  common::ObSEArray<uint64_t, 6, common::ModulePageAllocator, true> aux_table_id_;
-  common::ObSEArray<ObColumnRefRawExpr*, 12, common::ModulePageAllocator, true> aux_table_column_;
-  common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> extra_info_columns_;
+  ObSqlArray<uint64_t> aux_table_id_;
+  ObSqlArray<ObColumnRefRawExpr*> aux_table_column_;
+  ObSqlArray<ObColumnRefRawExpr*> extra_info_columns_;
 
   uint64_t main_table_tid_;
   ObVecIndexType vec_type_;
@@ -398,16 +401,35 @@ public:
         pre_query_range_(NULL),
         pre_range_graph_(NULL),
         part_ids_(NULL),
-        filter_before_index_back_(),
+        range_conds_(plan.get_allocator()),
+        index_range_conds_(plan.get_allocator()),
+        index_filters_(plan.get_allocator()),
+        full_filters_(plan.get_allocator()),
+        dynamic_id_filter_exprs_(plan.get_allocator()),
+        range_columns_(plan.get_allocator()),
+        idx_columns_(plan.get_allocator()),
+        access_exprs_(plan.get_allocator()),
+        rowkey_exprs_(plan.get_allocator()),
+        part_exprs_(plan.get_allocator()),
+        spatial_exprs_(plan.get_allocator()),
+        domain_exprs_(plan.get_allocator()),
+        ext_file_column_exprs_(plan.get_allocator()),
+        ext_column_dependent_exprs_(plan.get_allocator()),
+        real_expr_map_(plan.get_allocator()),
+        pushdown_aggr_exprs_(plan.get_allocator()),
+        pushdown_groupby_columns_(plan.get_allocator()),
+        filter_before_index_back_(plan.get_allocator()),
+        ddl_output_column_ids_(plan.get_allocator()),
+        auto_split_params_(plan.get_allocator()),
         table_partition_info_(NULL),
-        ranges_(),
-        ss_ranges_(),
+        ranges_(plan.get_allocator()),
+        ss_ranges_(plan.get_allocator()),
         is_skip_scan_(),
         push_down_top_n_info_(),
         sample_info_(),
         est_cost_info_(NULL),
         table_opt_info_(NULL),
-        est_records_(),
+        est_records_(plan.get_allocator()),
         part_expr_(NULL),
         subpart_expr_(NULL),
         gi_charged_(false),
@@ -434,22 +456,30 @@ public:
         use_column_store_(false),
         doc_id_table_id_(common::OB_INVALID_ID),
         text_retrieval_info_(),
-        vector_index_info_(),
+        lookup_tr_infos_(plan.get_allocator()),
+        match_tr_infos_(plan.get_allocator()),
+        vec_iter_tr_infos_(plan.get_allocator()),
+        merge_tr_infos_(plan.get_allocator()),
+        vector_index_info_(plan.get_allocator()),
         das_keep_ordering_(false),
-        filter_monotonicity_(),
+        filter_monotonicity_(plan.get_allocator()),
         auto_split_filter_type_(OB_INVALID_ID),
         auto_split_filter_(NULL),
         is_tsc_with_doc_id_(false),
         rowkey_doc_tid_(common::OB_INVALID_ID),
         is_skip_rowkey_doc_(false),
         is_skip_rowkey_vid_(false),
+        rowkey_id_exprs_(plan.get_allocator()),
         multivalue_col_idx_(common::OB_INVALID_ID),
         multivalue_type_(-1),
         is_tsc_with_vid_(false),
         rowkey_vid_tid_(common::OB_INVALID_ID),
+        with_domain_types_(plan.get_allocator()),
+        domain_table_ids_(plan.get_allocator()),
         index_prefix_(-1),
         mr_mv_scan_(common::ObQueryFlag::NormalMode),
-        aggr_param_mono_(),
+        pseudo_columnref_exprs_(plan.get_allocator()),
+        aggr_param_mono_(plan.get_allocator()),
         is_scan_resumable_(false)
   {
   }
@@ -930,7 +960,7 @@ public:
   const ObRawExpr *get_auto_split_filter() const { return auto_split_filter_; };
   const ObIArray<ObRawExpr *> &get_auto_split_params() const { return auto_split_params_; };
   bool is_tsc_with_doc_id() const;
-  inline bool is_tsc_with_domain_id() const { return with_domain_types_.size() > 0; }
+  inline bool is_tsc_with_domain_id() const { return with_domain_types_.count() > 0; }
   inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
   inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }
   inline bool is_spatial_index_scan() const { return is_spatial_index_; }
@@ -1272,7 +1302,7 @@ protected: // memeber variables
   const ObQueryRange *pre_query_range_;
   const ObPreRangeGraph *pre_range_graph_;
   const common::ObIArray<int64_t> *part_ids_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> range_conds_;
+  ObSqlArray<ObRawExpr *> range_conds_;
 
   // for index merge, we need to prepare range conds and filters for each index scan, and we need
   // to store full query filters for final check.
@@ -1292,46 +1322,46 @@ protected: // memeber variables
   //  ---------------------------------------------------------
   // NOTE: only filters before index back can be pushed down to index scan.
   // and full filters 'c1=1 or c2=1 or c4<1' will be used after lookup for final check.
-  typedef common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> ExprSEArray;
-  common::ObSEArray<ExprSEArray, 2, common::ModulePageAllocator, true> index_range_conds_;
-  common::ObSEArray<ExprSEArray, 2, common::ModulePageAllocator, true> index_filters_;
-  ExprSEArray full_filters_;
-  ExprSEArray dynamic_id_filter_exprs_;
+  typedef ObSqlArray<ObRawExpr *> ExprArray;
+  ObSqlArray<ExprArray, true> index_range_conds_;
+  ObSqlArray<ExprArray, true> index_filters_;
+  ObSqlArray<ObRawExpr *> full_filters_;
+  ObSqlArray<ObRawExpr *> dynamic_id_filter_exprs_;
 
   // index primary key columns.
   // indicates use which columns to extract query range
-  common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_;
+  ObSqlArray<ColumnItem> range_columns_;
   // index all columns, including storing columns
-  common::ObSEArray<uint64_t, 5, common::ModulePageAllocator, true> idx_columns_;
+  ObSqlArray<uint64_t> idx_columns_;
   // base columns to scan
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_exprs_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> part_exprs_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> spatial_exprs_;
+  ObSqlArray<ObRawExpr*> access_exprs_;
+  ObSqlArray<ObRawExpr*> rowkey_exprs_;
+  ObSqlArray<ObRawExpr*> part_exprs_;
+  ObSqlArray<ObRawExpr*> spatial_exprs_;
   // columns required for accessing a domain index (fulltext and JSON multi-value index)
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> domain_exprs_;
+  ObSqlArray<ObRawExpr*> domain_exprs_;
   //for external table
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_file_column_exprs_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_column_dependent_exprs_;
+  ObSqlArray<ObRawExpr*> ext_file_column_exprs_;
+  ObSqlArray<ObRawExpr*> ext_column_dependent_exprs_;
   // for oracle-mapping, map access expr to a real column expr
-  common::ObArray<std::pair<ObRawExpr *, ObRawExpr *>, common::ModulePageAllocator, true> real_expr_map_;
+  ObSqlArray<std::pair<ObRawExpr *, ObRawExpr *>> real_expr_map_;
   // aggr func pushdwon to table scan
-  common::ObSEArray<ObAggFunRawExpr *, 4, common::ModulePageAllocator, true> pushdown_aggr_exprs_;
+  ObSqlArray<ObAggFunRawExpr *> pushdown_aggr_exprs_;
   // group by columns pushdown to table scan
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pushdown_groupby_columns_;
+  ObSqlArray<ObRawExpr*> pushdown_groupby_columns_;
   // whether a filter can be evaluated before index back
-  common::ObSEArray<bool, 4, common::ModulePageAllocator, true> filter_before_index_back_;
+  ObSqlArray<bool> filter_before_index_back_;
 // // removal these in cg layer, up to opt layer.
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ddl_output_column_ids_;
+  ObSqlArray<uint64_t> ddl_output_column_ids_;
   // auto split param
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> auto_split_params_;
+  ObSqlArray<ObRawExpr *> auto_split_params_;
 // removal these in cg layer, up to opt layer end.
   // table partition locations
   ObTablePartitionInfo *table_partition_info_; //this member is not in copy_without_child,
                                                //because its used in EXCHANGE stage, and
                                                //copy_without_child used before this
-  ObRangesArray ranges_;//For explain. Code generator and executor cannot use this.
-  ObRangesArray ss_ranges_;//For explain. Code generator and executor cannot use this.
+  ObRangesSqlArray ranges_;//For explain. Code generator and executor cannot use this.
+  ObRangesSqlArray ss_ranges_;//For explain. Code generator and executor cannot use this.
   bool is_skip_scan_;
 
   // limit params from upper limit op
@@ -1341,7 +1371,7 @@ protected: // memeber variables
   ObCostTableScanInfo *est_cost_info_;
   ObCostTableScanSimpleInfo est_cost_simple_info_;
   BaseTableOptInfo *table_opt_info_;
-  common::ObSEArray<common::ObEstRowCountRecord, 4, common::ModulePageAllocator, true> est_records_;
+  ObSqlArray<common::ObEstRowCountRecord> est_records_;
 
   ObRawExpr *part_expr_;
   ObRawExpr *subpart_expr_;
@@ -1390,17 +1420,16 @@ protected: // memeber variables
   // text retrieval as index scan
   ObTextRetrievalInfo text_retrieval_info_;
   // text retrieval as functional lookup
-  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> lookup_tr_infos_;
+  ObSqlArray<ObTextRetrievalInfo> lookup_tr_infos_;
   // text retrieval as match score
-  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> match_tr_infos_;
-  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> vec_iter_tr_infos_;
-  common::ObSEArray<ObTextRetrievalInfo, 2, common::ModulePageAllocator, true> merge_tr_infos_;
+  ObSqlArray<ObTextRetrievalInfo> match_tr_infos_;
+  ObSqlArray<ObTextRetrievalInfo> vec_iter_tr_infos_;
+  ObSqlArray<ObTextRetrievalInfo> merge_tr_infos_;
   ObVecIndexInfo vector_index_info_;
 
   ObPxRFStaticInfo px_rf_info_;
   bool das_keep_ordering_;
-  typedef common::ObSEArray<ObRawFilterMonotonicity, 4, common::ModulePageAllocator, true> FilterMonotonicity;
-  FilterMonotonicity filter_monotonicity_;
+  ObSqlArray<ObRawFilterMonotonicity> filter_monotonicity_;
 
   uint64_t auto_split_filter_type_;
   ObRawExpr *auto_split_filter_;
@@ -1409,7 +1438,7 @@ protected: // memeber variables
   uint64_t rowkey_doc_tid_;
   bool is_skip_rowkey_doc_; // in the new fts version, is_skip_rowkey_doc_ is true.
   bool is_skip_rowkey_vid_; // in the new fts version, is_skip_rowkey_vid_ is true.
-  common::ObSEArray<std::pair<ObRowkeyIdExprType, ObRawExpr*>, 4, common::ModulePageAllocator, true> rowkey_id_exprs_;
+  ObSqlArray<std::pair<ObRowkeyIdExprType, ObRawExpr*>> rowkey_id_exprs_;
   uint64_t multivalue_col_idx_;
   int32_t multivalue_type_;
   // end for table scan with doc id
@@ -1420,15 +1449,15 @@ protected: // memeber variables
   // end for table scan with vid
 
   // begin for table scan with domain id
-  common::ObArray<int64_t, common::ModulePageAllocator, true> with_domain_types_;
-  common::ObArray<uint64_t, common::ModulePageAllocator, true> domain_table_ids_;
+  ObSqlArray<int64_t> with_domain_types_;
+  ObSqlArray<uint64_t> domain_table_ids_;
   // end for table scan with domain id
 
   int64_t index_prefix_;
   common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_columnref_exprs_;
+  ObSqlArray<ObRawExpr*> pseudo_columnref_exprs_;
 
-  common::ObSEArray<ObRawAggrParamMonotonicity, 4, common::ModulePageAllocator, true> aggr_param_mono_;
+  ObSqlArray<ObRawAggrParamMonotonicity> aggr_param_mono_;
   bool is_scan_resumable_;
 
   // disallow copy and assign

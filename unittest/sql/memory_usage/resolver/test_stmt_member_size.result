@@ -1,0 +1,157 @@
+| class | sizeof(class) |
+| --- | --- |
+| ObStmt | 32 |
+| vtable | 8 |
+| stmt_type_ | 4 |
+| query_ctx_ | 8 |
+| stmt_id_ | 8 |
+total_size = 28, fragment = 4
+
+| class | sizeof(class) |
+| --- | --- |
+| ObDMLStmt | 1080 |
+| ObStmt | 32 |
+| order_items_ | 40 |
+| limit_count_expr_ | 8 |
+| limit_offset_expr_ | 8 |
+| limit_percent_expr_ | 8 |
+| has_fetch_ | 1 |
+| is_fetch_with_ties_ | 1 |
+| from_items_ | 40 |
+| part_expr_items_ | 40 |
+| joined_tables_ | 40 |
+| stmt_hint_ | 88 |
+| semi_infos_ | 40 |
+| autoinc_params_ | 40 |
+| is_calc_found_rows_ | 1 |
+| has_top_limit_ | 1 |
+| is_contains_assignment_ | 1 |
+| affected_last_insert_id_ | 1 |
+| has_part_key_sequence_ | 1 |
+| nextval_sequence_ids_ | 40 |
+| currval_sequence_ids_ | 40 |
+| table_items_ | 40 |
+| column_items_ | 40 |
+| condition_exprs_ | 40 |
+| pseudo_column_like_exprs_ | 40 |
+| tables_hash_ | 176 |
+| subquery_exprs_ | 40 |
+| unpivot_item_ | 8 |
+| user_var_exprs_ | 40 |
+| check_constraint_items_ | 40 |
+| cte_definitions_ | 40 |
+| dblink_id_ | 8 |
+| is_reverse_link_ | 1 |
+| has_vec_approx_ | 1 |
+| match_exprs_ | 40 |
+| vector_index_query_param_ | 40 |
+total_size = 1065, fragment = 15
+
+| class | sizeof(class) |
+| --- | --- |
+| ObSelectStmt | 2016 |
+| ObDMLStmt | 1080 |
+| set_op_ | 4 |
+| is_recursive_cte_ | 1 |
+| is_breadth_search_ | 1 |
+| is_distinct_ | 1 |
+| is_nocycle_ | 1 |
+| search_by_items_ | 40 |
+| cycle_by_items_ | 40 |
+| cte_exprs_ | 40 |
+| select_items_ | 40 |
+| group_exprs_ | 40 |
+| rollup_exprs_ | 40 |
+| having_exprs_ | 40 |
+| agg_items_ | 40 |
+| win_func_exprs_ | 40 |
+| qualify_filters_ | 40 |
+| start_with_exprs_ | 40 |
+| connect_by_exprs_ | 40 |
+| connect_by_prior_exprs_ | 40 |
+| rollup_directions_ | 40 |
+| grouping_sets_items_ | 40 |
+| rollup_items_ | 40 |
+| cube_items_ | 40 |
+| for_update_columns_ | 40 |
+| is_set_distinct_ | 1 |
+| set_query_ | 40 |
+| for_update_dml_info_ | 40 |
+| show_stmt_ctx_ | 56 |
+| is_view_stmt_ | 1 |
+| view_ref_id_ | 8 |
+| select_type_ | 4 |
+| into_item_ | 8 |
+| is_match_topk_ | 1 |
+| children_swapped_ | 1 |
+| is_from_pivot_ | 1 |
+| check_option_ | 4 |
+| contain_ab_param_ | 1 |
+| is_order_siblings_ | 1 |
+| is_hierarchical_query_ | 1 |
+| has_prior_ | 1 |
+| has_reverse_link_ | 1 |
+| is_expanded_mview_ | 1 |
+| is_select_straight_join_ | 1 |
+| is_implicit_distinct_ | 1 |
+| is_oracle_compat_groupby_ | 1 |
+| is_recursive_union_branch_ | 1 |
+| for_update_cursor_table_id_ | 8 |
+total_size = 1991, fragment = 25
+
+| class | sizeof(class) |
+| --- | --- |
+| ObDelUpdStmt | 1448 |
+| ObDMLStmt | 1080 |
+| returning_exprs_ | 40 |
+| returning_into_exprs_ | 40 |
+| returning_strs_ | 40 |
+| returning_agg_items_ | 40 |
+| group_param_exprs_ | 40 |
+| ignore_ | 1 |
+| has_global_index_ | 1 |
+| error_log_info_ | 96 |
+| has_instead_of_trigger_ | 1 |
+| sharding_conditions_ | 40 |
+| ab_stmt_id_expr_ | 8 |
+| dml_source_from_join_ | 1 |
+| pdml_disabled_ | 1 |
+total_size = 1429, fragment = 19
+
+| class | sizeof(class) |
+| --- | --- |
+| ObDeleteStmt | 1488 |
+| ObDelUpdStmt | 1448 |
+| table_info_ | 40 |
+total_size = 1488, fragment = 0
+
+| class | sizeof(class) |
+| --- | --- |
+| ObUpdateStmt | 1488 |
+| ObDelUpdStmt | 1448 |
+| table_info_ | 40 |
+total_size = 1488, fragment = 0
+
+| class | sizeof(class) |
+| --- | --- |
+| ObInsertStmt | 1928 |
+| ObDelUpdStmt | 1448 |
+| is_all_const_values_ | 1 |
+| table_info_ | 480 |
+total_size = 1929, fragment = -1
+
+| class | sizeof(class) |
+| --- | --- |
+| ObInsertAllStmt | 1488 |
+| ObDelUpdStmt | 1448 |
+| is_multi_insert_first_ | 1 |
+| is_multi_condition_insert_ | 1 |
+| table_info_ | 40 |
+total_size = 1490, fragment = -2
+
+| class | sizeof(class) |
+| --- | --- |
+| ObMergeStmt | 2104 |
+| ObDelUpdStmt | 1448 |
+| table_info_ | 656 |
+total_size = 2104, fragment = 0

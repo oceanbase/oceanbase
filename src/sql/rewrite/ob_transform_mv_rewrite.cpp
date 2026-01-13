@@ -1111,7 +1111,7 @@ int ObTransformMVRewrite::build_join_tree_node(JoinTreeNode *left_node,
   } else if (OB_ISNULL(ptr = ctx_->allocator_->alloc(sizeof(JoinTreeNode)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate join tree node", K(ret));
-  } else if (OB_FALSE_IT(new_node = new(ptr) JoinTreeNode())) {
+  } else if (OB_FALSE_IT(new_node = new(ptr) JoinTreeNode(*ctx_->allocator_))) {
   } else if (OB_FAIL(new_node->table_set_.add_members(left_node->table_set_))) {
     LOG_WARN("failed to add left table rel ids", K(ret));
   } else if (OB_FAIL(new_node->table_set_.add_members(right_node->table_set_))) {
@@ -1164,7 +1164,7 @@ int ObTransformMVRewrite::build_leaf_tree_node(int64_t rel_id,
   } else if (OB_ISNULL(ptr = ctx_->allocator_->alloc(sizeof(JoinTreeNode)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate join tree node", K(ret));
-  } else if (OB_FALSE_IT(leaf_node = new(ptr) JoinTreeNode())) {
+  } else if (OB_FALSE_IT(leaf_node = new(ptr) JoinTreeNode(*ctx_->allocator_))) {
   } else if (OB_FAIL(leaf_node->table_set_.add_member(rel_id))) {
     LOG_WARN("failed to add table rel id", K(ret));
   } else if (OB_UNLIKELY(rel_id < 1 || rel_id > baserel_filters.count())) {

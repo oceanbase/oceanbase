@@ -122,7 +122,7 @@ int ObIOptLakeTableFile::create_opt_lake_table_file_by_type(ObIAllocator &alloca
   int ret = OB_SUCCESS;
   file = nullptr;
   if (type == LakeFileType::ICEBERG) {
-    file = OB_NEWx(ObOptIcebergFile, &allocator);
+    file = OB_NEWx(ObOptIcebergFile, &allocator, allocator);
   } else if (type == LakeFileType::HIVE) {
     file = OB_NEWx(ObOptHiveFile, &allocator);
   } else {

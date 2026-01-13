@@ -98,6 +98,7 @@ TEST(TestRawExprSize, expr_member_size)
   std::ofstream of_result(tmp_file);
   ASSERT_TRUE(of_result.is_open());
 
+  ObArenaAllocator allocator(ObModIds::TEST);
   {
     ObRawExprResType res_type;
     of_result << "| class | sizeof(class) |" << std::endl;
@@ -109,7 +110,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObSysFunRawExpr expr;
+    ObSysFunRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObRawExpr)
@@ -135,7 +136,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObConstRawExpr expr;
+    ObConstRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObConstRawExpr)
@@ -151,7 +152,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObColumnRefRawExpr expr;
+    ObColumnRefRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObColumnRefRawExpr)
@@ -179,7 +180,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObOpRawExpr expr;
+    ObOpRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObNonTerminalRawExpr)
@@ -188,7 +189,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObOpRawExpr expr;
+    ObOpRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObOpRawExpr)
@@ -197,7 +198,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObAggFunRawExpr expr;
+    ObAggFunRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObAggFunRawExpr)
@@ -213,7 +214,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObSysFunRawExpr expr;
+    ObSysFunRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObSysFunRawExpr)
@@ -222,7 +223,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObQueryRefRawExpr expr;
+    ObQueryRefRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObQueryRefRawExpr)
@@ -239,7 +240,7 @@ TEST(TestRawExprSize, expr_member_size)
     of_result << std::endl;
   }
   {
-    ObObjAccessRawExpr expr;
+    ObObjAccessRawExpr expr(allocator);
     of_result << "| class | sizeof(class) |" << std::endl;
     of_result << "| --- | --- |" << std::endl;
     PRINT_SIZE(of_result, ObObjAccessRawExpr)

@@ -260,7 +260,8 @@ public:
   };
 
   ObPLFuncValueNode(common::ObIAllocator &allocator)
-    : ObPartLocCalcNode(allocator)
+    : ObPartLocCalcNode(allocator),
+      param_value_(allocator)
   {
     set_node_type(FUNC_VALUE);
   }
@@ -271,7 +272,7 @@ public:
                         ObPartLocCalcNode *&other) const;
   virtual int add_part_calc_node(common::ObIArray<ObPartLocCalcNode*> &calc_nodes);
   ValueItemExpr vie_;
-  common::ObSEArray<ParamValuePair, 3, common::ModulePageAllocator, false> param_value_;
+  ObSqlArray<ParamValuePair> param_value_;
 };
 
 struct ObPLColumnValueNode : public ObPartLocCalcNode
@@ -438,17 +439,17 @@ public:
     RANGE,
     LIST,
   };
-  typedef common::ObIArray<ObTempExpr *> ISeKeyExprs;
   typedef common::ObIArray<ValueItemExpr> ISeValueItemExprs;
-  typedef common::ObSEArray<ObTempExpr *, 32, common::ModulePageAllocator, false> SeKeyExprs;
-  typedef common::ObSEArray<ValueItemExpr, 32, common::ModulePageAllocator, false> SeValueItemExprs;
+  typedef ObSqlArray<ValueItemExpr> SeValueItemExprs;
 
   class PartProjector
   {
     OB_UNIS_VERSION(1);
   public:
     PartProjector(common::ObIAllocator &allocator)
-      : allocator_(allocator)
+      : se_virtual_column_exprs_(allocator),
+        virtual_column_result_idx_(allocator),
+        allocator_(allocator)
     {
       reset();
     }
@@ -494,8 +495,8 @@ public:
     int64_t part_projector_size_;
     int32_t *subpart_projector_;
     int64_t subpart_projector_size_;
-    common::ObSEArray<ObTempExpr *, 2> se_virtual_column_exprs_;
-    common::ObSEArray<int64_t, 2> virtual_column_result_idx_;
+    ObSqlArray<ObTempExpr *> se_virtual_column_exprs_;
+    ObSqlArray<int64_t> virtual_column_result_idx_;
 
     common::ObIAllocator &allocator_;
   };
@@ -527,12 +528,15 @@ public:
     table_type_(share::schema::MAX_TABLE_TYPE),
     inner_allocator_(common::ObModIds::OB_SQL_TABLE_LOCATION),
     allocator_(inner_allocator_),
-    loc_meta_(inner_allocator_),
+    loc_meta_(allocator_),
     calc_node_(NULL),
     gen_col_node_(NULL),
     subcalc_node_(NULL),
     sub_gen_col_node_(NULL),
+    calc_nodes_(allocator_),
     stmt_type_(stmt::T_NONE),
+    vies_(allocator_),
+    sub_vies_(allocator_),
     se_part_expr_(NULL),
     se_gen_col_expr_(NULL),
     se_subpart_expr_(NULL),
@@ -580,10 +584,10 @@ public:
     gen_col_node_(NULL),
     subcalc_node_(NULL),
     sub_gen_col_node_(NULL),
-    calc_nodes_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator_)),
+    calc_nodes_(allocator_),
     stmt_type_(stmt::T_NONE),
-    vies_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator_)),
-    sub_vies_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator_)),
+    vies_(allocator_),
+    sub_vies_(allocator_),
     se_part_expr_(NULL),
     se_gen_col_expr_(NULL),
     se_subpart_expr_(NULL),
@@ -1296,7 +1300,7 @@ private:
   ObPartLocCalcNode *subcalc_node_;//二级分区分区计算Node
   ObPartLocCalcNode *sub_gen_col_node_;//query range node of column dependented by sub partition generated column
 
-  common::ObSEArray<ObPartLocCalcNode *, 5, common::ModulePageAllocator, false> calc_nodes_;
+  ObSqlArray<ObPartLocCalcNode *> calc_nodes_;
   stmt::StmtType stmt_type_;
 
   SeValueItemExprs vies_;

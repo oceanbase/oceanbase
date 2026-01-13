@@ -18,6 +18,7 @@
 #include "ob_log_exchange.h"
 #include "ob_log_group_by.h"
 #include "ob_log_distinct.h"
+#include "ob_log_insert.h"
 #include "ob_log_sort.h"
 #include "ob_log_subplan_scan.h"
 #include "ob_log_window_function.h"
@@ -375,14 +376,21 @@ ObAllocExprContext::~ObAllocExprContext()
 }
 
 ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
-  : child_(),
+  : child_(plan.get_allocator()),
+    equal_param_constraints_(plan.get_allocator()),
+    const_param_constraints_(plan.get_allocator()),
+    expr_constraints_(plan.get_allocator()),
     type_(LOG_OP_INVALID),
     my_plan_(&plan),
-    startup_exprs_(),
-    output_const_exprs_(),
+    output_exprs_(plan.get_allocator()),
+    filter_exprs_(plan.get_allocator()),
+    pushdown_filter_exprs_(plan.get_allocator()),
+    startup_exprs_(plan.get_allocator()),
+    output_const_exprs_(plan.get_allocator()),
     output_equal_sets_(NULL),
     fd_item_set_(NULL),
     table_set_(NULL),
+    ambient_card_(plan.get_allocator()),
     id_(OB_INVALID_ID),
     branch_id_(OB_INVALID_ID),
     op_id_(OB_INVALID_ID),
@@ -393,6 +401,10 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     card_(0.0),
     width_(0.0),
     traverse_ctx_(NULL),
+    strict_pwj_constraint_(plan.get_allocator()),
+    non_strict_pwj_constraint_(plan.get_allocator()),
+    location_constraint_(plan.get_allocator()),
+    multi_part_location_constraint_(plan.get_allocator()),
     exchange_allocated_(false),
     phy_plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
     location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
@@ -405,13 +417,13 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     contain_das_op_(false),
     contain_match_all_fake_cte_(false),
     strong_sharding_(NULL),
-    weak_sharding_(),
+    weak_sharding_(plan.get_allocator()),
     is_pipelined_plan_(false),
     is_nl_style_pipelined_plan_(false),
     is_at_most_one_row_(false),
     is_local_order_(false),
     is_range_order_(false),
-    op_ordering_(),
+    op_ordering_(plan.get_allocator()),
     empty_expr_sets_(plan.get_empty_expr_sets()),
     empty_fd_item_set_(plan.get_empty_fd_item_set()),
     empty_table_set_(plan.get_empty_table_set()),
@@ -420,8 +432,9 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     op_parallel_rule_(OpParallelRule::OP_DOP_RULE_MAX),
     available_parallel_(ObGlobalHint::DEFAULT_PARALLEL),
     server_cnt_(1),
+    server_list_(plan.get_allocator()),
     need_late_materialization_(false),
-    op_exprs_(),
+    op_exprs_(plan.get_allocator()),
     inherit_sharding_index_(-1),
     need_osg_merge_(false),
     max_px_thread_branch_(OB_INVALID_INDEX),
@@ -5553,7 +5566,7 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_for_join(
 
 int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc(
     ObLogicalOperator *root_op,
-    common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> &candidate_sk_exprs,
+    common::ObIArray<ObRawExpr *> &candidate_sk_exprs,
     uint64_t table_id, ObLogicalOperator *&scan_op, bool &table_scan_has_exchange,
     bool &has_px_coord, int64_t &effective_sk_cnt)
 {
@@ -5579,7 +5592,7 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc(
   return ret;
 }
 
-int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterInfo> &infos,
+int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterInfo*> &infos,
                                                       int64_t &filter_id)
 {
   int ret = OB_SUCCESS;
@@ -5596,16 +5609,19 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
     filter_create = NULL;
     bool right_has_exchange = false;
     bool right_has_px_coord = false;
-    const JoinFilterInfo &info = infos.at(i);
+    const JoinFilterInfo *info = infos.at(i);
     ObLogTableScan *scan_op = NULL;
     ObLogicalOperator *node = NULL;
-    if (!info.need_partition_join_filter_) {
+    if (OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("join filter info is null", K(ret));
+    } else if (!info->need_partition_join_filter_) {
       continue;
-    } else if (OB_ISNULL(info.sharding_)) {
+    } else if (OB_ISNULL(info->sharding_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null sharding", K(ret));
     } else if (OB_FAIL(find_table_scan(get_child(second_child),
-                                       info.table_id_,
+                                       info->table_id_,
                                        node,
                                        right_has_exchange,
                                        right_has_px_coord))) {
@@ -5637,7 +5653,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
       get_child(first_child)->set_parent(join_filter_create);
       join_filter_create->set_parent(this);
       set_child(first_child, join_filter_create);
-      join_filter_create->set_filter_length(info.sharding_->get_part_cnt() * 2);
+      join_filter_create->set_filter_length(info->sharding_->get_part_cnt() * 2);
       join_filter_create->set_is_use_filter_shuffle(right_has_exchange);
       if ((is_partition_wise_ || DistAlgo::DIST_PARTITION_NONE == join_dist_algo) && !right_has_exchange) {
           join_filter_create->set_is_no_shared_partition_join_filter();
@@ -5662,27 +5678,27 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
         } else {
           ObLogExchange *exch_op = static_cast<ObLogExchange*>(child);
           if (exch_op->get_calc_part_id_expr()->get_partition_id_calc_type() ==
-              info.calc_part_id_expr_->get_partition_id_calc_type()) {
+              info->calc_part_id_expr_->get_partition_id_calc_type()) {
             join_filter_create->set_tablet_id_expr(exch_op->get_calc_part_id_expr());
           } else {
-            join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
+            join_filter_create->set_tablet_id_expr(info->calc_part_id_expr_);
           }
         }
       } else {
-        join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
+        join_filter_create->set_tablet_id_expr(info->calc_part_id_expr_);
       }
       OZ(join_filter_create->compute_property());
       OZ(bf_info.init(get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id(),
           filter_id, GCTX.get_server_id(),
           join_filter_create->is_shared_join_filter(),
-          info.skip_subpart_,
+          info->skip_subpart_,
           join_filter_create->get_p2p_sequence_ids().at(0),
           right_has_exchange, join_filter_create));
       scan_op->set_join_filter_info(bf_info);
       scan_op->set_part_join_filter_created(true);
       filter_id++;
-      for (int j = 0; j < info.lexprs_.count() && OB_SUCC(ret); ++j) {
-        ObRawExpr *expr = info.lexprs_.at(j);
+      for (int j = 0; j < info->lexprs_.count() && OB_SUCC(ret); ++j) {
+        ObRawExpr *expr = info->lexprs_.at(j);
         CK(OB_NOT_NULL(expr));
         OZ(join_filter_create->get_join_exprs().push_back(expr));
       }
@@ -5691,7 +5707,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   return ret;
 }
 
-int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
+int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo*> &infos,
                                                    int64_t &filter_id)
 {
   int ret = OB_SUCCESS;
@@ -5723,16 +5739,19 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
       filter_use = NULL;
       join_filter_create = nullptr;
       join_filter_use = nullptr;
-      const JoinFilterInfo &info = infos.at(i);
+      const JoinFilterInfo *info = infos.at(i);
       ObLogicalOperator *node = NULL;
-      if (!info.can_use_join_filter_) {
+      if (OB_ISNULL(info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join filter info is null", K(ret));
+      } else if (!info->can_use_join_filter_) {
         //do nothing
       } else if (OB_ISNULL(filter_create = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))
           || OB_ISNULL(filter_use = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("failed to allocate join filter nodes", K(ret));
       } else if (OB_FAIL(find_table_scan(get_child(second_child),
-                                         info.table_id_,
+                                         info->table_id_,
                                          node,
                                          right_has_exchange,
                                          right_has_px_coord))) {
@@ -5808,18 +5827,18 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           OZ(join_filter_use->compute_property());
         }
         filter_id++;
-        for (int j = 0; j < info.lexprs_.count() && OB_SUCC(ret); ++j) {
-          ObRawExpr *lexpr = info.lexprs_.at(j);
-          ObRawExpr *rexpr = info.rexprs_.at(j);
+        for (int j = 0; j < info->lexprs_.count() && OB_SUCC(ret); ++j) {
+          ObRawExpr *lexpr = info->lexprs_.at(j);
+          ObRawExpr *rexpr = info->rexprs_.at(j);
           CK(OB_NOT_NULL(lexpr) && OB_NOT_NULL(rexpr));
           OZ(join_filter_create->get_join_exprs().push_back(lexpr));
           OZ(join_filter_use->get_join_exprs().push_back(rexpr));
         }
         OZ(create_runtime_filter_info(node,
-            join_filter_create, join_filter_use, info.join_filter_selectivity_));
+            join_filter_create, join_filter_use, info->join_filter_selectivity_));
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(try_prepare_rf_query_range_info(join_filter_create, join_filter_use,
-                                                           node, info))) {
+                                                           node, *info))) {
           LOG_WARN("failed to prepare_rf_query_range_info");
         }
         if (OB_FAIL(ret)) {
@@ -5827,7 +5846,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           join_filter_use->set_runtime_filter_adaptive_apply(false);
         } else if (LOG_TABLE_SCAN == node->get_type()) {
           ObLogTableScan *scan = static_cast<ObLogTableScan*>(node);
-          scan->set_use_column_store(info.use_column_store_);
+          scan->set_use_column_store(info->use_column_store_);
           if (scan->get_scan_order() == common::ObQueryFlag::ScanOrder::NoOrder) {
             // for table engine delete insert, we should disable runtime filter adaptive apply
             join_filter_use->set_runtime_filter_adaptive_apply(false);
@@ -5902,8 +5921,11 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
     }
 
     // add full hash join key left exprs to join filter
-    const JoinFilterInfo &info = infos.at(last_valid_join_filter_info_idx);
-    if (OB_FAIL(join_filter_create->set_all_join_key_left_exprs(info.all_join_key_left_exprs_))) {
+    const JoinFilterInfo *info = infos.at(last_valid_join_filter_info_idx);
+    if (OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("join filter info is null", K(ret));
+    } else if (OB_FAIL(join_filter_create->set_all_join_key_left_exprs(info->all_join_key_left_exprs_))) {
       LOG_WARN("failed to set_all_join_key_left_exprs");
     }
   }
@@ -6115,9 +6137,15 @@ int ObLogicalOperator::find_shuffle_join_filter(bool &find) const
   if (log_op_def::LOG_EXCHANGE == get_type()) {
     /* do nothing */
   } else if (log_op_def::LOG_JOIN == get_type()) {
-    const ObIArray<JoinFilterInfo> &infos = static_cast<const ObLogJoin*>(this)->get_join_filter_infos();
+    const ObIArray<JoinFilterInfo*> &infos = static_cast<const ObLogJoin*>(this)->get_join_filter_infos();
     for (int64_t i = 0; OB_SUCC(ret) && !find && i < infos.count(); ++i) {
-      find = !infos.at(i).in_current_dfo_;
+      const JoinFilterInfo *info = infos.at(i);
+      if (OB_ISNULL(info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join filter info is null", K(ret));
+      } else {
+        find = !info->in_current_dfo_;
+      }
     }
     const ObLogicalOperator *child = NULL;
     for (int64_t i = 0; !find && OB_SUCC(ret) && i < get_num_of_child(); i++) {

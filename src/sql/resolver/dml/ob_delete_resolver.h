@@ -49,7 +49,7 @@ private:
                                         TableItem *&table_item);
   int check_view_deletable();
   int check_safe_update_mode(ObDeleteStmt *delete_stmt, bool is_multi_table_delete);
-  common::ObSEArray<TableItem*, 2, common::ModulePageAllocator, true> delete_tables_;
+  common::ObSEArray<TableItem*, 2> delete_tables_;
 };
 }  // namespace sql
 }  // namespace oceanbase

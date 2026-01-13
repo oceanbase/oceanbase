@@ -213,8 +213,8 @@ private:
   const ObSelectStmt &stmt_;
   ObMVRefreshableType refresh_type_;
   // map the table in mv to mlog, use physical table id
-  common::ObSEArray<std::pair<const TableItem*, const share::schema::ObTableSchema*>, 4, common::ModulePageAllocator, true> mlog_tables_;
-  common::ObSEArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>, 4, common::ModulePageAllocator, true> expand_aggrs_;
+  common::ObSEArray<std::pair<const TableItem*, const share::schema::ObTableSchema*>, 4> mlog_tables_;
+  common::ObSEArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>, 4> expand_aggrs_;
   ObRawExprFactory &expr_factory_;
   ObSQLSessionInfo *session_info_;
   const ObTableSchema &mv_container_table_schema_;
@@ -222,7 +222,7 @@ private:
   ObSqlString &fast_refreshable_error_;
   int64_t marker_idx_;  // union all mv marker column index in select list
   // union all mv child refreshable type
-  common::ObSEArray<ObMVRefreshableType, 4, common::ModulePageAllocator, true> child_refresh_types_;
+  common::ObSEArray<ObMVRefreshableType, 4> child_refresh_types_;
   ObTableReferencedColumnsInfo *table_referenced_columns_info_;
   // automatically generated invisible columns for refresh
   common::ObIArray<std::pair<ObRawExpr*, int64_t>> &refresh_dep_columns_;

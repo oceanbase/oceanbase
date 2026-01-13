@@ -282,7 +282,7 @@ struct ExternalParams{
 public:
   int64_t count() { return params_.count(); }
   bool empty() { return params_.empty(); }
-  int assign(ExternalParams &other)
+  int assign(const ExternalParams &other)
   {
     by_name_ = other.by_name_;
     need_clear_ = need_clear_;
@@ -324,11 +324,12 @@ struct ObResolverParams
 {
   ObResolverParams()
       :allocator_(NULL),
+       inner_allocator_(ObModIds::OB_SQL_COMPILE),
        schema_checker_(NULL),
        secondary_namespace_(NULL),
        session_info_(NULL),
        query_ctx_(NULL),
-       global_hint_(),
+       global_hint_(inner_allocator_),
        param_list_(NULL),
        select_item_param_infos_(NULL),
        prepare_param_count_(0),
@@ -388,10 +389,12 @@ struct ObResolverParams
        is_htable_(false),
        disable_shared_expr_(false)
   {}
+  int assign(const ObResolverParams &other);
   bool is_force_trace_log() { return force_trace_log_; }
 
 public:
   common::ObIAllocator *allocator_;
+  ObArenaAllocator inner_allocator_;
   ObSchemaChecker *schema_checker_;
   pl::ObPLBlockNS *secondary_namespace_;
   ObSQLSessionInfo *session_info_;

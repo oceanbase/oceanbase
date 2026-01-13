@@ -26,12 +26,15 @@ public:
   ObLogSubPlanFilter(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         dist_algo_(DIST_INVALID_METHOD),
-        subquery_exprs_(),
-        exec_params_(),
-        onetime_exprs_(),
+        subquery_exprs_(plan.get_allocator()),
+        exec_params_(plan.get_allocator()),
+        onetime_exprs_(plan.get_allocator()),
         init_plan_idxs_(),
         one_time_idxs_(),
         update_set_(false),
+        enable_px_batch_rescans_(plan.get_allocator()),
+        above_pushdown_left_params_(plan.get_allocator()),
+        above_pushdown_right_params_(plan.get_allocator()),
         enable_das_group_rescan_(false)
   {}
   ~ObLogSubPlanFilter() {}
@@ -158,19 +161,19 @@ private:
 
 protected:
   DistAlgo dist_algo_;
-  common::ObSEArray<ObQueryRefRawExpr *, 8, common::ModulePageAllocator, true> subquery_exprs_;
-  common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> exec_params_;
-  common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> onetime_exprs_;
+  ObSqlArray<ObQueryRefRawExpr *> subquery_exprs_;
+  ObSqlArray<ObExecParamRawExpr *> exec_params_;
+  ObSqlArray<ObExecParamRawExpr *> onetime_exprs_;
 
   //InitPlan idxs，InitPlan只算一次，需要存储结果
   common::ObBitSet<> init_plan_idxs_;
   //One-Time idxs，One-Time只算一次，不用存储结果
   common::ObBitSet<> one_time_idxs_;
   bool update_set_;
-  common::ObSEArray<bool , 8, common::ModulePageAllocator, true> enable_px_batch_rescans_;
+  ObSqlArray<bool > enable_px_batch_rescans_;
 
-  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
-  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
+  ObSqlArray<ObExecParamRawExpr *> above_pushdown_left_params_;
+  ObSqlArray<ObExecParamRawExpr *> above_pushdown_right_params_;
   bool enable_das_group_rescan_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanFilter);

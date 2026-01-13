@@ -66,10 +66,16 @@ namespace sql
   class ObJoinOrderEnum;
   struct CandiRangeExprs
   {
+    CandiRangeExprs(common::ObIAllocator &allocator)
+      : column_id_(OB_INVALID_ID),
+        index_(OB_INVALID_INDEX),
+        eq_exprs_(allocator),
+        in_exprs_(allocator)
+    {}
     int64_t column_id_;
     int64_t index_;
-    ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> eq_exprs_;
-    ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> in_exprs_;
+    ObSqlArray<ObRawExpr*> eq_exprs_;
+    ObSqlArray<ObRawExpr*> in_exprs_;
     TO_STRING_KV(
       K_(column_id),
       K_(index),
@@ -147,13 +153,13 @@ namespace sql
   };
 
   struct BaseTableOptInfo {
-    BaseTableOptInfo ()
+    BaseTableOptInfo (common::ObIAllocator &allocator)
     : optimization_method_(OptimizationMethod::MAX_METHOD),
       heuristic_rule_(HeuristicRule::MAX_RULE),
-      available_index_id_(),
-      available_index_name_(),
-      pruned_index_name_(),
-      unstable_index_name_()
+      available_index_id_(allocator),
+      available_index_name_(allocator),
+      pruned_index_name_(allocator),
+      unstable_index_name_(allocator)
     {}
 
     void reuse() {
@@ -181,18 +187,18 @@ namespace sql
     // this following variables are tracked to remember how base table access path are generated
     OptimizationMethod optimization_method_;
     HeuristicRule heuristic_rule_;
-    common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> available_index_id_;
-    common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> available_index_name_;
-    common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> pruned_index_name_;
-    common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> unstable_index_name_;
+    ObSqlArray<uint64_t> available_index_id_;
+    ObSqlArray<common::ObString> available_index_name_;
+    ObSqlArray<common::ObString> pruned_index_name_;
+    ObSqlArray<common::ObString> unstable_index_name_;
 
     DISABLE_COPY_ASSIGN(BaseTableOptInfo);
   };
   struct JoinFilterInfo {
-  JoinFilterInfo()
-  : lexprs_(),
-    rexprs_(),
-    all_join_key_left_exprs_(),
+  JoinFilterInfo(common::ObIAllocator &allocator)
+  : lexprs_(allocator),
+    rexprs_(allocator),
+    all_join_key_left_exprs_(allocator),
     sharding_(NULL),
     calc_part_id_expr_(NULL),
     ref_table_id_(OB_INVALID_ID),
@@ -239,11 +245,11 @@ namespace sql
   );
 
   // join filter's left join keys
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> lexprs_;
+  ObSqlArray<ObRawExpr*> lexprs_;
   // join filter's right join keys
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rexprs_;
+  ObSqlArray<ObRawExpr*> rexprs_;
   // all hash join's join keys, maybe count greater than lexpr's count
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> all_join_key_left_exprs_;
+  ObSqlArray<ObRawExpr*> all_join_key_left_exprs_;
   ObShardingInfo *sharding_;      //join filter use基表的sharding
   ObRawExpr *calc_part_id_expr_;  //partition join filter计算分区id的表达式
   uint64_t ref_table_id_;         //join filter use基表的ref table id
@@ -310,7 +316,7 @@ struct EstimateCostInfo {
     K_(override)
   );
 
-  ObSEArray<JoinFilterInfo, 4> join_filter_infos_;
+  ObSEArray<JoinFilterInfo*, 4> join_filter_infos_;
   double need_row_count_;
   int64_t need_parallel_;
   bool need_batch_rescan_;
@@ -327,14 +333,14 @@ enum DomainIndexType
 
 struct DomainIndexAccessInfo
 {
-  DomainIndexAccessInfo()
-    : index_scan_exprs_(),
-      index_scan_filters_(),
-      index_scan_index_ids_(),
-      func_lookup_exprs_(),
-      func_lookup_index_ids_(),
-      match_exprs_(),
-      match_index_ids_(),
+  DomainIndexAccessInfo(common::ObIAllocator &allocator)
+    : index_scan_exprs_(allocator),
+      index_scan_filters_(allocator),
+      index_scan_index_ids_(allocator),
+      func_lookup_exprs_(allocator),
+      func_lookup_index_ids_(allocator),
+      match_exprs_(allocator),
+      match_index_ids_(allocator),
       domain_idx_type_(DomainIndexType::NON_DOMAIN_INDEX) {}
 
   void reset()
@@ -355,13 +361,13 @@ struct DomainIndexAccessInfo
   TO_STRING_KV(K_(index_scan_exprs), K_(index_scan_filters), K_(index_scan_index_ids),
       K_(func_lookup_exprs), K_(func_lookup_index_ids), K_(match_exprs), K_(match_index_ids), K_(domain_idx_type));
 
-  common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> index_scan_exprs_;
-  common::ObSEArray<ObRawExpr *, 2, common::ModulePageAllocator, true> index_scan_filters_;
-  common::ObSEArray<uint64_t, 2, common::ModulePageAllocator, true> index_scan_index_ids_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> func_lookup_exprs_;
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> func_lookup_index_ids_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> match_exprs_;
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> match_index_ids_;
+  ObSqlArray<ObRawExpr *> index_scan_exprs_;
+  ObSqlArray<ObRawExpr *> index_scan_filters_;
+  ObSqlArray<uint64_t> index_scan_index_ids_;
+  ObSqlArray<ObRawExpr *> func_lookup_exprs_;
+  ObSqlArray<uint64_t> func_lookup_index_ids_;
+  ObSqlArray<ObRawExpr *> match_exprs_;
+  ObSqlArray<uint64_t> match_index_ids_;
   // 新增成员
   DomainIndexType domain_idx_type_;
 };
@@ -369,52 +375,26 @@ struct DomainIndexAccessInfo
 class Path
 {
   public:
-    Path()
-    : parent_(NULL),
-      is_local_order_(false),
-      is_range_order_(false),
-      ordering_(),
-      interesting_order_info_(OrderingFlag::NOT_MATCH),
-      filter_(),
-      cost_(0.0),
-      op_cost_(0.0),
-      log_op_(NULL),
-      is_inner_path_(false),
-      inner_row_count_(0),
-      pushdown_filters_(),
-      nl_params_(),
-      strong_sharding_(NULL),
-      weak_sharding_(),
-      exchange_allocated_(false),
-      phy_plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
-      location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
-      contain_fake_cte_(false),
-      contain_pw_merge_op_(false),
-      contain_match_all_fake_cte_(false),
-      contain_das_op_(false),
-      parallel_(ObGlobalHint::UNSET_PARALLEL),
-      op_parallel_rule_(OpParallelRule::OP_DOP_RULE_MAX),
-      available_parallel_(ObGlobalHint::DEFAULT_PARALLEL),
-      server_cnt_(1),
-      inherit_sharding_index_(-1),
-      path_number_(-1)
-    {  }
-    Path(ObJoinOrder* parent)
+    Path(ObJoinOrder* parent, common::ObIAllocator &allocator)
       : parent_(parent),
         is_local_order_(false),
         is_range_order_(false),
-        ordering_(),
+        ordering_(allocator),
         interesting_order_info_(OrderingFlag::NOT_MATCH),
-        filter_(),
+        filter_(allocator),
         cost_(0.0),
         op_cost_(0.0),
         log_op_(NULL),
         is_inner_path_(false),
         inner_row_count_(0),
-        pushdown_filters_(),
-        nl_params_(),
+        pushdown_filters_(allocator),
+        nl_params_(allocator),
+        subquery_exprs_(allocator),
         strong_sharding_(NULL),
-        weak_sharding_(),
+        weak_sharding_(allocator),
+        equal_param_constraints_(allocator),
+        const_param_constraints_(allocator),
+        expr_constraints_(allocator),
         exchange_allocated_(false),
         phy_plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
         location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
@@ -426,9 +406,10 @@ class Path
         op_parallel_rule_(OpParallelRule::OP_DOP_RULE_MAX),
         available_parallel_(ObGlobalHint::DEFAULT_PARALLEL),
         server_cnt_(1),
-        server_list_(),
+        server_list_(allocator),
         is_pipelined_path_(false),
         is_nl_style_pipelined_path_(false),
+        ambient_card_(allocator),
         inherit_sharding_index_(-1),
         is_valid_inner_path_(false),
         path_number_(-1)
@@ -575,23 +556,23 @@ class Path
     ObJoinOrder* parent_;
     bool is_local_order_;
     bool is_range_order_;
-    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> ordering_;//Path的输出序，不一定来自于Stmt上的expr
+    ObSqlArray<OrderItem> ordering_;//Path的输出序，不一定来自于Stmt上的expr
     int64_t interesting_order_info_;  // 记录path的序在stmt中的哪些地方用到 e.g. join, group by, order by
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> filter_;//基类的过滤条件：对于scan和subquery是scan_filter_，对于join是join_qual_
+    ObSqlArray<ObRawExpr*> filter_;//基类的过滤条件：对于scan和subquery是scan_filter_，对于join是join_qual_
     double cost_;
     double op_cost_;
     ObLogicalOperator *log_op_;
     bool is_inner_path_; // inner path with push down filters
     double inner_row_count_; // inner path output row count
-    common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_filters_; // original push down filters(without being replaced by ?) for inner path
-    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> nl_params_; // parameters for inner path
-    common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> subquery_exprs_;
+    ObSqlArray<ObRawExpr *> pushdown_filters_; // original push down filters(without being replaced by ?) for inner path
+    ObSqlArray<ObExecParamRawExpr *> nl_params_; // parameters for inner path
+    ObSqlArray<ObRawExpr *> subquery_exprs_;
     ObShardingInfo *strong_sharding_; // may be null
     // weak sharding is used for partition-wise-join check, thus it should have table location, otherwise it is meaningless
-    common::ObSEArray<ObShardingInfo*, 8, common::ModulePageAllocator, true> weak_sharding_;
-    common::ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
-    common::ObSEArray<ObPCConstParamInfo, 4, common::ModulePageAllocator, true> const_param_constraints_;
-    common::ObSEArray<ObExprConstraint, 4, common::ModulePageAllocator, true> expr_constraints_;
+    ObSqlArray<ObShardingInfo*> weak_sharding_;
+    ObSqlArray<ObPCParamEqualInfo> equal_param_constraints_;
+    ObSqlArray<ObPCConstParamInfo> const_param_constraints_;
+    ObSqlArray<ObExprConstraint> expr_constraints_;
     bool exchange_allocated_;
     ObPhyPlanType phy_plan_type_;
     ObPhyPlanType location_type_;
@@ -604,10 +585,10 @@ class Path
     OpParallelRule op_parallel_rule_;
     int64_t available_parallel_; // parallel degree used by serial path to enable parallel again
     int64_t server_cnt_;
-    common::ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
+    ObSqlArray<common::ObAddr> server_list_;
     bool is_pipelined_path_;
     bool is_nl_style_pipelined_path_;
-    common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
+    ObSqlArray<double> ambient_card_;
     //Used to indicate which child node the current sharding inherits from
     int64_t inherit_sharding_index_;
     // mark this access path is inner path and contribute query range
@@ -633,15 +614,16 @@ class Path
                uint64_t ref_table_id,
                uint64_t index_id,
                ObJoinOrder* parent,
-               ObOrderDirection direction)
-      : Path(parent),
+               ObOrderDirection direction,
+               common::ObIAllocator &allocator)
+      : Path(parent, allocator),
         table_id_(table_id),
         ref_table_id_(ref_table_id),
         index_id_(index_id),
         is_global_index_(false),
         use_das_(false),
         table_partition_info_(NULL),
-        index_keys_(),
+        index_keys_(allocator),
         pre_query_range_(NULL),
         pre_range_graph_(NULL),
         is_get_(false),
@@ -650,11 +632,12 @@ class Path
         is_hash_index_(false),
         est_cost_info_(table_id,
                        ref_table_id,
-                       index_id),
-        est_records_(),
+                       index_id,
+                       allocator),
+        est_records_(allocator),
         range_prefix_count_(0),
         table_opt_info_(),
-        domain_idx_info_(),
+        domain_idx_info_(allocator),
         for_update_(false),
         use_skip_scan_(OptSkipScanState::SS_UNSET),
         use_column_store_(false),
@@ -797,7 +780,7 @@ class Path
     bool is_global_index_;
     bool use_das_;
     ObTablePartitionInfo *table_partition_info_;
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> index_keys_; // index keys
+    ObSqlArray<ObRawExpr*> index_keys_; // index keys
     ObQueryRange* pre_query_range_; // pre_query_range for each access path
     ObPreRangeGraph* pre_range_graph_; // pre_query_graph for each access path
     bool is_get_;
@@ -805,8 +788,7 @@ class Path
     bool force_direction_;
     bool is_hash_index_;  // is hash index (virtual table and is index)
     ObCostTableScanInfo est_cost_info_; // estimate cost info
-    common::ObSEArray<ObEstRowCountRecord, 2,
-                      common::ModulePageAllocator, true> est_records_;
+    ObSqlArray<ObEstRowCountRecord> est_records_;
     SampleInfo sample_info_; // sample scan info
     int64_t range_prefix_count_; // prefix count
     BaseTableOptInfo *table_opt_info_;
@@ -844,13 +826,15 @@ class Path
   struct ObIndexMergeNode
   {
   public:
-    ObIndexMergeNode()
+    ObIndexMergeNode(common::ObIAllocator &allocator)
       : node_type_(INDEX_MERGE_INVALID),
+        children_(allocator),
+        filter_(allocator),
         index_tid_(OB_INVALID_ID),
         ap_(NULL),
         scan_node_idx_(-1),
         has_dynamic_id_filter_(false),
-        non_ror_filters_()
+        non_ror_filters_(allocator)
     {}
 
     static int formalize_index_merge_tree(ObIndexMergeNode *&node);
@@ -862,14 +846,14 @@ class Path
 
   public:
     ObIndexMergeType node_type_;
-    common::ObSEArray<ObIndexMergeNode*, 4, common::ModulePageAllocator, true> children_;
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> filter_; // filters handled by all child node of this node
+    ObSqlArray<ObIndexMergeNode*> children_;
+    ObSqlArray<ObRawExpr*> filter_; // filters handled by all child node of this node
     /* fields below are only for the scan node */
     uint64_t index_tid_;
     AccessPath *ap_;
     int64_t scan_node_idx_;
     bool has_dynamic_id_filter_;
-    common::ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> non_ror_filters_;
+    ObSqlArray<ObRawExpr*> non_ror_filters_;
   };
 
   struct ObIndexMergeNodeSelPair
@@ -899,8 +883,9 @@ class Path
   public:
     IndexMergePath(uint64_t table_id,
                    uint64_t ref_table_id,
-                   ObJoinOrder* parent)
-      : AccessPath(table_id, ref_table_id, ref_table_id, parent, NULLS_FIRST_ASC),
+                   ObJoinOrder* parent,
+                   common::ObIAllocator &allocator)
+      : AccessPath(table_id, ref_table_id, ref_table_id, parent, NULLS_FIRST_ASC, allocator),
         root_(NULL),
         index_cnt_(0)
     {}
@@ -926,8 +911,8 @@ class Path
   class JoinPath : public Path
   {
   public:
-  JoinPath()
-    : Path(NULL),
+  JoinPath(common::ObIAllocator &allocator)
+    : Path(NULL, allocator),
       left_path_(NULL),
       right_path_(NULL),
       join_algo_(INVALID_JOIN_ALGO),
@@ -939,11 +924,12 @@ class Path
       left_prefix_pos_(0),
       right_need_sort_(false),
       right_prefix_pos_(0),
-      left_sort_keys_(),
-      right_sort_keys_(),
-      merge_directions_(),
-      equal_join_conditions_(),
-      other_join_conditions_(),
+      left_sort_keys_(allocator),
+      right_sort_keys_(allocator),
+      merge_directions_(allocator),
+      equal_join_conditions_(allocator),
+      other_join_conditions_(allocator),
+      join_filter_infos_(allocator),
       equal_cond_sel_(-1.0),
       other_cond_sel_(-1.0),
       contain_normal_nl_(false),
@@ -956,41 +942,6 @@ class Path
     {
     }
 
-    JoinPath(ObJoinOrder* parent,
-             const Path* left_path,
-             const Path* right_path,
-             JoinAlgo join_algo,
-             DistAlgo join_dist_algo,
-             ObJoinType join_type,
-             bool need_mat = false)
-      : Path(parent),
-        left_path_(left_path),
-        right_path_(right_path),
-        join_algo_(join_algo),
-        join_dist_algo_(join_dist_algo),
-        use_hybrid_hash_dm_(false),
-        join_type_(join_type),
-        need_mat_(need_mat),
-        left_need_sort_(false),
-        left_prefix_pos_(0),
-        right_need_sort_(false),
-        right_prefix_pos_(0),
-        left_sort_keys_(),
-        right_sort_keys_(),
-        merge_directions_(),
-        equal_join_conditions_(),
-        other_join_conditions_(),
-        equal_cond_sel_(-1.0),
-        other_cond_sel_(-1.0),
-        contain_normal_nl_(false),
-        has_none_equal_join_(false),
-        can_use_batch_nlj_(false),
-        is_naaj_(false),
-        is_sna_(false),
-        contain_expansion_join_(false),
-        join_output_rows_(-1.0)
-      {
-      }
     void init(ObJoinOrder* parent,
               const Path* left_path,
               const Path* right_path,
@@ -1018,7 +969,7 @@ class Path
                               EstimateCostInfo &left_param,
                               EstimateCostInfo &right_param,
                               bool re_est_for_op);
-    int re_estimate_rows(ObIArray<JoinFilterInfo> &pushdown_join_filter_infos,
+    int re_estimate_rows(ObIArray<JoinFilterInfo*> &pushdown_join_filter_infos,
                          double left_output_rows,
                          double right_output_rows,
                          double &row_count);
@@ -1217,13 +1168,13 @@ class Path
     int64_t left_prefix_pos_;
     bool right_need_sort_;
     int64_t right_prefix_pos_;
-    common::ObSEArray<OrderItem, 4, common::ModulePageAllocator, true> left_sort_keys_;
-    common::ObSEArray<OrderItem, 4, common::ModulePageAllocator, true> right_sort_keys_;
-    common::ObSEArray< ObOrderDirection, 4, common::ModulePageAllocator, true> merge_directions_;
+    ObSqlArray<OrderItem> left_sort_keys_;
+    ObSqlArray<OrderItem> right_sort_keys_;
+    ObSqlArray< ObOrderDirection> merge_directions_;
     // for all types of join
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> equal_join_conditions_;
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> other_join_conditions_;
-    common::ObSEArray<JoinFilterInfo, 2, common::ModulePageAllocator, true> join_filter_infos_;
+    ObSqlArray<ObRawExpr*> equal_join_conditions_;
+    ObSqlArray<ObRawExpr*> other_join_conditions_;
+    ObSqlArray<JoinFilterInfo*> join_filter_infos_;
     // for hash join only, used to simplify the re-estimate phase
     double equal_cond_sel_;
     double other_cond_sel_;
@@ -1245,12 +1196,12 @@ class Path
   class SubQueryPath : public Path
   {
   public:
-    SubQueryPath()
-      : Path(NULL),
+    SubQueryPath(common::ObIAllocator &allocator)
+      : Path(NULL, allocator),
         subquery_id_(common::OB_INVALID_ID),
         root_(NULL) {}
-    SubQueryPath(ObLogicalOperator* root)
-      : Path(NULL),
+    SubQueryPath(ObLogicalOperator* root, common::ObIAllocator &allocator)
+      : Path(NULL, allocator),
         subquery_id_(common::OB_INVALID_ID),
         root_(root) {}
     virtual ~SubQueryPath() { }
@@ -1278,8 +1229,8 @@ class Path
   class FunctionTablePath : public Path
   {
   public:
-    FunctionTablePath()
-      : Path(NULL),
+    FunctionTablePath(common::ObIAllocator &allocator)
+      : Path(NULL, allocator),
         table_id_(OB_INVALID_ID),
         value_expr_(NULL) {}
     virtual ~FunctionTablePath() { }
@@ -1304,11 +1255,11 @@ class Path
   class JsonTablePath : public Path
   {
   public:
-    JsonTablePath()
-      : Path(NULL),
+    JsonTablePath(common::ObIAllocator &allocator)
+      : Path(NULL, allocator),
         table_id_(OB_INVALID_ID),
-        value_exprs_(),
-        column_param_default_exprs_() {}
+        value_exprs_(allocator),
+        column_param_default_exprs_(allocator) {}
     virtual ~JsonTablePath() {}
     int assign(const JsonTablePath &other, common::ObIAllocator *allocator);
     virtual void reuse() override;
@@ -1323,8 +1274,8 @@ class Path
     }
   public:
     uint64_t table_id_;
-    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> value_exprs_;
-    common::ObSEArray<ObColumnDefault, 1, common::ModulePageAllocator, true> column_param_default_exprs_;
+    ObSqlArray<ObRawExpr*> value_exprs_;
+    ObSqlArray<ObColumnDefault> column_param_default_exprs_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JsonTablePath);
   };
@@ -1332,8 +1283,8 @@ class Path
   class TempTablePath : public Path
   {
   public:
-    TempTablePath()
-      : Path(NULL),
+    TempTablePath(common::ObIAllocator &allocator)
+      : Path(NULL, allocator),
         table_id_(OB_INVALID_ID),
         temp_table_id_(OB_INVALID_ID),
         root_(NULL) { }
@@ -1364,8 +1315,8 @@ class Path
   class CteTablePath : public Path
   {
   public:
-    CteTablePath()
-      : Path(NULL),
+    CteTablePath(common::ObIAllocator &allocator)
+      : Path(NULL, allocator),
         table_id_(OB_INVALID_ID),
         ref_table_id_(OB_INVALID_ID) {}
     virtual ~CteTablePath() { }
@@ -1390,8 +1341,8 @@ class Path
   class ValuesTablePath : public Path
   {
   public:
-    ValuesTablePath()
-      : Path(NULL),
+    ValuesTablePath(common::ObIAllocator &allocator)
+      : Path(NULL, allocator),
         table_id_(OB_INVALID_ID),
         table_def_(NULL) {}
     virtual ~ValuesTablePath() { }
@@ -1428,10 +1379,10 @@ class Path
   };
 
 struct InnerPathInfo {
-  InnerPathInfo() :
-        join_conditions_(),
-        inner_paths_(),
-        table_opt_info_(),
+  InnerPathInfo(common::ObIAllocator &allocator) :
+        join_conditions_(allocator),
+        inner_paths_(allocator),
+        table_opt_info_(allocator),
         force_inner_nl_(false),
         join_type_(UNKNOWN_JOIN)  {}
   virtual ~InnerPathInfo() {}
@@ -1452,15 +1403,15 @@ struct InnerPathInfo {
     return ret;
   }
 
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> join_conditions_;
-  common::ObSEArray<Path *, 8, common::ModulePageAllocator, true> inner_paths_;
+  ObSqlArray<ObRawExpr*> join_conditions_;
+  ObSqlArray<Path *> inner_paths_;
   BaseTableOptInfo table_opt_info_;
   bool force_inner_nl_; //force generation of inner path, ignoring range check
   ObJoinType join_type_;
 
   DISABLE_COPY_ASSIGN(InnerPathInfo);
 };
-typedef  common::ObSEArray<InnerPathInfo, 8, common::ModulePageAllocator, true> InnerPathInfos;
+typedef  ObSqlArray<InnerPathInfo*> InnerPathInfos;
 
 struct NullAwareAntiJoinInfo {
   NullAwareAntiJoinInfo() : is_naaj_(false), is_sna_(false),
@@ -2516,13 +2467,13 @@ struct MergeKeyInfoHelper
                                   const DistAlgo join_dist_algo,
                                   const ObIArray<ObRawExpr*> &equal_join_conditions,
                                   const bool is_left_naaj_na,
-                                  ObIArray<JoinFilterInfo> &join_filter_infos);
+                                  ObIArray<JoinFilterInfo*> &join_filter_infos);
 
     int find_possible_join_filter_tables(const Path &left_path,
                                         const Path &right_path,
                                         const DistAlgo join_dist_algo,
                                         const ObIArray<ObRawExpr*> &equal_join_conditions,
-                                        ObIArray<JoinFilterInfo> &join_filter_infos);
+                                        ObIArray<JoinFilterInfo*> &join_filter_infos);
 
     int find_possible_join_filter_tables(const ObLogPlanHint &log_plan_hint,
                                         const Path &right_path,
@@ -2534,7 +2485,7 @@ struct MergeKeyInfoHelper
                                         int64_t current_dfo_level,
                                         const ObIArray<ObRawExpr*> &left_join_conditions,
                                         const ObIArray<ObRawExpr*> &right_join_conditions,
-                                        ObIArray<JoinFilterInfo> &join_filter_infos);
+                                        ObIArray<JoinFilterInfo*> &join_filter_infos);
 
     int get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_conditions,
                               const ObIArray<ObRawExpr*> &right_join_conditions,
@@ -2545,7 +2496,7 @@ struct MergeKeyInfoHelper
     int check_path_contain_filter(const ObLogicalOperator* op, bool &contain);
     int check_normal_join_filter_valid(const Path& left_path,
                                        const Path& right_path,
-                                       ObIArray<JoinFilterInfo> &join_filter_infos);
+                                       ObIArray<JoinFilterInfo*> &join_filter_infos);
 
     int calc_join_filter_selectivity(const Path& left_path,
                                     JoinFilterInfo& info,
@@ -2560,7 +2511,7 @@ struct MergeKeyInfoHelper
 
     int check_partition_join_filter_valid(const DistAlgo join_dist_algo,
                                           const Path &right_path,
-                                          ObIArray<JoinFilterInfo> &join_filter_infos);
+                                          ObIArray<JoinFilterInfo*> &join_filter_infos);
 
     int build_join_filter_part_expr(const int64_t ref_table_id,
                                     const common::ObIArray<ObRawExpr *> &lexprs,
@@ -2569,7 +2520,7 @@ struct MergeKeyInfoHelper
                                     ObRawExpr *&left_calc_part_id_expr,
                                     bool skip_subpart);
 
-    int remove_invalid_join_filter_infos(ObIArray<JoinFilterInfo> &join_filter_infos);
+    int remove_invalid_join_filter_infos(ObIArray<JoinFilterInfo*> &join_filter_infos);
 
     int create_and_add_mj_path(const Path *left_path,
                                const Path *right_path,
@@ -3318,27 +3269,27 @@ struct MergeKeyInfoHelper
     ObShardingInfo *sharding_info_; // only for base table and local index
     ObTableMetaInfo table_meta_info_; // only for base table
     JoinInfo join_info_; //记录连接信息
-    common::ObSEArray<ObConflictDetector*, 8, common::ModulePageAllocator, true> used_conflict_detectors_; //记录当前join order用掉了哪些冲突检测器
-    common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> restrict_info_set_; //对于基表（SubQuery）记录单表条件；对于普通Join为空
-    common::ObSEArray<Path*, 32, common::ModulePageAllocator, true> interesting_paths_;
-    common::ObSEArray<Path*, 4, common::ModulePageAllocator, true> latest_interesting_paths_;
+    ObSqlArray<ObConflictDetector*> used_conflict_detectors_; //记录当前join order用掉了哪些冲突检测器
+    ObSqlArray<ObRawExpr*> restrict_info_set_; //对于基表（SubQuery）记录单表条件；对于普通Join为空
+    ObSqlArray<Path*> interesting_paths_;
+    ObSqlArray<Path*> latest_interesting_paths_;
     bool is_at_most_one_row_;
     PersistentEqualSets output_equal_sets_;
-    common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> output_const_exprs_;
+    ObSqlArray<ObRawExpr*> output_const_exprs_;
     BaseTableOptInfo table_opt_info_;
-    common::ObSEArray<AccessPath*, 4, common::ModulePageAllocator, true> available_access_paths_;
+    ObSqlArray<AccessPath*> available_access_paths_;
     int64_t diverse_path_count_; // number of access path with diverse query range
-    ObFdItemSet fd_item_set_;
-    ObFdItemSet candi_fd_item_set_;
-    ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> not_null_columns_;
+    ObFdItemSql fd_item_set_;
+    ObFdItemSql candi_fd_item_set_;
+    ObSqlArray<ObRawExpr *> not_null_columns_;
     // cache for all inner path
     InnerPathInfos inner_path_infos_;
-    common::ObSEArray<DeducedExprInfo, 4, common::ModulePageAllocator, true> deduced_exprs_info_;
+    ObSqlArray<DeducedExprInfo> deduced_exprs_info_;
     bool cnt_rownum_;
     uint64_t total_path_num_;
-    common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
+    ObSqlArray<double> ambient_card_;
     double current_join_output_rows_; // 记录对当前连接树估计的输出行数
-    ObSEArray<double, 8, common::ModulePageAllocator, true> current_join_ambient_card_;
+    ObSqlArray<double> current_join_ambient_card_;
     double best_cost_;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObJoinOrder);

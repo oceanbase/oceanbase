@@ -28,8 +28,11 @@ using common::ObArray;
 ObJoinOrderEnum::ObJoinOrderEnum(ObLogPlan &plan, const common::ObIArray<ObRawExpr*> &quals):
   plan_(plan),
   quals_(quals),
-  table_depend_infos_(),
-  bushy_tree_infos_(),
+  from_table_items_(get_allocator()),
+  base_table_items_(get_allocator()),
+  table_depend_infos_(get_allocator()),
+  bushy_tree_infos_(get_allocator()),
+  base_level_(get_allocator()),
   generator_(get_allocator(),
              plan.get_optimizer_context().get_expr_factory(),
              plan.get_optimizer_context().get_session_info(),
@@ -40,8 +43,10 @@ ObJoinOrderEnum::ObJoinOrderEnum(ObLogPlan &plan, const common::ObIArray<ObRawEx
              bushy_tree_infos_,
              plan.get_new_or_quals(),
              plan.get_optimizer_context().get_query_ctx()),
-  conflict_detectors_(),
+  conflict_detectors_(get_allocator()),
   output_join_order_(nullptr),
+  recycled_join_orders_(get_allocator()),
+  recycled_join_paths_(get_allocator()),
   path_cnt_(0) {}
 
 int ObJoinOrderEnum::init()
@@ -239,7 +244,7 @@ JoinPath* ObJoinOrderEnum::alloc_join_path()
   } else {
     ptr = get_allocator().alloc(sizeof(JoinPath));
     if (OB_NOT_NULL(ptr)) {
-      join_path = new(ptr) JoinPath();
+      join_path = new(ptr) JoinPath(get_allocator());
     }
   }
   return join_path;

@@ -709,7 +709,7 @@ int ObTableExprCgService::build_partition_expr(ObTableCtx &ctx,
   } else {
     ObResolverParams resolver_ctx;
     ObStmtFactory stmt_factory(ctx.get_allocator());
-    TableItem table_item;
+    TableItem table_item(ctx.get_allocator());
     resolver_ctx.allocator_ = &ctx.get_allocator();
     resolver_ctx.schema_checker_ = &schema_checker;
     resolver_ctx.session_info_ = &ctx.get_session_info();
@@ -2539,23 +2539,28 @@ int ObTableDmlCgService::generate_single_constraint_info(ObTableCtx &ctx,
 }
 
 int ObTableDmlCgService::generate_constraint_infos(ObTableCtx &ctx,
-                                                   ObIArray<ObUniqueConstraintInfo> &cst_infos)
+                                                   ObIAllocator &allocator,
+                                                   ObIArray<ObUniqueConstraintInfo*> &cst_infos)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard *schema_guard = ctx.get_schema_guard();
   const ObTableSchema *table_schema = ctx.get_table_schema();
   const uint64_t ref_table_id = ctx.get_ref_table_id();
-  ObUniqueConstraintInfo constraint_info;
+  ObUniqueConstraintInfo *constraint_info = NULL;
   ObSEArray<ObAuxTableMetaInfo, 16> index_infos;
 
   // 1. primary key
   if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret), KP(table_schema), KP(schema_guard));
+  } else if (OB_ISNULL(constraint_info = OB_NEWx(ObUniqueConstraintInfo,
+                                                 &allocator, allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory");
   } else if (OB_FAIL(generate_single_constraint_info(ctx,
                                                      *table_schema,
                                                      ref_table_id,
-                                                     constraint_info))) {
+                                                     *constraint_info))) {
     LOG_WARN("fail to generate primary key constraint info", K(ret), K(ref_table_id));
   } else if (OB_FAIL(cst_infos.push_back(constraint_info))) {
     LOG_WARN("fail to push back constraint info", K(ret));
@@ -2567,7 +2572,7 @@ int ObTableDmlCgService::generate_constraint_infos(ObTableCtx &ctx,
   } else {
     const ObTableSchema *index_schema = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); i++) {
-      constraint_info.reset();
+      constraint_info = NULL;
       if (OB_FAIL(schema_guard->get_table_schema(ctx.get_session_info().get_effective_tenant_id(),
                                                 index_infos.at(i).table_id_,
                                                 index_schema))) {
@@ -2576,10 +2581,14 @@ int ObTableDmlCgService::generate_constraint_infos(ObTableCtx &ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index schema null", K(ret));
       } else if (!index_schema->is_final_invalid_index() && index_schema->is_unique_index()) {
-        if (OB_FAIL(generate_single_constraint_info(ctx,
-                                                    *index_schema,
-                                                    ref_table_id,
-                                                    constraint_info))) {
+        if (OB_ISNULL(constraint_info = OB_NEWx(ObUniqueConstraintInfo,
+                                                &allocator, allocator))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory");
+        } else if (OB_FAIL(generate_single_constraint_info(ctx,
+                                                           *index_schema,
+                                                           ref_table_id,
+                                                           *constraint_info))) {
           LOG_WARN("fail to generate unique key constraint info", K(ret));
         } else if (OB_FAIL(cst_infos.push_back(constraint_info))) {
           LOG_WARN("fail to push back constraint info", K(ret));
@@ -2597,32 +2606,35 @@ int ObTableDmlCgService::generate_constraint_ctdefs(ObTableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObDMLCtDefAllocator<ObRowkeyCstCtdef> cst_ctdef_allocator(allocator);
-  ObSEArray<ObUniqueConstraintInfo, 2> cst_infos;
+  ObSEArray<ObUniqueConstraintInfo*, 2> cst_infos;
   ObRowkeyCstCtdef *rowkey_cst_ctdef = nullptr;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
 
-  if (OB_FAIL(generate_constraint_infos(ctx, cst_infos))) {
+  if (OB_FAIL(generate_constraint_infos(ctx, allocator, cst_infos))) {
     LOG_WARN("fail to generate constraint infos", K(ret), K(ctx));
   } else if (OB_FAIL(cst_ctdefs.init(cst_infos.count()))) {
     LOG_WARN("fail to allocate conflict checker spec array", K(ret), K(cst_infos.count()));
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < cst_infos.count(); i++) {
-    const ObIArray<ObColumnRefRawExpr*> &cst_columns = cst_infos.at(i).constraint_columns_;
-    if (OB_ISNULL(rowkey_cst_ctdef = cst_ctdef_allocator.alloc())) {
+    ObUniqueConstraintInfo *info = cst_infos.at(i);
+    if (OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("info is null", K(ret));
+    } else if (OB_ISNULL(rowkey_cst_ctdef = cst_ctdef_allocator.alloc())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc cst ctdef memory", K(ret));
     } else if (OB_FAIL(ob_write_string(allocator,
-                                       cst_infos.at(i).constraint_name_,
+                                       info->constraint_name_,
                                        rowkey_cst_ctdef->constraint_name_))) {
-      LOG_WARN("fail to write string", K(ret), K(cst_infos.at(i).constraint_name_));
-    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.init(cst_columns.count()))) {
-      LOG_WARN("fail to init rowkey", K(ret), K(cst_columns.count()));
+      LOG_WARN("fail to write string", K(ret), K(info->constraint_name_));
+    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.init(info->constraint_columns_.count()))) {
+      LOG_WARN("fail to init rowkey", K(ret), K(info->constraint_columns_.count()));
     } else {
-      for (int64_t j = 0; OB_SUCC(ret) && j < cst_columns.count(); ++j) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < info->constraint_columns_.count(); ++j) {
         const ObTableColumnItem *item = nullptr;
         const ObTableColumnInfo *col_info = nullptr;
-        ObColumnRefRawExpr *ref_expr = cst_columns.at(j);
+        ObColumnRefRawExpr *ref_expr = info->constraint_columns_.at(j);
         ObRawExpr *raw_expr = nullptr;
         ObExpr *expr = nullptr;
         if (OB_FAIL(ctx.get_column_item_by_expr(ref_expr, item))) {

@@ -23,10 +23,10 @@ namespace oceanbase
 namespace sql
 {
 
-ObOptTabletLoc::ObOptTabletLoc()
+ObOptTabletLoc::ObOptTabletLoc(ObIAllocator &allocator)
     : partition_id_(OB_INVALID_INDEX),
       first_level_part_id_(OB_INVALID_INDEX),
-      replica_locations_("SqlOptimLocaCac", OB_MALLOC_NORMAL_BLOCK_SIZE)
+      replica_locations_(allocator)
 {
 }
 
@@ -144,11 +144,11 @@ int ObOptTabletLoc::get_strong_leader(ObLSReplicaLocation &replica_location) con
   return get_strong_leader(replica_location, replica_idx);
 }
 
-ObCandiTabletLoc::ObCandiTabletLoc()
-  : opt_tablet_loc_(),
+ObCandiTabletLoc::ObCandiTabletLoc(ObIAllocator &allocator)
+  : opt_tablet_loc_(allocator),
     selected_replica_idx_(OB_INVALID_INDEX),
-    priority_replica_idxs_(),
-    files_()
+    priority_replica_idxs_(allocator),
+    files_(allocator)
 {
 }
 
@@ -371,10 +371,10 @@ int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &
   return ret;
 }
 
-ObCandiTableLoc::ObCandiTableLoc()
+ObCandiTableLoc::ObCandiTableLoc(ObIAllocator &allocator)
   : table_location_key_(OB_INVALID_ID),
     ref_table_id_(OB_INVALID_ID),
-    candi_tablet_locs_(),
+    candi_tablet_locs_(allocator),
     duplicate_type_(ObDuplicateType::NOT_DUPLICATE),
     is_lake_table_(false)
 {

@@ -642,26 +642,29 @@ int ObTransformPredicateMoveAround::generate_basic_table_pullup_preds(ObDMLStmt 
     LOG_WARN("get unexpected null", K(ret), K(stmt));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_check_constraint_items().count(); i++) {
-      CheckConstraintItem &item = stmt->get_check_constraint_items().at(i);
+      CheckConstraintItem *item = stmt->get_check_constraint_items().at(i);
       bool on_null_side = false;
-      if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(
-                        stmt, item.table_id_, on_null_side))) {
+      if (OB_ISNULL(item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("check constraint item is null", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(
+                         stmt, item->table_id_, on_null_side))) {
         LOG_WARN("check constraint expr valid", K(ret));
       } else if (on_null_side) {
         LOG_TRACE("table on null side", K(item));
         //the check expr is not maintance correctly.
         //add defense
-      } else if (OB_ISNULL(stmt->get_table_item_by_id(item.table_id_))) {
+      } else if (OB_ISNULL(stmt->get_table_item_by_id(item->table_id_))) {
         LOG_TRACE("check constraint not maintain correctly", K(item));
       } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < item.check_constraint_exprs_.count(); j++) {
-          ObRawExpr *check_constraint_expr = item.check_constraint_exprs_.at(j);
+        for (int64_t j = 0; OB_SUCC(ret) && j < item->check_constraint_exprs_.count(); j++) {
+          ObRawExpr *check_constraint_expr = item->check_constraint_exprs_.at(j);
           if (OB_ISNULL(check_constraint_expr) ||
-              OB_UNLIKELY(item.check_constraint_exprs_.count() != item.check_flags_.count())) {
+              OB_UNLIKELY(item->check_constraint_exprs_.count() != item->check_flags_.count())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(item));
-          } else if (!(item.check_flags_.at(j) & CheckConstraintFlag::IS_VALIDATE_CHECK) &&
-                    !(item.check_flags_.at(j) & CheckConstraintFlag::IS_RELY_CHECK)) {
+          } else if (!(item->check_flags_.at(j) & CheckConstraintFlag::IS_VALIDATE_CHECK) &&
+                    !(item->check_flags_.at(j) & CheckConstraintFlag::IS_RELY_CHECK)) {
             //do nothing
           } else if (OB_FAIL(preds.push_back(check_constraint_expr))) {
             LOG_WARN("push back failed", K(ret));
@@ -3208,7 +3211,6 @@ int ObTransformPredicateMoveAround::pushdown_into_semi_info(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 4> cols;
   ObSEArray<ObRawExpr*, 4> all_cols;
   ObSEArray<ObRawExpr*, 4> new_preds;
-  ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> empty;
   ObSEArray<ObRawExprCondition *, 4> pred_conditions;
   bool is_needed = false;
   OPT_TRACE("try to transform semi conditions");

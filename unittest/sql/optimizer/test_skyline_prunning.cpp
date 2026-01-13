@@ -154,10 +154,11 @@ void ObSkylinePrunningTest::check_index_back_dim(const bool left_index_back,
                                                  const ObSkylineDim::CompareStat status,
                                                  const ObSkylineDim::CompareStat reverse_status)
 {
-  ObIndexBackDim left_dim;
+  ObArenaAllocator allocator;
+  ObIndexBackDim left_dim(allocator);
   left_dim.set_index_back(left_index_back);
 
-  ObIndexBackDim right_dim;
+  ObIndexBackDim right_dim(allocator);
   right_dim.set_index_back(right_index_back);
 
   check(&left_dim, &right_dim, status, reverse_status);
@@ -168,6 +169,7 @@ void ObSkylinePrunningTest::check_interest_dim(const uint64_t *left, const int64
                                                const ObSkylineDim::CompareStat status,
                                                const ObSkylineDim::CompareStat reverse_status)
 {
+  ObArenaAllocator allocator;
   ObArray<uint64_t> left_ids;
   ObArray<uint64_t> right_ids;
   ObArray<bool> left_const_column_info;
@@ -177,7 +179,7 @@ void ObSkylinePrunningTest::check_interest_dim(const uint64_t *left, const int64
   dummy_const_column_info(left_cnt, left_const_column_info);
   dummy_const_column_info(right_cnt, right_const_column_info);
 
-  ObInterestOrderDim left_dim;
+  ObInterestOrderDim left_dim(allocator);
   if (left_cnt > 0) {
     left_dim.set_interesting_order(true);
     left_dim.add_interest_prefix_ids(left_ids);
@@ -186,7 +188,7 @@ void ObSkylinePrunningTest::check_interest_dim(const uint64_t *left, const int64
     left_dim.set_interesting_order(false);
   }
 
-  ObInterestOrderDim right_dim;
+  ObInterestOrderDim right_dim(allocator);
   if (right_cnt > 0) {
     right_dim.set_interesting_order(true);
     right_dim.add_interest_prefix_ids(right_ids);
@@ -202,17 +204,18 @@ void ObSkylinePrunningTest::check_query_range_dim(const uint64_t *left, const in
                                                   const ObSkylineDim::CompareStat status,
                                                   const ObSkylineDim::CompareStat reverse_status)
 {
+  ObArenaAllocator allocator;
   ObArray<uint64_t> left_ids;
   ObArray<uint64_t> right_ids;
   to_array(left, left_cnt, left_ids);
   to_array(right, right_cnt, right_ids);
 
-  ObQueryRangeDim left_dim;
+  ObQueryRangeDim left_dim(allocator);
   if (left_cnt > 0) {
     left_dim.add_range_column_ids(left_ids);
   }
 
-  ObQueryRangeDim right_dim;
+  ObQueryRangeDim right_dim(allocator);
   if (right_cnt > 0) {
     right_dim.add_range_column_ids(right_ids);
   }
@@ -246,13 +249,14 @@ TEST_F(ObSkylinePrunningTest, basic)
 TEST_F(ObSkylinePrunningTest, index_dim)
 {
   {
-    ObIndexBackDim dim_true;
+    ObArenaAllocator allocator;
+    ObIndexBackDim dim_true(allocator);
     dim_true.set_index_back(true);
-    ObIndexBackDim dim_false;
+    ObIndexBackDim dim_false(allocator);
     dim_false.set_index_back(false);
-    ObIndexBackDim dim2_true;
+    ObIndexBackDim dim2_true(allocator);
     dim2_true.set_index_back(true);
-    ObIndexBackDim dim2_false;
+    ObIndexBackDim dim2_false(allocator);
     dim2_false.set_index_back(false);
 
 //    check(&dim_true, &dim_false, ObSkylineDim::RIGHT_DOMINATED, ObSkylineDim::LEFT_DOMINATED);

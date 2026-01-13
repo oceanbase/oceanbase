@@ -76,9 +76,6 @@ typedef common::ObPooledAllocator<common::hash::HashMapTypes<uint64_t, int64_t>:
 class ObStmt
 {
 public:
-    typedef common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ObSynonymIds;
-
-public:
   ObStmt()
       : stmt_type_(stmt::T_NONE),
         query_ctx_(NULL),
@@ -812,8 +809,20 @@ public:
   }
   ~ObStmtFactory() { destory(); }
 
-  template <typename StmtType>
+  template <typename StmtType, typename std::enable_if<std::is_default_constructible<StmtType>::value, bool>::type = true>
   inline int create_stmt(StmtType *&stmt)
+  {
+    return inner_create_stmt<StmtType>(stmt);
+  }
+
+  template <typename StmtType, typename std::enable_if<!std::is_default_constructible<StmtType>::value, bool>::type = true>
+  inline int create_stmt(StmtType *&stmt)
+  {
+    return inner_create_stmt<StmtType>(stmt, allocator_);
+  }
+
+  template <typename StmtType, typename ...Args>
+  inline int inner_create_stmt(StmtType *&stmt, Args &...args)
   {
     int ret = common::OB_SUCCESS;
     void *ptr = allocator_.alloc(sizeof(StmtType));
@@ -823,7 +832,7 @@ public:
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       SQL_RESV_LOG(ERROR, "no more memory to stmt");
     } else {
-      stmt = new(ptr) StmtType();
+      stmt = new(ptr) StmtType(args...);
       if (OB_FAIL(stmt_store_.store_obj(stmt))) {
         SQL_RESV_LOG(WARN, "store stmt failed", K(ret));
         stmt->~StmtType();

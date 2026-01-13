@@ -52,7 +52,7 @@ public:
   ObJoinOrder* create_join_order(PathType type);
   int free(ObJoinOrder *&join_order);
 
-  typedef common::ObSEArray<ObJoinOrder*, 4, common::ModulePageAllocator, true> JoinOrderArray;
+  typedef ObSqlArray<ObJoinOrder*> JoinOrderArray;
   static const int64_t RELORDER_HASHBUCKET_SIZE = 256;
   static const int64_t JOINPATH_SET_HASHBUCKET_SIZE = 3000;
   struct JoinPathPairInfo
@@ -162,20 +162,20 @@ public:
 protected:
   ObLogPlan &plan_;
   const common::ObIArray<ObRawExpr*> &quals_;
-  common::ObSEArray<TableItem*, 8, common::ModulePageAllocator, true> from_table_items_; // include from tables and semi tables
-  common::ObSEArray<TableItem*, 8, common::ModulePageAllocator, true> base_table_items_; // all base tables
+  ObSqlArray<TableItem*> from_table_items_; // include from tables and semi tables
+  ObSqlArray<TableItem*> base_table_items_; // all base tables
 
-  common::ObSEArray<TableDependInfo, 8, common::ModulePageAllocator, true> table_depend_infos_;
-  common::ObSEArray<ObRelIds, 8, common::ModulePageAllocator, true> bushy_tree_infos_;
+  ObSqlArray<TableDependInfo> table_depend_infos_;
+  ObSqlArray<ObRelIds> bushy_tree_infos_;
   JoinOrderArray base_level_;
 
   ObConflictDetectorGenerator generator_;
-  common::ObSEArray<ObConflictDetector*, 8, common::ModulePageAllocator, true> conflict_detectors_;
+  ObSqlArray<ObConflictDetector*> conflict_detectors_;
 
   ObJoinOrder *output_join_order_;
 
-  common::ObSEArray<ObJoinOrder *, 8, common::ModulePageAllocator, true> recycled_join_orders_;
-  common::ObSEArray<JoinPath *,  8, common::ModulePageAllocator, true> recycled_join_paths_;
+  ObSqlArray<ObJoinOrder*> recycled_join_orders_;
+  ObSqlArray<JoinPath*> recycled_join_paths_;
 
   int64_t path_cnt_;
 

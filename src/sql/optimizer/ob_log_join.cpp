@@ -578,25 +578,29 @@ int ObLogJoin::print_outline_data(PlanText &plan_text)
       LOG_WARN("fail to print pq distribute hint", K(ret));
     } else {
     // 5. print (part) join filter hint
-      const ObIArray<JoinFilterInfo> &infos = get_join_filter_infos();
+      const ObIArray<JoinFilterInfo*> &infos = get_join_filter_infos();
       for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
-        if (infos.at(i).can_use_join_filter_ &&
+        JoinFilterInfo *info = infos.at(i);
+        if (OB_ISNULL(info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("join filter info is null", K(ret));
+        } else if (info->can_use_join_filter_ &&
             OB_FAIL(print_join_filter_hint_outline(*stmt,
                                                    qb_name,
                                                    left_child->get_table_set(),
-                                                   infos.at(i).filter_table_id_,
-                                                   infos.at(i).pushdown_filter_table_,
-                                                   infos.at(i).table_id_,
+                                                   info->filter_table_id_,
+                                                   info->pushdown_filter_table_,
+                                                   info->table_id_,
                                                    false,
                                                    plan_text))) {
           LOG_WARN("fail to print join filter hint", K(ret));
-        } else if (infos.at(i).need_partition_join_filter_ &&
+        } else if (info->need_partition_join_filter_ &&
                    OB_FAIL(print_join_filter_hint_outline(*stmt,
                                                           qb_name,
                                                           left_child->get_table_set(),
-                                                          infos.at(i).filter_table_id_,
-                                                          infos.at(i).pushdown_filter_table_,
-                                                          infos.at(i).table_id_,
+                                                          info->filter_table_id_,
+                                                          info->pushdown_filter_table_,
+                                                          info->table_id_,
                                                           true,
                                                           plan_text))) {
           LOG_WARN("fail to print part join filter hint", K(ret));
@@ -789,12 +793,15 @@ int ObLogJoin::append_used_join_filter_hint(ObIArray<const ObHint*> &used_hints)
   int ret = OB_SUCCESS;
   const int64_t N = get_join_filter_infos().count();
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    const JoinFilterInfo &info = get_join_filter_infos().at(i);
-    if (info.can_use_join_filter_ && NULL != info.force_filter_ &&
-        OB_FAIL(add_var_to_array_no_dup(used_hints, static_cast<const ObHint*>(info.force_filter_)))) {
+    const JoinFilterInfo *info = get_join_filter_infos().at(i);
+    if (OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("join filter info is null", K(ret));
+    } else if (info->can_use_join_filter_ && NULL != info->force_filter_ &&
+        OB_FAIL(add_var_to_array_no_dup(used_hints, static_cast<const ObHint*>(info->force_filter_)))) {
       LOG_WARN("failed to add hint", K(ret));
-    } else if (info.need_partition_join_filter_ && NULL != info.force_part_filter_ &&
-               OB_FAIL(add_var_to_array_no_dup(used_hints, static_cast<const ObHint*>(info.force_part_filter_)))) {
+    } else if (info->need_partition_join_filter_ && NULL != info->force_part_filter_ &&
+               OB_FAIL(add_var_to_array_no_dup(used_hints, static_cast<const ObHint*>(info->force_part_filter_)))) {
       LOG_WARN("failed to add hint", K(ret));
     }
   }

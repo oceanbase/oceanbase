@@ -833,7 +833,7 @@ int ObMVPrinter::create_joined_table_item(ObDMLStmt *stmt,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("falied to allocate memory", K(ret), K(ptr));
   } else {
-    joined_table = new (ptr) JoinedTable();
+    joined_table = new (ptr) JoinedTable(ctx_.alloc_);
     joined_table->table_id_ = stmt->get_query_ctx()->available_tb_id_--;
     joined_table->type_ = TableItem::JOINED_TABLE;
     joined_table->joined_type_ = joined_type;

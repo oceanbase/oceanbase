@@ -1466,7 +1466,7 @@ int ObAlterTableExecutor::resolve_alter_column_partition_expr(
   } else {
     ObResolverParams resolver_ctx;
     ObStmtFactory stmt_factory(allocator);
-    TableItem table_item;
+    TableItem table_item(allocator);
     resolver_ctx.allocator_ = &allocator;
     resolver_ctx.schema_checker_ = &schema_checker;
     resolver_ctx.session_info_ = &session_info;

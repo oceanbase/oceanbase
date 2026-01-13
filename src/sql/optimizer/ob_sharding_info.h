@@ -21,6 +21,7 @@
 #include "sql/optimizer/ob_table_partition_info.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/optimizer/ob_phy_table_location_info.h"
+#include "sql/resolver/dml/ob_raw_expr_sets.h"
 
 namespace oceanbase
 {
@@ -34,36 +35,38 @@ class ObLogPlan;
 class ObShardingInfo
 {
 public:
-  ObShardingInfo()
+  ObShardingInfo(common::ObIAllocator &allocator)
     : part_level_(share::schema::PARTITION_LEVEL_MAX),
       part_func_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
       subpart_func_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
       location_type_(OB_TBL_LOCATION_UNINITIALIZED),
       part_num_(0),
-      partition_keys_(),
-      sub_partition_keys_(),
+      partition_keys_(allocator),
+      sub_partition_keys_(allocator),
+      part_func_exprs_(allocator),
       phy_table_location_info_(NULL),
       partition_array_ (NULL),
-      all_tablet_ids_(),
-      all_partition_indexes_(),
-      all_subpartition_indexes_(),
+      all_tablet_ids_(allocator),
+      all_partition_indexes_(allocator),
+      all_subpartition_indexes_(allocator),
       is_partition_single_(false),
       is_subpartition_sinlge_(false),
       can_reselect_replica_(false)
   {}
-  ObShardingInfo(ObTableLocationType type)
+  ObShardingInfo(ObTableLocationType type, common::ObIAllocator &allocator)
   : part_level_(share::schema::PARTITION_LEVEL_MAX),
     part_func_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
     subpart_func_type_(share::schema::PARTITION_FUNC_TYPE_MAX),
     location_type_(type),
     part_num_(0),
-    partition_keys_(),
-    sub_partition_keys_(),
+    partition_keys_(allocator),
+    sub_partition_keys_(allocator),
+    part_func_exprs_(allocator),
     phy_table_location_info_(NULL),
     partition_array_ (NULL),
-    all_tablet_ids_(),
-    all_partition_indexes_(),
-    all_subpartition_indexes_(),
+    all_tablet_ids_(allocator),
+    all_partition_indexes_(allocator),
+    all_subpartition_indexes_(allocator),
     is_partition_single_(false),
     is_subpartition_sinlge_(false),
     can_reselect_replica_(false)
@@ -380,22 +383,22 @@ private:
   // 一级分区数量
   int64_t part_num_;
   //一级分区的分区键
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> partition_keys_;
+  ObSqlArray<ObRawExpr *> partition_keys_;
   //二级分区的分区键
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> sub_partition_keys_;
+  ObSqlArray<ObRawExpr *> sub_partition_keys_;
   //分区方法expr
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> part_func_exprs_;
+  ObSqlArray<ObRawExpr *> part_func_exprs_;
   const ObCandiTableLoc *phy_table_location_info_;
   // 一级分区array
   share::schema::ObPartition **partition_array_;
   // phy_table_location_info_中所有的partition_id(物理分区id)
-  common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> all_tablet_ids_;
+  ObSqlArray<uint64_t> all_tablet_ids_;
   // phy_table_location_info_中每一个partition_id(物理分区id)的
   // part_id(一级逻辑分区id)在part_array中的偏移
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> all_partition_indexes_;
+  ObSqlArray<int64_t> all_partition_indexes_;
   // phy_table_location_info_中每一个partition_id(物理分区id)的
   // subpart_id(二级逻辑分区id)在subpart_array中的偏移
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> all_subpartition_indexes_;
+  ObSqlArray<int64_t> all_subpartition_indexes_;
   // 二级分区表的phy_table_location_info_中，是否只涉及到一个一级分区
   bool is_partition_single_;
   // 二级分区表的phy_table_location_info_中，是否每个一级分区都只涉及一个二级分区

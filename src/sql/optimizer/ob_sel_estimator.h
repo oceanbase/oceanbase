@@ -739,7 +739,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(type), K_(child_estimators));
 
 private:
-  common::ObSEArray<ObSelEstimator *, 4, common::ModulePageAllocator, true> child_estimators_;
+  common::ObSEArray<ObSelEstimator *, 4> child_estimators_;
 private:
   DISABLE_COPY_ASSIGN(ObBoolOpSelEstimator);
 };
@@ -783,7 +783,7 @@ public:
 
 private:
   const ObColumnRefRawExpr *column_expr_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> range_exprs_;
+  common::ObSEArray<ObRawExpr *, 4> range_exprs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRangeSelEstimator);
 };
@@ -845,7 +845,7 @@ private:
   const ObRelIds *left_rel_ids_;
   const ObRelIds *right_rel_ids_;
   const ObRelIds *join_rel_ids_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> join_conditions_;
+  common::ObSEArray<ObRawExpr *, 4> join_conditions_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSimpleJoinSelEstimator);

@@ -234,7 +234,7 @@ int ObTruncatePartKeyInfo::resolve_part_expr(
     LOG_WARN("session is null", K(ret));
   } else {
     ObStmtFactory stmt_factory(allocator);
-    TableItem table_item;
+    TableItem table_item(allocator);
     ObResolverParams resolver_ctx;
     resolver_ctx.allocator_ = &allocator;
     resolver_ctx.schema_checker_ = &schema_checker;

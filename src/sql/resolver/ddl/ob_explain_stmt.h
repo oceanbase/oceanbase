@@ -37,7 +37,7 @@ struct ObExplainDisplayOpt
 class ObExplainStmt : public ObDMLStmt
 {
 public:
-  ObExplainStmt();
+  ObExplainStmt(ObIAllocator &allocator);
   virtual ~ObExplainStmt();
   void set_explain_format(ExplainType format) { format_ = format; }
   ExplainType get_explain_type() const { return format_; }

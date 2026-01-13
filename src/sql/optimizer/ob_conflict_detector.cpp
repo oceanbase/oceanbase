@@ -28,7 +28,7 @@ int ObConflictDetector::build_detector(ObIAllocator &allocator, ObConflictDetect
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory for conflict detector failed");
   } else {
-    new(detector) ObConflictDetector();
+    new(detector) ObConflictDetector(allocator);
   }
   return ret;
 }

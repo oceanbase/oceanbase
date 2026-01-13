@@ -2267,17 +2267,17 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       } else { /* Do nothing */ }
     }
 
-    if (OB_SUCC(ret) && with_domain_types_.size() > 0) {
+    if (OB_SUCC(ret) && with_domain_types_.count() > 0) {
       if (OB_FAIL(BUF_PRINTF(", "))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (OB_FAIL(BUF_PRINTF("with_domain_id("))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < with_domain_types_.size(); i++) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < with_domain_types_.count(); i++) {
           ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(with_domain_types_[i]);
           if (OB_FAIL(BUF_PRINTF("%s", ObDomainIdUtils::get_domain_str_by_id(cur_type)))) {
             LOG_WARN("BUF_PRINTF fails", K(ret));
-          } else if ((i != with_domain_types_.size() - 1) && OB_FAIL(BUF_PRINTF(", "))) {
+          } else if ((i != with_domain_types_.count() - 1) && OB_FAIL(BUF_PRINTF(", "))) {
             LOG_WARN("BUF_PRINTF fails", K(ret));
           }
         }
@@ -3018,7 +3018,8 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   } else {
     if (OB_FAIL(ret)) {
     } else if (use_index_merge()) {
-      ObIndexMergeHint index_merge_hint;
+      ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+      ObIndexMergeHint index_merge_hint(allocator);
       index_merge_hint.set_qb_name(qb_name);
       index_merge_hint.get_table().set_table(*table_item);
       ObSEArray<ObString, 8> index_name_list;
@@ -3395,7 +3396,7 @@ int ObLogTableScan::create_exec_param_for_auto_split(const ObRawExprResType &typ
 bool ObLogTableScan::is_tsc_with_doc_id() const
 {
   bool re = false;
-  if (with_domain_types_.size() > 0) {
+  if (with_domain_types_.count() > 0) {
     for (int64_t i = 0; i < with_domain_types_.count(); ++i) {
       if (ObDomainIdUtils::DOC_ID == with_domain_types_.at(i)) {
         re = true;
@@ -6101,8 +6102,6 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
   }
   // only for get ivfflat index table id
   ObSEArray<uint64_t, 8> vec_id_cols(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("vecIdCol", tenant_id));
-  with_domain_types_.set_attr(ObMemAttr(tenant_id, "VecDType"));
-  domain_table_ids_.set_attr(ObMemAttr(tenant_id, "VecDTID"));
   if (OB_FAIL(ret)) {
   } else if (!(stmt->is_delete_stmt() || stmt->is_update_stmt() || stmt->is_select_stmt())) {
     // just skip, nothing to do
@@ -6238,7 +6237,7 @@ int ObLogTableScan::check_das_need_scan_with_domain_id()
     }
   }
   if (OB_SUCC(ret)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < with_domain_types_.size(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < with_domain_types_.count(); i++) {
       uint64_t domain_table_id = common::OB_INVALID_ID;
       ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(with_domain_types_[i]);
       if (OB_FAIL(ObDomainIdUtils::get_domain_tid_table_by_cid(cur_type, schema_guard, table_schema, vec_id_cols.at(i), domain_table_id))) {
@@ -6269,7 +6268,7 @@ int ObLogTableScan::prepare_rowkey_domain_id_dep_exprs()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, table schema is nullptr", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < with_domain_types_.size(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < with_domain_types_.count(); i++) {
       const ObTableSchema *rowkey_domain_id_schema = nullptr;
       ObDomainIdUtils::ObDomainIDType cur_type = static_cast<ObDomainIdUtils::ObDomainIDType>(with_domain_types_[i]);
       uint64_t domain_id_tid = domain_table_ids_[i];
@@ -6447,7 +6446,7 @@ int ObLogTableScan::check_expr_calculable_on_index(const ObRawExpr *expr,
 uint64_t ObLogTableScan::get_rowkey_domain_id_tid(int64_t domain_type) const
 {
   uint64_t table_id = OB_INVALID_ID;
-  for (int i = 0; i < with_domain_types_.size(); i++) {
+  for (int i = 0; i < with_domain_types_.count(); i++) {
     if (with_domain_types_[i] == domain_type) {
       table_id = domain_table_ids_[i];
     }
@@ -6458,7 +6457,7 @@ uint64_t ObLogTableScan::get_rowkey_domain_id_tid(int64_t domain_type) const
 bool ObLogTableScan::is_scan_domain_id_table(uint64 table_id) const
 {
   bool bret = false;
-  for (int i = 0; i < domain_table_ids_.size() && !bret; i++) {
+  for (int i = 0; i < domain_table_ids_.count() && !bret; i++) {
     if (domain_table_ids_[i] == table_id) {
       bret = true;
     }

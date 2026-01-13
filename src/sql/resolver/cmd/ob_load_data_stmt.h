@@ -265,8 +265,9 @@ public:
     bool is_table_column_;  //false: is a user variable
   };
 
-  ObLoadDataStmt() :
-    ObCMDStmt(stmt::T_LOAD_DATA), optimizer_ctx_(nullptr), is_default_table_columns_(false)
+  ObLoadDataStmt(common::ObIAllocator &allocator) :
+    ObCMDStmt(stmt::T_LOAD_DATA), optimizer_ctx_(nullptr),
+    assignments_(allocator), is_default_table_columns_(false)
   {
   }
   virtual ~ObLoadDataStmt()

@@ -1840,7 +1840,6 @@ int ObQueryRefRawExpr::assign(const ObRawExpr &other)
         is_cursor_ = tmp.is_cursor_;
         has_nl_param_ = tmp.has_nl_param_;
         is_multiset_ = tmp.is_multiset_;
-        column_types_ = tmp.column_types_;
       }
     }
   }
@@ -5634,32 +5633,39 @@ int ObUDFRawExpr::assign(const ObRawExpr &other)
     } else {
       const ObUDFRawExpr &tmp =
           static_cast<const ObUDFRawExpr &>(other);
-      udf_id_ = tmp.udf_id_;
-      pkg_id_ = tmp.pkg_id_;
-      type_id_ = tmp.type_id_;
-      subprogram_path_ = tmp.subprogram_path_;
-      udf_schema_version_ = tmp.udf_schema_version_;
-      pkg_schema_version_ = tmp.pkg_schema_version_;
-      pls_type_ = tmp.pls_type_;
-      params_type_ = tmp.params_type_;
-      database_name_ = tmp.database_name_;
-      package_name_ = tmp.package_name_;
-      is_parallel_enable_ = tmp.is_parallel_enable_;
-      is_result_cache_ = tmp.is_result_cache_;
-      is_udt_udf_ = tmp.is_udt_udf_;
-      is_pkg_body_udf_ = tmp.is_pkg_body_udf_;
-      is_return_sys_cursor_ = tmp.is_return_sys_cursor_;
-      is_aggregate_udf_ = tmp.is_aggregate_udf_;
-      is_aggr_udf_distinct_ = tmp.is_aggr_udf_distinct_;
-      nocopy_params_ = tmp.nocopy_params_;
-      loc_ = tmp.loc_;
-      is_udt_cons_ = tmp.is_udt_cons_;
-      params_name_ = tmp.params_name_;
-      params_desc_v2_ = tmp.params_desc_v2_;
-      dblink_name_ = tmp.dblink_name_;
-      dblink_id_ = tmp.dblink_id_;
-      external_routine_type_ = tmp.external_routine_type_;
-      is_mysql_udtf_ = tmp.is_mysql_udtf_;
+      if (OB_FAIL(subprogram_path_.assign(tmp.subprogram_path_))) {
+        LOG_WARN("failed to assign subprogram path", K(ret));
+      } else if (OB_FAIL(params_type_.assign(tmp.params_type_))) {
+        LOG_WARN("failed to assign params type", K(ret));
+      } else if (OB_FAIL(nocopy_params_.assign(tmp.nocopy_params_))) {
+        LOG_WARN("failed to assign nocopy params", K(ret));
+      } else if (OB_FAIL(params_name_.assign(tmp.params_name_))) {
+        LOG_WARN("failed to assign params name", K(ret));
+      } else if (OB_FAIL(params_desc_v2_.assign(tmp.params_desc_v2_))) {
+        LOG_WARN("failed to assign params desc v2", K(ret));
+      } else {
+        udf_id_ = tmp.udf_id_;
+        pkg_id_ = tmp.pkg_id_;
+        type_id_ = tmp.type_id_;
+        udf_schema_version_ = tmp.udf_schema_version_;
+        pkg_schema_version_ = tmp.pkg_schema_version_;
+        pls_type_ = tmp.pls_type_;
+        database_name_ = tmp.database_name_;
+        package_name_ = tmp.package_name_;
+        is_parallel_enable_ = tmp.is_parallel_enable_;
+        is_result_cache_ = tmp.is_result_cache_;
+        is_udt_udf_ = tmp.is_udt_udf_;
+        is_pkg_body_udf_ = tmp.is_pkg_body_udf_;
+        is_return_sys_cursor_ = tmp.is_return_sys_cursor_;
+        is_aggregate_udf_ = tmp.is_aggregate_udf_;
+        is_aggr_udf_distinct_ = tmp.is_aggr_udf_distinct_;
+        loc_ = tmp.loc_;
+        is_udt_cons_ = tmp.is_udt_cons_;
+        dblink_name_ = tmp.dblink_name_;
+        dblink_id_ = tmp.dblink_id_;
+        external_routine_type_ = tmp.external_routine_type_;
+        is_mysql_udtf_ = tmp.is_mysql_udtf_;
+      }
     }
   }
   return ret;

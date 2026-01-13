@@ -353,10 +353,11 @@ int ObLogInsert::get_constraint_info_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("get unexpected null", K(ret));
   } else if (NULL != constraint_infos_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < constraint_infos_->count(); ++i) {
-      const ObIArray<ObColumnRefRawExpr*> &constraint_columns =
-          constraint_infos_->at(i).constraint_columns_;
       temp_exprs.reuse();
-      if (OB_FAIL(append(temp_exprs, constraint_columns))) {
+      if (OB_ISNULL(constraint_infos_->at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("constraint info is null", K(ret));
+      } else if (OB_FAIL(append(temp_exprs, constraint_infos_->at(i)->constraint_columns_))) {
         LOG_WARN("failed to append exprs", K(ret));
       } else if (OB_FAIL(append_array_no_dup(all_exprs, temp_exprs))) {
         LOG_WARN("failed to append exprs", K(ret));
@@ -572,10 +573,13 @@ int ObLogInsert::inner_replace_op_exprs(ObRawExprReplacer &replacer)
     LOG_WARN("failed to replace dml info exprs", K(ret));
   } else if (NULL != constraint_infos_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < constraint_infos_->count(); ++i) {
-      const ObIArray<ObColumnRefRawExpr*> &constraint_columns =
-          constraint_infos_->at(i).constraint_columns_;
-      for (int64_t i = 0; OB_SUCC(ret) && i < constraint_columns.count(); ++i) {
-        ObColumnRefRawExpr *expr = constraint_columns.at(i);
+      ObUniqueConstraintInfo *info = constraint_infos_->at(i);
+      if (OB_ISNULL(info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("constraint info is null", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < info->constraint_columns_.count(); ++j) {
+        ObColumnRefRawExpr *expr = info->constraint_columns_.at(j);
         if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
@@ -679,7 +683,7 @@ int ObLogInsert::generate_in_filter_for_insertup_opt()
       ObOpRawExpr *in_filter_expr = nullptr;
       ObRawExpr *pk_increment = nullptr;
       ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
-      common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> rowkey_exprs;
+      ObSEArray<ObRawExpr*, 1> rowkey_exprs;
       if (OB_FAIL(get_plan()->get_rowkey_exprs(primary_dml_info->table_id_,
                                                primary_dml_info->ref_table_id_,
                                                rowkey_exprs))) {

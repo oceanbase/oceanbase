@@ -829,7 +829,8 @@ int ObLogSet::print_outline_data(PlanText &plan_text)
   int64_t &pos = plan_text.pos_;
   const ObDMLStmt *stmt = NULL;
   ObString qb_name;
-  ObPQSetHint hint;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObPQSetHint hint(allocator);
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()), K(stmt));
@@ -898,7 +899,8 @@ int ObLogSet::get_used_pq_set_hint(const ObPQSetHint *&used_hint)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()));
   } else if (NULL != (stmt_pq_set = get_plan()->get_log_plan_hint().get_normal_hint(T_PQ_SET))) {
-    ObPQSetHint hint;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObPQSetHint hint(allocator);
     used_hint = static_cast<const ObPQSetHint*>(stmt_pq_set);
     const ObIArray<ObItemType> &dist_methods = used_hint->get_dist_methods();
     if (OB_FAIL(construct_pq_set_hint(hint))) {

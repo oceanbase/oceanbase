@@ -27,8 +27,7 @@ namespace sql
 class ObGrantStmt: public ObDDLStmt
 {
 public:
-  explicit ObGrantStmt(common::ObIAllocator *name_pool);
-  ObGrantStmt();
+  explicit ObGrantStmt(common::ObIAllocator &allocator);
   virtual ~ObGrantStmt();
   int add_user(const common::ObString &user_name, const common::ObString &host_name,
                const common::ObString &pwd, const common::ObString &need_enc,
@@ -120,14 +119,14 @@ private:
   uint64_t option_;
   share::ObRawPrivArray sys_priv_array_;
   share::ObRawObjPrivArray obj_priv_array_;
-  ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> sel_col_ids_;
-  ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ins_col_ids_;
-  ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> upd_col_ids_;
-  ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ref_col_ids_;
+  ObSqlArray<uint64_t> sel_col_ids_;
+  ObSqlArray<uint64_t> ins_col_ids_;
+  ObSqlArray<uint64_t> upd_col_ids_;
+  ObSqlArray<uint64_t> ref_col_ids_;
   ObSelectStmt *ref_query_; // 用于grant 视图时，对视图依赖的table,view等做递归权限check.
   bool is_grant_all_tab_priv_;
 
-  ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv_;
+  ObSqlArray<std::pair<ObString, ObPrivType>> column_names_priv_;
 
   int64_t table_schema_version_;
 

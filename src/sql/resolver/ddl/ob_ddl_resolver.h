@@ -1149,7 +1149,7 @@ protected:
   common::ObArray<common::ObString> store_column_names_;
   common::ObArray<common::ObString> hidden_store_column_names_;
   common::ObArray<common::ObString> zone_list_;
-  common::ObSEArray<share::schema::ObColumnNameWrapper, 16, common::ModulePageAllocator, true> sort_column_array_;
+  common::ObSEArray<share::schema::ObColumnNameWrapper, 16> sort_column_array_;
   common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper,
                                    common::OB_MAX_COLUMN_NUMBER> storing_column_set_;
   common::hash::ObPlacementHashSet<share::schema::ObForeignKeyNameHashWrapper,

@@ -882,7 +882,7 @@ int ObTransformJoinLimitPushDown::build_lazy_left_join(ObDMLStmt *stmt,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory", K(ret));
       } else {
-        tmp_joined_table = new (buf) JoinedTable();
+        tmp_joined_table = new (buf) JoinedTable(*ctx_->allocator_);
         tmp_joined_table->type_ = TableItem::JOINED_TABLE;
         tmp_joined_table->table_id_ = stmt->get_query_ctx()->available_tb_id_--;
         tmp_joined_table->joined_type_ = LEFT_OUTER_JOIN;

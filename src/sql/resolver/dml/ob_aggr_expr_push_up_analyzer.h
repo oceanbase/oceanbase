@@ -88,7 +88,7 @@ private:
 
   // 1. ref an upper layer column
   // 2. ref an upper layer select item
-  common::ObArray<ObExecParamRawExpr *, common::ModulePageAllocator, true> exec_columns_;
+  common::ObArray<ObExecParamRawExpr *> exec_columns_;
 
   // aggregate function in this resolver
   ObSelectResolver &cur_resolver_;

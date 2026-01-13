@@ -380,9 +380,12 @@ int ObRestoreSchema::do_resolve_single_stmt(ParseNode *node,
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "parse node should not be NULL", K(ret));
   } else {
+    ObResolverParams params;
     ObResolver resolver(ctx);
     ObStmt *stmt = NULL;
-    if (OB_FAIL(resolver.resolve(
+    if (OB_FAIL(params.assign(ctx))) {
+      STORAGE_LOG(WARN, "fail to assign params", K(ret));
+    } else if (OB_FAIL(resolver.resolve(
                                  ObResolver::IS_NOT_PREPARED_STMT,
                                  *node, stmt))) {
       STORAGE_LOG(WARN, "resolver.resolve() failed", K(ret));

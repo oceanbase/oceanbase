@@ -72,7 +72,7 @@ struct ObDSTableParam
   int64_t max_ds_timeout_;
   int64_t degree_;
   bool need_specify_partition_;
-  ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> partition_infos_;
+  ObSEArray<PartInfo, 4> partition_infos_;
   bool force_use_kv_cache_;
 
   TO_STRING_KV(K(tenant_id_),
@@ -392,8 +392,8 @@ private:
   ObString sample_block_;
   ObString basic_hints_;
   ObString where_conditions_;
-  ObSEArray<ObDSStatItem *, 4, common::ModulePageAllocator, true> ds_stat_items_;
-  ObSEArray<ObObj, 4, common::ModulePageAllocator, true> results_;
+  ObSEArray<ObDSStatItem *, 4> ds_stat_items_;
+  ObSEArray<ObObj, 4> results_;
   bool is_big_table_;
   int64_t sample_big_table_rown_cnt_;
   ObString table_clause_;

@@ -86,7 +86,7 @@ int StmtCompareHelper::alloc_compare_helper(ObIAllocator &allocator, StmtCompare
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed", K(ret));
   } else {
-    helper = new(buf)StmtCompareHelper();
+    helper = new(buf)StmtCompareHelper(allocator);
   }
   return ret;
 }

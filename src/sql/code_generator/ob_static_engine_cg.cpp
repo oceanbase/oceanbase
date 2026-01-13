@@ -45,6 +45,7 @@
 #include "sql/optimizer/ob_log_insert_all.h"
 #include "sql/optimizer/ob_log_err_log.h"
 #include "sql/optimizer/ob_log_stat_collector.h"
+#include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
 #include "sql/optimizer/ob_direct_load_optimizer_ctx.h"
 #include "sql/optimizer/ob_log_expand.h"
 #include "sql/engine/ob_operator_factory.h"

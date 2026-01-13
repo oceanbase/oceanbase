@@ -53,12 +53,11 @@ protected:
 private:
   int print_link_stmt(char *buf, int64_t buf_len);
 protected:
-  common::ObIAllocator &allocator_;
   char *stmt_fmt_buf_;
   int32_t stmt_fmt_len_;
   bool is_reverse_link_;
   uint64_t tm_dblink_id_;
-  common::ObSEArray<ObParamPosIdx, 16, common::ModulePageAllocator, true> param_infos_;
+  ObSqlArray<ObParamPosIdx> param_infos_;
 };
 
 } // namespace sql

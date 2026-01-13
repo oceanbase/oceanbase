@@ -32,19 +32,20 @@ public:
   ObLogicalOperator(plan), is_create_(false),
       filter_id_(common::OB_INVALID_ID),
       filter_len_(0), paired_join_filter_(nullptr),
-      join_exprs_(), is_use_filter_shuffle_(false),
-      join_filter_cmp_funcs_(),
-      join_filter_exprs_(),
-      join_filter_types_(),
-      p2p_sequence_ids_(),
-      is_null_safe_cmps_(),
+      join_exprs_(plan.get_allocator()), is_use_filter_shuffle_(false),
+      join_filter_cmp_funcs_(plan.get_allocator()),
+      join_filter_exprs_(plan.get_allocator()),
+      join_filter_types_(plan.get_allocator()),
+      p2p_sequence_ids_(plan.get_allocator()),
+      is_null_safe_cmps_(plan.get_allocator()),
       filter_type_(JoinFilterSharedType::INVALID_TYPE),
       calc_tablet_id_expr_(NULL),
       skip_subpart_(false),
-      rf_prefix_col_idxs_(),
+      rf_prefix_col_idxs_(plan.get_allocator()),
       probe_table_id_(OB_INVALID_ID),
       range_column_cnt_(-1),
       jf_material_control_info_(),
+      all_join_key_left_exprs_(plan.get_allocator()),
       enable_runtime_filter_adaptive_apply_(true),
       basic_table_row_count_(0)
   { }
@@ -173,24 +174,24 @@ private:
    //if this is a partition join filter create op, the paired_join_filter_ is partition filter gi
   ObLogicalOperator *paired_join_filter_;
   //equal join condition expr
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_exprs_;
+  ObSqlArray<ObRawExpr *> join_exprs_;
   bool is_use_filter_shuffle_; // 标记use端filter是否有shuffle
   // join_filter_cmp_funcs_ is for join filter use
-  common::ObSEArray<common::ObDatumCmpFuncType, 8, common::ModulePageAllocator, true> join_filter_cmp_funcs_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_filter_exprs_;
-  common::ObSEArray<RuntimeFilterType, 8, common::ModulePageAllocator, true> join_filter_types_;
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> p2p_sequence_ids_;
-  common::ObSEArray<bool, 8, common::ModulePageAllocator, true> is_null_safe_cmps_;
+  ObSqlArray<common::ObDatumCmpFuncType> join_filter_cmp_funcs_;
+  ObSqlArray<ObRawExpr *> join_filter_exprs_;
+  ObSqlArray<RuntimeFilterType> join_filter_types_;
+  ObSqlArray<int64_t> p2p_sequence_ids_;
+  ObSqlArray<bool> is_null_safe_cmps_;
   JoinFilterSharedType filter_type_;
   ObRawExpr *calc_tablet_id_expr_; // 计算tablet_id的expr
   bool skip_subpart_; // Ignore 2-level subpart_id when calculating partition id
 
   // for runtime filter extract query range
-  ObSEArray<int64_t, 4, common::ModulePageAllocator, true> rf_prefix_col_idxs_;
+  ObSqlArray<int64_t> rf_prefix_col_idxs_;
   int64_t probe_table_id_;
   int64_t range_column_cnt_;
   ObJoinFilterMaterialControlInfo jf_material_control_info_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> all_join_key_left_exprs_;
+  ObSqlArray<ObRawExpr *> all_join_key_left_exprs_;
   bool enable_runtime_filter_adaptive_apply_;
   double basic_table_row_count_;
   DISALLOW_COPY_AND_ASSIGN(ObLogJoinFilter);

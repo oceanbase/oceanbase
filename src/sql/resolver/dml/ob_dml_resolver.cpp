@@ -140,7 +140,7 @@ int ObDMLResolver::alloc_joined_table_item(JoinedTable *&joined_table)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SQL_RESV_LOG(ERROR, "alloc memory for JoinedTable failed", "size", sizeof(JoinedTable));
   } else {
-    joined_table = new (ptr) JoinedTable();
+    joined_table = new (ptr) JoinedTable(*allocator_);
   }
   return ret;
 }
@@ -3940,24 +3940,33 @@ int ObDMLResolver::resolve_table_check_constraint_items(const TableItem *table_i
   ObDMLStmt *dml_stmt = NULL;
   ObSEArray<ObRawExpr*, 4> stmt_constr_exprs;
   ObSEArray<int64_t, 4> check_flags;
+  void *ptr = NULL;
   if (OB_ISNULL(dml_stmt = get_stmt()) || OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get stmt null", K(ret), K(dml_stmt), K(table_item));
   } else if (OB_FAIL(generate_check_constraint_exprs(table_item, table_schema, stmt_constr_exprs, &check_flags))) {
     LOG_WARN("failed to add check constraint to stmt");
-  } else if (!stmt_constr_exprs.empty()) {
-    CheckConstraintItem check_constraint_item;
-    check_constraint_item.table_id_ = table_item->table_id_;
-    check_constraint_item.ref_table_id_ = table_schema->get_table_id();
-    if (OB_FAIL(append(check_constraint_item.check_constraint_exprs_, stmt_constr_exprs))) {
+  } else if (stmt_constr_exprs.empty()) {
+    // do nothing
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_ISNULL(ptr = allocator_->alloc(sizeof(CheckConstraintItem)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret));
+  } else {
+    CheckConstraintItem *check_constraint_item = new (ptr) CheckConstraintItem(*allocator_);
+    check_constraint_item->table_id_ = table_item->table_id_;
+    check_constraint_item->ref_table_id_ = table_schema->get_table_id();
+    if (OB_FAIL(check_constraint_item->check_constraint_exprs_.assign(stmt_constr_exprs))) {
       LOG_WARN("failed to append", K(ret));
-    } else if (OB_FAIL(append(check_constraint_item.check_flags_, check_flags))) {
+    } else if (OB_FAIL(check_constraint_item->check_flags_.assign(check_flags))) {
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(dml_stmt->set_check_constraint_item(check_constraint_item))) {
       LOG_WARN("failed to set check constraint item", K(ret));
     } else {
       LOG_TRACE("succeed to resolve table check constraint items", K(table_item->table_id_),
-                        K(table_schema->get_table_id()), K(check_constraint_item));
+                        K(table_schema->get_table_id()), KPC(check_constraint_item));
     }
   }
   return ret;
@@ -7250,7 +7259,7 @@ int ObDMLResolver::create_rb_iterate_table_item(TableItem *&table_item, ObString
   } else if (OB_ISNULL(table_def = static_cast<ObJsonTableDef*>(allocator_->alloc(sizeof(ObJsonTableDef))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("faield to allocate memory json table def buffer", K(ret));
-  } else if (OB_FALSE_IT(table_def = static_cast<ObJsonTableDef*>(new (table_def) ObJsonTableDef()))) {
+  } else if (OB_FALSE_IT(table_def = static_cast<ObJsonTableDef*>(new (table_def) ObJsonTableDef(*allocator_)))) {
   } else if (OB_FALSE_IT(table_def->table_type_ = MulModeTableType::OB_RB_ITERATE_TABLE_TYPE)) {
   } else if (OB_ISNULL(table_item = stmt->create_table_item(*allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -7302,7 +7311,7 @@ int ObDMLResolver::create_rb_iterate_table_item(TableItem *&table_item, ObString
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate column def", K(ret));
     } else {
-      root_col_def = new (root_col_def) ObDmlJtColDef();
+      root_col_def = new (root_col_def) ObDmlJtColDef(*allocator_);
       root_col_def->table_id_ = table_item->table_id_;
       root_col_def->col_base_info_.col_type_ = NESTED_COL_TYPE;
       root_col_def->col_base_info_.parent_id_ = -1;
@@ -7337,7 +7346,7 @@ int ObDMLResolver::create_unnest_table_item(TableItem *&table_item, ObItemType i
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("faield to allocate memory json table def buffer", K(ret));
   } else {
-    table_def = static_cast<ObJsonTableDef*>(new (table_def) ObJsonTableDef());
+    table_def = static_cast<ObJsonTableDef*>(new (table_def) ObJsonTableDef(*allocator_));
     if (item_type == T_RB_ITERATE_EXPRESSION) {
       table_def->table_type_ = MulModeTableType::OB_RB_ITERATE_TABLE_TYPE;
     } else if (item_type == T_UNNEST_EXPRESSION) {
@@ -7364,7 +7373,7 @@ int ObDMLResolver::create_unnest_table_item(TableItem *&table_item, ObItemType i
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate column def", K(ret));
     } else {
-      root_col_def = new (root_col_def) ObDmlJtColDef();
+      root_col_def = new (root_col_def) ObDmlJtColDef(*allocator_);
       root_col_def->table_id_ = table_item->table_id_;
       root_col_def->col_base_info_.col_type_ = NESTED_COL_TYPE;
       root_col_def->col_base_info_.parent_id_ = -1;
@@ -7391,7 +7400,7 @@ int ObDMLResolver::rb_iterate_table_add_column(TableItem *&table_item, ColumnIte
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else {
-    col_def = new (col_def) ObDmlJtColDef();
+    col_def = new (col_def) ObDmlJtColDef(*allocator_);
   }
 
   // generate col_name
@@ -7465,7 +7474,7 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else {
-    col_def = new (col_def) ObDmlJtColDef();
+    col_def = new (col_def) ObDmlJtColDef(*allocator_);
     col_def->col_base_info_.col_name_.assign_ptr(col_name.ptr(), col_name.length());
     col_def->col_base_info_.col_type_ = col_type;
     col_def->col_base_info_.parent_id_ = 0;
@@ -7692,7 +7701,7 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("faield to allocate memory json table def buffer", K(ret));
     } else {
-      table_def = static_cast<ObJsonTableDef*>(new (table_buf) ObJsonTableDef());
+      table_def = static_cast<ObJsonTableDef*>(new (table_buf) ObJsonTableDef(*allocator_));
       if (OB_FAIL(table_def->doc_exprs_.push_back(json_doc_expr))) {
         LOG_WARN("failed to push back doc expr", K(ret));
       } else if (T_JSON_TABLE_EXPRESSION == parse_tree.type_) {
@@ -7735,7 +7744,7 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate column def", K(ret));
     } else {
-      root_col_def = new (root_col_def) ObDmlJtColDef();
+      root_col_def = new (root_col_def) ObDmlJtColDef(*allocator_);
       root_col_def->table_id_ = item->table_id_;
       root_col_def->col_base_info_.col_type_ = NESTED_COL_TYPE;
     }
@@ -12854,7 +12863,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
       LOG_WARN("allocate memory failed", K(ret));
     } else {
       // make coldef node
-      col_def = new (buf) ObDmlJtColDef();
+      col_def = new (buf) ObDmlJtColDef(*allocator_);
 
       // name node & returning type is 0,1
       const ParseNode* name_node = parse_tree.children_[0];
@@ -13122,7 +13131,7 @@ int ObDMLResolver::resolve_json_table_nested_column(const ParseNode &parse_tree,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(alloc_size));
   } else {
-    col_def = new (buf) ObDmlJtColDef();
+    col_def = new (buf) ObDmlJtColDef(*allocator_);
     col_def->col_base_info_.col_type_ = NESTED_COL_TYPE;
 
     ParseNode* path_node = const_cast<ParseNode*>(parse_tree.children_[0]);
@@ -15946,7 +15955,8 @@ int ObDMLResolver::resolve_hints(const ParseNode *node)
     /* do nothing */
   } else {
     ObQueryHint &query_hint = query_ctx->get_query_hint_for_update();
-    ObGlobalHint global_hint;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObGlobalHint global_hint(allocator);
     ObSEArray<ObHint*, 8> hints;
     bool get_outline_data = false;
     bool filter_embedded_hint = query_hint.has_outline_data() || query_hint.has_user_def_outline();
@@ -15998,7 +16008,8 @@ int ObDMLResolver::resolve_outline_data_hints()
     /* do noting */
   } else {
     ObQueryHint &query_hint = query_ctx->get_query_hint_for_update();
-    ObGlobalHint global_hint;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObGlobalHint global_hint(allocator);
     ObSEArray<ObHint*, 8> hints;
     bool get_outline_data = false;
     ObString qb_name;
@@ -16052,7 +16063,8 @@ int ObDMLResolver::pre_resolve_global_hints(const ParseNode *node)
   } else {
     typedef ObSEArray<const void*, 1024> NodesArray;
     ObQueryHint &query_hint = query_ctx->get_query_hint_for_update();
-    ObGlobalHint global_hint;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObGlobalHint global_hint(allocator);
     ObSEArray<ObHint*, 8> hints;
     bool get_outline_data = false;
     bool filter_embedded_hint = false;
@@ -16152,7 +16164,8 @@ int ObDMLResolver::inner_resolve_hints(const ParseNode &node,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected node type", K(ret), K(node.type_));
   } else {
-    ObGlobalHint embeded_global_hint;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObGlobalHint embeded_global_hint(allocator);
     ObSEArray<ObHint*, 8> embedded_hints;
     ParseNode *hint_node = NULL;
     bool in_outline_data = false;
@@ -17277,7 +17290,8 @@ int ObDMLResolver::resolve_join_hint(const ParseNode &join_node,
   } else {
     ObJoinHint *join_hint = NULL;
     const ParseNode *cur_table_node = NULL;
-    ObHint::TablesInHint hint_tables;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObHint::TablesInHint hint_tables(allocator);
     for (int64_t i = 0; OB_SUCC(ret) && i < join_tables->num_child_; i++) {
       hint_tables.reuse();
       if (OB_ISNULL(cur_table_node = join_tables->children_[i])) {
@@ -17844,7 +17858,8 @@ int ObDMLResolver::resolve_win_magic_hint(const ParseNode &hint_node,
   } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
     LOG_WARN("failed to resolve qb name", K(ret));
   } else {
-    ObSEArray<ObHint::TablesInHint, 4> tb_name_list;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObSqlArray<ObHint::TablesInHint, true> tb_name_list(allocator);
     const ParseNode *tb_name_list_node = hint_node.children_[1];
     if (NULL != tb_name_list_node &&
         OB_FAIL(resolve_tb_name_list(tb_name_list_node, tb_name_list))) {
@@ -17962,18 +17977,21 @@ int ObDMLResolver::resolve_tb_name_list(const ParseNode *tb_name_list_node,
   if (OB_ISNULL(tb_name_list_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (tb_name_list_node->type_ == T_RELATION_FACTOR_IN_USE_JOIN_HINT_LIST) {
+  } else if (tb_name_list_node->type_ != T_RELATION_FACTOR_IN_USE_JOIN_HINT_LIST) {
+    // do nothing
+  } else if (OB_UNLIKELY(!tb_name_list.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected non empty tb name list", K(ret));
+  } else if (OB_FAIL(tb_name_list.prepare_allocate(tb_name_list_node->num_child_))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else {
     const ParseNode *cur_table_node = NULL;
-    ObHint::TablesInHint hint_tables;
     for (int64_t i = 0; OB_SUCC(ret) && i < tb_name_list_node->num_child_; ++i) {
-      hint_tables.reuse();
       if (OB_ISNULL(cur_table_node = tb_name_list_node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(resolve_simple_table_list_in_hint(cur_table_node, hint_tables))) {
+      } else if (OB_FAIL(resolve_simple_table_list_in_hint(cur_table_node, tb_name_list.at(i)))) {
         LOG_WARN("failed to resolve simple table list", K(ret));
-      } else if (OB_FAIL(tb_name_list.push_back(hint_tables))) {
-        LOG_WARN("failed to push back hint tables", K(ret));
       }
     }
   }
@@ -18196,7 +18214,8 @@ int ObDMLResolver::resolve_pq_distribute_window_hint(const ParseNode &node,
   int ret = OB_SUCCESS;
   hint = NULL;
   ObWindowDistHint *win_dist = NULL;
-  ObSEArray<ObWindowDistHint::WinDistOption, 2> win_dist_options;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObWindowDistHint::WinDistOption, true> win_dist_options(allocator);
   ObString qb_name;
   if (OB_UNLIKELY(T_PQ_DISTRIBUTE_WINDOW != node.type_ || 2 != node.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -18226,8 +18245,11 @@ int ObDMLResolver::resolve_win_dist_options(const ParseNode *option_list,
   if (OB_ISNULL(option_list) || OB_UNLIKELY(T_METHOD_OPT_LIST != option_list->type_)) {
     //ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected win func option list in hint node", K(ret), K(option_list));
+  } else if (OB_FAIL(win_dist_options.reserve(option_list->num_child_))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
   } else {
-    ObWindowDistHint::WinDistOption dist_option;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObWindowDistHint::WinDistOption dist_option(allocator);
     bool is_valid = true;
     for (int64_t i = 0; is_valid && OB_SUCC(ret) && i < option_list->num_child_; ++i) {
       if (OB_FAIL(resolve_win_dist_option(option_list->children_[i], dist_option, is_valid))) {
@@ -18340,21 +18362,18 @@ int ObDMLResolver::resolve_multi_qb_name_list(const ParseNode *multi_qb_name_lis
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(multi_qb_name_list_node));
   } else if (T_LINK_NODE != multi_qb_name_list_node->type_) {
-    QbNameList qb_name_list;
-    if (OB_FAIL(resolve_qb_name_list(multi_qb_name_list_node, qb_name_list.qb_names_))) {
-      LOG_WARN("failed to resolve qb name node", K(ret));
-    } else if (OB_FAIL(multi_qb_name_list.push_back(qb_name_list))) {
-      LOG_WARN("failed to push back qb_name", K(ret));
-    }
-  } else if (OB_UNLIKELY(2 != multi_qb_name_list_node->num_child_)) {
+    // do nothing
+  } else if (OB_UNLIKELY(!multi_qb_name_list.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected join tables node", K(ret), K(multi_qb_name_list_node));
-  } else if (OB_FAIL(SMART_CALL(resolve_multi_qb_name_list(multi_qb_name_list_node->children_[0],
-                                                           multi_qb_name_list)))) {
-    LOG_WARN("failed to resolve qb name list", K(ret));
-  } else if (OB_FAIL(SMART_CALL(resolve_multi_qb_name_list(multi_qb_name_list_node->children_[1],
-                                                           multi_qb_name_list)))) {
-    LOG_WARN("failed to resolve qb name list", K(ret));
+    LOG_WARN("unexpected non empty multi qb name list", K(ret));
+  } else if (OB_FAIL(multi_qb_name_list.prepare_allocate(multi_qb_name_list_node->num_child_))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < multi_qb_name_list_node->num_child_; ++i) {
+      if (OB_FAIL(resolve_qb_name_list(multi_qb_name_list_node->children_[i], multi_qb_name_list.at(i).qb_names_))) {
+        LOG_WARN("failed to resolve qb name node", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -19701,7 +19720,7 @@ int ObDMLResolver::resolve_values_table_item(const ParseNode &table_node, TableI
     if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObValuesTableDef)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("faield to allocate memory table def buffer", K(ret));
-    } else if (FALSE_IT(new_table_item->values_table_def_ = new (buf) ObValuesTableDef())) {
+    } else if (FALSE_IT(new_table_item->values_table_def_ = new (buf) ObValuesTableDef(*allocator_))) {
     } else if ((upper_insert_resolver_ == NULL || is_mock) &&
                OB_FAIL(resolve_values_table_for_select(table_node, *new_table_item->values_table_def_))) {
       LOG_WARN("failed to resolve table values for select", K(ret));
@@ -20997,8 +21016,9 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
       ObJoinHint *main_join_hint = NULL;
       ObJoinHint *rowkey_join_hint = NULL;
       ObJoinOrderHint *ordered_hint = NULL;
-      ObHint::TablesInHint main_hint_tables;
-      ObHint::TablesInHint rowkey_hint_tables;
+      ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+      ObHint::TablesInHint main_hint_tables(allocator);
+      ObHint::TablesInHint rowkey_hint_tables(allocator);
       ObTableInHint main_table;
       ObTableInHint rowkey_doc;
       main_table.qb_name_ = left_table->qb_name_;

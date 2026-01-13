@@ -31,10 +31,11 @@ protected:
 
   struct JoinHelper
   {
-    JoinHelper():
+    JoinHelper(ObIAllocator &allocator):
       left_tree_(nullptr),
       right_tree_(nullptr),
       join_tree_(nullptr),
+      join_info_(allocator),
       force_order_(false) {}
 
     void reuse()
@@ -141,12 +142,14 @@ protected:
   struct JoinOrderCostInfo
   {
     JoinOrderCostInfo(ObIAllocator &allocator):
+      best_cardinality_(allocator),
+      best_cost_(allocator),
       id_cost_map_allocer_(RELORDER_HASHBUCKET_SIZE,
                            ObWrapperAllocator(&allocator)),
       bucket_allocator_wrapper_(&allocator) {}
 
-    ObSEArray<double, 10, common::ModulePageAllocator, true> best_cardinality_;
-    ObSEArray<double, 10, common::ModulePageAllocator, true> best_cost_;
+    ObSqlArray<double> best_cardinality_;
+    ObSqlArray<double> best_cost_;
 
     IdCostMapAllocer id_cost_map_allocer_;
     common::ObWrapperAllocator bucket_allocator_wrapper_;
@@ -269,15 +272,15 @@ public:
                        KPC_(cur_top_tree));
 
 private:
-  common::ObSEArray<ObRelIds, 10, common::ModulePageAllocator, true> leading_table_depend_infos_;
+  ObSqlArray<ObRelIds> leading_table_depend_infos_;
 
   ObJoinOrder *leading_tree_;
   bool use_leading_;
 
   int64_t size_;
   JoinOrderArray initial_permutation_;
-  ObSEArray<int64_t, 10, common::ModulePageAllocator, true> cur_permutation_;
-  ObSEArray<JoinHelper, 10, common::ModulePageAllocator, true> join_helpers_;
+  ObSqlArray<int64_t> cur_permutation_;
+  ObSqlArray<JoinHelper, true> join_helpers_;
 
   ObJoinOrder *cur_top_tree_;
 

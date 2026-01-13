@@ -75,7 +75,10 @@ protected:
   bool is_unique_;
 };
 
-typedef common::ObSEArray<ObFdItem *, 8, common::ModulePageAllocator, true> ObFdItemSet;
+typedef ObIArray<ObFdItem *> ObFdItemSet;
+typedef common::ObSEArray<ObFdItem *, 8> ObFdItemLocal;
+typedef ObSqlArray<ObFdItem *> ObFdItemSql;
+typedef common::ObFixedArray<ObFdItem *, common::ObIAllocator> ObFdItemFixed;
 
 class ObTableFdItem : public ObFdItem
 {
@@ -133,7 +136,7 @@ class ObFdItemFactory
 {
 public:
   explicit ObFdItemFactory(common::ObIAllocator &alloc) :
-      allocator_(alloc), item_store_(alloc), item_set_store_(alloc) {}
+      allocator_(alloc), item_store_(alloc), item_set_store_(alloc), parent_sets_(alloc) {}
   ~ObFdItemFactory() {}
 
   int create_fd_item_set(ObFdItemSet *&fd_item_set);
@@ -202,7 +205,7 @@ private:
   common::ObIAllocator &allocator_;
   common::ObObjStore<ObFdItem *, common::ObIAllocator&, true> item_store_;
   common::ObObjStore<ObFdItemSet *, common::ObIAllocator&, true> item_set_store_;
-  ObRawExprSets parent_sets_;
+  PersistentEqualSets parent_sets_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFdItemFactory);
 };

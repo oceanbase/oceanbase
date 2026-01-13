@@ -1660,6 +1660,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute_write);
+  ObMemPerfGuard mem_perf_guard("inner_execute_write");
   ObSqlQueryExecutor executor(sql);
   const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
   SMART_VAR(ObInnerSQLResult, res, get_session(), is_inner_session(), diagnostic_info_) {
@@ -1881,6 +1882,7 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute_read);
+  ObMemPerfGuard mem_perf_guard("inner_execute_read");
   ObInnerSQLReadContext *read_ctx = NULL;
   const static int64_t ctx_size = sizeof(ObInnerSQLReadContext);
   static_assert(ctx_size <= ObISQLClient::ReadResult::BUF_SIZE, "buffer not enough");

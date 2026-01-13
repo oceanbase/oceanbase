@@ -474,9 +474,9 @@ void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr, const b
                 AOBJECT_TAIL_SIZE + (obj.on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0));
   if (OB_NOT_NULL(malloc_callback)) {
     const int64_t size = obj.alloc_bytes_;
-    (*malloc_callback)(attr, size);
+    (*malloc_callback)(attr, size, obj);
     for (auto *p = malloc_callback->next(); p != malloc_callback; p = p->next()) {
-      (*p)(attr, size);
+      (*p)(attr, size, obj);
     }
   }
 }
@@ -497,9 +497,9 @@ void ObTenantCtxAllocator::on_free(AObject& obj, ABlock& block)
   ObMemAttr attr(tenant_id, label, ctx_id);
   if (OB_NOT_NULL(malloc_callback)) {
     const int64_t size = obj.alloc_bytes_;
-    (*malloc_callback)(attr, -size);
+    (*malloc_callback)(attr, -size, obj);
     for (auto *p = malloc_callback->next(); p != malloc_callback; p = p->next()) {
-      (*p)(attr, -size);
+      (*p)(attr, -size, obj);
     }
   }
 }

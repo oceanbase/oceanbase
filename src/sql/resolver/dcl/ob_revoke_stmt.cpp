@@ -22,13 +22,14 @@ namespace sql
 {
 
 
-ObRevokeStmt::ObRevokeStmt(ObIAllocator *name_pool)
-    : ObDDLStmt(name_pool, stmt::T_GRANT),
+ObRevokeStmt::ObRevokeStmt(ObIAllocator &allocator)
+    : ObDDLStmt(&allocator, stmt::T_GRANT),
       priv_set_(0),
       grant_level_(OB_PRIV_INVALID_LEVEL),
       database_(),
       table_(),
       tenant_id_(OB_INVALID_ID),
+      users_(allocator),
       revoke_all_(false),
       role_id_set_(),
       object_type_(share::schema::ObObjectType::INVALID),
@@ -39,29 +40,7 @@ ObRevokeStmt::ObRevokeStmt(ObIAllocator *name_pool)
       grantor_id_(),
       revoke_all_ora_(false),
       has_warning_(false),
-      column_names_priv_(),
-      table_schema_version_(0)
-{
-}
-
-ObRevokeStmt::ObRevokeStmt()
-    : ObDDLStmt(NULL, stmt::T_GRANT),
-      priv_set_(0),
-      grant_level_(OB_PRIV_INVALID_LEVEL),
-      database_(),
-      table_(),
-      tenant_id_(OB_INVALID_ID),
-      revoke_all_(false),
-      role_id_set_(),
-      object_type_(share::schema::ObObjectType::INVALID),
-      sys_priv_array_(),
-      obj_priv_array_(),
-      obj_id_(),
-      obj_type_(),
-      grantor_id_(),
-      revoke_all_ora_(false),
-      has_warning_(false),
-      column_names_priv_(),
+      column_names_priv_(allocator),
       table_schema_version_(0)
 {
 }

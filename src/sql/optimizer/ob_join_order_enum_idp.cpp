@@ -32,7 +32,8 @@ ObJoinOrderEnumIDP::ObJoinOrderEnumIDP(ObLogPlan &plan, const common::ObIArray<O
 int ObJoinOrderEnumIDP::inner_enumerate()
 {
   int ret = OB_SUCCESS;
-  common::ObArray<JoinOrderArray> join_rels;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<JoinOrderArray, true> join_rels(allocator);
   int64_t join_level = base_level_.count(); //需要连接的层次数
   //初始化动规数据结构
   if (OB_UNLIKELY(join_level < 1)) {
@@ -106,7 +107,7 @@ int ObJoinOrderEnumIDP::init_idp(int64_t initial_idp_step,
   return ret;
 }
 
-int ObJoinOrderEnumIDP::prepare_ordermap_pathset(const JoinOrderArray base_level)
+int ObJoinOrderEnumIDP::prepare_ordermap_pathset(const JoinOrderArray &base_level)
 {
   int ret = OB_SUCCESS;
   if (!relid_joinorder_map_.created() &&
@@ -156,7 +157,8 @@ int ObJoinOrderEnumIDP::generate_join_levels_with_IDP(common::ObIArray<JoinOrder
 int ObJoinOrderEnumIDP::generate_join_levels_with_orgleading(common::ObIArray<JoinOrderArray> &join_rels)
 {
   int ret = OB_SUCCESS;
-  ObArray<JoinOrderArray> temp_join_rels;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<JoinOrderArray, true> temp_join_rels(allocator);
   int64_t join_level = join_rels.count();
   int64_t temp_join_level = from_table_items_.count();
   LOG_TRACE("idp start enum join order with orig leading", K(temp_join_level));
@@ -184,7 +186,8 @@ int ObJoinOrderEnumIDP::inner_generate_join_levels_with_IDP(common::ObIArray<Joi
   // c. idp enumeration failed, under bushy cases, etc
   ObIDPAbortType abort_type = ObIDPAbortType::IDP_NO_ABORT;
   uint32_t join_level = 0;
-  ObArray<JoinOrderArray> temp_join_rels;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<JoinOrderArray, true> temp_join_rels(allocator);
   if (ignore_hint) {
     OPT_TRACE("IDP without hint");
   } else {
@@ -392,7 +395,8 @@ int ObJoinOrderEnumIDP::prepare_next_round_idp(common::ObIArray<JoinOrderArray> 
                                                ObJoinOrder *&best_order)
 {
   int ret = OB_SUCCESS;
-  JoinOrderArray remained_rels;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  JoinOrderArray remained_rels(allocator);
   if (OB_ISNULL(best_order)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid best order", K(best_order), K(ret));
@@ -672,7 +676,8 @@ int ObJoinOrderEnumIDP::inner_generate_join_order(ObIArray<JoinOrderArray> &join
     //依次检查每一个join info，是否有合法的连接
     ObSEArray<ObConflictDetector*, 4> valid_detectors;
     ObRelIds cur_relids;
-    JoinInfo join_info;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    JoinInfo join_info(allocator);
     bool is_strict_order = true;
     bool is_detector_valid = true;
     if (left_tree->get_tables().overlap(right_tree->get_tables())) {

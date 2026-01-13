@@ -100,12 +100,15 @@ int ObOutlineResolver::resolve_outline_stmt(const ParseNode *node, ObStmt *&out_
     LOG_WARN("invalid parameter", K(ret), K(node), K(stmt_));
   } else {
     ObStmt *outline_stmt = NULL;
-    ObResolver resolver(params_);
-    if (node->type_ != T_SELECT
-        && node->type_ != T_INSERT
-        && node->type_ != T_REPLACE
-        && node->type_ != T_DELETE
-        && node->type_ != T_UPDATE) {
+    ObResolverParams params;
+    ObResolver resolver(params);
+    if (OB_FAIL(params.assign(params_))) {
+      LOG_WARN("fail to assign params", K(ret));
+    } else if (node->type_ != T_SELECT
+               && node->type_ != T_INSERT
+               && node->type_ != T_REPLACE
+               && node->type_ != T_DELETE
+               && node->type_ != T_UPDATE) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected node type", K(node->type_), K(ret));
     } else if (OB_FAIL(resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *node, outline_stmt))) {

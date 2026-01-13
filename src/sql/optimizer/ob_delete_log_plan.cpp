@@ -345,7 +345,8 @@ int ObDeleteLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
                                                     ObIArray<IndexDMLInfo*> &all_index_dml_infos)
 {
   int ret = OB_SUCCESS;
-  ObAssignments empty_assignments;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObAssignments empty_assignments(allocator);
   ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   const ObTableSchema* index_schema = NULL;

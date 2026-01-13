@@ -144,6 +144,10 @@ private:
                                               ObIArray<ObGroupbyExpr> &rollup_exprs_list);
   int simple_expand_grouping_sets_items(ObIArray<ObGroupingSetsItem> &grouping_sets_items,
                                         ObIArray<ObGroupingSetsItem> &simple_grouping_sets_items);
+  int init_simple_grouping_sets_items(ObIArray<ObGroupingSetsItem> &grouping_sets_items,
+                                      ObIArray<ObGroupingSetsItem> &simple_grouping_sets_items);
+  int init_expanded_grouping_sets_exprs(ObIArray<ObGroupingSetsItem> &grouping_sets_items,
+                                        ObIArray<ObGroupbyExpr> &grouping_sets_exprs);
   int create_child_stmts_for_groupby_sets(ObSelectStmt *origin_stmt,
                                           ObIArray<ObSelectStmt*> &child_stmts);
   int get_groupby_and_rollup_exprs_list(ObSelectStmt *origin_stmt,

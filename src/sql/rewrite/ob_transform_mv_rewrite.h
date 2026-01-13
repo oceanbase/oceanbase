@@ -71,7 +71,9 @@ class ObTransformMVRewrite : public ObTransformRule
 public:
   ObTransformMVRewrite(ObTransformerCtx *ctx)
     : ObTransformRule(ctx, TransMethod::PRE_ORDER, T_MV_REWRITE),
-      parent_stmts_(NULL) {}
+      allocator_("MvRewrite"),
+      parent_stmts_(NULL),
+      mv_temp_query_ctx_(allocator_) {}
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
@@ -84,12 +86,13 @@ protected:
 
 private:
   struct JoinTreeNode {
-    JoinTreeNode() : table_set_(),
-                     table_id_(common::OB_INVALID_ID),
-                     ori_table_(NULL),
-                     left_child_(NULL),
-                     right_child_(NULL),
-                     join_info_() {}
+    JoinTreeNode(ObIAllocator &allocator)
+      : table_set_(),
+        table_id_(common::OB_INVALID_ID),
+        ori_table_(NULL),
+        left_child_(NULL),
+        right_child_(NULL),
+        join_info_(allocator) {}
     TO_STRING_KV(
       K_(table_set),
       K_(table_id),
@@ -130,8 +133,8 @@ private:
     ObSEArray<ObRawExpr*, 16> mv_conds_;                // where/on conditions pulled up from mv join tree
     ObSEArray<ObRawExpr*, 16> query_conds_;             // where/on conditions pulled up from query join tree (only mv part)
     ObSEArray<ObRawExpr*, 16> query_other_conds_;       // where conditions which are not participating in join tree build/compare, will be added into rewrite stmt directly
-    PersistentEqualSets mv_equal_sets_;                 // mv equal sets
-    PersistentEqualSets query_equal_sets_;              // origin query equal sets
+    TemporaryEqualSets mv_equal_sets_;                 // mv equal sets
+    TemporaryEqualSets query_equal_sets_;              // origin query equal sets
     hash::ObHashMap<PtrKey, int64_t> mv_es_map_;        // mv equal sets map, expr -> equal set idx
     hash::ObHashMap<PtrKey, int64_t> query_es_map_;     // origin query equal sets map, expr -> equal set idx
     ObSEArray<ObSqlBitSet<>, 16> equal_sets_map_;       // map origin query equal set to mv equal sets
@@ -381,6 +384,7 @@ private:
   static bool is_range_cond(ObRawExpr *expr);
 
 private:
+  ObArenaAllocator allocator_;
   ObIArray<ObParentDMLStmt> *parent_stmts_;
   ObQueryCtx mv_temp_query_ctx_; // used for generating mv stmt
 private:

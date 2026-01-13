@@ -141,9 +141,9 @@ class ObTransformUtils
 
     ObRelIds table_set_;
     ObSEArray<ObRawExpr *, 4> const_exprs_;
-    PersistentEqualSets equal_sets_;
-    ObFdItemSet fd_sets_;
-    ObFdItemSet candi_fd_sets_;
+    TemporaryEqualSets equal_sets_;
+    ObFdItemLocal fd_sets_;
+    ObFdItemLocal candi_fd_sets_;
     ObSEArray<ObRawExpr *, 4> not_null_;
 
     int assign(const UniqueCheckInfo &other);
@@ -368,10 +368,10 @@ public:
                                            const uint64_t new_table_id,
                                            common::ObIArray<PartExprItem> &part_items);
   static int update_table_id_for_check_constraint_items(
-             const common::ObIArray<CheckConstraintItem> &other_check_constraint_items,
+             const common::ObIArray<CheckConstraintItem*> &other_check_constraint_items,
              const uint64_t old_table_id,
              const uint64_t new_table_id,
-             common::ObIArray<CheckConstraintItem> &check_constraint_items);
+             common::ObIArray<CheckConstraintItem*> &check_constraint_items);
   static int update_table_id_for_semi_info(const ObIArray<SemiInfo*> &other_semi_infos,
                                            const uint64_t old_table_id,
                                            const uint64_t new_table_id,

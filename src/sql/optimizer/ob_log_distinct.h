@@ -24,6 +24,7 @@ class ObLogDistinct : public ObLogicalOperator
 public:
   ObLogDistinct(ObLogPlan &plan)
       : ObLogicalOperator(plan),
+        distinct_exprs_(plan.get_allocator()),
         algo_(AGGREGATE_UNINITIALIZED),
         step_(SINGLE),
         is_block_mode_(false),
@@ -91,7 +92,7 @@ public:
     has_push_down_ = has_push_down;
   }
 private:
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;
+  ObSqlArray<ObRawExpr*> distinct_exprs_;
   AggregateAlgo algo_;
 
   AggregatePathType step_;

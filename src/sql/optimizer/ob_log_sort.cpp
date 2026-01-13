@@ -583,7 +583,7 @@ int ObLogSort::try_allocate_pushdown_topn_runtime_filter()
   ObSQLSessionInfo *session_info = nullptr;
   uint64_t table_id = OB_INVALID_ID;
   int64_t p2p_sequence_id = OB_INVALID_ID;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> candidate_sk_exprs;
+  common::ObSEArray<ObRawExpr *, 8> candidate_sk_exprs;
   int64_t effective_sk_cnt = 0;
   bool tsc_has_exchange = false;
   bool tsc_has_px_coord = false;
@@ -714,7 +714,7 @@ int ObLogSort::try_allocate_pushdown_topn_runtime_filter()
 // get the front sort keys from same table, topn filter can pushdown to this table
 int ObLogSort::get_candidate_pushdown_sort_keys(
     uint64_t &table_id,
-    common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> &candidate_sk_exprs)
+    common::ObIArray<ObRawExpr *> &candidate_sk_exprs)
 {
   int ret = OB_SUCCESS;
   bool can_expr_pushdown = true;

@@ -161,7 +161,8 @@ int ObDMLStmtPrinter::print_hint()
     DATA_PRINTF("%s", hint_begin);
     if (OB_SUCC(ret)) {
       const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
-      ObQueryHint query_hint_dblink;
+      ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+      ObQueryHint query_hint_dblink(allocator);
       if (print_params_.for_dblink_ &&
           is_first_stmt_for_hint_ &&
           OB_FAIL(prepare_dblink_hint(query_hint_dblink))) {
@@ -1566,7 +1567,7 @@ int ObDMLStmtPrinter::build_json_table_nested_tree(const TableItem* table_item, 
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate col node", K(ret));
     } else {
-      col_def = new (col_def) ObDmlJtColDef();
+      col_def = new (col_def) ObDmlJtColDef(*allocator);
       col_def->col_base_info_.assign(info);
 
       if (info.col_type_ != NESTED_COL_TYPE) {

@@ -12970,7 +12970,9 @@ NO_REWRITE opt_qb_name
 }
 | MATERIALIZE '(' qb_name_option multi_qb_name_list ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MATERIALIZE, 2, $3, $4);
+  ParseNode *qb_name_list = NULL;
+  merge_nodes(qb_name_list, result, T_LINK_NODE, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MATERIALIZE, 2, $3, qb_name_list);
 }
 | SEMI_TO_INNER opt_qb_name
 {
@@ -12990,7 +12992,9 @@ NO_REWRITE opt_qb_name
 }
 | COALESCE_SQ '(' qb_name_option multi_qb_name_list ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_SQ, 2, $3, $4);
+  ParseNode *qb_name_list = NULL;
+  merge_nodes(qb_name_list, result, T_LINK_NODE, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COALESCE_SQ, 2, $3, qb_name_list);
 }
 | NO_COALESCE_SQ opt_qb_name
 {
@@ -16052,8 +16056,10 @@ ANALYZE TABLE relation_factor UPDATE HISTOGRAM ON column_name_list WITH INTNUM B
 | ANALYZE TABLE table_list
 {
   ParseNode *compute_statictic = NULL;
+  ParseNode *table_list = NULL;
   malloc_non_terminal_node(compute_statictic, result->malloc_pool_, T_ANALYZE_STATISTICS, 2, NULL, NULL);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_ANALYZE, 3, $3, NULL, compute_statictic);
+  merge_nodes(table_list, result, T_LINK_NODE, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MYSQL_ANALYZE, 3, table_list, NULL, compute_statictic);
 }
 ;
 

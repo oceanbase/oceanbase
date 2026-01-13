@@ -709,10 +709,16 @@ int OptTableMeta::refine_column_stat(const ObGlobalColumnStat &stat,
 int OptTableMetas::copy_table_meta_info(const OptTableMeta &src_meta, OptTableMeta *&dst_meta)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(table_metas_.push_back(src_meta))) {
+  OptTableMeta *new_meta = NULL;
+  if (OB_ISNULL(new_meta = OB_NEWx(OptTableMeta, &allocator_, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate table meta", K(ret));
+  } else if (OB_FAIL(new_meta->assign(src_meta))) {
+    LOG_WARN("failed to assign table meta", K(ret));
+  } else if (OB_FAIL(table_metas_.push_back(new_meta))) {
     LOG_WARN("failed to push back table meta");
   } else {
-    dst_meta = &table_metas_.at(table_metas_.count() - 1);
+    dst_meta = new_meta;
   }
   return ret;
 }
@@ -755,9 +761,11 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null sql schema guard", K(schema_guard));
-  } else if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
+  } else if (OB_ISNULL(table_meta = OB_NEWx(OptTableMeta, &allocator_, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate place holder for table meta", K(ret));
+    LOG_WARN("failed to allocate table meta", K(ret));
+  } else if (OB_FAIL(table_metas_.push_back(table_meta))) {
+    LOG_WARN("failed to push back table meta", K(ret));
   } else if (OB_FAIL(table_meta->init(table_id, ref_table_id, rows, stat_type, micro_block_count,
                                       *schema_guard, all_used_part_id, all_used_tablets,
                                       column_ids, stat_part_id, hist_part_id, scale_ratio, ctx,
@@ -791,9 +799,11 @@ int OptTableMetas::add_set_child_stmt_meta_info(const ObSelectStmt *parent_stmt,
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null stmt", K(ret), K(parent_stmt), K(child_stmt));
-  } else if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
+  } else if (OB_ISNULL(table_meta = OB_NEWx(OptTableMeta, &allocator_, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate place holder for table meta", K(ret));
+    LOG_WARN("failed to allocate table meta", K(ret));
+  } else if (OB_FAIL(table_metas_.push_back(table_meta))) {
+    LOG_WARN("failed to push back table meta", K(ret));
   } else {
     const double table_rows = child_rows;
     table_meta->set_table_id(table_id);
@@ -878,9 +888,11 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt) || OB_ISNULL(child_ctx.get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null stmt", K(ret), K(parent_stmt), K(child_stmt));
-  } else if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
+  } else if (OB_ISNULL(table_meta = OB_NEWx(OptTableMeta, &allocator_, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate place holder for table meta", K(ret));
+    LOG_WARN("failed to allocate table meta", K(ret));
+  } else if (OB_FAIL(table_metas_.push_back(table_meta))) {
+    LOG_WARN("failed to push back table meta", K(ret));
   } else if (OB_FAIL(parent_stmt->get_column_items(table_id, column_items))) {
     LOG_WARN("failed to get column items", K(ret));
   } else {
@@ -992,9 +1004,11 @@ int OptTableMetas::add_values_table_meta_info(const ObDMLStmt *stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(table_def)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null stmt", K(ret), KP(stmt), KP(table_def));
-  } else if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
+  } else if (OB_ISNULL(table_meta = OB_NEWx(OptTableMeta, &allocator_, allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate place holder for table meta", K(ret));
+    LOG_WARN("failed to allocate table meta", K(ret));
+  } else if (OB_FAIL(table_metas_.push_back(table_meta))) {
+    LOG_WARN("failed to push back table meta", K(ret));
   } else if (OB_FAIL(stmt->get_column_items(table_id, column_items))) {
     LOG_WARN("failed to get column items", K(ret));
   } else {
@@ -1102,8 +1116,8 @@ const OptTableMeta* OptTableMetas::get_table_meta_by_table_id(const uint64_t tab
 {
   const OptTableMeta *table_meta = NULL;
   for (int64_t i = 0; NULL == table_meta && i < table_metas_.count(); ++i) {
-    if (table_id == table_metas_.at(i).get_table_id()) {
-      table_meta = &table_metas_.at(i);
+    if (NULL != table_metas_.at(i) && table_id == table_metas_.at(i)->get_table_id()) {
+      table_meta = table_metas_.at(i);
     }
   }
   return table_meta;
@@ -1113,8 +1127,8 @@ OptTableMeta* OptTableMetas::get_table_meta_by_table_id(const uint64_t table_id)
 {
   OptTableMeta *table_meta = NULL;
   for (int64_t i = 0; NULL == table_meta && i < table_metas_.count(); ++i) {
-    if (table_id == table_metas_.at(i).get_table_id()) {
-      table_meta = &table_metas_.at(i);
+    if (NULL != table_metas_.at(i) && table_id == table_metas_.at(i)->get_table_id()) {
+      table_meta = table_metas_.at(i);
     }
   }
   return table_meta;
@@ -1174,14 +1188,20 @@ int OptTableMetas::add_lake_table_meta_info(OptSelectivityCtx &ctx,
 {
   int ret = OB_SUCCESS;
   OptTableMeta *table_meta = NULL;
-  if (OB_ISNULL(table_meta = table_metas_.alloc_place_holder())) {
+  void *ptr = NULL;
+  if (OB_ISNULL(ptr = allocator_.alloc(sizeof(OptTableMeta)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate place holder for table meta", K(ret));
-  } else if (OB_FAIL(table_meta->init_lake_table(table_id, ref_table_id, rows, last_analyzed, stat_type,
-                                                 column_ids, column_stats, ctx, base_meta_info))) {
-    LOG_WARN("failed to init new tstat", K(ret));
+    LOG_WARN("failed to allocate table meta", K(ret));
   } else {
-    LOG_TRACE("add base table meta info success", K(*table_meta));
+    table_meta = new (ptr) OptTableMeta(allocator_);
+    if (OB_FAIL(table_metas_.push_back(table_meta))) {
+      LOG_WARN("failed to push back table meta", K(ret));
+    } else if (OB_FAIL(table_meta->init_lake_table(table_id, ref_table_id, rows, last_analyzed, stat_type,
+                                                   column_ids, column_stats, ctx, base_meta_info))) {
+      LOG_WARN("failed to init new tstat", K(ret));
+    } else {
+      LOG_TRACE("add base table meta info success", K(*table_meta));
+    }
   }
 
   return ret;

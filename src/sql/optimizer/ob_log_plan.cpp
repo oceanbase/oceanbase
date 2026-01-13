@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_log_join_filter.h"
 #include "sql/optimizer/ob_log_sort.h"
 #include "sql/optimizer/ob_log_group_by.h"
+#include "sql/optimizer/ob_log_insert.h"
 #include "sql/optimizer/ob_log_window_function.h"
 #include "sql/optimizer/ob_log_window_function.h"
 #include "sql/optimizer/ob_log_limit.h"
@@ -76,39 +77,63 @@ static const char *ExplainColumnName[] =
   "COST"
 };
 
+const EmptyEqualSets ObLogPlan::empty_expr_sets_ = EmptyEqualSets();
+const ObRelIds ObLogPlan::empty_table_set_ = ObRelIds();
+const ObFdItemFixed ObLogPlan::empty_fd_item_set_ = ObFdItemFixed();
+
 ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
   : optimizer_context_(ctx),
     allocator_(ctx.get_allocator()),
     stmt_(stmt),
     log_op_factory_(allocator_),
-    candidates_(),
-    group_replaced_exprs_(),
+    candidates_(allocator_),
+    group_replaced_exprs_(allocator_),
+    overwrite_group_replaced_exprs_(allocator_),
     stat_partition_id_expr_(nullptr),
     stat_table_scan_(nullptr),
+    pushdown_filters_(allocator_),
+    startup_filters_(allocator_),
     query_ref_(NULL),
     root_(NULL),
     sql_text_(),
     hash_value_(0),
-    subplan_infos_(),
+    subquery_filters_(allocator_),
+    subplan_infos_(allocator_),
+    rownum_exprs_(allocator_),
+    special_filters_(allocator_),
+    select_item_exprs_(allocator_),
+    condition_exprs_(allocator_),
+    groupby_rollup_exprs_(allocator_),
+    having_exprs_(allocator_),
+    orderby_exprs_(allocator_),
+    winfunc_exprs_(allocator_),
+    push_subq_exprs_(allocator_),
+    log_plan_hint_(allocator_),
     outline_print_flags_(0),
-    onetime_exprs_(),
-    pred_sels_(),
-    multi_stmt_rowkey_pos_(),
-    equal_sets_(),
+    onetime_exprs_(allocator_),
+    pred_sels_(allocator_),
+    multi_stmt_rowkey_pos_(allocator_),
+    equal_sets_(allocator_),
     max_op_id_(OB_INVALID_ID),
     is_subplan_scan_(false),
     is_parent_set_distinct_(false),
     is_rescan_subplan_(false),
     disable_child_batch_rescan_(false),
     temp_table_info_(NULL),
-    const_exprs_(),
-    hash_dist_info_(),
+    const_exprs_(allocator_),
+    hash_dist_info_(allocator_),
+    column_items_(allocator_),
     insert_stmt_(NULL),
-    basic_table_metas_(),
-    update_table_metas_(),
-    selectivity_ctx_(ctx, this, stmt),
-    alloc_sfu_list_(),
+    basic_table_metas_(allocator_),
+    update_table_metas_(allocator_),
+    selectivity_ctx_(ctx, this, stmt, allocator_),
+    alloc_sfu_list_(allocator_),
+    cache_part_id_exprs_(allocator_),
     onetime_copier_(NULL),
+    onetime_query_refs_(allocator_),
+    onetime_params_(allocator_),
+    onetime_replaced_exprs_(allocator_),
+    new_or_quals_(allocator_),
     nonrecursive_plan_for_fake_cte_(NULL),
     has_allocated_range_shuffle_(false),
     need_accurate_cardinality_(false)
@@ -3585,8 +3610,9 @@ int ObLogPlan::prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_ex
                        *get_optimizer_context().get_session_info(),
                        helper.aggr_code_expr_))) {
     LOG_WARN("failed to build inner aggr code expr", K(ret));
+  } else if (OB_FAIL(helper.distinct_aggr_batch_.reserve(aggr_items.count()))) {
+    LOG_WARN("failed to reserve distinct aggr batch", K(ret));
   }
-
 
   for (int64_t i = 0; OB_SUCC(ret) && i < aggr_items.count(); ++i) {
     ObAggFunRawExpr *aggr = aggr_items.at(i);
@@ -3668,7 +3694,11 @@ int ObLogPlan::generate_three_stage_aggr_expr(ObRawExprFactory &expr_factory,
   }
   // 3. the aggr does not share distinct exprs with others, create a new batch here
   if (OB_SUCC(ret) && !find_same) {
-    ObDistinctAggrBatch batch;
+    ObDistinctAggrBatch *batch = batch_distinct_aggrs.alloc_place_holder();
+    if (OB_ISNULL(batch)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failted to allocate distinct aggr batch", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < new_aggr->get_real_param_exprs().count(); ++i) {
       ObRawExpr *real_param = new_aggr->get_real_param_exprs().at(i);
       ObRawExpr *new_real_param = NULL;
@@ -3676,7 +3706,7 @@ int ObLogPlan::generate_three_stage_aggr_expr(ObRawExprFactory &expr_factory,
                                                       real_param,
                                                       new_real_param))) {
         LOG_WARN("failed to create dup data expr", K(ret));
-      } else if (OB_FAIL(batch.mocked_params_.push_back(
+      } else if (OB_FAIL(batch->mocked_params_.push_back(
                            std::pair<ObRawExpr *, ObRawExpr *>(real_param, new_real_param)))) {
         LOG_WARN("failed to push back the mocked param pair", K(ret));
       } else if (OB_FAIL(distinct_params.push_back(new_real_param))) {
@@ -3686,10 +3716,8 @@ int ObLogPlan::generate_three_stage_aggr_expr(ObRawExprFactory &expr_factory,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(batch.mocked_aggrs_.push_back(mocked_aggr))) {
+      if (OB_FAIL(batch->mocked_aggrs_.push_back(mocked_aggr))) {
         LOG_WARN("failed to push back mocked aggr", K(ret));
-      } else if (OB_FAIL(batch_distinct_aggrs.push_back(batch))) {
-        LOG_WARN("failed to push back batch distinct funcs", K(ret));
       }
     }
   }
@@ -3770,7 +3798,8 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
   AggregateAlgo second_aggr_algo;
   AggregateAlgo third_aggr_algo;
   ObLogicalOperator *child = NULL;
-  ObThreeStageAggrInfo three_stage_info;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObThreeStageAggrInfo three_stage_info(allocator);
   double aggr_code_ndv = 1.0;
   // 1. prepare to allocate the first group by
   if (OB_ISNULL(top)) {
@@ -4629,7 +4658,7 @@ int ObLogPlan::get_grouping_style_exchange_info(const ObIArray<ObRawExpr*> &part
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
-        sharding_info = new(sharding_info) ObShardingInfo();
+        sharding_info = new(sharding_info) ObShardingInfo(allocator_);
         if (OB_FAIL(sharding_info->get_partition_keys().assign(partition_exprs))) {
           LOG_WARN("failed to assign expr", K(ret));
         } else {
@@ -4776,7 +4805,7 @@ int ObLogPlan::init_grouping_set_info(const ObLogicalOperator &top,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else {
-    grouping_set_info = new(info_buf)ObGroupingSetInfo();
+    grouping_set_info = new(info_buf)ObGroupingSetInfo(get_allocator());
     ObRawExprFactory &factory = get_optimizer_context().get_expr_factory();
     if (OB_FAIL(ObRawExprUtils::build_grouping_id(factory,
                                                   *get_optimizer_context().get_session_info(),
@@ -9498,6 +9527,17 @@ int ObLogPlan::filter_distinct_exprs_by(DistinctPushdownContext *&context,
   return ret;
 }
 
+int ObDistinctAggrBatch::assign(const ObDistinctAggrBatch &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(mocked_aggrs_.assign(other.mocked_aggrs_))) {
+    LOG_WARN("failed to assign mocked aggrs", K(ret));
+  } else if (OB_FAIL(mocked_params_.assign(other.mocked_params_))) {
+    LOG_WARN("failed to assign mocked params", K(ret));
+  }
+  return ret;
+}
+
 int DistinctPushdownContext::map(const common::ObIArray<ObRawExpr *> &from_exprs,
                                  const common::ObIArray<ObRawExpr *> &to_exprs,
                                  ObRawExprFactory *expr_factory,
@@ -9589,7 +9629,7 @@ int DistinctPushdownContext::assign_to(ObIAllocator *allocator, DistinctPushdown
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc pushdown context", K(ret));
   } else {
-    copied_context = new (ptr) DistinctPushdownContext();
+    copied_context = new (ptr) DistinctPushdownContext(*allocator);
     copied_context->assign_distinct_exprs(distinct_exprs_);
     copied_context->set_pushed_down_through_shuffle(pushed_down_through_shuffle_);
   }
@@ -9604,7 +9644,7 @@ int ObLogPlan::alloc_partial_distinct_context(DistinctPushdownContext *&distinct
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc pushdown context", K(ret));
   } else {
-    distinct_context = new (ptr) DistinctPushdownContext();
+    distinct_context = new (ptr) DistinctPushdownContext(get_allocator());
   }
   return ret;
 }
@@ -9686,7 +9726,7 @@ int ObLogPlan::get_partial_distinct_context(ObLogGroupBy *groupby_node,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc pushdown context", K(ret));
     } else {
-      distinct_context = new (ptr) DistinctPushdownContext();
+      distinct_context = new (ptr) DistinctPushdownContext(get_allocator());
       distinct_context->set_pushed_down_through_shuffle(false);
       distinct_context->assign_distinct_exprs(distinct_exprs);
     }
@@ -9707,7 +9747,7 @@ int ObLogPlan::get_partial_distinct_context(const ObLogDistinct *distinct_node,
   } else {
     // if distinct_node is single && distinct_pushdown is disabled by hint
     // do not derive pushdown context
-    distinct_context = new (ptr) DistinctPushdownContext();
+    distinct_context = new (ptr) DistinctPushdownContext(get_allocator());
     distinct_context->assign_distinct_exprs(distinct_node->get_distinct_exprs());
     // if we met a partial distinct
     // which means we have already pushed through an exchange
@@ -10215,7 +10255,7 @@ int GroupByPushdownContext::init(ObIAllocator *allocator, GroupByPushdownContext
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc pushdown context", K(ret));
   } else {
-    new_context = new (ptr) GroupByPushdownContext();
+    new_context = new (ptr) GroupByPushdownContext(*allocator);
   }
   return ret;
 }
@@ -10228,7 +10268,7 @@ int GroupByPushdownResult::init(ObIAllocator *allocator, GroupByPushdownResult* 
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc pushdown context", K(ret));
   } else {
-    new_result = new (ptr) GroupByPushdownResult();
+    new_result = new (ptr) GroupByPushdownResult(*allocator);
   }
   return ret;
 }
@@ -11400,7 +11440,8 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     ObBitSet<256> output_deps;                       // output expr dependencies
     AllocGIContext gi_ctx;
     ObPxPipeBlockingCtx pipe_block_ctx(get_allocator());
-    ObLocationConstraintContext location_constraints;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObLocationConstraintContext location_constraints(allocator);
     AllocBloomFilterContext bf_ctx;
     AllocOpContext alloc_op_ctx;
     SMART_VAR(ObBatchExecParamCtx, batch_exec_param_ctx) {
@@ -12525,7 +12566,8 @@ int ObLogPlan::remove_duplicate_base_table_constraint(ObLocationConstraintContex
 {
   int ret = OB_SUCCESS;
   ObLocationConstraint &base_constraints = location_constraint.base_table_constraints_;
-  ObLocationConstraint unique_constraint;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObLocationConstraint unique_constraint(allocator);
   for (int64_t i = 0; OB_SUCC(ret) && i < base_constraints.count(); ++i) {
     bool find = false;
     int64_t j = 0;
@@ -12661,7 +12703,7 @@ EqualSets* ObLogPlan::create_equal_sets()
   EqualSets *esets = NULL;
   void *ptr = NULL;
   if (OB_LIKELY(NULL != (ptr = get_allocator().alloc(sizeof(PersistentEqualSets))))) {
-    esets = new (ptr) PersistentEqualSets();
+    esets = new (ptr) PersistentEqualSets(get_allocator());
   }
   return esets;
 }
@@ -14036,7 +14078,7 @@ int ObLogPlan::collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
 int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
 {
   int ret = OB_SUCCESS;
-  ObIArray<TableLocRelInfo> &loc_rel_infos = optimizer_context_.get_loc_rel_infos();
+  ObIArray<TableLocRelInfo*> &loc_rel_infos = optimizer_context_.get_loc_rel_infos();
   if (op.is_table_scan()) {
     ObLogTableScan &tsc_op = static_cast<ObLogTableScan&>(op);
     ObTablePartitionInfo *table_part_info = tsc_op.get_table_partition_info();
@@ -14048,47 +14090,51 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
                K(table_loc_id), K(ref_table_id), K(loc_rel_infos));
     } else if (!tsc_op.get_is_index_global()) {
       //global index with data table has no related tablet info
-      TableLocRelInfo rel_info;
-      rel_info.table_loc_id_ = tsc_op.get_table_id();
-      rel_info.ref_table_id_ = tsc_op.get_real_ref_table_id();
-      if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_real_index_table_id()))) {
+      TableLocRelInfo *rel_info = nullptr;
+      ObIAllocator &allocator = optimizer_context_.get_allocator();
+      if (OB_ISNULL(rel_info = OB_NEWx(TableLocRelInfo, &allocator, allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate table loc rel info", K(ret));
+      } else if (OB_FALSE_IT(rel_info->table_loc_id_ = tsc_op.get_table_id())) {
+      } else if (OB_FALSE_IT(rel_info->ref_table_id_ = tsc_op.get_real_ref_table_id())) {
+      } else if (OB_FAIL(rel_info->related_ids_.push_back(tsc_op.get_real_index_table_id()))) {
         LOG_WARN("store the source table id failed", K(ret));
       } else if (table_part_info != nullptr &&
-          OB_FAIL(rel_info.table_part_infos_.push_back(table_part_info))) {
+          OB_FAIL(rel_info->table_part_infos_.push_back(table_part_info))) {
         LOG_WARN("collect table partition info to relation info failed", K(ret));
       } else if (tsc_op.get_index_back()) {
-        if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_real_ref_table_id()))) {
+        if (OB_FAIL(rel_info->related_ids_.push_back(tsc_op.get_real_ref_table_id()))) {
           LOG_WARN("store the related table id failed", K(ret));
         } else if (tsc_op.need_doc_id_index_back() && tsc_op.get_doc_id_index_table_id() != OB_INVALID_ID // in new version, doc_id_rowkey may be invalid
-          && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_doc_id_index_table_id()))) {
+          && OB_FAIL(rel_info->related_ids_.push_back(tsc_op.get_doc_id_index_table_id()))) {
           LOG_WARN("store doc id index back aux tid failed", K(ret));
         }
       }
 
       if (OB_SUCC(ret) && tsc_op.is_text_retrieval_scan()) {
-        if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_text_retrieval_info().fwd_idx_tid_))) {
+        if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, tsc_op.get_text_retrieval_info().fwd_idx_tid_))) {
           LOG_WARN("failed to append forward index table id", K(ret));
-        } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_text_retrieval_info().doc_id_idx_tid_))) {
+        } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, tsc_op.get_text_retrieval_info().doc_id_idx_tid_))) {
           LOG_WARN("failed to append doc id idx table id", K(ret));
-        } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
+        } else if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, tsc_op.get_real_ref_table_id()))) {
           LOG_WARN("failed to append main table id", K(ret));
         } else if (tsc_op.get_vector_index_info().is_vec_adaptive_scan() || tsc_op.get_vector_index_info().vec_index_post_filter()) {
-          if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_text_retrieval_info().inv_idx_tid_))) {
+          if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, tsc_op.get_text_retrieval_info().inv_idx_tid_))) {
             LOG_WARN("failed to append inverted index table id", K(ret));
-          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_text_retrieval_info().rowkey_idx_tid_))) {
+          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, tsc_op.get_text_retrieval_info().rowkey_idx_tid_))) {
             LOG_WARN("failed to append rowkey index table id", K(ret));
           }
         }
       }
 
       if (OB_SUCC(ret) && tsc_op.is_tsc_with_domain_id()) {
-        if (OB_FAIL(append_array_no_dup(rel_info.related_ids_, tsc_op.get_rowkey_domain_tids()))) {
+        if (OB_FAIL(append_array_no_dup(rel_info->related_ids_, tsc_op.get_rowkey_domain_tids()))) {
           LOG_WARN("fail to store rowkey domain table ids", K(ret));
         }
       }
 
       if (OB_SUCC(ret) && tsc_op.is_vec_idx_scan()) {
-        if (OB_FAIL(collect_vec_index_location_related_info(tsc_op, rel_info))) {
+        if (OB_FAIL(collect_vec_index_location_related_info(tsc_op, *rel_info))) {
           LOG_WARN("fail to collect vec index location related info", K(ret));
         }
       }
@@ -14097,44 +14143,44 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
         ObArray<ObTableID> index_tids;
         if (OB_FAIL(tsc_op.get_index_merge_tids(index_tids))) {
           LOG_WARN("failed to get index tids", K(ret));
-        } else if (OB_FAIL(append_array_no_dup(rel_info.related_ids_, index_tids))) {
+        } else if (OB_FAIL(append_array_no_dup(rel_info->related_ids_, index_tids))) {
           LOG_WARN("failed to append index merge table ids", K(index_tids), K(ret));
-        } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
+        } else if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, tsc_op.get_real_ref_table_id()))) {
           LOG_WARN("failed to append main table id", K(ret));
         } else if (tsc_op.has_merge_fts_index()) {
           for (int64_t i = 0; OB_SUCC(ret) && i < tsc_op.get_merge_tr_infos().count(); ++i) {
             const ObTextRetrievalInfo &curr_tr_info = tsc_op.get_merge_tr_infos().at(i);
-            if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.inv_idx_tid_))) {
+            if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.inv_idx_tid_))) {
               LOG_WARN("failed to append inverted index table id", K(ret));
-            } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.fwd_idx_tid_))) {
+            } else if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.fwd_idx_tid_))) {
               LOG_WARN("failed to append foward index table id", K(ret));
-            } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.doc_id_idx_tid_))) {
+            } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.doc_id_idx_tid_))) {
               LOG_WARN("failed to append doc_id index table id", K(ret));
-            } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.rowkey_idx_tid_))) {
+            } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.rowkey_idx_tid_))) {
               LOG_WARN("failed to append rowkey index table id", K(ret));
-            } else if (tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.data_table_id_))) {
+            } else if (tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.data_table_id_))) {
               LOG_WARN("failed to append data table id", K(ret));
             }
           }
         }
       }
 
-      LOG_TRACE("collect location related info", K(rel_info));
+      LOG_TRACE("collect location related info", KPC(rel_info));
       if (OB_SUCC(ret) && tsc_op.has_func_lookup()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < tsc_op.get_lookup_tr_infos().count(); ++i) {
           const ObTextRetrievalInfo &curr_tr_info = tsc_op.get_lookup_tr_infos().at(i);
           if (tsc_op.is_index_scan()
-            && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
+            && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, tsc_op.get_real_ref_table_id()))) {
             LOG_WARN("failed to append real table id", K(ret));
-          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.inv_idx_tid_))) {
+          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.inv_idx_tid_))) {
             LOG_WARN("failed to append inverted index table id", K(ret));
-          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.fwd_idx_tid_))) {
+          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.fwd_idx_tid_))) {
             LOG_WARN("failed to append foward index table id", K(ret));
-          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.doc_id_idx_tid_))) {
+          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.doc_id_idx_tid_))) {
             LOG_WARN("failed to append doc_id index table id", K(ret));
-          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.rowkey_idx_tid_))) {
+          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.rowkey_idx_tid_))) {
             LOG_WARN("failed to append rowkey index table id", K(ret));
-          } else if (tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.data_table_id_))) {
+          } else if (tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.data_table_id_))) {
             LOG_WARN("failed to append data table id", K(ret));
           }
         }
@@ -14144,17 +14190,17 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
         for (int64_t i = 0; OB_SUCC(ret) && i < tsc_op.get_match_tr_infos().count(); ++i) {
           const ObTextRetrievalInfo &curr_tr_info = tsc_op.get_match_tr_infos().at(i);
           if (tsc_op.is_index_scan()
-            && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
+            && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, tsc_op.get_real_ref_table_id()))) {
             LOG_WARN("failed to append real table id", K(ret));
-          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.inv_idx_tid_))) {
+          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.inv_idx_tid_))) {
             LOG_WARN("failed to append inverted index table id", K(ret));
-          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.fwd_idx_tid_))) {
+          } else if (OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.fwd_idx_tid_))) {
             LOG_WARN("failed to append foward index table id", K(ret));
-          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.doc_id_idx_tid_))) {
+          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.doc_id_idx_tid_))) {
             LOG_WARN("failed to append doc_id index table id", K(ret));
-          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.rowkey_idx_tid_))) {
+          } else if (!tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.rowkey_idx_tid_))) {
             LOG_WARN("failed to append rowkey index table id", K(ret));
-          } else if (tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, curr_tr_info.data_table_id_))) {
+          } else if (tsc_op.need_skip_rowkey_doc() && OB_FAIL(add_var_to_array_no_dup(rel_info->related_ids_, curr_tr_info.data_table_id_))) {
             LOG_WARN("failed to append data table id", K(ret));
           }
         }
@@ -14165,14 +14211,18 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
       }
     } else if (tsc_op.get_is_index_global() && tsc_op.get_index_back()) {
       //for global index lookup
-      TableLocRelInfo rel_info;
-      rel_info.table_loc_id_ = tsc_op.get_table_id();
-      rel_info.ref_table_id_ = tsc_op.get_ref_table_id();
-      if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_ref_table_id()))) {
+      TableLocRelInfo *rel_info = nullptr;
+      ObIAllocator &allocator = optimizer_context_.get_allocator();
+      if (OB_ISNULL(rel_info = OB_NEWx(TableLocRelInfo, &allocator, allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate table loc rel info", K(ret));
+      } else if (OB_FALSE_IT(rel_info->table_loc_id_ = tsc_op.get_table_id())) {
+      } else if (OB_FALSE_IT(rel_info->ref_table_id_ = tsc_op.get_ref_table_id())) {
+      } else if (OB_FAIL(rel_info->related_ids_.push_back(tsc_op.get_ref_table_id()))) {
         LOG_WARN("store the source table id failed", K(ret));
-      } else if (tsc_op.is_tsc_with_domain_id() && OB_FAIL(append_array_no_dup(rel_info.related_ids_, tsc_op.get_rowkey_domain_tids()))) {
+      } else if (tsc_op.is_tsc_with_domain_id() && OB_FAIL(append_array_no_dup(rel_info->related_ids_, tsc_op.get_rowkey_domain_tids()))) {
         LOG_WARN("fail to store rowkey domain table ids", K(ret));
-      } else if (nullptr != tsc_op.get_global_index_back_table_partition_info() && OB_FAIL(rel_info.table_part_infos_.push_back(tsc_op.get_global_index_back_table_partition_info()))) {
+      } else if (nullptr != tsc_op.get_global_index_back_table_partition_info() && OB_FAIL(rel_info->table_part_infos_.push_back(tsc_op.get_global_index_back_table_partition_info()))) {
         LOG_WARN("collect table partition info to relation info failed", K(ret));
       }
       if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
@@ -14192,15 +14242,19 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
         if (OB_ISNULL(loc_rel_info = optimizer_context_.get_loc_rel_info_by_id(
                                        table_loc_id, ref_table_id))) {
           //init table location related info with the main table
-          TableLocRelInfo rel_info;
-          rel_info.table_loc_id_ = table_loc_id;
-          rel_info.ref_table_id_ = ref_table_id;
-          if (OB_FAIL(rel_info.related_ids_.push_back(ref_table_id))) {
+          TableLocRelInfo *rel_info = nullptr;
+          ObIAllocator &allocator = optimizer_context_.get_allocator();
+          if (OB_ISNULL(rel_info = OB_NEWx(TableLocRelInfo, &allocator, allocator))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate table loc rel info", K(ret));
+          } else if (OB_FALSE_IT(rel_info->table_loc_id_ = table_loc_id)) {
+          } else if (OB_FALSE_IT(rel_info->ref_table_id_ = ref_table_id)) {
+          } else if (OB_FAIL(rel_info->related_ids_.push_back(ref_table_id))) {
             LOG_WARN("store the source table id failed", K(ret));
           } else if (OB_FAIL(loc_rel_infos.push_back(rel_info))) {
             LOG_WARN("store rel info failed", K(ret));
           } else {
-            loc_rel_info = &loc_rel_infos.at(loc_rel_infos.count() - 1);
+            loc_rel_info = loc_rel_infos.at(loc_rel_infos.count() - 1);
           }
         } else if (OB_FAIL(add_var_to_array_no_dup(loc_rel_info->related_ids_, ref_table_id))) {
           LOG_WARN("add ref_table_id to the related ids failed", K(ret));
@@ -14253,19 +14307,22 @@ int ObLogPlan::build_location_related_tablet_ids()
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < optimizer_context_.get_loc_rel_infos().count(); ++i) {
-    TableLocRelInfo &rel_info = optimizer_context_.get_loc_rel_infos().at(i);
-    if (rel_info.related_ids_.count() <= 1) {
+    TableLocRelInfo *rel_info = optimizer_context_.get_loc_rel_infos().at(i);
+    if (OB_ISNULL(rel_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (rel_info->related_ids_.count() <= 1) {
       //the first table id is the source table, <=1 mean no dependency table
     } else {
-      for (int64_t j = 0; OB_SUCC(ret) && j < rel_info.table_part_infos_.count(); ++j) {
-        ObTablePartitionInfo *source_part_info = rel_info.table_part_infos_.at(j);
+      for (int64_t j = 0; OB_SUCC(ret) && j < rel_info->table_part_infos_.count(); ++j) {
+        ObTablePartitionInfo *source_part_info = rel_info->table_part_infos_.at(j);
         ObDASTableLocMeta &source_loc_meta = source_part_info->get_loc_meta();
-        source_loc_meta.related_table_ids_.set_capacity(rel_info.related_ids_.count() - 1);
-        for (int64_t k = 0; OB_SUCC(ret) && k < rel_info.related_ids_.count(); ++k) {
+        source_loc_meta.related_table_ids_.set_capacity(rel_info->related_ids_.count() - 1);
+        for (int64_t k = 0; OB_SUCC(ret) && k < rel_info->related_ids_.count(); ++k) {
           //set related table ids to loc meta
-          if (rel_info.related_ids_.at(k) == source_part_info->get_ref_table_id()) {
+          if (rel_info->related_ids_.at(k) == source_part_info->get_ref_table_id()) {
             //ignore itself, do nothing
-          } else if (OB_FAIL(source_loc_meta.related_table_ids_.push_back(rel_info.related_ids_.at(k)))) {
+          } else if (OB_FAIL(source_loc_meta.related_table_ids_.push_back(rel_info->related_ids_.at(k)))) {
             LOG_WARN("store related table ids failed", K(ret));
           }
         }
@@ -15202,11 +15259,11 @@ int ObLogPlan::get_table_for_update_info(const uint64_t table_id,
                                                               is_nullable))) {
       LOG_WARN("failed to check is table on null side", K(ret));
     } else if (OB_ISNULL(index_dml_info = static_cast<IndexDMLInfo *>(
-                       get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo))))) {
+                         get_allocator().alloc(sizeof(IndexDMLInfo))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for index dml info", K(ret));
     } else {
-      index_dml_info = new (index_dml_info) IndexDMLInfo();
+      index_dml_info = new (index_dml_info) IndexDMLInfo(get_allocator());
       index_dml_info->table_id_ = table->table_id_;
       index_dml_info->loc_table_id_ = table->table_id_;
       index_dml_info->ref_table_id_ = table->ref_id_;
@@ -15285,7 +15342,7 @@ int ObLogPlan::get_table_for_update_info_for_hierarchical(const uint64_t table_i
       } else if (table_id != for_update_info->table_id_) {
         // do nothing
       } else if (OB_ISNULL(index_dml_info = static_cast<IndexDMLInfo *>(
-                        get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo))))) {
+                           get_allocator().alloc(sizeof(IndexDMLInfo))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for index dml info", K(ret));
       } else if (OB_ISNULL(table->ref_query_)) {
@@ -15294,7 +15351,7 @@ int ObLogPlan::get_table_for_update_info_for_hierarchical(const uint64_t table_i
       } else if (OB_FAIL(check_hierarchical_for_update(table, for_update_info->base_table_id_))) {
         LOG_WARN("failed to check hierarchical for update", K(ret), KPC(for_update_info));
       } else {
-        index_dml_info = new (index_dml_info) IndexDMLInfo();
+        index_dml_info = new (index_dml_info) IndexDMLInfo(get_allocator());
         index_dml_info->table_id_ = for_update_info->table_id_;
         index_dml_info->loc_table_id_ = for_update_info->base_table_id_;
         index_dml_info->ref_table_id_ = for_update_info->ref_table_id_;
@@ -16037,7 +16094,8 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                 int64_t current_dfo_level,
                                                 const ObIArray<ObRawExpr*> &left_join_conditions,
                                                 const ObIArray<ObRawExpr*> &right_join_conditions,
-                                                ObIArray<JoinFilterInfo> &join_filter_infos)
+                                                common::ObIAllocator &allocator,
+                                                ObIArray<JoinFilterInfo*> &join_filter_infos)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt* stmt;
@@ -16066,6 +16124,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                         current_dfo_level,
                                                                         left_join_conditions,
                                                                         right_join_conditions,
+                                                                        allocator,
                                                                         join_filter_infos))) {
         LOG_WARN("failed to find pushdown join filter table", K(ret));
       }
@@ -16078,6 +16137,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     const ObJoinFilterHint *force_hint = NULL;
     bool can_part_join_filter = false;
     const ObJoinFilterHint *force_part_hint = NULL;
+    void *ptr = NULL;
     if (OB_FAIL(hint_info.check_use_join_filter(*stmt,
                                                 stmt->get_query_ctx()->get_query_hint(),
                                                 scan->get_table_id(),
@@ -16096,39 +16156,42 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     } else if ((!can_join_filter && !can_part_join_filter)
                || (scan->use_das() && NULL == force_hint)) {
       // do nothing, hint disable the join filter or das scan without force hint
+    } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(JoinFilterInfo)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate join filter info", K(ret));
     } else {
-      JoinFilterInfo info;
-      info.table_id_ = scan->get_table_id();
-      info.filter_table_id_ = hint_info.filter_table_id_;
-      info.ref_table_id_ = scan->get_ref_table_id();
-      info.index_id_ = scan->get_index_table_id();
-      info.sharding_ = scan->get_strong_sharding();
-      info.row_count_ = scan->get_output_row_count();
-      info.can_use_join_filter_ = can_join_filter;
-      info.force_filter_ = force_hint;
-      info.need_partition_join_filter_ = can_part_join_filter;
-      info.force_part_filter_ = force_part_hint;
-      info.in_current_dfo_ = is_current_dfo;
-      if (info.can_use_join_filter_ || info.need_partition_join_filter_) {
+      JoinFilterInfo *info = new (ptr) JoinFilterInfo(allocator);
+      info->table_id_ = scan->get_table_id();
+      info->filter_table_id_ = hint_info.filter_table_id_;
+      info->ref_table_id_ = scan->get_ref_table_id();
+      info->index_id_ = scan->get_index_table_id();
+      info->sharding_ = scan->get_strong_sharding();
+      info->row_count_ = scan->get_output_row_count();
+      info->can_use_join_filter_ = can_join_filter;
+      info->force_filter_ = force_hint;
+      info->need_partition_join_filter_ = can_part_join_filter;
+      info->force_part_filter_ = force_part_hint;
+      info->in_current_dfo_ = is_current_dfo;
+      if (info->can_use_join_filter_ || info->need_partition_join_filter_) {
         bool use_column_store = false;
         bool use_row_store = false;
         if (scan->use_column_store()) {
-          info.use_column_store_ = true;
-        } else if (OB_FAIL(will_use_column_store(info.table_id_,
-                                                 info.index_id_,
-                                                 info.ref_table_id_,
+          info->use_column_store_ = true;
+        } else if (OB_FAIL(will_use_column_store(info->table_id_,
+                                                 info->index_id_,
+                                                 info->ref_table_id_,
                                                  use_column_store,
                                                  use_row_store))) {
           LOG_WARN("failed to check will use column store", K(ret));
         } else if (use_column_store) {
-          info.use_column_store_ = true;
+          info->use_column_store_ = true;
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
                                                 right_join_conditions,
-                                                info))) {
+                                                *info))) {
           LOG_WARN("failed to get join filter exprs", K(ret));
-        } else if (OB_FAIL(fill_join_filter_info(info))) {
+        } else if (OB_FAIL(fill_join_filter_info(*info))) {
           LOG_WARN("failed to fill join filter info");
         } else if(OB_FAIL(join_filter_infos.push_back(info))) {
           LOG_WARN("failed to push back info", K(ret));
@@ -16139,6 +16202,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     const ObLogTempTableAccess* temp_table = static_cast<const ObLogTempTableAccess*>(op);
     bool can_join_filter = false;
     const ObJoinFilterHint *force_hint = NULL;
+    void *ptr = NULL;
     if (OB_FAIL(hint_info.check_use_join_filter(*stmt,
                                                 stmt->get_query_ctx()->get_query_hint(),
                                                 temp_table->get_table_id(),
@@ -16146,24 +16210,29 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                 can_join_filter,
                                                 force_hint))) {
       LOG_WARN("failed to check use join filter", K(ret));
-    } else if (can_join_filter) {
-      JoinFilterInfo info;
-      info.table_id_ = temp_table->get_table_id();
-      info.filter_table_id_ = hint_info.filter_table_id_;
-      info.row_count_ = temp_table->get_card();
-      info.can_use_join_filter_ = true;
-      info.force_filter_ = force_hint;
-      info.need_partition_join_filter_ = false;
-      info.force_part_filter_ = NULL;
-      info.in_current_dfo_ = is_current_dfo;
+    } else if (!can_join_filter) {
+      // do nothing
+    } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(JoinFilterInfo)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate join filter info", K(ret));
+    } else {
+      JoinFilterInfo *info = new (ptr) JoinFilterInfo(allocator);
+      info->table_id_ = temp_table->get_table_id();
+      info->filter_table_id_ = hint_info.filter_table_id_;
+      info->row_count_ = temp_table->get_card();
+      info->can_use_join_filter_ = true;
+      info->force_filter_ = force_hint;
+      info->need_partition_join_filter_ = false;
+      info->force_part_filter_ = NULL;
+      info->in_current_dfo_ = is_current_dfo;
       if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
                                         right_join_conditions,
-                                        info))) {
+                                        *info))) {
         LOG_WARN("failed to get join filter exprs", K(ret));
-      } else if (OB_FAIL(fill_join_filter_info(info))) {
+      } else if (OB_FAIL(fill_join_filter_info(*info))) {
         LOG_WARN("failed to fill join filter info");
       } else if (OB_FAIL(join_filter_infos.push_back(info))) {
-      LOG_WARN("failed to push back info", K(ret));
+        LOG_WARN("failed to push back info", K(ret));
       }
     }
   } else if (op->get_type() == log_op_def::LOG_SUBPLAN_SCAN) {
@@ -16196,6 +16265,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                    current_dfo_level,
                                    pushdown_left_quals,
                                    pushdown_right_quals,
+                                   allocator,
                                    join_filter_infos))) {
       LOG_WARN("failed to find pushdown join filter table", K(ret));
     }
@@ -16217,6 +16287,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     current_dfo_level,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
+                                                                    allocator,
                                                                     join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
     } else if (OB_FAIL(SMART_CALL(find_possible_join_filter_tables(right_op,
@@ -16227,6 +16298,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     current_dfo_level,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
+                                                                    allocator,
                                                                     join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
     }
@@ -16250,6 +16322,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                             current_dfo_level,
                                                             left_join_conditions,
                                                             right_join_conditions,
+                                                            allocator,
                                                             join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
     }
@@ -16264,6 +16337,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                               current_dfo_level,
                                                               left_join_conditions,
                                                               right_join_conditions,
+                                                              allocator,
                                                               join_filter_infos)))) {
         LOG_WARN("failed to find shuffle table scan", K(ret));
       }
@@ -16353,15 +16427,16 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
 }
 
 int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
-                                                  ObLogicalOperator* child_op,
-                                                  uint64_t subquery_id,
-                                                  const JoinFilterPushdownHintInfo &hint_info,
-                                                  bool is_current_dfo,
-                                                  bool is_fully_partition_wise,
-                                                  int64_t current_dfo_level,
-                                                  const ObIArray<ObRawExpr*> &left_join_conditions,
-                                                  const ObIArray<ObRawExpr*> &right_join_conditions,
-                                                  ObIArray<JoinFilterInfo> &join_filter_infos)
+                                                 ObLogicalOperator* child_op,
+                                                 uint64_t subquery_id,
+                                                 const JoinFilterPushdownHintInfo &hint_info,
+                                                 bool is_current_dfo,
+                                                 bool is_fully_partition_wise,
+                                                 int64_t current_dfo_level,
+                                                 const ObIArray<ObRawExpr*> &left_join_conditions,
+                                                 const ObIArray<ObRawExpr*> &right_join_conditions,
+                                                 common::ObIAllocator &allocator,
+                                                 ObIArray<JoinFilterInfo*> &join_filter_infos)
 {
   int ret = OB_SUCCESS;
   const ObSelectStmt *child_stmt = NULL;
@@ -16407,6 +16482,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                                       current_dfo_level,
                                                       candi_left_filters,
                                                       candi_right_filters,
+                                                      allocator,
                                                       join_filter_infos))) {
     LOG_WARN("failed to find possible join filter table", K(ret));
   }

@@ -16,6 +16,7 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_log_for_update.h"
+#include "sql/optimizer/ob_log_insert.h"
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/optimizer/ob_log_update.h"
 #include "sql/optimizer/ob_insert_log_plan.h"
@@ -963,7 +964,7 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
 {
   int ret = OB_SUCCESS;
   ObDMLCtDefAllocator<ObRowkeyCstCtdef> cst_ctdef_allocator(cg_.phy_plan_->get_allocator());
-  const ObIArray<ObUniqueConstraintInfo> *log_constraint_infos = op.get_constraint_infos();
+  const ObIArray<ObUniqueConstraintInfo*> *log_constraint_infos = op.get_constraint_infos();
   if (OB_ISNULL(log_constraint_infos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log_constraint_info is null", K(ret));
@@ -974,25 +975,27 @@ int ObDmlCgService::generate_constraint_infos(ObLogInsert &op,
     ObRowkeyCstCtdef *rowkey_cst_ctdef = NULL;
     ObSEArray<ObRawExpr *, 4> constraint_dep_exprs;
     ObSEArray<ObRawExpr *, 8> constraint_raw_exprs;
-    const ObIArray<ObColumnRefRawExpr*> &constraint_columns =
-                                               log_constraint_infos->at(i).constraint_columns_;
-    if (OB_ISNULL(rowkey_cst_ctdef = cst_ctdef_allocator.alloc())) {
+    ObUniqueConstraintInfo *info = log_constraint_infos->at(i);
+    if (OB_ISNULL(info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("info is null", K(ret));
+    } else if (OB_ISNULL(rowkey_cst_ctdef = cst_ctdef_allocator.alloc())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rowkey_cst_ctdef is null", K(ret));
     } else if (OB_FAIL(ob_write_string(cg_.phy_plan_->get_allocator(),
-                                       log_constraint_infos->at(i).constraint_name_,
+                                       info->constraint_name_,
                                        rowkey_cst_ctdef->constraint_name_))) {
       LOG_WARN("fail to write string", K(ret), K(i),
-               "name", log_constraint_infos->at(i).constraint_name_);
-    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.init(constraint_columns.count()))) {
-      LOG_WARN("init rowkey failed", K(ret), K(constraint_columns.count()));
-    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_accuracys_.init(constraint_columns.count()))) {
+               "name", info->constraint_name_);
+    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_expr_.init(info->constraint_columns_.count()))) {
+      LOG_WARN("init rowkey failed", K(ret), K(info->constraint_columns_.count()));
+    } else if (OB_FAIL(rowkey_cst_ctdef->rowkey_accuracys_.init(info->constraint_columns_.count()))) {
       LOG_WARN("init rowkey accuracy failed", K(ret));
     }
 
-    for (int64_t j = 0; OB_SUCC(ret) && j < constraint_columns.count(); ++j) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < info->constraint_columns_.count(); ++j) {
       ObExpr *expr = NULL;
-      ObColumnRefRawExpr *col_expr = constraint_columns.at(j);
+      ObColumnRefRawExpr *col_expr = info->constraint_columns_.at(j);
       if (OB_ISNULL(col_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("col_expr is null", K(ret));

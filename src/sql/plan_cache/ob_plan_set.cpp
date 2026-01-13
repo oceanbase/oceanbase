@@ -1269,7 +1269,8 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
   int ret = OB_SUCCESS;
   ObSqlCtx &sql_ctx = pc_ctx.sql_ctx_;
   //DASTableLocList table_locs(pc_ctx.exec_ctx_.get_allocator());
-  ObArray<ObCandiTableLoc> candi_table_locs;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObCandiTableLoc, true> candi_table_locs(allocator);
   ObPhyPlanType plan_type = OB_PHY_PLAN_UNINITIALIZED;
   if (OB_ISNULL(plan_cache_value_) ||
       OB_ISNULL(pc_ctx.exec_ctx_.get_physical_plan_ctx())) {
@@ -2408,7 +2409,8 @@ int ObSqlPlanSet::get_plan_type(const ObIArray<ObTableLocation> &table_locations
                                 ObPhyPlanType &plan_type)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObCandiTableLoc, 1> candi_table_locs;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObCandiTableLoc, true> candi_table_locs(allocator);
 
   if (OB_FAIL(get_phy_locations(table_locations,
                                 pc_ctx,

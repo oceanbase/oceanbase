@@ -81,15 +81,14 @@ int ObTransformJoinElimination::construct_transform_hint(ObDMLStmt &stmt, void *
     LOG_WARN("failed to push back hint", K(ret));
   } else if (OB_FAIL(ctx_->add_used_trans_hint(get_hint(stmt.get_stmt_hint())))) {
     LOG_WARN("failed to add used trans hint", K(ret));
+  } else if (OB_FAIL(hint->get_tb_name_list().prepare_allocate(eliminated_tables->count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
   } else {
     hint->set_qb_name(ctx_->src_qb_name_);
     for (int64_t i = 0; OB_SUCC(ret) && i < eliminated_tables->count(); ++i) {
-      ObHint::TablesInHint single_or_joined_hint_table;
       if (OB_FAIL(ObTransformUtils::get_sorted_table_hint(eliminated_tables->at(i),
-                                                          single_or_joined_hint_table))) {
+                                                          hint->get_tb_name_list().at(i)))) {
         LOG_WARN("failed to get table hint", K(ret));
-      } else if (OB_FAIL(hint->get_tb_name_list().push_back(single_or_joined_hint_table))) {
-        LOG_WARN("failed to push back table name list", K(ret));
       }
     }
   }

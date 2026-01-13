@@ -38,7 +38,7 @@ int ObRawExprSetUtils::to_expr_set(common::ObIAllocator *allocator,
 
 int ObRawExprSetUtils::add_expr_set(common::ObIAllocator *allocator,
                                     const common::ObIArray<ObRawExpr *> &exprs,
-                                    ObIRawExprSets &expr_sets)
+                                    EqualSets &expr_sets)
 {
   int ret = OB_SUCCESS;
   ObRawExprSet *expr_set = NULL;

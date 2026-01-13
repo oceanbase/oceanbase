@@ -576,6 +576,7 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
   int ret = OB_SUCCESS;
 
   FLTSpanGuard(pc_get_plan);
+  ObMemPerfGuard mem_perf_guard("pc_get_plan");
   ObGlobalReqTimeService::check_req_timeinfo();
   pc_ctx.handle_id_ = guard.ref_handle_;
   if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)
@@ -1060,6 +1061,7 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pc_add_plan);
+  ObMemPerfGuard mem_perf_guard("pc_add_plan");
   ObGlobalReqTimeService::check_req_timeinfo();
   if (OB_ISNULL(plan)) {
     ret = OB_INVALID_ARGUMENT;

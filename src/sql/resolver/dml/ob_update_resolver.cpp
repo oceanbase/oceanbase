@@ -521,7 +521,7 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
     LOG_WARN("failed to allocate table info", K(ret));
   } else {
     bool need_all_cols = true;
-    table_info = new(ptr) ObUpdateTableInfo();
+    table_info = new(ptr) ObUpdateTableInfo(*allocator_);
     if (OB_FAIL(table_info->assignments_.assign(table_assign.assignments_))) {
       LOG_WARN("failed to assign exprs", K(ret));
     } else if (OB_FAIL(table_info->part_ids_.assign(table_item->get_base_table_item().part_ids_))) {

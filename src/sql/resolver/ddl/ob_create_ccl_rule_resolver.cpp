@@ -239,9 +239,11 @@ int ObCreateCCLRuleResolver::resolve(const ParseNode &parse_tree)
           }
         } else if (ccl_filter_option_node->type_ == T_FILTER_QUERY) {
           ObStmt *filter_sql_stmt = NULL;
-          ObResolver resolver(params_);
-          if (OB_FAIL(
-                       resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *node, filter_sql_stmt))) {
+          ObResolverParams params;
+          ObResolver resolver(params);
+          if (OB_FAIL(params.assign(params_))) {
+            LOG_WARN("fail to assign params", K(ret));
+          } else if (OB_FAIL(resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *node, filter_sql_stmt))) {
             LOG_WARN("fail to resolve", K(ret));
           } else if (OB_ISNULL(filter_sql_stmt)) {
             ret = OB_ERR_UNEXPECTED;

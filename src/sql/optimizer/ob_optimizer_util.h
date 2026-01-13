@@ -1928,6 +1928,11 @@ int ObOptimizerUtil::choose_random_members(const uint64_t seed,
       }
       lib::ob_sort(&indices.at(0), &indices.at(0) + choose_cnt);
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(output_array.reserve(choose_cnt))) {
+        SQL_OPT_LOG(WARN, "failed to reserve", K(ret), K(choose_cnt));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < choose_cnt; i ++) {
       if (OB_FAIL(output_array.push_back(input_array.at(indices.at(i))))) {
         SQL_OPT_LOG(WARN, "failed to push back", K(ret));

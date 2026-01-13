@@ -88,8 +88,8 @@ private:
                                              ObSelectStmt *&cond_sel_stmt);
 
 private:
-  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> all_delta_table_views_;
-  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> all_pre_table_views_;
+  ObSEArray<ObSelectStmt*, 8> all_delta_table_views_;
+  ObSEArray<ObSelectStmt*, 8> all_pre_table_views_;
 
   DISALLOW_COPY_AND_ASSIGN(ObOuterJoinMJVPrinter);
 };

@@ -28,7 +28,7 @@ protected:
   virtual int inner_enumerate() override;
 
 private:
-  int prepare_ordermap_pathset(const JoinOrderArray base_level);
+  int prepare_ordermap_pathset(const JoinOrderArray &base_level);
   int init_idp(int64_t initial_idp_step,
                common::ObIArray<JoinOrderArray> &idp_join_rels,
                common::ObIArray<JoinOrderArray> &full_join_rels);

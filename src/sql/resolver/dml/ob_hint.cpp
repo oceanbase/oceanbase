@@ -82,6 +82,17 @@ int ObDBLinkHit::print(char *buf, int64_t &buf_len, int64_t &pos, const char* ou
   return 0;
 }
 
+ObGlobalHint::ObGlobalHint(common::ObIAllocator &allocator)
+  : dops_(allocator),
+    opt_params_(allocator),
+    ob_ddl_schema_versions_(allocator),
+    alloc_op_hints_(allocator),
+    disable_op_rich_format_hint_(allocator),
+    trigger_hint_(allocator)
+{
+  reset();
+}
+
 int ObGlobalHint::merge_alloc_op_hints(const ObIArray<ObAllocOpHint> &alloc_op_hints)
 {
   int ret = OB_SUCCESS;

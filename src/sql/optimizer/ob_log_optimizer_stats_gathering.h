@@ -22,14 +22,16 @@ namespace oceanbase
 namespace sql
 {
 
+class ObLogPlan;
+
 struct OSGShareInfo {
-  OSGShareInfo() :
+  OSGShareInfo(common::ObIAllocator &allocator) :
   table_id_(common::OB_INVALID_ID),
   calc_part_id_expr_(NULL),
   part_level_(share::schema::PARTITION_LEVEL_ZERO),
-  col_conv_exprs_(),
-  generated_column_exprs_(),
-  column_ids_(),
+  col_conv_exprs_(allocator),
+  generated_column_exprs_(allocator),
+  column_ids_(allocator),
   online_sample_rate_(1.) {}
   ~OSGShareInfo()
   {
@@ -41,9 +43,9 @@ struct OSGShareInfo {
   uint64_t table_id_;
   ObRawExpr *calc_part_id_expr_;
   share::schema::ObPartitionLevel part_level_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> col_conv_exprs_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> generated_column_exprs_;
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> column_ids_;
+  ObSqlArray<ObRawExpr *> col_conv_exprs_;
+  ObSqlArray<ObRawExpr *> generated_column_exprs_;
+  ObSqlArray<uint64_t> column_ids_;
   double online_sample_rate_;
 };
 
@@ -56,9 +58,9 @@ public:
   calc_part_id_expr_(NULL),
   part_level_(share::schema::PARTITION_LEVEL_ZERO),
   osg_type_(OSG_TYPE::GATHER_OSG),
-  col_conv_exprs_(),
-  generated_column_exprs_(),
-  column_ids_(),
+  col_conv_exprs_(plan.get_allocator()),
+  generated_column_exprs_(plan.get_allocator()),
+  column_ids_(plan.get_allocator()),
   online_sample_percent_(1.)
   {}
 
@@ -106,9 +108,9 @@ private:
   ObRawExpr *calc_part_id_expr_;
   share::schema::ObPartitionLevel part_level_;
   OSG_TYPE osg_type_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> col_conv_exprs_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> generated_column_exprs_;
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> column_ids_;
+  ObSqlArray<ObRawExpr *> col_conv_exprs_;
+  ObSqlArray<ObRawExpr *> generated_column_exprs_;
+  ObSqlArray<uint64_t> column_ids_;
   double online_sample_percent_;
   DISALLOW_COPY_AND_ASSIGN(ObLogOptimizerStatsGathering);
 };

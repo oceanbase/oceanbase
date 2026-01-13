@@ -569,7 +569,8 @@ int ObTransformTempTable::inner_extract_common_table_expression(ObDMLStmt &root_
     if (OB_SUCC(ret) && !find_similar) {
       StmtCompareHelper *new_helper = NULL;
       bool force_no_trans = false;
-      QbNameList qb_names;
+      ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+      QbNameList qb_names(allocator);
       map_info.reset();
       if (OB_FAIL(get_hint_force_set(root_stmt, *stmt, qb_names, force_no_trans))) {
         LOG_WARN("failed to get hint set", K(ret));
@@ -2111,6 +2112,8 @@ int ObTransformTempTable::construct_transform_hint(ObDMLStmt &stmt, void *trans_
     LOG_WARN("failed to create hint", K(ret));
   } else if (OB_FAIL(sort_materialize_stmts(params->materialize_stmts_))) {
     LOG_WARN("failed to sort stmts", K(ret));
+  } else if (OB_FAIL(hint->get_qb_name_list().prepare_allocate(params->materialize_stmts_.count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
   } else {
     Ob2DArray<MaterializeStmts *> &child_stmts = params->materialize_stmts_;
     ObSelectStmt* subquery = NULL;
@@ -2118,7 +2121,7 @@ int ObTransformTempTable::construct_transform_hint(ObDMLStmt &stmt, void *trans_
     const ObMaterializeHint *myhint = static_cast<const ObMaterializeHint*>(get_hint(stmt.get_stmt_hint()));
     for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
       MaterializeStmts *subqueries = child_stmts.at(i);
-      QbNameList qb_names;
+      QbNameList &qb_names = hint->get_qb_name_list().at(i);
       if (OB_ISNULL(subqueries)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null stmts", K(ret));
@@ -2138,8 +2141,6 @@ int ObTransformTempTable::construct_transform_hint(ObDMLStmt &stmt, void *trans_
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(hint->add_qb_name_list(qb_names))) {
-        LOG_WARN("failed to add qb names", K(ret));
       } else if (NULL != myhint && myhint->enable_materialize_subquery(qb_names.qb_names_)) {
         use_hint = true;
       }

@@ -23,7 +23,7 @@ namespace sql
 class ObMergeStmt: public ObDelUpdStmt
 {
 public:
-  ObMergeStmt();
+  ObMergeStmt(ObIAllocator &allocator);
   virtual ~ObMergeStmt();
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_copier,

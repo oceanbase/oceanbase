@@ -25,7 +25,7 @@ class ObMallocCallback
 {
 public:
   ObMallocCallback() : prev_(this), next_(this) {}
-  virtual void operator()(const ObMemAttr& attr, int64_t used) = 0;
+  virtual void operator()(const ObMemAttr& attr, int64_t used, const lib::AObject &obj) = 0;
   ObMallocCallback *prev() const { return prev_; }
   ObMallocCallback *next() const { return next_; }
   void unlink();
@@ -38,7 +38,7 @@ private:
 class ObDefaultMallocCallback final : public ObMallocCallback
 {
 public:
-  virtual void operator()(const ObMemAttr& attr, int64_t used) override;
+  virtual void operator()(const ObMemAttr& attr, int64_t used, const lib::AObject &obj) override;
 };
 
 RLOCAL_EXTERN(ObMallocCallback *, malloc_callback);

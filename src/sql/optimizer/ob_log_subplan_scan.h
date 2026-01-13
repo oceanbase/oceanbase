@@ -25,7 +25,7 @@ public:
       : ObLogicalOperator(plan),
         subquery_id_(common::OB_INVALID_ID),
         subquery_name_(),
-        access_exprs_()
+        access_exprs_(plan.get_allocator())
   {}
 
   ~ObLogSubPlanScan() {};
@@ -45,7 +45,7 @@ public:
 private:
   uint64_t subquery_id_;
   common::ObString subquery_name_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
+  ObSqlArray<ObRawExpr*> access_exprs_;
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanScan);
 };
 

@@ -1,0 +1,68 @@
+# join order
+| class | sizeof(class) |
+| --- | --- |
+| BaseTableOptInfo | 168 |
+| JoinFilterInfo | 296 |
+| DomainIndexAccessInfo | 288 |
+| ObIndexMergeNode | 160 |
+| InnerPathInfo | 264 |
+| ObConflictDetector | 392 |
+| JoinInfo | 160 |
+| IndexInfoEntry | 616 |
+| OrderingInfo | 88 |
+| QueryRangeInfo | 472 |
+| ObSkylineDim | 16 |
+| ObIndexBackDim | 16 |
+| ObInterestOrderDim | 96 |
+| ObQueryRangeDim | 144 |
+| ObUniqueRangeDim | 24 |
+| ObShardingInfoDim | 32 |
+
+# cost model
+| class | sizeof(class) |
+| --- | --- |
+| ObTableMetaInfo | 136 |
+| ObIndexMetaInfo | 72 |
+| ObCostTableScanInfo | 1008 |
+| ObDSFailTabInfo | 160 |
+| ObDSTableParam | 488 |
+| ObDSResultItem | 472 |
+| ObDSStatItem | 48 |
+
+# log plan
+| class | sizeof(class) |
+| --- | --- |
+| OptTableMetas | 88 |
+| OSGShareInfo | 152 |
+| TableDependInfo | 32 |
+| ObTopNFilterInfo | 56 |
+| ObTextRetrievalInfo | 184 |
+| ObRawFilterMonotonicity | 72 |
+| ObRawAggrParamMonotonicity | 24 |
+| ObVecIndexInfo | 936 |
+| ObThreeStageAggrInfo | 120 |
+| ObRollupAdaptiveInfo | 104 |
+| ObHashRollupInfo | 168 |
+| ObGroupingSetInfo | 288 |
+| IndexDMLInfo | 448 |
+
+# location
+| class | sizeof(class) |
+| --- | --- |
+| ObShardingInfo | 296 |
+| ObTablePartitionInfo | 824 |
+| ObCandiTableLoc | 80 |
+| ObCandiTabletLoc | 168 |
+| ObOptTabletLoc | 80 |
+| ObRoutePolicy::CandidateReplica | 136 |
+| ObTableLocation | 736 |
+| ObLakeTablePartitionInfo | 904 |
+
+# others
+| class | sizeof(class) |
+| --- | --- |
+| ObFdItem | 24 |
+| ObTableFdItem | 48 |
+| ObExprFdItem | 128 |
+| PersistentEqualSets | 40 |
+| EqualSet | 48 |

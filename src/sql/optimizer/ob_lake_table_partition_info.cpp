@@ -253,7 +253,7 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAddr, 16> all_servers;
-  ObIArray<ObCandiTabletLoc> &candi_tablet_locs = candi_table_loc_.get_phy_part_loc_info_list_for_update();
+  ObCandiTabletLocIArray &candi_tablet_locs = candi_table_loc_.get_phy_part_loc_info_list_for_update();
   candi_tablet_locs.reset();
   ObDefaultLoadBalancer load_balancer;
   ObAddr addr;
@@ -290,6 +290,8 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
       LOG_WARN("failed to create part idx map");
     } else if (OB_FAIL(bucket_idx_map.create(all_servers.count(), "TabeltLocMap", "LakeTableLoc"))) {
       LOG_WARN("failed to create bucket idx map");
+    } else if (OB_FAIL(candi_tablet_locs.reserve(all_servers.count()))) {
+      LOG_WARN("failed to reserve candi tablet locs", K(ret));
     }
     hash::ObHashMap<ObLakeTablePartKey, uint64_t>::const_iterator iter = part_key_map.begin();
     for (; OB_SUCC(ret) && iter != part_key_map.end(); ++iter) {
@@ -354,6 +356,8 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
     hash::ObHashMap<ObAddr, int64_t> tablet_loc_map;
     if (OB_FAIL(tablet_loc_map.create(all_servers.count(), "TabeltLocMap", "LakeTableLoc"))) {
       LOG_WARN("failed to create tablet loc map");
+    } else if (OB_FAIL(candi_tablet_locs.reserve(all_servers.count()))) {
+      LOG_WARN("failed to reserve candi tablet locs", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
       ObIcebergFileDesc *file_desc = file_descs.at(i);
@@ -403,7 +407,7 @@ int ObLakeTablePartitionInfo::select_location_for_hive(ObExecContext *exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAddr, 16> all_servers;
-  ObIArray<ObCandiTabletLoc> &candi_tablet_locs
+  ObCandiTabletLocIArray &candi_tablet_locs
       = candi_table_loc_.get_phy_part_loc_info_list_for_update();
   candi_tablet_locs.reset();
   ObDefaultLoadBalancer load_balancer;
@@ -433,6 +437,8 @@ int ObLakeTablePartitionInfo::select_location_for_hive(ObExecContext *exec_ctx,
       } else if (OB_FAIL(init_tablet_loc_by_addr(*tablet_loc, GCTX.self_addr(), part_id))) {
         LOG_WARN("failed to init tablet loc by addr");
       }
+    } else if (OB_FAIL(candi_tablet_locs.reserve(all_servers.count()))) {
+      LOG_WARN("failed to reserve candi tablet locs", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
         int64_t idx = -1;

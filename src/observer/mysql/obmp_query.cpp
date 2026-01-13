@@ -449,7 +449,6 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT_DISABLE)
 int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                    ObSMConnection *conn,
                                    ObSQLSessionInfo &session,
@@ -459,8 +458,74 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                    bool &need_disconnect)
 {
   int ret = OB_SUCCESS;
+  const bool enable_mem_perf = session.is_user_session() && session.get_optimizer_tracer().enable_mem_perf();
+  if (!enable_mem_perf) {
+    ret = do_process_single_stmt(multi_stmt_item,
+                                 conn,
+                                 session,
+                                 has_more_result,
+                                 force_sync_resp,
+                                 async_resp_used,
+                                 need_disconnect);
+  } else {
+    ret = process_with_mem_perf(multi_stmt_item,
+                                conn,
+                                session,
+                                has_more_result,
+                                force_sync_resp,
+                                async_resp_used,
+                                need_disconnect);
+  }
+  return ret;
+}
+
+int ObMPQuery::process_with_mem_perf(const ObMultiStmtItem &multi_stmt_item,
+                                     ObSMConnection *conn,
+                                     ObSQLSessionInfo &session,
+                                     bool has_more_result,
+                                     bool force_sync_resp,
+                                     bool &async_resp_used,
+                                     bool &need_disconnect)
+{
+  int ret = OB_SUCCESS;
+  int64_t last_mem_usage = session.get_raw_audit_record().request_memory_used_;
+  observer::ObMemPerfCallback mpcb(session.get_optimizer_tracer());
+  ObSQLSessionInfo *session_info = &session;
+  BEGIN_MEM_PERF(session_info);
+  {
+    lib::ObMallocCallbackGuard guard(mpcb);
+    int tmp_ret = OB_SUCCESS;
+
+    ret = do_process_single_stmt(multi_stmt_item,
+                                 conn,
+                                 session,
+                                 has_more_result,
+                                 force_sync_resp,
+                                 async_resp_used,
+                                 need_disconnect);
+    MEM_TRACE("memory stat", K(last_mem_usage),
+                             "cur_mem_usage", session.get_raw_audit_record().request_memory_used_,
+                             K(mpcb.cur_used_), K(mpcb.max_used_),
+                             K(mpcb.total_used_), K(mpcb.total_freed_));
+    MEM_TRACE("malloc_callback", (void*)malloc_callback, "mpcb", (void*)(&mpcb));
+  }
+  END_MEM_PERF(session_info);
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT_DISABLE)
+int ObMPQuery::do_process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
+                                      ObSMConnection *conn,
+                                      ObSQLSessionInfo &session,
+                                      bool has_more_result,
+                                      bool force_sync_resp,
+                                      bool &async_resp_used,
+                                      bool &need_disconnect)
+{
+  int ret = OB_SUCCESS;
   FLTSpanGuard(mpquery_single_stmt);
   ObReqTimeGuard req_timeinfo_guard;
+  ObMemPerfGuard mem_perf_guard("mpquery_single_stmt");
   ctx_.spm_ctx_.reset();
   bool need_response_error = true;
   session.get_raw_audit_record().request_memory_used_ = 0;
@@ -778,6 +843,7 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
 
       // exec cmd
       FLTSpanGuard(sql_execute);
+      ObMemPerfGuard mem_perf_guard("sql_execute");
       if (OB_FAIL(process_trans_ctrl_cmd(session,
                                          need_disconnect,
                                          async_resp_used,
@@ -1617,6 +1683,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(sql_execute);
+  ObMemPerfGuard mem_perf_guard("sql_execute");
   //ac = 1时线程新启事务进行oracle临时表数据清理会和clog回调形成死锁, 这里改成同步方式
   ObSQLSessionInfo &session = result.get_session();
   CHECK_COMPATIBILITY_MODE(&session);

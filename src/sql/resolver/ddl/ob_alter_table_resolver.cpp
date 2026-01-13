@@ -6847,7 +6847,7 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
   ObResolverParams resolver_ctx;
   ObRawExprFactory expr_factory(*allocator_);
   ObStmtFactory stmt_factory(*allocator_);
-  TableItem table_item;
+  TableItem table_item(*allocator_);
   resolver_ctx.allocator_ = allocator_;
   resolver_ctx.schema_checker_ = schema_checker_;
   resolver_ctx.session_info_ = session_info_;

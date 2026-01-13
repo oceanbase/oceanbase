@@ -119,7 +119,7 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("sub_query or table_buf is null", K(ret), KP(table_buf));
   } else {
-    table_def = new (table_buf) ObValuesTableDef();
+    table_def = new (table_buf) ObValuesTableDef(*allocator);
     table_def->column_cnt_ = column_cnt;
     table_def->row_cnt_ = row_cnt;
     table_def->access_type_ = access_type;

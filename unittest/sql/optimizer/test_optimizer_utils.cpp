@@ -31,8 +31,6 @@ TestOptimizerUtils::~TestOptimizerUtils()
 void TestOptimizerUtils::init()
 {
   TestSqlUtils::init();
-  //OK(stat_manager_.init(&cs_, &ts_));
-  OK(opt_stat_manager_.init(&opt_stat_, NULL, NULL));
 }
 void TestOptimizerUtils::SetUp()
 {
@@ -85,7 +83,11 @@ int TestOptimizerUtils::generate_logical_plan(ObResultSet &result, //ObIAllocato
   ObStmt *basic_stmt = NULL;
   ObPhysicalPlan *phy_plan = NULL;
   session_info_.set_user_session();
-  if (OB_FAIL(schema_checker.init(sql_schema_guard_))) {
+  ObQueryCtx *query_ctx = stmt_factory_.get_query_ctx();
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query_ctx is null", K(ret));
+  } else if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_))) {
     LOG_WARN("fail to init schema_checker", K(ret));
   } else if (OB_FAIL(MockCacheObjectFactory::alloc(
               phy_plan, session_info_.get_effective_tenant_id()))) {
@@ -106,7 +108,6 @@ int TestOptimizerUtils::generate_logical_plan(ObResultSet &result, //ObIAllocato
     resolver_ctx.expr_factory_ = &expr_factory_;
     resolver_ctx.stmt_factory_ = &stmt_factory_;
     resolver_ctx.query_ctx_ = stmt_factory_.get_query_ctx();
-    //stat_manager_.set_schema_checker(&schema_checker);
 
     /**
      *  3. set resolver context
@@ -184,7 +185,7 @@ int TestOptimizerUtils::generate_logical_plan(ObResultSet &result, //ObIAllocato
             // transform
             time_3_0 = get_usec();
             ObSchemaChecker schema_checker;
-            if (OB_FAIL(schema_checker.init(sql_schema_guard_))) {
+            if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_))) {
               LOG_WARN("fail to init schema_checker", K(ret));
             } else {
               ObTransformerCtx ctx;
@@ -195,7 +196,7 @@ int TestOptimizerUtils::generate_logical_plan(ObResultSet &result, //ObIAllocato
               ctx.expr_factory_ = &expr_factory_;
               ctx.stmt_factory_ = &stmt_factory_;
               //ctx.stat_mgr_ = &stat_manager_;
-              ctx.sql_schema_guard_ = &sql_schema_guard_;
+              ctx.sql_schema_guard_ = &query_ctx->sql_schema_guard_;
               ctx.self_addr_ = &addr;
               ctx.merged_version_ = OB_MERGED_VERSION_INIT;
 
@@ -224,7 +225,7 @@ int TestOptimizerUtils::generate_logical_plan(ObResultSet &result, //ObIAllocato
                 optctx_ = new(ctx_ptr) ObOptimizerContext(&session_info_,
                     &exec_ctx_,
                     //schema_mgr_, // schema manager
-                    &sql_schema_guard_,
+                    &query_ctx->sql_schema_guard_,
                     //&stat_manager_, // statistics manager
                     NULL, // statistics manager
                     static_cast<ObIAllocator &>(allocator_),

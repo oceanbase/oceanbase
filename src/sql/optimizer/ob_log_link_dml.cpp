@@ -24,7 +24,8 @@ namespace sql
 
 ObLogLinkDml::ObLogLinkDml(ObLogPlan &plan)
   : ObLogLink(plan),
-    dml_type_(stmt::StmtType::T_SELECT)
+    dml_type_(stmt::StmtType::T_SELECT),
+    related_dblink_ids_(plan.get_allocator())
 {}
 
 int ObLogLinkDml::compute_op_ordering()

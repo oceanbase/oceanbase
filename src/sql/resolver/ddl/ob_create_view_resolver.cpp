@@ -1478,10 +1478,7 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
   ObColumnSchemaV2 column;
   int64_t cur_column_id = OB_APP_MIN_COLUMN_ID;
   uint64_t data_version = 0;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version >= DATA_VERSION_4_1_0_0) {
     if ((!column_list.empty() && OB_UNLIKELY(column_list.count() != select_items.count()))

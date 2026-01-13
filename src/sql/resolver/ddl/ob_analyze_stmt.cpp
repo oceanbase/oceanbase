@@ -19,17 +19,19 @@ namespace oceanbase
 namespace sql
 {
 
-ObAnalyzeTableInfo::ObAnalyzeTableInfo()
+ObAnalyzeTableInfo::ObAnalyzeTableInfo(common::ObIAllocator &allocator)
   : database_name_(),
     database_id_(common::OB_INVALID_ID),
     table_name_(),
     table_id_(common::OB_INVALID_ID),
     part_level_(share::schema::PARTITION_LEVEL_ZERO),
     partition_name_(),
-    partition_infos_(),
-    subpartition_infos_(),
-    column_params_(),
-    column_group_params_(),
+    partition_infos_(allocator),
+    subpartition_infos_(allocator),
+    column_params_(allocator),
+    column_group_params_(allocator),
+    all_partition_infos_(allocator),
+    all_subpartition_infos_(allocator),
     ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE),
     gather_subpart_hist_(false),
     is_sepcify_subpart_(false)
@@ -68,9 +70,10 @@ int ObAnalyzeTableInfo::assign(const ObAnalyzeTableInfo &other)
   return ret;
 }
 
-ObAnalyzeStmt::ObAnalyzeStmt()
+ObAnalyzeStmt::ObAnalyzeStmt(common::ObIAllocator &allocator)
   : ObStmt(NULL, stmt::T_ANALYZE),
     tenant_id_(common::OB_INVALID_ID),
+    tables_(allocator),
     statistic_type_(InvalidStatistics),
     sample_info_(),
     parallel_degree_(1),
@@ -190,7 +193,6 @@ int ObAnalyzeStmt::add_table(const ObString database_name,
                             const share::schema::ObTableType table_type)
 {
   int ret = OB_SUCCESS;
-  ObAnalyzeTableInfo table;
   if (is_mysql_mode()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < tables_.count(); ++i) {
       if (tables_.at(i).get_table_id() == table_id

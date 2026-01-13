@@ -87,7 +87,6 @@ int ObTablePartitionInfo::calculate_phy_table_location_info(
                           const common::ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
-  ObCandiTableLoc candi_table_loc;
   if (OB_FAIL(table_location_.calculate_candi_tablet_locations(
                        exec_ctx,
                        params,
@@ -115,35 +114,7 @@ int ObTablePartitionInfo::calc_phy_table_loc_and_select_leader(ObExecContext &ex
     LOG_WARN("fail to calculate phy table location info", K(ret));
   } else if (OB_FAIL(candi_table_loc_.all_select_leader(is_on_same_server, same_server))) {
     LOG_WARN("fail to all select leader", K(ret), K(candi_table_loc_));
-    //
-    //
-    // 考虑没有 leader 的场景下，all_select_leader 一定会失败
-    // 导致 optimize 失败。optimize 失败后，不会进入执行期，进而
-    // 导致没有任何可用的 retry 信息被记录下来。
-    //
-    // 所以：将当前info 加入到 exec ctx 中，这样才有机会重试刷新
-    //
-    ObCandiTableLoc candi_table_loc;
-    ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(exec_ctx);
-    int tmp_ret = OB_SUCCESS;
-    if (OB_ISNULL(task_exec_ctx)) {
-      // don't overwirte err code
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("task_exec_ctx not inited", K(tmp_ret));
-    } else if (OB_SUCCESS != (tmp_ret = candi_table_loc.assign(candi_table_loc_))) {
-      LOG_WARN("fail to assign", K(tmp_ret), K(candi_table_loc_));
-    } else {
-      ObCandiTabletLocIArray &info_array = candi_table_loc.get_phy_part_loc_info_list_for_update();
-
-      for (int64_t i = 0; i < info_array.count() && OB_SUCCESS == tmp_ret; i++) {
-        ObCandiTabletLoc &info = info_array.at(i);
-        if (info.get_partition_location().get_replica_locations().count() <= 0) {
-          //nothing todo
-        } else if (OB_SUCCESS != (tmp_ret = info.set_selected_replica_idx(0))) {
-          LOG_WARN("fail to set selected replica index", KR(ret));
-        }
-      }
-    }
+    // 被删掉的代码实际上是 do nothing，提 review 的时候标注一下
   }
   return ret;
 }

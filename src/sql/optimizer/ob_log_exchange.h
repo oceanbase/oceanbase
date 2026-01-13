@@ -22,7 +22,6 @@ namespace sql
 {
 class ObLogExchange : public ObLogicalOperator
 {
-  typedef common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> RepartColumnExprs;
 public:
   ObLogExchange(ObLogPlan &plan)
       : ObLogicalOperator(plan),
@@ -38,16 +37,20 @@ public:
       is_rollup_hybrid_(false),
       is_wf_hybrid_(false),
       wf_hybrid_aggr_status_expr_(NULL),
-      sort_keys_(),
+      wf_hybrid_pby_exprs_cnt_array_(plan.get_allocator()),
+      sort_keys_(plan.get_allocator()),
       slice_count_(1),
       repartition_type_(OB_REPARTITION_NO_REPARTITION),
       repartition_ref_table_id_(OB_INVALID_ID),
       repartition_table_id_(OB_INVALID_ID),
       repartition_table_name_(),
-      repartition_keys_(),
-      repartition_sub_keys_(),
-      repartition_func_exprs_(),
+      repart_all_tablet_ids_(plan.get_allocator()),
+      repartition_keys_(plan.get_allocator()),
+      repartition_sub_keys_(plan.get_allocator()),
+      repartition_func_exprs_(plan.get_allocator()),
       calc_part_id_expr_(NULL),
+      hash_dist_exprs_(plan.get_allocator()),
+      popular_values_(plan.get_allocator()),
       dist_method_(ObPQDistributeMethod::LOCAL), // pull to local
       unmatch_row_dist_method_(ObPQDistributeMethod::LOCAL),
       null_row_dist_method_(ObNullDistributeMethod::NONE),
@@ -59,6 +62,8 @@ public:
       partition_id_expr_(NULL),
       ddl_slice_id_expr_(NULL),
       random_expr_(NULL),
+      table_locations_(plan.get_allocator()),
+      filter_id_array_(plan.get_allocator()),
       need_null_aware_shuffle_(false),
       is_old_unblock_mode_(true),
       sample_type_(NOT_INIT_SAMPLE_TYPE),
@@ -240,21 +245,21 @@ private:
   bool is_rollup_hybrid_;  // for adaptive rollup pushdown
   bool is_wf_hybrid_;  // for adaptive window function pushdown
   ObRawExpr *wf_hybrid_aggr_status_expr_;
-  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> wf_hybrid_pby_exprs_cnt_array_;
-  common::ObSEArray<OrderItem, 4, common::ModulePageAllocator, true> sort_keys_;
+  ObSqlArray<int64_t> wf_hybrid_pby_exprs_cnt_array_;
+  ObSqlArray<OrderItem> sort_keys_;
 
   int64_t slice_count_;//对于重分发之外的exchange, slice_count均为1
   ObRepartitionType repartition_type_;
   int64_t repartition_ref_table_id_;
   int64_t repartition_table_id_;
   ObString repartition_table_name_; //just for print plan
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> repart_all_tablet_ids_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> repartition_keys_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> repartition_sub_keys_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> repartition_func_exprs_;
+  ObSqlArray<uint64_t> repart_all_tablet_ids_;
+  ObSqlArray<ObRawExpr *> repartition_keys_;
+  ObSqlArray<ObRawExpr *> repartition_sub_keys_;
+  ObSqlArray<ObRawExpr *> repartition_func_exprs_;
   ObRawExpr *calc_part_id_expr_;
-  common::ObSEArray<ObExchangeInfo::HashExpr, 4, common::ModulePageAllocator, true> hash_dist_exprs_;
-  common::ObSEArray<ObObj, 20, common::ModulePageAllocator, true> popular_values_; // for hybrid hash distr
+  ObSqlArray<ObExchangeInfo::HashExpr> hash_dist_exprs_;
+  ObSqlArray<ObObj> popular_values_; // for hybrid hash distr
 
   ObPQDistributeMethod::Type dist_method_;
   ObPQDistributeMethod::Type unmatch_row_dist_method_;
@@ -273,8 +278,8 @@ private:
   // produce random number, added in %sort_keys_ of range distribution to splitting big range.
   ObRawExpr *random_expr_;
 
-  common::ObSEArray<ObTableLocation, 4, common::ModulePageAllocator, true> table_locations_;
-  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> filter_id_array_;
+  ObSqlArray<ObTableLocation> table_locations_;
+  ObSqlArray<int64_t> filter_id_array_;
   // new shuffle method for non-preserved side in naaj
   // broadcast 1st line && null join key
   bool need_null_aware_shuffle_;

@@ -18,6 +18,7 @@
 #include "rpc/obmysql/ob_2_0_protocol_utils.h"
 #include "sql/ob_sql_context.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/ob_optimizer_trace_impl.h"
 #include "observer/ob_server_struct.h"
 #include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
 #include "observer/mysql/obmp_packet_sender.h"
@@ -171,7 +172,7 @@ public:
   }
   virtual ~ObProcessMallocCallback() {}
 
-  virtual void operator()(const ObMemAttr &attr, int64_t add_size) override
+  virtual void operator()(const ObMemAttr &attr, int64_t add_size, const lib::AObject &obj) override
   {
     //You can use:
     //alter system set_tp tp_no=405, error_code=label_high64, frequency=1;
@@ -186,9 +187,11 @@ public:
     //If you don't have access to this tool,
     //you can map a string that conforms to the ObLabel format into two int64_t integer values,
     //ensuring consistency with the endianness of the target machine.
+    UNUSED(obj);
     int64_t label_high64 = - EVENT_CODE(EventTable::EN_SQL_MEMORY_LABEL_HIGH64);
     if (OB_UNLIKELY(ObLabel("SqlDtlBuf") == attr.label_
-                    || ObCtxIds::MEMSTORE_CTX_ID == attr.ctx_id_)) {
+                    || ObCtxIds::MEMSTORE_CTX_ID == attr.ctx_id_
+                    || ObCtxIds::LOGGER_CTX_ID == attr.ctx_id_)) {
       // do nothing
     } else if (label_high64 != 0) {
       int64_t label_low64 = - EVENT_CODE(EventTable::EN_SQL_MEMORY_LABEL_LOW64);
@@ -211,10 +214,32 @@ public:
       max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
     }
   }
+  int64_t get_cur_used() const { return cur_used_; }
+  int64_t get_max_used() const { return max_used_; }
 private:
   int64_t cur_used_;
   int64_t &max_used_;
 }; // end of class ObProcessMallocCallback
+
+class ObMemPerfCallback final : public lib::ObMallocCallback
+{
+public:
+  ObMemPerfCallback(sql::ObOptimizerTraceImpl &tracer)
+    : is_enable_(true), cur_used_(0), max_used_(0), total_used_(0), total_freed_(0),
+      tracer_(tracer)
+  {
+  }
+  virtual ~ObMemPerfCallback() {}
+
+  virtual void operator()(const ObMemAttr &attr, int64_t add_size, const lib::AObject &obj) override;
+public:
+  bool is_enable_;
+  int64_t cur_used_;
+  int64_t max_used_;
+  int64_t total_used_;
+  int64_t total_freed_;
+  sql::ObOptimizerTraceImpl &tracer_;
+};
 
 } // end of namespace observer
 } // end of namespace oceanbsae

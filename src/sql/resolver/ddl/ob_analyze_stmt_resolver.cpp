@@ -113,7 +113,7 @@ int ObAnalyzeStmtResolver::resolve_oracle_analyze(const ParseNode &parse_node,
     if (OB_ISNULL(table_node) || OB_ISNULL(statistic_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null parse node", K(table_node), K(statistic_node), K(ret));
-    } else if (OB_FAIL(recursive_resolve_table_info(table_node, analyze_stmt))) {
+    } else if (OB_FAIL(resolve_table_infos(table_node, analyze_stmt))) {
       LOG_WARN("failed to resolve table info", K(ret));
     } else if (OB_FAIL(resolve_partition_info(part_node, analyze_stmt))) {
       LOG_WARN("failed to resolve partition info", K(ret));
@@ -231,18 +231,21 @@ int ObAnalyzeStmtResolver::resolve_mysql_column_bucket_info(const ParseNode *col
   return ret;
 }
 
-int ObAnalyzeStmtResolver::recursive_resolve_table_info(const ParseNode *table_list_node,
-                                                        ObAnalyzeStmt &analyze_stmt)
+int ObAnalyzeStmtResolver::resolve_table_infos(const ParseNode *table_list_node,
+                                               ObAnalyzeStmt &analyze_stmt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_list_node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null point", K(ret), KP(table_list_node));
   } else if (T_LINK_NODE == table_list_node->type_) {
-    if (OB_FAIL(SMART_CALL(recursive_resolve_table_info(table_list_node->children_[0], analyze_stmt)))) {
-      LOG_WARN("recursive resolve table list node failed", K(ret));
-    } else if (OB_FAIL(SMART_CALL(recursive_resolve_table_info(table_list_node->children_[1], analyze_stmt)))) {
-      LOG_WARN("recursive resolve table list node failed", K(ret));
+    if (OB_FAIL(analyze_stmt.get_tables().reserve(table_list_node->num_child_))) {
+      LOG_WARN("failed to reserve tables", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_list_node->num_child_; i++) {
+      if (OB_FAIL(resolve_table_info(table_list_node->children_[i], analyze_stmt))) {
+        LOG_WARN("failed to resolve table info", K(ret));
+      }
     }
   } else if (OB_FAIL(resolve_table_info(table_list_node, analyze_stmt))) {
     LOG_WARN("resolve table info failed", K(ret));

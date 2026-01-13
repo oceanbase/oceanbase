@@ -33,7 +33,7 @@ public:
   const common::ObIArray<ObRawExpr*> &get_select_exprs() const { return select_exprs_; }
   common::ObIArray<ObRawExpr*> &get_select_exprs() { return select_exprs_; }
 private:
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> select_exprs_;
+  ObSqlArray<ObRawExpr*> select_exprs_;
 
 };
 

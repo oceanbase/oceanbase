@@ -31,19 +31,19 @@ class ObJoinOrder;
  */
 struct JoinInfo
 {
-  JoinInfo() :
+  JoinInfo(common::ObIAllocator &allocator) :
       table_set_(),
-      on_conditions_(),
-      where_conditions_(),
-      equal_join_conditions_(),
+      on_conditions_(allocator),
+      where_conditions_(allocator),
+      equal_join_conditions_(allocator),
       join_type_(UNKNOWN_JOIN)
       {}
 
-  JoinInfo(ObJoinType join_type) :
+  JoinInfo(ObJoinType join_type, common::ObIAllocator &allocator) :
       table_set_(),
-      on_conditions_(),
-      where_conditions_(),
-      equal_join_conditions_(),
+      on_conditions_(allocator),
+      where_conditions_(allocator),
+      equal_join_conditions_(allocator),
       join_type_(join_type)
       {}
 
@@ -80,9 +80,9 @@ struct JoinInfo
                 K_(where_conditions),
                 K_(equal_join_conditions));
   ObRelIds table_set_; //要连接的表集合（即包含在join_qual_中的，除自己之外的所有表）
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> on_conditions_; //来自on的条件，如果是outer/semi join
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> where_conditions_; //来自where的条件，如果是outer/semi join，则是join filter，如果是inner join，则是join condition
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> equal_join_conditions_; //是连接条件（outer/semi的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的merge join所需的序的时候使用
+  ObSqlArray<ObRawExpr*> on_conditions_; //来自on的条件，如果是outer/semi join
+  ObSqlArray<ObRawExpr*> where_conditions_; //来自where的条件，如果是outer/semi join，则是join filter，如果是inner join，则是join condition
+  ObSqlArray<ObRawExpr*> equal_join_conditions_; //是连接条件（outer/semi的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的merge join所需的序的时候使用
   ObJoinType join_type_;
 };
 
@@ -90,11 +90,11 @@ class ObConflictDetector
 {
   friend class ObConflictDetectorGenerator;
 public:
-  ObConflictDetector() :
-    join_info_(),
-    CR_(),
-    cross_product_rule_(),
-    delay_cross_product_rule_(),
+  ObConflictDetector(common::ObIAllocator &allocator) :
+    join_info_(allocator),
+    CR_(allocator),
+    cross_product_rule_(allocator),
+    delay_cross_product_rule_(allocator),
     L_TES_(),
     R_TES_(),
     L_DS_(),
@@ -166,9 +166,9 @@ private:
   //table set包含的是当前join condition所引用的所有表，也就是SES
   JoinInfo join_info_;
   //conflict rules: R1 -> R2
-  common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> CR_;
-  common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> cross_product_rule_;
-  common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> delay_cross_product_rule_;
+  ObSqlArray<std::pair<ObRelIds, ObRelIds>> CR_;
+  ObSqlArray<std::pair<ObRelIds, ObRelIds>> cross_product_rule_;
+  ObSqlArray<std::pair<ObRelIds, ObRelIds>> delay_cross_product_rule_;
   //left total eligibility set
   ObRelIds L_TES_;
   //right total eligibility set

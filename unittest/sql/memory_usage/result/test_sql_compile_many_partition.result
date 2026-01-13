@@ -1,0 +1,18 @@
+***************   Case 1   ***************
+select /*+USE_PLAN_CACHE(none)*/ * from t_parts;
+memory usage: parser = 0, resolve = 295152, transform = 0, optimize = 6712936, total = 6989992
+***************   Case 2   ***************
+select /*+USE_PLAN_CACHE(none)*/ * from t_subparts;
+memory usage: parser = 0, resolve = 295152, transform = 0, optimize = 6843880, total = 7120936
+
+memory usage
+| query | parser | resolve | transform | optimize | total |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 0 | 295,152 | 0 | 6,712,936 | 6,989,992 |
+| 2 | 0 | 295,152 | 0 | 6,843,880 | 7,120,936 |
+
+max memory usage
+| query | parser | resolve | transform | optimize | total |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 0 | 314,672 | 23,048 | 13,021,416 | 13,316,568 |
+| 2 | 0 | 314,672 | 23,048 | 13,160,296 | 13,455,448 |

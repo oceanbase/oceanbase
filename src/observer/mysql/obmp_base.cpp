@@ -761,5 +761,26 @@ int ObMPBase::load_privilege_info_for_change_user(sql::ObSQLSessionInfo *session
   return ret;
 }
 
+void ObMemPerfCallback::operator()(const ObMemAttr &attr, int64_t add_size, const lib::AObject &obj)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_enable_ || ObCtxIds::LOGGER_CTX_ID == attr.ctx_id_)) {
+    // do nothing
+  } else {
+    bool old_value = is_enable_;
+    is_enable_ = false;
+    cur_used_ += add_size;
+    max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
+    total_used_ += MAX(add_size, 0);
+    total_freed_ += MAX(-add_size, 0);
+    tracer_.new_line();
+    tracer_.append("[MEM PERF]", add_size, ",", (void*)obj.data_);
+    if (add_size > 0) {
+      tracer_.append(",", lbt());
+    }
+    is_enable_ = old_value;
+  }
+}
+
 } // namespace observer
 } // namespace oceanbase

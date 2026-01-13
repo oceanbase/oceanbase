@@ -119,7 +119,7 @@ private:
     bool phy_rowid_for_table_loc_;
     bool ignore_calc_failure_;
     int64_t range_optimizer_max_mem_size_;
-    common::ObSEArray<ObRangeExprItem, 4, common::ModulePageAllocator, true> precise_range_exprs_;
+    common::ObSEArray<ObRangeExprItem, 4> precise_range_exprs_;
     ObExecContext *exec_ctx_;
     ObQueryCtx *query_ctx_;
     ExprConstrantArray *expr_constraints_;

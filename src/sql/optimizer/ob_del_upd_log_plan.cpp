@@ -493,7 +493,7 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
   } else {
     const ObArray<ObRawExpr*> empty_filters;
     const ObIArray<ObRawExpr*> &real_filters = get_optimizer_context().is_online_ddl() ? empty_filters : filters;
-    sharding_info = new(sharding_info) ObShardingInfo();
+    sharding_info = new(sharding_info) ObShardingInfo(allocator_);
     table_partition_info = new(table_partition_info) ObTablePartitionInfo(allocator_);
     ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
     ObAddr &server = get_optimizer_context().get_local_server_addr();
@@ -1798,7 +1798,8 @@ int ObDelUpdLogPlan::split_update_index_dml_info(const IndexDMLInfo &upd_dml_inf
                                                  IndexDMLInfo *&ins_dml_info)
 {
   int ret = OB_SUCCESS;
-  IndexDMLInfo tmp_dml_info;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  IndexDMLInfo tmp_dml_info(allocator);
   if (OB_FAIL(tmp_dml_info.assign_basic(upd_dml_info))) {
     LOG_WARN("assign tmp dml info failed", K(ret));
   } else if (OB_FAIL(tmp_dml_info.init_column_convert_expr(upd_dml_info.assignments_))) {
@@ -1823,11 +1824,11 @@ int ObDelUpdLogPlan::create_index_dml_info(const IndexDMLInfo &orgi_dml_info,
 {
   int ret = OB_SUCCESS;
   void *ptr= NULL;
-  if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+  if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    opt_dml_info = new (ptr) IndexDMLInfo();
+    opt_dml_info = new (ptr) IndexDMLInfo(get_allocator());
     if (OB_FAIL(opt_dml_info->assign_basic(orgi_dml_info))) {
       LOG_WARN("failed to assign dml info", K(ret));
     } else if (OB_FAIL(prune_virtual_column(*opt_dml_info))) {
@@ -2064,11 +2065,11 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
   if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null",K(ret), K(schema_guard), K(session_info));
-  } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+  } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    table_dml_info = new (ptr) IndexDMLInfo();
+    table_dml_info = new (ptr) IndexDMLInfo(get_allocator());
     if (OB_FAIL(table_dml_info->assign(table_info))) {
       LOG_WARN("failed to assign table info", K(ret));
     } else if (has_tg) {
@@ -2133,11 +2134,11 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
       } else if ((index_schema->is_fts_index() || index_schema->is_multivalue_index())&& OB_FAIL(check_dml_table_write_dependency(
           table_info.ref_table_id_, *index_schema))) {
         LOG_WARN("failed to check dml table write dependency", K(ret));
-      } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+      } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
       } else {
-        index_dml_info = new (ptr) IndexDMLInfo();
+        index_dml_info = new (ptr) IndexDMLInfo(get_allocator());
         if (OB_FAIL(index_schema->get_index_name(index_dml_info->index_name_))) {
           LOG_WARN("failed to get index name", K(ret));
         } else {
@@ -2363,7 +2364,7 @@ int ObDelUpdLogPlan::generate_index_rowkey_exprs(uint64_t table_id,
   return ret;
 }
 
-int ObDelUpdLogPlan::check_index_update(ObAssignments assigns,
+int ObDelUpdLogPlan::check_index_update(const ObAssignments &assigns,
                                         const ObTableSchema& index_schema,
                                         const bool is_update_view,
                                         bool& need_update)

@@ -1325,6 +1325,7 @@ ob_set_subtarget(ob_sql printer
 
 ob_set_subtarget(ob_sql resolver
   resolver/ob_resolver.cpp
+  resolver/ob_resolver_define.cpp
   resolver/ob_resolver_utils.cpp
   resolver/ob_schema_checker.cpp
   resolver/ob_stmt.cpp

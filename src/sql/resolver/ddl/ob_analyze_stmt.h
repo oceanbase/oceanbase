@@ -36,7 +36,7 @@ enum StatisticType
 class ObAnalyzeTableInfo
 {
 public:
-  ObAnalyzeTableInfo();
+  ObAnalyzeTableInfo(common::ObIAllocator &allocator);
   virtual ~ObAnalyzeTableInfo();
   void set_database_name(const ObString &str) { database_name_ = str; }
   void set_database_id(const uint64_t id) { database_id_ = id; }
@@ -95,14 +95,14 @@ private:
   share::schema::ObPartitionLevel part_level_;
   ObString partition_name_;
 
-  common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> partition_infos_;
-  common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> subpartition_infos_;
+  ObSqlArray<PartInfo> partition_infos_;
+  ObSqlArray<PartInfo> subpartition_infos_;
 
-  common::ObSEArray<common::ObColumnStatParam, 4, common::ModulePageAllocator, true> column_params_;
-  common::ObSEArray<common::ObColumnGroupStatParam, 4, common::ModulePageAllocator, true> column_group_params_;
+  ObSqlArray<common::ObColumnStatParam> column_params_;
+  ObSqlArray<common::ObColumnGroupStatParam> column_group_params_;
 
-  common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> all_partition_infos_;
-  common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> all_subpartition_infos_;
+  ObSqlArray<PartInfo> all_partition_infos_;
+  ObSqlArray<PartInfo> all_subpartition_infos_;
   share::schema::ObTableType ref_table_type_;
   bool gather_subpart_hist_;
   bool is_sepcify_subpart_;
@@ -111,7 +111,7 @@ private:
 class ObAnalyzeStmt: public ObStmt, public ObICmd
 {
 public:
-  ObAnalyzeStmt();
+  ObAnalyzeStmt(common::ObIAllocator &allocator);
   virtual ~ObAnalyzeStmt();
   virtual int get_cmd_type() const { return get_stmt_type(); }
 
@@ -154,7 +154,7 @@ private:
   //ANALYZE TABLE without histogram clause support multi tables.For example:
   //  ANALYZE TABLE db1.t1, db2.t1;
   //And in other cases, size of tables_ is always 1.
-  ObSEArray<ObAnalyzeTableInfo, 1, common::ModulePageAllocator, true> tables_;
+  ObSqlArray<ObAnalyzeTableInfo, true> tables_;
 
   StatisticType statistic_type_;
   ObAnalyzeSampleInfo sample_info_;

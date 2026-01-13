@@ -945,6 +945,7 @@ int ObResultSet::do_close(int *client_ret)
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
 
   FLTSpanGuard(close);
+  ObMemPerfGuard mem_perf_guard("close");
   const bool is_tx_active = my_session_.is_in_transaction();
   int do_close_plan_ret = OB_SUCCESS;
   ObPhysicalPlan* physical_plan_ = static_cast<ObPhysicalPlan*>(cache_obj_guard_.get_cache_obj());

@@ -1666,7 +1666,7 @@ struct ObExprEqualCheckContext
   bool override_set_op_compare_;
   int err_code_;
   //when compare with T_QUESTIONMARK, as T_QUESTIONMARK is unkown, record this first.
-  common::ObSEArray<ParamExprPair, 3, common::ModulePageAllocator, true> param_expr_;
+  common::ObSEArray<ParamExprPair, 4> param_expr_;
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
   bool ignore_for_write_; // ignore for_write_ field in ObObjAccessRawExpr comparison
@@ -3019,20 +3019,6 @@ private:
 class ObQueryRefRawExpr : public ObRawExpr
 {
 public:
-  ObQueryRefRawExpr()
-    : ObRawExpr(),
-      ref_id_(common::OB_INVALID_ID),
-      output_column_(0),
-      is_set_(false),
-      is_cursor_(false),
-      has_nl_param_(false),
-      is_multiset_(false)
-  {
-    //匿名union对象的初始化只能放到函数体里面，不然会报多次初始化同一个对象的编译错误
-    ref_stmt_ = NULL;
-    set_expr_class(EXPR_QUERY_REF);
-  }
-
   ObQueryRefRawExpr(common::ObIAllocator &alloc)
     : ObRawExpr(alloc),
       ref_id_(common::OB_INVALID_ID),
@@ -3040,20 +3026,24 @@ public:
       is_set_(false),
       is_cursor_(false),
       has_nl_param_(false),
-      is_multiset_(false)
+      is_multiset_(false),
+      column_types_(alloc),
+      exec_params_(alloc)
   {
     //匿名union对象的初始化只能放到函数体里面，不然会报多次初始化同一个对象的编译错误
     ref_stmt_ = NULL;
     set_expr_class(EXPR_QUERY_REF);
   }
-  ObQueryRefRawExpr(int64_t id, ObItemType expr_type = T_INVALID)
+  ObQueryRefRawExpr(common::ObIAllocator &alloc, int64_t id, ObItemType expr_type = T_INVALID)
     : ObRawExpr(expr_type),
       ref_id_(id),
       output_column_(0),
       is_set_(false),
       is_cursor_(false),
       has_nl_param_(false),
-      is_multiset_(false)
+      is_multiset_(false),
+      column_types_(alloc),
+      exec_params_(alloc)
   {
     //匿名union对象的初始化只能放到函数体里面，不然会报多次初始化同一个对象的编译错误
     ref_stmt_ = NULL;
@@ -3138,8 +3128,8 @@ private:
   bool has_nl_param_;
   bool is_multiset_;
   //子查询的输出列类型
-  common::ObSEArray<ObRawExprResType, 64, common::ModulePageAllocator, true> column_types_;
-  common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> exec_params_;
+  ObSqlArray<ObRawExprResType> column_types_;
+  ObSqlArray<ObExecParamRawExpr *> exec_params_;
 };
 
 inline int64_t ObQueryRefRawExpr::get_ref_id() const
@@ -3726,21 +3716,11 @@ inline uint64_t ObOpRawExpr::hash_internal(uint64_t seed) const
 class ObCaseOpRawExpr : public ObNonTerminalRawExpr
 {
 public:
-  ObCaseOpRawExpr()
-    : ObNonTerminalRawExpr(),
-      arg_expr_(NULL),
-      when_exprs_(),
-      then_exprs_(),
-      default_expr_(NULL),
-      is_decode_func_(false)
-  {
-    set_expr_class(EXPR_CASE_OPERATOR);
-  }
   ObCaseOpRawExpr(common::ObIAllocator &alloc)
     : ObNonTerminalRawExpr(alloc),
       arg_expr_(NULL),
-      when_exprs_(),
-      then_exprs_(),
+      when_exprs_(alloc),
+      then_exprs_(alloc),
       default_expr_(NULL),
       is_decode_func_(false)
   {
@@ -3803,8 +3783,8 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCaseOpRawExpr);
   ObRawExpr *arg_expr_;
-  common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> when_exprs_;
-  common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> then_exprs_;
+  ObSqlArray<ObRawExpr *> when_exprs_;
+  ObSqlArray<ObRawExpr *> then_exprs_;
   ObRawExpr *default_expr_;
   bool is_decode_func_;
 };
@@ -3947,26 +3927,11 @@ inline uint64_t ObCaseOpRawExpr::hash_internal(uint64_t seed) const
 class ObAggFunRawExpr : public ObRawExpr
 {
 public:
-  ObAggFunRawExpr()
-    : ObRawExpr(),
-    real_param_exprs_(),
-    distinct_(false),
-    order_items_(),
-    separator_param_expr_(NULL),
-    udf_meta_(),
-    expr_in_inner_stmt_(false),
-    is_need_deserialize_row_(false),
-    keep_sum_precision_(false),
-    pl_agg_udf_expr_(NULL)
-  {
-    set_expr_class(EXPR_AGGR);
-    order_items_.set_label(common::ObModIds::OB_SQL_AGGR_FUNC_ARR);
-  }
   ObAggFunRawExpr(common::ObIAllocator &alloc)
     : ObRawExpr(alloc),
-    real_param_exprs_(),
+    real_param_exprs_(alloc),
     distinct_(false),
-    order_items_(),
+    order_items_(alloc),
     separator_param_expr_(NULL),
     udf_meta_(),
     expr_in_inner_stmt_(false),
@@ -3975,14 +3940,13 @@ public:
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
-    order_items_.set_label(common::ObModIds::OB_SQL_AGGR_FUNC_ARR);
   }
-  ObAggFunRawExpr(const common::ObSEArray<ObRawExpr *, 1, common::ModulePageAllocator, true> &real_param_exprs,
+  ObAggFunRawExpr(common::ObIAllocator &alloc,
                   bool is_distinct, ObItemType expr_type = T_INVALID)
-    : ObRawExpr(expr_type),
-    real_param_exprs_(real_param_exprs),
+    : ObRawExpr(alloc, expr_type),
+    real_param_exprs_(alloc),
     distinct_(is_distinct),
-    order_items_(),
+    order_items_(alloc),
     separator_param_expr_(NULL),
     udf_meta_(),
     expr_in_inner_stmt_(false),
@@ -3991,7 +3955,6 @@ public:
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
-    order_items_.set_label(common::ObModIds::OB_SQL_AGGR_FUNC_ARR);
   }
   virtual ~ObAggFunRawExpr() {}
   int assign(const ObRawExpr &other) override;
@@ -4073,10 +4036,10 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAggFunRawExpr);
   // real_param_exprs_.count() == 0 means '*'
-  common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> real_param_exprs_;
+  ObSqlArray<ObRawExpr*> real_param_exprs_;
   bool distinct_;
   // used for group_concat/rank/percent rank/dense rank/cume dist
-  common::ObArray<OrderItem, common::ModulePageAllocator, true> order_items_;
+  ObSqlArray<OrderItem> order_items_;
   ObRawExpr *separator_param_expr_;
   //use for udf function info
   share::schema::ObUDFMeta udf_meta_;
@@ -4275,8 +4238,7 @@ private:
 class ObNormalDllUdfRawExpr : public ObSysFunRawExpr
 {
 public:
-  ObNormalDllUdfRawExpr(common::ObIAllocator &alloc) : ObSysFunRawExpr(alloc), udf_meta_(), udf_attributes_() {}
-  ObNormalDllUdfRawExpr() : ObSysFunRawExpr(), udf_meta_(), udf_attributes_() {}
+  ObNormalDllUdfRawExpr(common::ObIAllocator &alloc) : ObSysFunRawExpr(alloc), udf_meta_(), udf_attributes_(alloc) {}
   virtual ~ObNormalDllUdfRawExpr() {}
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
@@ -4290,7 +4252,7 @@ public:
 private:
   //for udf function info
   share::schema::ObUDFMeta udf_meta_;
-  common::ObSEArray<common::ObString, 16> udf_attributes_;// name of input expr
+  ObSqlArray<common::ObString> udf_attributes_;// name of input expr
 };
 
 class ObCollectionConstructRawExpr : public ObSysFunRawExpr
@@ -4304,16 +4266,7 @@ public:
       index_type_(),
       capacity_(OB_INVALID_SIZE),
       udt_id_(OB_INVALID_ID),
-      database_id_(OB_INVALID_ID),
-      coll_schema_version_(common::OB_INVALID_VERSION) {}
-  ObCollectionConstructRawExpr()
-    : ObSysFunRawExpr(),
-      is_associative_array_with_param_assign_op_(false),
-      type_(pl::ObPLType::PL_INVALID_TYPE),
-      elem_type_(),
-      index_type_(),
-      capacity_(OB_INVALID_SIZE),
-      udt_id_(OB_INVALID_ID),
+      access_names_(alloc),
       database_id_(OB_INVALID_ID),
       coll_schema_version_(common::OB_INVALID_VERSION) {}
   virtual ~ObCollectionConstructRawExpr() {}
@@ -4374,7 +4327,7 @@ private:
   int64_t capacity_; //记录VArray的容量，对于NestedTable为-1
   uint64_t udt_id_; // 记录复杂类型的ID
   // 用于打印构造函数的名字
-  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> access_names_;
+  ObSqlArray<common::ObString> access_names_;
   int64_t database_id_;
   int64_t coll_schema_version_;
 };
@@ -4386,16 +4339,8 @@ public:
     : ObSysFunRawExpr(alloc),
       rowsize_(0),
       udt_id_(OB_INVALID_ID),
-      elem_types_(),
-      access_names_(),
-      database_id_(OB_INVALID_ID),
-      object_schema_version_(common::OB_INVALID_VERSION) {}
-  ObObjectConstructRawExpr()
-    : ObSysFunRawExpr(),
-      rowsize_(0),
-      udt_id_(OB_INVALID_ID),
-      elem_types_(),
-      access_names_(),
+      elem_types_(alloc),
+      access_names_(alloc),
       database_id_(OB_INVALID_ID),
       object_schema_version_(common::OB_INVALID_VERSION) {}
 
@@ -4463,9 +4408,9 @@ private:
   int64_t rowsize_;
   uint64_t udt_id_;
   // 记录Object每个元素的类型
-  common::ObSEArray<ObRawExprResType, 5, common::ModulePageAllocator, true> elem_types_;
+  ObSqlArray<ObRawExprResType> elem_types_;
   // 用于打印构造函数的名字
-  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> access_names_;
+  ObSqlArray<common::ObString> access_names_;
   int64_t database_id_;
   int64_t object_schema_version_;
 };
@@ -4519,11 +4464,11 @@ public:
       udf_id_(common::OB_INVALID_ID),
       pkg_id_(common::OB_INVALID_ID),
       type_id_(common::OB_INVALID_ID),
-      subprogram_path_(),
+      subprogram_path_(alloc),
       udf_schema_version_(common::OB_INVALID_VERSION),
       pkg_schema_version_(common::OB_INVALID_VERSION),
       pls_type_(pl::PL_INTEGER_INVALID),
-      params_type_(),
+      params_type_(alloc),
       database_name_(),
       package_name_(),
       is_parallel_enable_(false),
@@ -4533,49 +4478,16 @@ public:
       is_aggregate_udf_(false),
       is_aggr_udf_distinct_(false),
       is_result_cache_(false),
-      nocopy_params_(),
+      nocopy_params_(alloc),
       loc_(0),
       is_udt_cons_(false),
-      params_name_(),
-      params_desc_v2_(),
+      params_name_(alloc),
+      params_desc_v2_(alloc),
       dblink_name_(),
       dblink_id_(common::OB_INVALID_ID),
       external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
       is_mysql_udtf_(false),
-      out_params_type_() {
-    set_expr_class(EXPR_UDF);
-    is_deterministic_ = false;
-  }
-
-  ObUDFRawExpr()
-    : ObSysFunRawExpr(),
-      udf_id_(common::OB_INVALID_ID),
-      pkg_id_(common::OB_INVALID_ID),
-      type_id_(common::OB_INVALID_ID),
-      subprogram_path_(),
-      udf_schema_version_(common::OB_INVALID_VERSION),
-      pkg_schema_version_(common::OB_INVALID_VERSION),
-      pls_type_(pl::PL_INTEGER_INVALID),
-      params_type_(),
-      database_name_(),
-      package_name_(),
-      is_parallel_enable_(false),
-      is_udt_udf_(false),
-      is_pkg_body_udf_(false),
-      is_return_sys_cursor_(false),
-      is_aggregate_udf_(false),
-      is_aggr_udf_distinct_(false),
-      is_result_cache_(false),
-      nocopy_params_(),
-      loc_(0),
-      is_udt_cons_(false),
-      params_name_(),
-      params_desc_v2_(),
-      dblink_name_(),
-      dblink_id_(common::OB_INVALID_ID),
-      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
-      is_mysql_udtf_(false),
-      out_params_type_() {
+      out_params_type_(alloc) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4771,11 +4683,11 @@ private:
   uint64_t udf_id_;
   uint64_t pkg_id_;
   uint64_t type_id_;
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> subprogram_path_;
+  ObSqlArray<int64_t> subprogram_path_;
   int64_t udf_schema_version_;
   int64_t pkg_schema_version_;
   pl::ObPLIntegerType pls_type_; // 当返回PLS类型时, 该字段记录返回的PLS类型
-  common::ObSEArray<ObRawExprResType, 5, common::ModulePageAllocator, true> params_type_;
+  ObSqlArray<ObRawExprResType> params_type_;
   common::ObString database_name_;
   common::ObString package_name_;
   bool is_parallel_enable_;
@@ -4785,16 +4697,16 @@ private:
   bool is_aggregate_udf_;
   bool is_aggr_udf_distinct_;
   bool is_result_cache_;
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> nocopy_params_;
+  ObSqlArray<int64_t> nocopy_params_;
   uint64_t loc_; // line 和 column 组合，主要是为call_stack准备
   bool is_udt_cons_;
-  common::ObSEArray<common::ObString, 5, common::ModulePageAllocator, true> params_name_;
-  common::ObSEArray<ObUDFParamDesc, 5, common::ModulePageAllocator, true> params_desc_v2_;
+  ObSqlArray<common::ObString> params_name_;
+  ObSqlArray<ObUDFParamDesc> params_desc_v2_;
   common::ObString dblink_name_;
   uint64_t dblink_id_;
   ObExternalRoutineType external_routine_type_;
   bool is_mysql_udtf_;
-  common::ObSEArray<ObRawExprResType, 5, common::ModulePageAllocator, true> out_params_type_;
+  ObSqlArray<ObRawExprResType> out_params_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUDFRawExpr);
 };
@@ -4994,21 +4906,11 @@ public:
     : ObOpRawExpr(alloc),
       get_attr_func_(0),
       func_name_(),
-      access_indexs_(),
-      var_indexs_(),
+      access_indexs_(alloc),
+      var_indexs_(alloc),
       for_write_(false),
       property_type_(pl::ObCollectionType::INVALID_PROPERTY),
-      orig_access_indexs_(),
-      extend_size_() {}
-  ObObjAccessRawExpr()
-    : ObOpRawExpr(),
-      get_attr_func_(0),
-      func_name_(),
-      access_indexs_(),
-      var_indexs_(),
-      for_write_(false),
-      property_type_(pl::ObCollectionType::INVALID_PROPERTY),
-      orig_access_indexs_(),
+      orig_access_indexs_(alloc),
       extend_size_(0) {}
   virtual ~ObObjAccessRawExpr() {}
   int assign(const ObRawExpr &other) override;
@@ -5039,11 +4941,11 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObObjAccessRawExpr);
   uint64_t get_attr_func_; //获取用户自定义类型数据的函数指针
   common::ObString func_name_;
-  common::ObSEArray<pl::ObObjAccessIdx, 4, common::ModulePageAllocator, true> access_indexs_;
-  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> var_indexs_;
+  ObSqlArray<pl::ObObjAccessIdx> access_indexs_;
+  ObSqlArray<int64_t> var_indexs_;
   bool for_write_;
   pl::ObCollectionType::PropertyType property_type_;
-  common::ObSEArray<pl::ObObjAccessIdx, 4, common::ModulePageAllocator, true> orig_access_indexs_;
+  ObSqlArray<pl::ObObjAccessIdx> orig_access_indexs_;
   int32_t extend_size_;
 };
 
@@ -5205,11 +5107,11 @@ public:
 struct ObWindow : public ObFrame
 {
 public:
-  ObWindow()
-    : has_frame_orig_(false)
+  ObWindow(common::ObIAllocator &alloc)
+    : partition_exprs_(alloc),
+      order_items_(alloc),
+      has_frame_orig_(false)
   {
-    partition_exprs_.set_label(common::ObModIds::OB_SQL_WINDOW_FUNC);
-    order_items_.set_label(common::ObModIds::OB_SQL_WINDOW_FUNC);
   }
   inline int set_partition_exprs(const common::ObIArray<ObRawExpr *> &exprs)
   { return partition_exprs_.assign(exprs); }
@@ -5229,8 +5131,8 @@ public:
 
   int assign(const ObWindow &other);
 
-  common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> partition_exprs_;
-  common::ObArray<OrderItem, common::ModulePageAllocator, true> order_items_;
+  ObSqlArray<ObRawExpr *> partition_exprs_;
+  ObSqlArray<OrderItem> order_items_;
   // used in resolver
   common::ObString win_name_;
   bool has_frame_orig_;
@@ -5239,23 +5141,13 @@ public:
 class ObWinFunRawExpr : public ObRawExpr, public ObWindow
 {
 public:
-  ObWinFunRawExpr()
-    : ObRawExpr(),
-      ObWindow(),
-      func_type_(T_MAX),
-      is_ignore_null_(false),
-      is_from_first_(false),
-      agg_expr_(NULL),
-      pl_agg_udf_expr_(NULL)
-  {
-    set_expr_class(EXPR_WINDOW);
-  }
   ObWinFunRawExpr(common::ObIAllocator &alloc)
     : ObRawExpr(alloc),
-      ObWindow(),
+      ObWindow(alloc),
       func_type_(T_MAX),
       is_ignore_null_(false),
       is_from_first_(false),
+      func_params_(alloc),
       agg_expr_(NULL),
       pl_agg_udf_expr_(NULL)
   {
@@ -5343,7 +5235,7 @@ private:
   ObItemType func_type_;
   bool is_ignore_null_;
   bool is_from_first_;
-  common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> func_params_;
+  ObSqlArray<ObRawExpr *> func_params_;
   ObAggFunRawExpr *agg_expr_;
   ObRawExpr *pl_agg_udf_expr_;//for pl agg udf expr
 };
@@ -5448,23 +5340,12 @@ private:
 class ObMatchFunRawExpr : public ObRawExpr
 {
 public:
-  ObMatchFunRawExpr()
-    : ObRawExpr(),
-      mode_flag_(NATURAL_LANGUAGE_MODE),
-      match_columns_(),
-      search_key_(NULL),
-      columns_boosts_(),
-      param_text_expr_(NULL)
-  {
-    set_expr_class(EXPR_MATCH_AGAINST);
-  }
-
   ObMatchFunRawExpr(common::ObIAllocator &alloc)
     : ObRawExpr(alloc),
       mode_flag_(NATURAL_LANGUAGE_MODE),
-      match_columns_(),
+      match_columns_(alloc),
       search_key_(NULL),
-      columns_boosts_(),
+      columns_boosts_(alloc),
       param_text_expr_(NULL)
   {
     set_expr_class(EXPR_MATCH_AGAINST);
@@ -5524,25 +5405,19 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMatchFunRawExpr);
   ObMatchAgainstMode mode_flag_; // for MySQL search mode flag
-  ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, ModulePageAllocator, true> match_columns_; // columns for choosing full-text index to use, serves only as an identifier;
-                                                                                     // can only be replaced with equivalent base table columns, not with arbitrary expressions that are not base table columns.
+  ObSqlArray<ObRawExpr*> match_columns_; // columns for choosing full-text index to use, serves only as an identifier;
+                                         // can only be replaced with equivalent base table columns, not with arbitrary expressions that are not base table columns.
   ObRawExpr *search_key_; // user defined search query
 
-  ObSEArray<ObRawExpr*, COMMON_MULTI_NUM, ModulePageAllocator, true> columns_boosts_; // boost values for each column
+  ObSqlArray<ObRawExpr*> columns_boosts_; // boost values for each column
   ObRawExpr *param_text_expr_; // param text expr for should_match_expr_
 };
 
 class ObUnpivotRawExpr : public ObRawExpr
 {
 public:
-  ObUnpivotRawExpr()
-    : ObRawExpr(), is_label_expr_(false)
-  {
-    set_expr_class(EXPR_UNPIVOT);
-  }
-
   ObUnpivotRawExpr(common::ObIAllocator &alloc)
-    : ObRawExpr(alloc), is_label_expr_(false)
+    : ObRawExpr(alloc), exprs_(alloc), is_label_expr_(false)
   {
     set_expr_class(EXPR_UNPIVOT);
   }
@@ -5578,7 +5453,7 @@ public:
                                             K_(is_label_expr));
 
 protected:
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> exprs_;
+  ObSqlArray<ObRawExpr *> exprs_;
   bool is_label_expr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUnpivotRawExpr);
@@ -5854,18 +5729,6 @@ private:
 class ObPlQueryRefRawExpr : public ObRawExpr
 {
 public:
-  ObPlQueryRefRawExpr()
-    : ObRawExpr(),
-      ps_sql_(ObString()),
-      type_(stmt::T_NONE),
-      route_sql_(ObString()),
-      subquery_result_type_(),
-      is_ignore_fail_(false),
-      exprs_()
-  {
-    set_expr_class(EXPR_PL_QUERY_REF);
-  }
-
   ObPlQueryRefRawExpr(common::ObIAllocator &alloc)
     : ObRawExpr(alloc),
       ps_sql_(ObString()),
@@ -5873,7 +5736,7 @@ public:
       route_sql_(ObString()),
       subquery_result_type_(),
       is_ignore_fail_(false),
-      exprs_()
+      exprs_(alloc)
   {
     set_expr_class(EXPR_PL_QUERY_REF);
   }
@@ -5931,7 +5794,7 @@ private:
 
   bool is_ignore_fail_;
 
-  common::ObSEArray<ObRawExpr *, COMMON_MULTI_NUM, common::ModulePageAllocator, true> exprs_;
+  ObSqlArray<ObRawExpr *> exprs_;
 };
 
 inline const ObRawExpr *ObPlQueryRefRawExpr::get_param_expr(int64_t index) const
@@ -5982,15 +5845,7 @@ public:
       udt_id_(OB_INVALID_ID),
       root_udt_id_(OB_INVALID_ID),
       attr_pos_(0),
-      access_names_(),
-      database_id_(OB_INVALID_ID),
-      object_schema_version_(common::OB_INVALID_VERSION) {}
-  ObUDTConstructorRawExpr()
-    : ObSysFunRawExpr(),
-      udt_id_(OB_INVALID_ID),
-      root_udt_id_(OB_INVALID_ID),
-      attr_pos_(0),
-      access_names_(),
+      access_names_(alloc),
       database_id_(OB_INVALID_ID),
       object_schema_version_(common::OB_INVALID_VERSION) {}
 
@@ -6045,7 +5900,7 @@ private:
   uint64_t root_udt_id_;
   uint64_t attr_pos_;
   // 用于打印构造函数的名字
-  common::ObSEArray<common::ObString, 4, common::ModulePageAllocator, true> access_names_;
+  ObSqlArray<common::ObString> access_names_;
   int64_t database_id_;
   int64_t object_schema_version_;
 };

@@ -15,6 +15,7 @@
 
 #include "ob_log_plan.h"
 #include "ob_log_del_upd.h"
+#include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
 
 namespace oceanbase
 {
@@ -25,6 +26,8 @@ class ObDelUpdLogPlan: public ObLogPlan
 public:
   ObDelUpdLogPlan(ObOptimizerContext &ctx, const ObDelUpdStmt *del_upd_stmt)
       : ObLogPlan(ctx, del_upd_stmt),
+        index_dml_infos_(allocator_),
+        extra_dependency_tables_(allocator_),
         max_dml_parallel_(ObGlobalHint::UNSET_PARALLEL),
         use_pdml_(false),
         use_parallel_das_dml_(false)
@@ -218,7 +221,7 @@ public:
                                   ObIArray<ObColumnRefRawExpr*> &column_exprs,
                                   bool need_spk);
 
-  int check_index_update(ObAssignments assigns,
+  int check_index_update(const ObAssignments &assigns,
                          const ObTableSchema& index_schema,
                          const bool is_update_view,
                          bool& need_update);
@@ -273,8 +276,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
 protected:
-  ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> index_dml_infos_;
-  ObSEArray<share::schema::ObSchemaObjVersion, 4, common::ModulePageAllocator, true> extra_dependency_tables_;
+  ObSqlArray<IndexDMLInfo *> index_dml_infos_;
+  ObSqlArray<share::schema::ObSchemaObjVersion> extra_dependency_tables_;
   int64_t max_dml_parallel_;
   int64_t use_pdml_;
   bool use_parallel_das_dml_;

@@ -17,6 +17,8 @@
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/allocator/ob_allocator.h"
 #include "lib/container/ob_se_array.h"
+#include "sql/resolver/ob_sql_array.h"
+#include "sql/resolver/ob_sql_array_iterator.h"
 #include "sql/resolver/ob_stmt.h"
 #include "sql/parser/parse_node.h"
 #include "sql/ob_sql_define.h"
@@ -41,9 +43,21 @@ struct TransposeDef;
 struct ObUnpivotItem
 {
 public:
-  ObUnpivotItem() : is_include_null_(false) {}
+  ObUnpivotItem(ObIAllocator &allocator)
+    : is_include_null_(false),
+      origin_exprs_(allocator),
+      label_exprs_(allocator),
+      value_exprs_(allocator)
+  {
+  }
 
-  void reset() { new (this) ObUnpivotItem(); }
+  void reset()
+  {
+    is_include_null_ = false;
+    origin_exprs_.reset();
+    label_exprs_.reset();
+    value_exprs_.reset();
+  }
 
   int deep_copy(ObIRawExprCopier &expr_copier,
                 const ObUnpivotItem &other);
@@ -51,9 +65,9 @@ public:
   TO_STRING_KV(K_(is_include_null), K_(origin_exprs), K_(label_exprs), K_(value_exprs));
 
   bool is_include_null_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> origin_exprs_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> label_exprs_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> value_exprs_;
+  ObSqlArray<ObRawExpr*> origin_exprs_;
+  ObSqlArray<ObRawExpr*> label_exprs_;
+  ObSqlArray<ObRawExpr*> value_exprs_;
 };
 
 enum MulModeTableType {
@@ -104,23 +118,32 @@ typedef struct ObJtColBaseInfo
 } ObJtColBaseInfo;
 
 typedef struct ObJsonTableDef {
-  ObJsonTableDef()
-    : all_cols_(),
-      doc_exprs_(),
+  ObJsonTableDef(ObIAllocator &allocator)
+    : all_cols_(allocator),
+      doc_exprs_(allocator),
       table_type_(MulModeTableType::INVALID_TABLE_TYPE),
-      namespace_arr_() {}
+      namespace_arr_(allocator) {}
 
   int deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   int assign(const ObJsonTableDef& src);
-  common::ObSEArray<ObJtColBaseInfo*, 4, common::ModulePageAllocator, true> all_cols_;
-  common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> doc_exprs_;
+  ObSqlArray<ObJtColBaseInfo*> all_cols_;
+  ObSqlArray<ObRawExpr*> doc_exprs_;
   MulModeTableType table_type_;
-  common::ObSEArray<ObString, 16, common::ModulePageAllocator, true> namespace_arr_;
+  ObSqlArray<ObString> namespace_arr_;
 } ObJsonTableDef;
 
 struct ObValuesTableDef {
-  ObValuesTableDef() : start_param_idx_(-1), end_param_idx_(-1), column_cnt_(0), row_cnt_(0),
-                       access_type_(ACCESS_EXPR), is_const_(false) {}
+  ObValuesTableDef(ObIAllocator &allocator)
+    : access_exprs_(allocator),
+      start_param_idx_(-1), end_param_idx_(-1),
+      access_objs_(allocator),
+      column_ndvs_(allocator),
+      column_nnvs_(allocator),
+      column_cnt_(0), row_cnt_(0),
+      access_type_(ACCESS_EXPR), is_const_(false),
+      column_types_(allocator)
+  {
+  }
   enum TableAccessType {
     ACCESS_EXPR = 0,  // expr, one by one
     FOLD_ACCESS_EXPR, // expr, one expr->ObSqlArray
@@ -130,17 +153,17 @@ struct ObValuesTableDef {
   int deep_copy(const ObValuesTableDef &other,
                 ObIRawExprCopier &expr_copier,
                 ObIAllocator* allocator);
-  common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> access_exprs_;
+  ObSqlArray<ObRawExpr*> access_exprs_;
   int64_t start_param_idx_;
   int64_t end_param_idx_;
-  common::ObArray<ObObjParam, common::ModulePageAllocator, true> access_objs_;
-  common::ObArray<int64_t, common::ModulePageAllocator, true> column_ndvs_;  // column num distinct
-  common::ObArray<int64_t, common::ModulePageAllocator, true> column_nnvs_;  // column num null
+  ObSqlArray<ObObjParam> access_objs_;
+  ObSqlArray<int64_t> column_ndvs_;  // column num distinct
+  ObSqlArray<int64_t> column_nnvs_;  // column num null
   int64_t column_cnt_;
   int64_t row_cnt_;
   TableAccessType access_type_;
   bool is_const_; // values table’s outputs are all params.
-  common::ObArray<ObRawExprResType, common::ModulePageAllocator, true> column_types_;
+  ObSqlArray<ObRawExprResType> column_types_;
   virtual TO_STRING_KV(K(column_cnt_), K(row_cnt_), K(access_exprs_), K(start_param_idx_),
                        K(end_param_idx_), K(access_objs_), K(column_ndvs_), K(column_nnvs_),
                        K(access_type_), K(is_const_), K(column_types_));
@@ -148,7 +171,10 @@ struct ObValuesTableDef {
 
 struct TableItem
 {
-  TableItem()
+  TableItem(ObIAllocator &allocator)
+    : part_ids_(allocator),
+      part_names_(allocator),
+      exec_params_(allocator)
   {
     table_id_ = common::OB_INVALID_ID;
     is_index_table_ = false;
@@ -359,9 +385,9 @@ struct TableItem
   int64_t ddl_schema_version_;
   int64_t ddl_table_id_;
   // table partition
-  common::ObSEArray<ObObjectID, 1, common::ModulePageAllocator, true> part_ids_;
-  common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> part_names_;
-  common::ObSEArray<ObExecParamRawExpr*, 4, common::ModulePageAllocator, true> exec_params_;
+  ObSqlArray<ObObjectID> part_ids_;
+  ObSqlArray<ObString> part_names_;
+  ObSqlArray<ObExecParamRawExpr*> exec_params_;
   // json table
   ObJsonTableDef *json_table_def_;
   // values table
@@ -498,12 +524,13 @@ struct FromItem
 
 struct JoinedTable : public TableItem
 {
-  JoinedTable() :
+  JoinedTable(ObIAllocator &allocator) :
+    TableItem(allocator),
     joined_type_(UNKNOWN_JOIN),
     left_table_(NULL),
     right_table_(NULL),
-    single_table_ids_(common::OB_MALLOC_NORMAL_BLOCK_SIZE),
-    join_conditions_(common::OB_MALLOC_NORMAL_BLOCK_SIZE),
+    single_table_ids_(allocator),
+    join_conditions_(allocator),
     is_straight_join_(false)
   {
   }
@@ -535,20 +562,20 @@ struct JoinedTable : public TableItem
   ObJoinType joined_type_;
   TableItem *left_table_;
   TableItem *right_table_;
-  common::ObSEArray<uint64_t, 16, common::ModulePageAllocator, true> single_table_ids_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> join_conditions_;
+  ObSqlArray<uint64_t> single_table_ids_;
+  ObSqlArray<ObRawExpr*> join_conditions_;
   bool is_straight_join_; // In MySQL mode, mark INNER JOIN as STRAIGHT_JOIN.
 };
 
 class SemiInfo
 {
 public:
-  SemiInfo(ObJoinType join_type = LEFT_SEMI_JOIN) :
+  SemiInfo(ObIAllocator &allocator, ObJoinType join_type = LEFT_SEMI_JOIN) :
     join_type_(join_type),
     semi_id_(common::OB_INVALID_ID),
     right_table_id_(common::OB_INVALID_ID),
-    left_table_ids_(),
-    semi_conditions_() {}
+    left_table_ids_(allocator),
+    semi_conditions_(allocator) {}
   virtual ~SemiInfo() {};
   int deep_copy(ObIRawExprCopier &copier,
                 const SemiInfo &other);
@@ -565,8 +592,8 @@ public:
   //generate table create from subquery
   uint64_t right_table_id_;
   //table ids which involved right table in parent query
-  common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> left_table_ids_;
-  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> semi_conditions_;
+  ObSqlArray<uint64_t> left_table_ids_;
+  ObSqlArray<ObRawExpr*> semi_conditions_;
 };
 
 struct PartExprItem
@@ -604,11 +631,11 @@ enum CheckConstraintFlag
 };
 struct CheckConstraintItem
 {
-  CheckConstraintItem()
+  CheckConstraintItem(ObIAllocator &allocator)
       : table_id_(common::OB_INVALID_ID),
         ref_table_id_(common::OB_INVALID_ID),
-        check_constraint_exprs_(),
-        check_flags_()
+        check_constraint_exprs_(allocator),
+        check_flags_(allocator)
   {
   }
   void reset() {
@@ -626,8 +653,8 @@ struct CheckConstraintItem
                 K_(check_flags));
   uint64_t table_id_;
   uint64_t ref_table_id_;
-  ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> check_constraint_exprs_;
-  ObSEArray<int64_t, 4,common::ModulePageAllocator, true> check_flags_;
+  ObSqlArray<ObRawExpr*> check_constraint_exprs_;
+  ObSqlArray<int64_t> check_flags_;
 };
 
 class ObDMLStmt : public ObStmt
@@ -642,7 +669,7 @@ public:
                                   common::ObWrapperAllocator> ObDMLStmtTableHash;
 public:
 
-  explicit ObDMLStmt(stmt::StmtType type);
+  explicit ObDMLStmt(stmt::StmtType type, ObIAllocator &allocator);
   virtual ~ObDMLStmt();
   int assign(const ObDMLStmt &other);
   int deep_copy(ObStmtFactory &stmt_factory,
@@ -1087,14 +1114,14 @@ public:
 
   int get_temp_table_ids(ObIArray<uint64_t> &temp_table_ids);
 
-  common::ObIArray<CheckConstraintItem> &get_check_constraint_items() {
+  common::ObIArray<CheckConstraintItem*> &get_check_constraint_items() {
     return check_constraint_items_; }
-  const common::ObIArray<CheckConstraintItem> &get_check_constraint_items() const {
+  const common::ObIArray<CheckConstraintItem*> &get_check_constraint_items() const {
     return check_constraint_items_; }
-  int set_check_constraint_item(CheckConstraintItem &check_constraint_item);
+  int set_check_constraint_item(CheckConstraintItem *check_constraint_item);
   int remove_check_constraint_item(const uint64_t table_id);
   int get_check_constraint_items(const uint64_t table_id,
-                                 CheckConstraintItem &check_constraint_item);
+                                 CheckConstraintItem *&check_constraint_item);
 
   int get_qb_name(ObString &qb_name) const;
 
@@ -1258,7 +1285,7 @@ protected:
    * which then should be define in ObStmt.
    */
   // order by
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> order_items_;
+  ObSqlArray<OrderItem> order_items_;
   // limit
   /* -1 means no limit */
   ObRawExpr*  limit_count_expr_;
@@ -1267,15 +1294,15 @@ protected:
   bool has_fetch_;
   bool is_fetch_with_ties_;
   // table_references
-  common::ObSEArray<FromItem, 8, common::ModulePageAllocator, true> from_items_;
-  common::ObSEArray<PartExprItem, 8, common::ModulePageAllocator, true> part_expr_items_;
-  common::ObSEArray<JoinedTable*, 8, common::ModulePageAllocator, true> joined_tables_;
+  ObSqlArray<FromItem> from_items_;
+  ObSqlArray<PartExprItem> part_expr_items_;
+  ObSqlArray<JoinedTable*> joined_tables_;
   ObStmtHint stmt_hint_;
   // semi info for semi join
-  common::ObSEArray<SemiInfo*, 4, common::ModulePageAllocator, true> semi_infos_;
+  ObSqlArray<SemiInfo*> semi_infos_;
 
   //move from ObStmt
-  common::ObSEArray<share::AutoincParam, 2, common::ModulePageAllocator, true> autoinc_params_;  // auto-increment related
+  ObSqlArray<share::AutoincParam> autoinc_params_;  // auto-increment related
   //member for found_rows
   bool is_calc_found_rows_;
   bool has_top_limit_; // no longer used, should be removed
@@ -1288,26 +1315,26 @@ protected:
   // 就设置这个标记为 true，提示生成 multi-dml 计划
   bool has_part_key_sequence_;
   // sequence 对象个数，用于 ObSequence 计算 nextval，已去重
-  common::ObSEArray<uint64_t, 2> nextval_sequence_ids_;
+  ObSqlArray<uint64_t> nextval_sequence_ids_;
   // sequence 对象个数，用于记录 currval 的sequence id，已去重
-  common::ObSEArray<uint64_t, 2> currval_sequence_ids_;
+  ObSqlArray<uint64_t> currval_sequence_ids_;
   // `table_items` 在resolve_from_clause的时候生成, 顺序是从SQL语句左到右push_back的.
-  common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> table_items_;
-  common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> column_items_;
-  common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> condition_exprs_;
+  ObSqlArray<TableItem *> table_items_;
+  ObSqlArray<ColumnItem> column_items_;
+  ObSqlArray<ObRawExpr *> condition_exprs_;
   // 存放共享的类伪列表达式, 我们认为除了一般的伪列表达式ObPseudoColumnRawExpr, rownum和sequence也属于伪列
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> pseudo_column_like_exprs_;
+  ObSqlArray<ObRawExpr *> pseudo_column_like_exprs_;
   ObDMLStmtTableHash tables_hash_;
-  common::ObSEArray<ObQueryRefRawExpr*, 4, common::ModulePageAllocator, true> subquery_exprs_;
+  ObSqlArray<ObQueryRefRawExpr*> subquery_exprs_;
   ObUnpivotItem *unpivot_item_;
 
-  common::ObSEArray<ObUserVarIdentRawExpr *, 4, common::ModulePageAllocator, true> user_var_exprs_;
-  common::ObSEArray<CheckConstraintItem, 8, common::ModulePageAllocator, true> check_constraint_items_;
+  ObSqlArray<ObUserVarIdentRawExpr *> user_var_exprs_;
+  ObSqlArray<CheckConstraintItem*> check_constraint_items_;
   /*
     keep all cte table defined in current level. Only used for print stmt.
     Needn't maintain it after resolver.
   */
-  common::ObSEArray<TableItem*, 2, common::ModulePageAllocator, true> cte_definitions_;
+  ObSqlArray<TableItem*> cte_definitions_;
   /*
    * If the current needs to be executed at the remote end, dblink_id indicates the remote definition
    */
@@ -1315,15 +1342,16 @@ protected:
   bool is_reverse_link_;
   bool has_vec_approx_;
   // fulltext search exprs
-  common::ObSEArray<ObMatchFunRawExpr*, 2, common::ModulePageAllocator, true> match_exprs_;
+  ObSqlArray<ObMatchFunRawExpr*> match_exprs_;
   share::ObVectorIndexQueryParam vector_index_query_param_;
 };
 
 template <typename T>
-int deep_copy_stmt_object(ObIAllocator &allocator,
-                          ObIRawExprCopier &expr_copier,
-                          const T *obj,
-                          T *&new_obj)
+typename std::enable_if<std::is_default_constructible<T>::value, int>::type
+deep_copy_stmt_object(ObIAllocator &allocator,
+                      ObIRawExprCopier &expr_copier,
+                      const T *obj,
+                      T *&new_obj)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -1342,14 +1370,41 @@ int deep_copy_stmt_object(ObIAllocator &allocator,
   return ret;
 }
 
-
 template <typename T>
-int deep_copy_stmt_objects(ObIAllocator &allocator,
-                           ObIRawExprCopier &expr_copier,
-                           const ObIArray<T *> &objs,
-                           ObIArray<T *> &new_objs)
+typename std::enable_if<!std::is_default_constructible<T>::value, int>::type
+deep_copy_stmt_object(ObIAllocator &allocator,
+                      ObIRawExprCopier &expr_copier,
+                      const T *obj,
+                      T *&new_obj)
 {
   int ret = OB_SUCCESS;
+  void *ptr = NULL;
+  new_obj = NULL;
+  if (OB_LIKELY(NULL != obj)) {
+    if (OB_ISNULL(ptr = allocator.alloc(sizeof(T)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_RESV_LOG(WARN, "failed to allocate memory", K(ret), K(lbt()));
+    } else {
+      new_obj = new (ptr) T(allocator);
+      if (OB_FAIL(new_obj->deep_copy(expr_copier, *obj))) {
+        SQL_RESV_LOG(WARN, "failed to deep copy obj", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+typename std::enable_if<std::is_default_constructible<T>::value, int>::type
+deep_copy_stmt_objects(ObIAllocator &allocator,
+                       ObIRawExprCopier &expr_copier,
+                       const ObIArray<T *> &objs,
+                       ObIArray<T *> &new_objs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(new_objs.reserve(objs.count()))) {
+    SQL_RESV_LOG(WARN, "failed to reserve array size", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); ++i) {
     const T *obj = objs.at(i);
     void *ptr = NULL;
@@ -1373,18 +1428,52 @@ int deep_copy_stmt_objects(ObIAllocator &allocator,
 }
 
 template <typename T>
+typename std::enable_if<!std::is_default_constructible<T>::value, int>::type
+deep_copy_stmt_objects(ObIAllocator &allocator,
+                       ObIRawExprCopier &expr_copier,
+                       const ObIArray<T *> &objs,
+                       ObIArray<T *> &new_objs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(new_objs.reserve(objs.count()))) {
+    SQL_RESV_LOG(WARN, "failed to reserve array size", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); ++i) {
+    const T *obj = objs.at(i);
+    void *ptr = NULL;
+    T *new_obj = NULL;
+    if (OB_LIKELY(NULL != obj)) {
+      if (OB_ISNULL(ptr = allocator.alloc(sizeof(T)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_RESV_LOG(WARN, "failed to allocate memory", K(ret), K(lbt()));
+      } else {
+        new_obj = new (ptr) T(allocator);
+        if (OB_FAIL(new_obj->deep_copy(expr_copier, *obj))) {
+          SQL_RESV_LOG(WARN, "failed to deep copy obj", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(new_objs.push_back(new_obj))) {
+      SQL_RESV_LOG(WARN, "failed to push back new object", K(ret));
+    }
+  }
+  return ret;
+}
+
+template <typename T>
 int deep_copy_stmt_objects(ObIRawExprCopier &expr_copier,
                            const ObIArray<T> &objs,
                            ObIArray<T> &new_objs)
 {
   int ret = OB_SUCCESS;
+  int64_t orig_cnt = new_objs.count();
+  if (OB_FAIL(new_objs.prepare_allocate(orig_cnt + objs.count()))) {
+    SQL_RESV_LOG(WARN, "failed to prepare allocate", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); ++i) {
     const T &obj = objs.at(i);
-    T new_obj;
-    if (OB_FAIL(new_obj.deep_copy(expr_copier, obj))) {
+    if (OB_FAIL(new_objs.at(orig_cnt + i).deep_copy(expr_copier, obj))) {
       SQL_RESV_LOG(WARN, "failed to deep copy object", K(ret));
-    } else if (OB_FAIL(new_objs.push_back(new_obj))) {
-      SQL_RESV_LOG(WARN, "failed to push back new obj", K(ret));
     }
   }
   return ret;

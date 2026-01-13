@@ -97,6 +97,34 @@ inline ObOptimizerTraceImpl** get_local_tracer()
     }                                                                     \
   } while (0);                                                            \
 
+#define BEGIN_MEM_PERF(session)                                           \
+  ObOptimizerTraceImpl *copy_tracer = NULL;                               \
+  do {                                                                    \
+    ObOptimizerTraceImpl** local_tracer = get_local_tracer();             \
+    if (OB_ISNULL(local_tracer) || OB_ISNULL(session)) {                  \
+    } else {                                                              \
+      copy_tracer = *local_tracer;                                        \
+      if (session->is_user_session() &&                                   \
+          session->get_optimizer_tracer().enable_mem_perf()) {            \
+        session->get_optimizer_tracer().open();                           \
+      }                                                                   \
+      *local_tracer = &(session->get_optimizer_tracer());                 \
+    }                                                                     \
+  } while (0);                                                            \
+
+#define END_MEM_PERF(session)                                             \
+  do {                                                                    \
+    ObOptimizerTraceImpl** local_tracer = get_local_tracer();             \
+    if (OB_ISNULL(local_tracer) || OB_ISNULL(session)) {                  \
+    } else {                                                              \
+      if (session->is_user_session() &&                                   \
+          session->get_optimizer_tracer().enable_mem_perf()) {            \
+        session->get_optimizer_tracer().close();                          \
+      }                                                                   \
+      *local_tracer = copy_tracer;                                        \
+    }                                                                     \
+  } while (0);                                                            \
+
 #define CHECK_TRACE                                                       \
   ObOptimizerTraceImpl** local_tracer = get_local_tracer();               \
   ObOptimizerTraceImpl *tracer = NULL;                                    \
@@ -259,6 +287,14 @@ inline ObOptimizerTraceImpl** get_local_tracer()
     }                                             \
   } while(0);                                     \
 
+#define MEM_TRACE(args...)                        \
+  do {                                            \
+    CHECK_TRACE if (tracer->enable_mem_perf()) {  \
+      tracer->new_line();                         \
+      SMART_CALL(tracer->append(args));           \
+    }                                             \
+  } while (0);                                    \
+
 class LogFileAppender {
 public:
   LogFileAppender();
@@ -290,6 +326,7 @@ public:
   int set_parameters(const common::ObString &identifier,
                     const common::ObString &sql_id,
                     const int trace_level);
+  int enable_mem_perf(const common::ObString &identifier);
   void reset();
   int open();
   void close();
@@ -298,6 +335,7 @@ public:
 
   inline bool can_trace_log() const { return enable() && (trace_state_ & 1); }
   inline void set_enable(bool value) { enable_ = value; }
+  inline void set_mem_perf_enable(bool value) { enable_mem_perf_ = value; }
   inline bool enable_trace_time_used() const { return trace_level_ > 0; }
   inline bool enable_trace_mem_used() const { return trace_level_ > 0; }
   inline bool enable_trace_trans_sql() const { return trace_level_ > 1; }
@@ -310,6 +348,7 @@ public:
   void resume_trace();
   void stop_trace();
   void restart_trace();
+  inline bool enable_mem_perf() const { return enable_mem_perf_; }
 
 /***********************************************/
 ////print basic type
@@ -401,8 +440,9 @@ private:
   int section_;
   int trace_level_;
   bool enable_;
-  uint64_t trace_state_;
   bool enable_trace_cost_model_;
+  bool enable_mem_perf_;
+  uint64_t trace_state_;
 };
 
 //for class ObRawExpr
@@ -534,6 +574,17 @@ int ObOptimizerTraceImpl::append_format(const char *format, const ARGS&... args)
   }
   return ret;
 }
+
+class ObMemPerfGuard
+{
+public:
+  ObMemPerfGuard(const ObString &section);
+  ~ObMemPerfGuard();
+private:
+  void print_trace(const ObString &stage);
+private:
+  ObString section_;
+};
 
 }
 

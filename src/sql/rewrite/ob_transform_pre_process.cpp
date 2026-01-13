@@ -783,10 +783,13 @@ int ObTransformPreProcess::remove_single_item_groupingsets(ObSelectStmt &stmt,
                                                            bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  trans_happened = false;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
   ObIArray<ObGroupingSetsItem> &grouping_sets_items = stmt.get_grouping_sets_items();
-  typedef ObSEArray<ObGroupingSetsItem, 4> GroupingSetsArray;
-  SMART_VAR(GroupingSetsArray, tmp_grouping_sets_items) {
+  trans_happened = false;
+  ObSqlArray<ObGroupingSetsItem, true> tmp_grouping_sets_items(allocator);
+  if (OB_FAIL(tmp_grouping_sets_items.reserve(grouping_sets_items.count()))) {
+    LOG_WARN("failed to reserve", K(ret));
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_items.count(); ++i) {
       bool is_released = true;
       int64_t grouping_sets_expr_cnt = grouping_sets_items.at(i).grouping_sets_exprs_.count();
@@ -900,14 +903,21 @@ int ObTransformPreProcess::try_convert_rollup(ObDMLStmt *&stmt, ObSelectStmt *se
       if (idx >= 0) {
         const ObIArray<ObGroupbyExpr> &rollup_list_exprs =
                                         select_stmt->get_rollup_items().at(idx).rollup_list_exprs_;
+        ObIArray<ObRollupItem> &rollup_items = select_stmt->get_rollup_items();
         for (int64_t i = 0; OB_SUCC(ret) && i < rollup_list_exprs.count(); ++i) {
           if (OB_FAIL(select_stmt->get_rollup_exprs().push_back(
                                                   rollup_list_exprs.at(i).groupby_exprs_.at(0)))) {
             LOG_WARN("failed to push back exprs", K(ret));
           }
         }
+        for (int64_t i = idx; OB_SUCC(ret) && i < rollup_items.count() - 1; ++i) {
+          rollup_items.at(i).rollup_list_exprs_.reset();
+          if (OB_FAIL(rollup_items.at(i).assign(rollup_items.at(i + 1)))) {
+            LOG_WARN("failed to assign rollup item", K(ret));
+          }
+        }
         if (OB_SUCC(ret)) {
-          select_stmt->get_rollup_items().remove(idx);
+          rollup_items.pop_back();
           stmt = select_stmt;
         }
       }
@@ -1123,12 +1133,14 @@ int ObTransformPreProcess::trans_all_to_groping_sets(ObSelectStmt &stmt, bool &t
   int ret = OB_SUCCESS;
   trans_happened = false;
   ObIArray<ObGroupingSetsItem> &grouping_sets_items = stmt.get_grouping_sets_items();
-  ObGroupingSetsItem tmp_grouping_set_item;
-  ObSEArray<ObGroupbyExpr, 8> new_group_exprs;
-  ObSEArray<ObGroupbyExpr, 8> new_rollup_exprs;
-  ObSEArray<ObGroupbyExpr, 8> all_gby_expr_list;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObGroupingSetsItem *tmp_grouping_set_item = NULL;
+  ObSqlArray<ObGroupbyExpr, true> new_group_exprs(allocator);
+  ObSqlArray<ObGroupbyExpr, true> new_rollup_exprs(allocator);
+  ObSqlArray<ObGroupbyExpr, true> all_gby_expr_list(allocator);
   ObSEArray<ObRawExpr *, 8> tmp_rollup_exprs;
   ObSEArray<ObRawExpr *, 8> common_group_exprs;
+  int64_t all_gby_expr_list_count = 0;
 
   if (OB_FAIL(get_groupby_and_rollup_exprs_list(&stmt, new_group_exprs, new_rollup_exprs))) {
     LOG_WARN("get groupby and rollup exprs failed", K(ret));
@@ -1136,6 +1148,14 @@ int ObTransformPreProcess::trans_all_to_groping_sets(ObSelectStmt &stmt, bool &t
   // all grouping sets are organized as
   // [group by (...) with rollup(...), group by(...) with rollup(...), ...]
   // following routine expand rollup to grouping sets
+  all_gby_expr_list_count = new_group_exprs.count();
+  for (int i = 0; OB_SUCC(ret) && i < new_rollup_exprs.count(); i++) {
+    all_gby_expr_list_count += new_rollup_exprs.at(i).groupby_exprs_.count();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(all_gby_expr_list.reserve(all_gby_expr_list_count))) {
+    LOG_WARN("failed to reserve all gby expr list", K(ret));
+  }
   for (int i = 0; OB_SUCC(ret) && i < new_group_exprs.count(); i++) {
     ObGroupbyExpr &group_exprs = new_group_exprs.at(i);
     if (OB_FAIL(all_gby_expr_list.push_back(group_exprs))) {
@@ -1166,7 +1186,8 @@ int ObTransformPreProcess::trans_all_to_groping_sets(ObSelectStmt &stmt, bool &t
   // stmt will group by as following pattern:
   // group by a,b,c ..., grouping sets((a, b, c, d, e), (a, b, c, f, g)...)
   // so that some group by rewrite rules can be used directly
-  if (OB_UNLIKELY(all_gby_expr_list.count() <= 0)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(all_gby_expr_list.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid group by exprs", K(ret));
   } else if (all_gby_expr_list.count() == 1
@@ -1191,10 +1212,11 @@ int ObTransformPreProcess::trans_all_to_groping_sets(ObSelectStmt &stmt, bool &t
   } else if (FALSE_IT(stmt.get_group_exprs().reuse())) {
   } else if (FALSE_IT(stmt.get_rollup_items().reuse())) {
   } else if (FALSE_IT(stmt.get_rollup_exprs().reuse())) {
-  } else if (OB_FAIL(tmp_grouping_set_item.grouping_sets_exprs_.assign(all_gby_expr_list))) {
+  } else if (OB_ISNULL(tmp_grouping_set_item = grouping_sets_items.alloc_place_holder())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc grouping set item", K(ret));
+  } else if (OB_FAIL(tmp_grouping_set_item->grouping_sets_exprs_.assign(all_gby_expr_list))) {
     LOG_WARN("assign array failed", K(ret));
-  } else if (OB_FAIL(grouping_sets_items.push_back(tmp_grouping_set_item))) {
-    LOG_WARN("push back element failed", K(ret));
   } else if (OB_FAIL(stmt.get_group_exprs().assign(common_group_exprs))) {
     LOG_WARN("assign failed", K(ret));
   } else {
@@ -1777,8 +1799,9 @@ int ObTransformPreProcess::create_child_stmts_for_groupby_sets(ObSelectStmt *ori
                                                                ObIArray<ObSelectStmt*> &child_stmts)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObGroupbyExpr, 4> groupby_exprs_list;
-  ObSEArray<ObGroupbyExpr, 4> rollup_exprs_list;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObGroupbyExpr, true> groupby_exprs_list(allocator);
+  ObSqlArray<ObGroupbyExpr, true> rollup_exprs_list(allocator);
   if (OB_ISNULL(origin_stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), KP(origin_stmt), KP(ctx_));
@@ -1874,52 +1897,122 @@ int ObTransformPreProcess::simple_expand_grouping_sets_items(
   int ret = OB_SUCCESS;
   if (grouping_sets_items.empty()) {
     /* do nothing */
+  } else if (OB_FAIL(init_simple_grouping_sets_items(grouping_sets_items, simple_grouping_sets_items))) {
+    LOG_WARN("failed to init simple grouping sets items", K(ret));
   } else {
-    int total_cnt = 1;
-    for (int64_t i = 0; i < grouping_sets_items.count(); ++i) {
-      total_cnt = total_cnt * (grouping_sets_items.at(i).grouping_sets_exprs_.count() +
-                               grouping_sets_items.at(i).rollup_items_.count() +
-                               grouping_sets_items.at(i).cube_items_.count());
-    }
-    if (OB_FAIL(simple_grouping_sets_items.prepare_allocate(total_cnt))) {
-      LOG_WARN("failed to prepare allocate", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; ++i) {
-        int64_t bit_count = i;
-        int64_t index = 0;
-        for (int64_t j = 0; OB_SUCC(ret) && j < grouping_sets_items.count(); ++j) {
-          ObGroupingSetsItem &item = grouping_sets_items.at(j);
-          int64_t item_count = item.grouping_sets_exprs_.count() + item.rollup_items_.count() +
-                               item.cube_items_.count();
-          index = bit_count % (item_count);
-          bit_count = bit_count / (item_count);
-          if (index < item.grouping_sets_exprs_.count()) {
-            if (OB_FAIL(simple_grouping_sets_items.at(i).grouping_sets_exprs_.push_back(
-                        item.grouping_sets_exprs_.at(index)))) {
-              LOG_WARN("failed to push back item", K(ret));
-            }
-          } else if (index >= item.grouping_sets_exprs_.count() &&
-                     index < item.grouping_sets_exprs_.count() + item.rollup_items_.count()) {
-            if (OB_FAIL(simple_grouping_sets_items.at(i).rollup_items_.push_back(
-                        item.rollup_items_.at(index - item.grouping_sets_exprs_.count())))) {
-              LOG_WARN("failed to push back item", K(ret));
-            }
-          } else if (index >= item.grouping_sets_exprs_.count() + item.rollup_items_.count() &&
-                     index < item.grouping_sets_exprs_.count() + item.rollup_items_.count() +
-                             item.cube_items_.count()) {
-            if (OB_FAIL(simple_grouping_sets_items.at(i).cube_items_.push_back(
-                        item.cube_items_.at(index - item.grouping_sets_exprs_.count() -
-                                            item.rollup_items_.count())))) {
-              LOG_WARN("failed to push back item", K(ret));
-            }
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected error", K(ret), K(index), K(item.grouping_sets_exprs_.count()),
-                     K(item.rollup_items_.count()), K(item.cube_items_.count()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_grouping_sets_items.count(); ++i) {
+      int64_t bit_count = i;
+      int64_t index = 0;
+      for (int64_t j = 0; OB_SUCC(ret) && j < grouping_sets_items.count(); ++j) {
+        ObGroupingSetsItem &item = grouping_sets_items.at(j);
+        int64_t item_count = item.grouping_sets_exprs_.count() + item.rollup_items_.count() +
+                              item.cube_items_.count();
+        index = bit_count % (item_count);
+        bit_count = bit_count / (item_count);
+        if (index < item.grouping_sets_exprs_.count()) {
+          if (OB_FAIL(simple_grouping_sets_items.at(i).grouping_sets_exprs_.push_back(
+                      item.grouping_sets_exprs_.at(index)))) {
+            LOG_WARN("failed to push back item", K(ret));
           }
+        } else if (index >= item.grouping_sets_exprs_.count() &&
+                   index < item.grouping_sets_exprs_.count() + item.rollup_items_.count()) {
+          if (OB_FAIL(simple_grouping_sets_items.at(i).rollup_items_.push_back(
+                      item.rollup_items_.at(index - item.grouping_sets_exprs_.count())))) {
+            LOG_WARN("failed to push back item", K(ret));
+          }
+        } else if (index >= item.grouping_sets_exprs_.count() + item.rollup_items_.count() &&
+                   index < item.grouping_sets_exprs_.count() + item.rollup_items_.count() +
+                            item.cube_items_.count()) {
+          if (OB_FAIL(simple_grouping_sets_items.at(i).cube_items_.push_back(
+                      item.cube_items_.at(index - item.grouping_sets_exprs_.count() -
+                                          item.rollup_items_.count())))) {
+            LOG_WARN("failed to push back item", K(ret));
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(index), K(item.grouping_sets_exprs_.count()),
+                    K(item.rollup_items_.count()), K(item.cube_items_.count()));
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::init_simple_grouping_sets_items(ObIArray<ObGroupingSetsItem> &grouping_sets_items,
+                                                           ObIArray<ObGroupingSetsItem> &simple_grouping_sets_items)
+{
+  int ret = OB_SUCCESS;
+  int64_t total_cnt = 1;
+  for (int64_t i = 0; i < grouping_sets_items.count(); ++i) {
+    total_cnt = total_cnt * (grouping_sets_items.at(i).grouping_sets_exprs_.count() +
+                            grouping_sets_items.at(i).rollup_items_.count() +
+                            grouping_sets_items.at(i).cube_items_.count());
+  }
+  if (OB_FAIL(simple_grouping_sets_items.prepare_allocate(total_cnt))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; ++i) {
+    int64_t bit_count = i;
+    int64_t index = 0;
+    int64_t group_expr_count = 0;
+    int64_t rollup_count = 0;
+    int64_t cube_count = 0;
+    for (int64_t j = 0; OB_SUCC(ret) && j < grouping_sets_items.count(); ++j) {
+      ObGroupingSetsItem &item = grouping_sets_items.at(j);
+      int64_t item_count = item.grouping_sets_exprs_.count() + item.rollup_items_.count() +
+                            item.cube_items_.count();
+      index = bit_count % (item_count);
+      bit_count = bit_count / (item_count);
+      if (index < item.grouping_sets_exprs_.count()) {
+        ++group_expr_count;
+      } else if (index >= item.grouping_sets_exprs_.count() &&
+                 index < item.grouping_sets_exprs_.count() + item.rollup_items_.count()) {
+        ++rollup_count;
+      } else if (index >= item.grouping_sets_exprs_.count() + item.rollup_items_.count() &&
+                 index < item.grouping_sets_exprs_.count() + item.rollup_items_.count() +
+                         item.cube_items_.count()) {
+        ++cube_count;
+        // each cube item will be expanded to multi rollup items
+        rollup_count += item.cube_items_.at(index - item.grouping_sets_exprs_.count() -
+                                            item.rollup_items_.count()).cube_list_exprs_.count();
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(index), K(item.grouping_sets_exprs_.count()),
+                  K(item.rollup_items_.count()), K(item.cube_items_.count()));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(simple_grouping_sets_items.at(i).grouping_sets_exprs_.reserve(group_expr_count))) {
+      LOG_WARN("failed to reserve grouping sets exprs", K(ret));
+    } else if (OB_FAIL(simple_grouping_sets_items.at(i).rollup_items_.reserve(rollup_count))) {
+      LOG_WARN("failed to reserve rollup items", K(ret));
+    } else if (OB_FAIL(simple_grouping_sets_items.at(i).cube_items_.reserve(cube_count))) {
+      LOG_WARN("failed to reserve cube items", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::init_expanded_grouping_sets_exprs(ObIArray<ObGroupingSetsItem> &grouping_sets_items,
+                                                             ObIArray<ObGroupbyExpr> &grouping_sets_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t group_expr_count = 0;
+  for (int64_t i = 0; i < grouping_sets_items.count(); ++i) {
+    ObGroupingSetsItem &item = grouping_sets_items.at(i);
+    int64_t tmp_group_expr_count = 1;
+    for (int64_t j = 0; j < item.cube_items_.count(); ++j) {
+      tmp_group_expr_count <<= item.cube_items_.at(j).cube_list_exprs_.count();
+    }
+    for (int64_t j = 0; j < item.rollup_items_.count(); ++j) {
+      tmp_group_expr_count *= item.rollup_items_.at(j).rollup_list_exprs_.count() + 1;
+    }
+    group_expr_count += tmp_group_expr_count;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(grouping_sets_exprs.reserve(group_expr_count))) {
+    LOG_WARN("failed to reserve grouping sets exprs", K(ret));
   }
   return ret;
 }
@@ -1931,11 +2024,14 @@ int ObTransformPreProcess::expand_cube_item(ObCubeItem &cube_item,
                                             common::ObIArray<ObRollupItem> &rollup_items) {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < cube_item.cube_list_exprs_.count(); ++i) {
-    ObRollupItem rollup_item;
-    if (OB_FAIL(rollup_item.rollup_list_exprs_.push_back(cube_item.cube_list_exprs_.at(i)))) {
+    ObRollupItem *rollup_item = NULL;
+    if (OB_ISNULL(rollup_item = rollup_items.alloc_place_holder())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc rollup item", K(ret));
+    } else if (OB_FAIL(rollup_item->rollup_list_exprs_.reserve(1))) {
+      LOG_WARN("failed to reserve rollup list exprs", K(ret));
+    } else if (OB_FAIL(rollup_item->rollup_list_exprs_.push_back(cube_item.cube_list_exprs_.at(i)))) {
       LOG_WARN("failed to append item", K(ret));
-    } else if (OB_FAIL(rollup_items.push_back(rollup_item))) {
-      LOG_WARN("failed to push back item", K(ret));
     }
   }
   return ret;
@@ -1948,6 +2044,14 @@ int ObTransformPreProcess::expand_cube_items(common::ObIArray<ObCubeItem> &cube_
                                              common::ObIArray<ObRollupItem> &rollup_items)
 {
   int ret = OB_SUCCESS;
+  int64_t total_rollup_item_num = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cube_items.count(); ++i) {
+    total_rollup_item_num += cube_items.at(i).cube_list_exprs_.count();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(rollup_items.reserve(total_rollup_item_num))) {
+    LOG_WARN("failed to reserve rollup items", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < cube_items.count(); ++i) {
     ObCubeItem &cube_item = cube_items.at(i);
     if (OB_FAIL(expand_cube_item(cube_item, rollup_items))) {
@@ -1963,11 +2067,12 @@ int ObTransformPreProcess::get_groupby_exprs_list(ObIArray<ObGroupingSetsItem> &
                                                   ObIArray<ObGroupbyExpr> &groupby_exprs_list)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObGroupbyExpr, 4> grouping_sets_exprs_list;
-  ObSEArray<ObGroupbyExpr, 4> rollup_exprs_list;
-  ObSEArray<ObGroupbyExpr, 4> tmp_groupby_exprs_list;
-  ObSEArray<ObRollupItem, 4> tmp_rollup_items;
-  ObSEArray<ObGroupbyExpr, 4> tmp_rollup_exprs_list;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObGroupbyExpr, true> grouping_sets_exprs_list(allocator);
+  ObSqlArray<ObGroupbyExpr, true> rollup_exprs_list(allocator);
+  ObSqlArray<ObGroupbyExpr, true> tmp_groupby_exprs_list(allocator);
+  ObSqlArray<ObRollupItem, true> tmp_rollup_items(allocator);
+  ObSqlArray<ObGroupbyExpr, true> tmp_rollup_exprs_list(allocator);
   if (OB_FAIL(expand_grouping_sets_items(grouping_sets_items, grouping_sets_exprs_list))) {
     LOG_WARN("failed to expand grouping sets items", K(ret));
   } else if (OB_FAIL(expand_rollup_items(rollup_items, rollup_exprs_list))) {
@@ -2012,14 +2117,13 @@ int ObTransformPreProcess::transform_grouping_sets_to_rollup_exprs(ObSelectStmt 
    * 1. Do transform grouping sets to rollup in the future.
    * 2. And what is more, if has_group_id = true, remember to handle it.
    */
+  if (OB_FAIL(groupby_exprs_list.prepare_allocate(origin_groupby_exprs_list.count()))) {
+    LOG_WARN("failed to prepare allocate groupby exprs list", K(ret));
+  } else if (OB_FAIL(rollup_exprs_list.prepare_allocate(origin_groupby_exprs_list.count()))) {
+    LOG_WARN("failed to prepare allocate rollup exprs list", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < origin_groupby_exprs_list.count(); ++i) {
-    ObGroupbyExpr groupby_expr;
-    ObGroupbyExpr rollup_expr;
-    if (OB_FAIL(groupby_exprs_list.push_back(groupby_expr))) {
-      LOG_WARN("failed to push_back groupby_exprs_list", K(ret));
-    } else if (OB_FAIL(rollup_exprs_list.push_back(rollup_expr))) {
-      LOG_WARN("failed to push_back rollup_exprs_list", K(ret));
-    } else if (OB_FAIL(append_array_no_dup(groupby_exprs_list.at(i).groupby_exprs_, groupby_exprs))) {
+    if (OB_FAIL(append_array_no_dup(groupby_exprs_list.at(i).groupby_exprs_, groupby_exprs))) {
       LOG_WARN("failed to append array no dup", K(ret));
     } else if (OB_FAIL(append_array_no_dup(groupby_exprs_list.at(i).groupby_exprs_,
                                             origin_groupby_exprs_list.at(i).groupby_exprs_))) {
@@ -2036,10 +2140,11 @@ int ObTransformPreProcess::get_groupby_and_rollup_exprs_list(ObSelectStmt *origi
                                                         ObIArray<ObGroupbyExpr> &rollup_exprs_list)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
   ObIArray<ObGroupingSetsItem> &grouping_sets_items = origin_stmt->get_grouping_sets_items();
   ObIArray<ObRollupItem> &rollup_items = origin_stmt->get_rollup_items();
   ObIArray<ObCubeItem> &cube_items = origin_stmt->get_cube_items();
-  ObSEArray<ObGroupbyExpr, 4> temp_groupby_exprs_list;
+  ObSqlArray<ObGroupbyExpr, true> temp_groupby_exprs_list(allocator);
   if (OB_ISNULL(origin_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("origin stmt is NULL", K(ret), K(origin_stmt));
@@ -2081,13 +2186,16 @@ int ObTransformPreProcess::expand_grouping_sets_items(
                                                   ObIArray<ObGroupbyExpr> &grouping_sets_exprs)
 {
   int ret = OB_SUCCESS;
-  typedef ObSEArray<ObGroupingSetsItem, 4> GroupingSetsArray;
-  SMART_VAR(GroupingSetsArray, tmp_grouping_sets_items) {
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  typedef ObSqlArray<ObGroupingSetsItem, true> GroupingSetsArray;
+  SMART_VAR(GroupingSetsArray, tmp_grouping_sets_items, allocator) {
     if (OB_FAIL(simple_expand_grouping_sets_items(grouping_sets_items, tmp_grouping_sets_items))) {
       LOG_WARN("failed to simple expand grouping_sets_items", K(ret));
+    } else if (OB_FAIL(init_expanded_grouping_sets_exprs(tmp_grouping_sets_items, grouping_sets_exprs))) {
+      LOG_WARN("failed to init expanded grouping sets exprs", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < tmp_grouping_sets_items.count(); ++i) {
-        ObGroupbyExpr groupby_item;
+        ObGroupbyExpr groupby_item(allocator);
         for (int64_t j = 0; OB_SUCC(ret) && j < tmp_grouping_sets_items.at(i).grouping_sets_exprs_.count(); ++j) {
           if (OB_FAIL(append(groupby_item.groupby_exprs_,
                         tmp_grouping_sets_items.at(i).grouping_sets_exprs_.at(j).groupby_exprs_))) {
@@ -2096,7 +2204,7 @@ int ObTransformPreProcess::expand_grouping_sets_items(
         }
         // multi cube -> multi rollup
         if (OB_SUCC(ret) && tmp_grouping_sets_items.at(i).cube_items_.count() > 0) {
-          ObSEArray<ObRollupItem, 4> tmp_rollup_items;
+          ObSqlArray<ObRollupItem, true> tmp_rollup_items(allocator);
           if (OB_FAIL(expand_cube_items(tmp_grouping_sets_items.at(i).cube_items_,
                                         tmp_rollup_items))) {
             LOG_WARN("failed to expand multi rollup items", K(ret));
@@ -2107,7 +2215,7 @@ int ObTransformPreProcess::expand_grouping_sets_items(
         }
         if (OB_SUCC(ret)) {
           if (tmp_grouping_sets_items.at(i).rollup_items_.count() > 0) {
-            ObSEArray<ObGroupbyExpr, 4> groupby_exprs_list;
+            ObSqlArray<ObGroupbyExpr, true> groupby_exprs_list(allocator);
             if (OB_FAIL(expand_rollup_items(tmp_grouping_sets_items.at(i).rollup_items_,
                                             groupby_exprs_list))) {
               LOG_WARN("failed to expand multi rollup items", K(ret));
@@ -2139,16 +2247,22 @@ int ObTransformPreProcess::expand_rollup_items(ObIArray<ObRollupItem> &rollup_it
                                                ObIArray<ObGroupbyExpr> &rollup_list_exprs)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObGroupbyExpr, 4> result_rollup_list_exprs;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObGroupbyExpr, true> result_rollup_list_exprs1(allocator);
+  ObSqlArray<ObGroupbyExpr, true> result_rollup_list_exprs2(allocator);
+  ObIArray<ObGroupbyExpr> *src = &result_rollup_list_exprs1;
+  ObIArray<ObGroupbyExpr> *dst = &result_rollup_list_exprs2;
   for (int64_t i = 0; OB_SUCC(ret) && i < rollup_items.count(); ++i) {
     ObRollupItem &rollup_item = rollup_items.at(i);
-    ObSEArray<ObGroupbyExpr, 4> tmp_rollup_list_exprs;
-    ObGroupbyExpr empty_item;
-    if (OB_FAIL(tmp_rollup_list_exprs.push_back(empty_item))) {
+    ObSqlArray<ObGroupbyExpr, true> tmp_rollup_list_exprs(allocator);
+    ObGroupbyExpr empty_item(allocator);
+    if (OB_FAIL(tmp_rollup_list_exprs.reserve(rollup_item.rollup_list_exprs_.count() + 1))) {
+      LOG_WARN("failed to reserve rollup list", K(ret));
+    } else if (OB_FAIL(tmp_rollup_list_exprs.push_back(empty_item))) {
       LOG_WARN("failed to push back item", K(ret));
     } else {
       for (int64_t j = 0; OB_SUCC(ret) && j < rollup_item.rollup_list_exprs_.count(); ++j) {
-        ObGroupbyExpr item;
+        ObGroupbyExpr item(allocator);
         if (OB_FAIL(append(item.groupby_exprs_, tmp_rollup_list_exprs.at(j).groupby_exprs_))) {
           LOG_WARN("failed to append exprs", K(ret));
         } else if (OB_FAIL(append(item.groupby_exprs_,
@@ -2159,15 +2273,20 @@ int ObTransformPreProcess::expand_rollup_items(ObIArray<ObRollupItem> &rollup_it
         } else {/*do nothing*/}
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(combination_two_rollup_list(result_rollup_list_exprs,
+        if (OB_FAIL(combination_two_rollup_list(*src,
                                                 tmp_rollup_list_exprs,
-                                                rollup_list_exprs))) {
+                                                *dst))) {
           LOG_WARN("failed to combination two rollup list", K(ret));
-        } else if (OB_FAIL(result_rollup_list_exprs.assign(rollup_list_exprs))) {
-          LOG_WARN("failed to assign exprs", K(ret));
-        } else {/*do nothing*/}
+        } else {
+          std::swap(src, dst);
+        }
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(rollup_list_exprs.assign(*src))) {
+      LOG_WARN("failed to assign exprs", K(ret));
+    } else {/*do nothing*/}
   }
   return ret;
 }
@@ -2179,25 +2298,25 @@ int ObTransformPreProcess::combination_two_rollup_list(ObIArray<ObGroupbyExpr> &
   int ret = OB_SUCCESS;
   rollup_list_exprs.reset();
   if (rollup_list_exprs1.count() == 0 && rollup_list_exprs2.count() > 0) {
-    if (OB_FAIL(append(rollup_list_exprs, rollup_list_exprs2))) {
-      LOG_WARN("failed to append exprs", K(ret));
+    if (OB_FAIL(rollup_list_exprs.assign(rollup_list_exprs2))) {
+      LOG_WARN("failed to assign exprs", K(ret));
     } else {/*do nothing*/}
   } else if (rollup_list_exprs1.count() > 0 && rollup_list_exprs2.count() == 0) {
-    if (OB_FAIL(append(rollup_list_exprs, rollup_list_exprs1))) {
-      LOG_WARN("failed to append exprs", K(ret));
+    if (OB_FAIL(rollup_list_exprs.assign(rollup_list_exprs1))) {
+      LOG_WARN("failed to assign exprs", K(ret));
     } else {/*do nothing*/}
+  } else if (OB_FAIL(rollup_list_exprs.prepare_allocate(rollup_list_exprs1.count() * rollup_list_exprs2.count()))) {
+    LOG_WARN("failed to prepare allocate rollup list exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < rollup_list_exprs1.count(); ++i) {
       for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs2.count(); ++j) {
-        ObGroupbyExpr item;
+        ObGroupbyExpr &item = rollup_list_exprs.at(i * rollup_list_exprs2.count() + j);
         if (OB_FAIL(append(item.groupby_exprs_,
                           rollup_list_exprs1.at(i).groupby_exprs_))) {
           LOG_WARN("failed to append exprs", K(ret));
         } else if (OB_FAIL(append(item.groupby_exprs_,
                                   rollup_list_exprs2.at(j).groupby_exprs_))) {
           LOG_WARN("failed to append exprs", K(ret));
-        } else if (OB_FAIL(rollup_list_exprs.push_back(item))) {
-          LOG_WARN("failed to push back item", K(ret));
         } else {/*do nothing*/}
       }
     }
@@ -2938,7 +3057,7 @@ int ObTransformPreProcess::create_for_update_dml_info(ObSelectStmt *stmt, TableI
               = static_cast<ForUpdateDMLInfo*>(ctx_->allocator_->alloc(sizeof(ForUpdateDMLInfo))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
-    } else if (FALSE_IT(for_update_info = new(for_update_info)ForUpdateDMLInfo())) {
+    } else if (FALSE_IT(for_update_info = new(for_update_info)ForUpdateDMLInfo(*ctx_->allocator_))) {
     } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx_,
                                                                              view_stmt,
                                                                              table,
@@ -3019,7 +3138,7 @@ int ObTransformPreProcess::pull_up_for_update_dml_info(ObSelectStmt *upper_stmt,
               = static_cast<ForUpdateDMLInfo*>(ctx_->allocator_->alloc(sizeof(ForUpdateDMLInfo))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
-    } else if (FALSE_IT(for_update_info = new(for_update_info)ForUpdateDMLInfo())) {
+    } else if (FALSE_IT(for_update_info = new(for_update_info)ForUpdateDMLInfo(*ctx_->allocator_))) {
     } else if (OB_FAIL(for_update_info->assign(*view_for_update_info))) {
       LOG_WARN("fail to assign for update dml info", K(ret));
     } else {
@@ -5944,7 +6063,7 @@ int ObTransformPreProcess::transform_insert_only_merge_into(ObDMLStmt* stmt, ObD
     } else if (OB_ISNULL(semi_info = static_cast<SemiInfo *>(ctx_->allocator_->alloc(sizeof(SemiInfo))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate semi info", K(ret));
-    } else if (OB_FALSE_IT(semi_info = new(semi_info)SemiInfo())) {
+    } else if (OB_FALSE_IT(semi_info = new(semi_info)SemiInfo(*ctx_->allocator_))) {
     } else if (OB_FAIL(semi_info->semi_conditions_.assign(merge_stmt->get_match_condition_exprs()))) {
       LOG_WARN("failed to assign join conditions", K(ret));
     } else if (OB_FALSE_IT(semi_info->join_type_ = LEFT_ANTI_JOIN)) {
@@ -9543,7 +9662,7 @@ int ObTransformPreProcess::switch_left_outer_to_semi_join(ObSelectStmt *&sub_stm
                                                                     sizeof(SemiInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to alloc semi info", K(ret));
-  } else if (FALSE_IT(semi_info = new(semi_info)SemiInfo())) {
+  } else if (FALSE_IT(semi_info = new(semi_info)SemiInfo(*ctx_->allocator_))) {
   } else if (OB_FAIL(semi_infos.push_back(semi_info))) {
     LOG_WARN("failed to push back semi info", K(ret));
   } else if (joined_table->right_table_->type_ == TableItem::JOINED_TABLE &&

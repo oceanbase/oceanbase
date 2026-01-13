@@ -364,7 +364,7 @@ public:
                                           const common::ObIArray<ObTabletID> &tablet_ids,
                                           const common::ObIArray<ObObjectID> &partition_ids,
                                           const ObIArray<ObObjectID> &first_level_part_ids,
-                                          common::ObIArray<ObCandiTabletLoc> &candi_tablet_locs);
+                                          ObCandiTabletLocIArray &candi_tablet_locs);
 
   int get_tablet_loc(const ObDASTableLocMeta &loc_meta,
                      const common::ObTabletID &tablet_id,

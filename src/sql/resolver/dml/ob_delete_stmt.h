@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SQL_DELETESTMT_H_
 #define OCEANBASE_SQL_DELETESTMT_H_
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
+#include "sql/resolver/ob_sql_array.h"
 #include "lib/string/ob_string.h"
 #include "sql/ob_sql_context.h"
 
@@ -44,7 +45,7 @@ namespace sql
 class ObDeleteStmt : public ObDelUpdStmt
 {
 public:
-  ObDeleteStmt();
+  ObDeleteStmt(ObIAllocator &allocator);
   virtual ~ObDeleteStmt();
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_factory,
@@ -65,7 +66,7 @@ public:
   virtual int remove_table_item_dml_info(const TableItem* table) override;
   DECLARE_VIRTUAL_TO_STRING;
 private:
-  common::ObSEArray<ObDeleteTableInfo*, 2, common::ModulePageAllocator, true> table_info_;
+  ObSqlArray<ObDeleteTableInfo*> table_info_;
 };
 }
 }

@@ -31,9 +31,13 @@ static inline double round_cost(double cost)
 ObJoinOrderEnumPermutation::ObJoinOrderEnumPermutation(ObLogPlan &plan,
                                                        const common::ObIArray<ObRawExpr*> &quals):
   ObJoinOrderEnum(plan, quals),
+  leading_table_depend_infos_(get_allocator()),
   leading_tree_(nullptr),
   use_leading_(false),
   size_(0),
+  initial_permutation_(get_allocator()),
+  cur_permutation_(get_allocator()),
+  join_helpers_(get_allocator()),
   cur_top_tree_(nullptr),
   ignore_hint_(false),
   global_contain_normal_nl_(true),
@@ -433,7 +437,6 @@ int ObJoinOrderEnumPermutation::generate_initial_join_tree(const ObIArray<ObJoin
                                                            const GreedyParam &greedy_method)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<JoinHelper, 4> priority_next_join_helpers;
   ObArray<ObJoinOrder *> candidate_leading;
   if (OB_FAIL(join_helpers_.prepare_allocate(candidate_base_levels.count()))) {
     LOG_WARN("failed to prepare allocate", K(ret));
@@ -532,10 +535,13 @@ int ObJoinOrderEnumPermutation::get_current_join_node(const ObIArray<ObJoinOrder
                                                       JoinHelper &cur_join_helper)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<JoinHelper, 10> tmp_helpers;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<JoinHelper, true> tmp_helpers(allocator);
   int64_t best_idx = 0;
   bool need_free = cur_level > 0 && cur_level < size_ - 1;
-  if (nullptr == pre_join_tree) {
+  if (OB_FAIL(tmp_helpers.reserve(candi_nodes.count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
+  } else if (nullptr == pre_join_tree) {
     for (int64_t i = 0; OB_SUCC(ret) && i < candi_nodes.count(); i ++) {
       JoinHelper *helper = nullptr;
       if (OB_ISNULL(helper = tmp_helpers.alloc_place_holder())) {
@@ -547,7 +553,8 @@ int ObJoinOrderEnumPermutation::get_current_join_node(const ObIArray<ObJoinOrder
       }
     }
   } else {
-    JoinHelper join_helper;
+    ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_COMPILE);
+    JoinHelper join_helper(tmp_allocator);
     for (int64_t i = 0; OB_SUCC(ret) && i < candi_nodes.count(); i ++) {
       ObJoinOrder *joined_node = candi_nodes.at(i);
       if (OB_FAIL(fill_join_helper(pre_join_tree,
@@ -768,7 +775,8 @@ int ObJoinOrderEnumPermutation::try_join_two_tree(ObJoinOrder *left_tree,
 {
   int ret = OB_SUCCESS;
   new_join_tree = nullptr;
-  JoinHelper join_helper;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  JoinHelper join_helper(allocator);
   if (OB_FAIL(fill_join_helper(left_tree,
                                right_tree,
                                /*level = */ -1,

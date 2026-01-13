@@ -69,18 +69,18 @@ struct ResolverJoinInfo {
 
 struct ObDmlJtColDef
 {
-  ObDmlJtColDef()
+  ObDmlJtColDef(common::ObIAllocator &allocator)
     : col_base_info_(),
       table_id_(common::OB_INVALID_ID),
-      regular_cols_(),
-      nested_cols_(),
+      regular_cols_(allocator),
+      nested_cols_(allocator),
       error_expr_(nullptr),
       empty_expr_(nullptr) {}
 
   ObJtColBaseInfo col_base_info_;
   int64_t table_id_;
-  common::ObSEArray<ObDmlJtColDef*, 4, common::ModulePageAllocator, true> regular_cols_;
-  common::ObSEArray<ObDmlJtColDef*, 4, common::ModulePageAllocator, true> nested_cols_;
+  ObSqlArray<ObDmlJtColDef*> regular_cols_;
+  ObSqlArray<ObDmlJtColDef*> nested_cols_;
   ObRawExpr* error_expr_;
   ObRawExpr* empty_expr_;
   TO_STRING_KV(K_(col_base_info));
@@ -1254,27 +1254,27 @@ protected:
   int32_t current_view_level_;
   uint64_t view_ref_id_;
   bool is_resolving_view_;
-  common::ObSEArray<ResolverJoinInfo, 1, common::ModulePageAllocator, true> join_infos_;
+  common::ObSEArray<ResolverJoinInfo, 1> join_infos_;
   //store parent cte tables
-  common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> parent_cte_tables_;
+  common::ObSEArray<TableItem *, 4> parent_cte_tables_;
   //store cte tables of current level
-  common::ObSEArray<TableItem *, 4, common::ModulePageAllocator, true> current_cte_tables_;
+  common::ObSEArray<TableItem *, 4> current_cte_tables_;
 
   ObSharedExprResolver expr_resv_ctx_;
   /*these member is only for with clause*/
   ObCteResolverCtx cte_ctx_;
 
   //store json table column info
-  common::ObSEArray<ObDmlJtColDef *, 1, common::ModulePageAllocator, true> json_table_infos_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_external_file_col_exprs_;
+  common::ObSEArray<ObDmlJtColDef *, 1> json_table_infos_;
+  common::ObSEArray<ObRawExpr*, 4> pseudo_external_file_col_exprs_;
   //for validity check for on-condition with (+)
-  common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ansi_join_outer_table_id_;
+  common::ObSEArray<uint64_t, 4> ansi_join_outer_table_id_;
 
   //for values table used to insert stmt:insert into table values row()....
   ObInsertResolver *upper_insert_resolver_;
   bool can_resolve_pseudo_column_ref_with_empty_tablename_ = false;
   // mapped table id and column id
-  common::ObSEArray<std::pair<uint64_t, int64_t>, 4, common::ModulePageAllocator, true> mapped_ids_;
+  common::ObSEArray<std::pair<uint64_t, int64_t>, 4> mapped_ids_;
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };

@@ -27,24 +27,27 @@ namespace sql
   public:
     ObLogJoin(ObLogPlan &plan)
       : ObLogicalOperator(plan),
-        join_conditions_(),
-        join_filters_(),
+        join_conditions_(plan.get_allocator()),
+        join_filters_(plan.get_allocator()),
         join_type_(UNKNOWN_JOIN),
         join_algo_(INVALID_JOIN_ALGO),
         join_dist_algo_(DistAlgo::DIST_INVALID_METHOD),
         late_mat_(false),
-        merge_directions_(),
-        nl_params_(),
-        connect_by_pseudo_columns_(),
-        connect_by_prior_exprs_(),
-        prior_exprs_(),
-        connect_by_root_exprs_(),
-        sys_connect_by_path_exprs_(),
+        merge_directions_(plan.get_allocator()),
+        nl_params_(plan.get_allocator()),
+        connect_by_pseudo_columns_(plan.get_allocator()),
+        connect_by_prior_exprs_(plan.get_allocator()),
+        prior_exprs_(plan.get_allocator()),
+        connect_by_root_exprs_(plan.get_allocator()),
+        sys_connect_by_path_exprs_(plan.get_allocator()),
         partition_id_expr_(nullptr),
-        connect_by_extra_exprs_(),
+        connect_by_extra_exprs_(plan.get_allocator()),
         enable_px_batch_rescan_(false),
+        join_filter_infos_(plan.get_allocator()),
         can_use_batch_nlj_(false),
-        join_path_(nullptr)
+        join_path_(nullptr),
+        above_pushdown_left_params_(plan.get_allocator()),
+        above_pushdown_right_params_(plan.get_allocator())
     { }
     virtual ~ObLogJoin() {}
 
@@ -148,8 +151,8 @@ namespace sql
     inline bool enable_px_batch_rescan() { return enable_px_batch_rescan_; }
     inline void set_px_batch_rescan(bool flag) { enable_px_batch_rescan_ = flag; }
 
-    int set_join_filter_infos(const common::ObIArray<JoinFilterInfo> &infos) { return join_filter_infos_.assign(infos); }
-    const common::ObIArray<JoinFilterInfo> &get_join_filter_infos() const { return join_filter_infos_; }
+    int set_join_filter_infos(const common::ObIArray<JoinFilterInfo*> &infos) { return join_filter_infos_.assign(infos); }
+    const common::ObIArray<JoinFilterInfo*> &get_join_filter_infos() const { return join_filter_infos_; }
 
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }
@@ -235,31 +238,31 @@ namespace sql
     virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   private:
     // all join predicates
-    common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_conditions_; //equal join condition, for merge-join
-    common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_filters_; //join filter, all conditions are here for nested loop join.
+    ObSqlArray<ObRawExpr *> join_conditions_; //equal join condition, for merge-join
+    ObSqlArray<ObRawExpr *> join_filters_; //join filter, all conditions are here for nested loop join.
     ObJoinType join_type_;
     JoinAlgo join_algo_;
     DistAlgo join_dist_algo_;
     bool late_mat_;
-    common::ObSEArray<ObOrderDirection, 8, common::ModulePageAllocator, true> merge_directions_;
-    common::ObSEArray<ObExecParamRawExpr *, 8, common::ModulePageAllocator, true> nl_params_;
-    common::ObSEArray<ObRawExpr*, 3, common::ModulePageAllocator, true> connect_by_pseudo_columns_;
-    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_prior_exprs_;
-    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> prior_exprs_;
-    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_root_exprs_;
-    common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> sys_connect_by_path_exprs_;
+    ObSqlArray<ObOrderDirection> merge_directions_;
+    ObSqlArray<ObExecParamRawExpr *> nl_params_;
+    ObSqlArray<ObRawExpr*> connect_by_pseudo_columns_;
+    ObSqlArray<ObRawExpr*> connect_by_prior_exprs_;
+    ObSqlArray<ObRawExpr*> prior_exprs_;
+    ObSqlArray<ObRawExpr*> connect_by_root_exprs_;
+    ObSqlArray<ObRawExpr*> sys_connect_by_path_exprs_;
     // NLJ 模式下右侧接 GI 时，通知 GI 过滤掉不可能命中的分区，以提升 rescan 性能
     // NLJ 模式下记录左侧 pkey exchange 生成的 partition id 列
     // 用于在 CG 阶段定位 part id 列位置，然后生成行下标
     ObOpPseudoColumnRawExpr *partition_id_expr_;
-    ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> connect_by_extra_exprs_;
+    ObSqlArray<ObRawExpr *> connect_by_extra_exprs_;
     // for nestloop join
     bool enable_px_batch_rescan_;
-    common::ObSEArray<JoinFilterInfo, 4, common::ModulePageAllocator, true> join_filter_infos_;
+    ObSqlArray<JoinFilterInfo*> join_filter_infos_;
     bool can_use_batch_nlj_;
     JoinPath *join_path_;
-    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
-    common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
+    ObSqlArray<ObExecParamRawExpr *> above_pushdown_left_params_;
+    ObSqlArray<ObExecParamRawExpr *> above_pushdown_right_params_;
     ObJoinFilterMaterialControlInfo jf_material_control_info_;
     DISALLOW_COPY_AND_ASSIGN(ObLogJoin);
   };

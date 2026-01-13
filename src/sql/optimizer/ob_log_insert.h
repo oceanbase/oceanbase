@@ -15,7 +15,7 @@
 #include "ob_logical_operator.h"
 #include "ob_log_del_upd.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
-#include "sql/optimizer/ob_log_plan.h"
+#include "sql/optimizer/ob_del_upd_log_plan.h"
 
 namespace oceanbase
 {
@@ -30,6 +30,8 @@ public:
       : ObLogDelUpd(plan),
         is_replace_(false),
         is_overwrite_(false),
+        index_replace_infos_(plan.get_allocator()),
+        index_upd_infos_(plan.get_allocator()),
         insert_up_(false),
         is_insert_select_(false),
         append_table_id_(0),
@@ -117,11 +119,11 @@ public:
     append_table_id_ = append_table_id;
   }
   inline uint64_t get_append_table_id() const { return append_table_id_; }
-  void set_constraint_infos(const common::ObIArray<ObUniqueConstraintInfo> *constraint_infos)
+  void set_constraint_infos(const common::ObIArray<ObUniqueConstraintInfo*> *constraint_infos)
   {
     constraint_infos_ = constraint_infos;
   }
-  const common::ObIArray<ObUniqueConstraintInfo> *get_constraint_infos() const
+  const common::ObIArray<ObUniqueConstraintInfo*> *get_constraint_infos() const
   {
     return constraint_infos_;
   }
@@ -140,14 +142,14 @@ protected:
 protected:
   bool is_replace_;
   bool is_overwrite_;
-  common::ObArray<IndexDMLInfo *, common::ModulePageAllocator, true> index_replace_infos_;
+  ObSqlArray<IndexDMLInfo *> index_replace_infos_;
   // for insert_up update caluse
-  common::ObArray<IndexDMLInfo *, common::ModulePageAllocator, true> index_upd_infos_;
+  ObSqlArray<IndexDMLInfo *> index_upd_infos_;
   bool insert_up_; // insert on duplicate update statement
   //for SPM Pruning
   bool is_insert_select_;
   uint64_t append_table_id_;
-  const common::ObIArray<ObUniqueConstraintInfo> *constraint_infos_;
+  const common::ObIArray<ObUniqueConstraintInfo*> *constraint_infos_;
   ObRawExpr *in_filter_expr_;
 };
 

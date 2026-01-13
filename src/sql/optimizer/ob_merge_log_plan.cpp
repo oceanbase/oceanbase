@@ -993,7 +993,8 @@ int ObMergeLogPlan::prepare_table_dml_info_delete(const ObMergeTableInfo& merge_
                                                   ObIArray<IndexDMLInfo*> &all_index_dml_infos)
 {
   int ret = OB_SUCCESS;
-  ObAssignments empty_assignments;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObAssignments empty_assignments(allocator);
   IndexDMLInfo* index_dml_info = NULL;
   ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();

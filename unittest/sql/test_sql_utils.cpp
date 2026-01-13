@@ -12,12 +12,20 @@
 
 #define USING_LOG_PREFIX SQL
 #include "test_sql_utils.h"
+#define private public
+#define protected public
+#include "observer/mysql/obmp_base.h"
 #include "observer/ob_server.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "sql/ob_sql_init.h"
+#include "sql/ob_sql_mock_schema_utils.h"
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "share/ob_simple_mem_limit_getter.h"
-#define CLUSTER_VERSION_2100 (oceanbase::common::cal_version(2, 1, 0, 0))
-#define CLUSTER_VERSION_2200 (oceanbase::common::cal_version(2, 2, 0, 0))
+#undef protected
+#undef private
+#include <iostream>
+using namespace std;
 using namespace oceanbase::observer;
 //c funcs
 namespace test
@@ -31,10 +39,10 @@ bool comparisonFunc(const char *c1, const char *c2)
 
 void load_sql_file(const char* file_name)
 {
+  const char *test_suffix = "test";
+  const int64_t suffix_len = strlen(test_suffix);
   if (file_name != NULL){
-    if ( strcmp(".", file_name) != 0
-         && strcmp("..", file_name) != 0
-         && strncmp("test_resolver", file_name, strlen("test_resolver")) == 0 ) {
+    if ( strlen(file_name) > suffix_len && strncmp(test_suffix, file_name + strlen(file_name) - suffix_len, suffix_len) == 0 ) {
       snprintf(clp.file_names[clp.file_count++],
                strlen(file_name) - 3,  //strlen("test")-1
                "%s",
@@ -148,6 +156,7 @@ void parse_cmd_line_param(int argc, char *argv[], CmdLineParam &clp)
 TestSqlUtils::TestSqlUtils()
     : //next_user_table_id_(OB_MIN_USER_TABLE_ID),
       next_user_table_id_map_(),
+      next_user_tablet_id_map_(),
       sys_user_id_(OB_SYS_USER_ID),
       next_user_id_(OB_MIN_USER_OBJECT_ID),
       sys_database_id_(OB_SYS_DATABASE_ID),
@@ -174,139 +183,176 @@ TestSqlUtils::TestSqlUtils()
     auto& cluster_version = ObClusterVersion::get_instance();
     cluster_version.init(&common::ObServerConfig::get_instance(), &oceanbase::omt::ObTenantConfigMgr::get_instance());
     oceanbase::omt::ObTenantConfigMgr::get_instance().add_tenant_config(sys_tenant_id_);
-    cluster_version.refresh_cluster_version("4.3.0.0");
+    cluster_version.init(CLUSTER_CURRENT_VERSION);
+    cluster_version.update_data_version(DATA_CURRENT_VERSION);
     ODV_MGR.init(true);
 
     ObServer &observer = ObServer::get_instance();
     int ret = OB_SUCCESS;
     if (OB_FAIL(observer.init_tz_info_mgr())) {
-      LOG_ERROR("init tz_info_mgr fail", K(ret));
+      LOG_WARN("init tz_info_mgr fail", K(ret));
     } else if (OB_FAIL(observer.init_global_context())) {
-      LOG_ERROR("init global context fail", K(ret));
+      LOG_WARN("init global context fail", K(ret));
+    } else if (OB_FAIL(oceanbase::sql::init_sql_factories())) {
+      LOG_WARN("init sql factories fail", K(ret));
+    } else if (OB_FAIL(oceanbase::sql::init_sql_executor_singletons())) {
+      LOG_WARN("init sql executor singletons fail", K(ret));
+    } else if (OB_FAIL(oceanbase::sql::init_sql_expr_static_var())) {
+      LOG_WARN("init sql expr static var fail", K(ret));
     }
 }
 
 void TestSqlUtils::init()
 {
   int64_t ret = OB_SUCCESS;
-  //common::ObSessionDIBuffer::get_instance().init(OB_MAX_SERVER_SESSION_CNT, 4);
-  //common::ObDITenantCache::get_instance().init(100000, 4);
-  schema_service_ = new MockSchemaService();
-  ASSERT_TRUE(schema_service_);
+  ObClockGenerator::init();
   ObVirtualTenantManager::get_instance().init();
   ObVirtualTenantManager::get_instance().add_tenant(sys_tenant_id_);
   ObVirtualTenantManager::get_instance().set_tenant_mem_limit(sys_tenant_id_, 1024L * 1024L * 1024L, 1024L * 1024L * 1024L);
 
-  GCTX.schema_service_ = schema_service_;
   oceanbase::transaction::ObBLService::get_instance().init();
 
   const int64_t max_cache_size = 1024L * 1024L * 512;
   static ObSimpleMemLimitGetter mem_limit_getter;
+  local_addr_.set_ip_addr("1.1.1.1", 8888);
   mem_limit_getter.add_tenant(OB_SYS_TENANT_ID, 0, max_cache_size);
   mem_limit_getter.add_tenant(OB_SERVER_TENANT_ID, 0, INT64_MAX);
   ObKVGlobalCache::get_instance().init(&mem_limit_getter);
+  TP_SET_EVENT(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE, OB_ERR_UNEXPECTED, 0, 1);
 
   if (OB_SUCCESS != (ret = ObPreProcessSysVars::init_sys_var())) {
     _OB_LOG(WARN, "PreProcessing system value init failed, ret=%ld", ret);
     ASSERT_TRUE(0);
-  } else if (OB_FAIL(schema_service_->init())) {
-    _OB_LOG(WARN, "schema_service_ init fail, ret=%ld", ret);
-    ASSERT_TRUE(0);
-  } else if (OB_FAIL(schema_service_->get_schema_guard(schema_guard_, schema_version_))) {
-    _OB_LOG(WARN, "schema_guard init fail, ret=%ld", ret);
-    ASSERT_TRUE(0);
-  } else {
-    sql_schema_guard_.set_schema_guard(&schema_guard_);
-    sql_ctx_.schema_guard_ = &schema_guard_;
-    ObString tenant("sql_test");
-    ASSERT_TRUE(OB_SUCCESS == session_info_.init_tenant(tenant, sys_tenant_id_));
-
-    ObArenaAllocator *allocator = NULL;
-    uint32_t version = 0;
-    if (OB_SUCCESS != (ret = session_info_.test_init(version, 0, 0, allocator)) ){
-      _OB_LOG(ERROR, "%s", "init session_info error!");
-      ASSERT_TRUE(0);
-    } else {
-      exec_ctx_.set_my_session(&session_info_);
-    }
-
-    if (OB_SUCC(ret)) {
-      exec_ctx_.get_task_executor_ctx()->set_min_cluster_version(CLUSTER_VERSION_2200);
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(exec_ctx_.create_physical_plan_ctx())) {
-      OB_LOG(WARN, "Create plan ctx error", K(ret));
-      ASSERT_TRUE(0);
-    } else if (OB_SUCCESS != (ret = next_user_table_id_map_.create(16, "HashBucAltTabMa"))) {
-      _OB_LOG(WARN, "create user table id map failed, ret=%ld", ret);
-      ASSERT_TRUE(0);
-    } else {
-      OK(session_info_.load_default_sys_variable(true, true));
-      //OK(session_info_.load_sys_variable(sql_mode, type, value, ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE));
-      const uint64_t tenant_id = 1;
-      ASSERT_TRUE(OB_SUCCESS == session_info_.init_tenant(tenant, tenant_id));
-      session_info_.set_user(OB_SYS_USER_NAME, OB_SYS_HOST_NAME, OB_SYS_USER_ID);
-      session_info_.set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT | OB_PRIV_BOOTSTRAP);
-      session_info_.set_default_database(OB_SYS_DATABASE_NAME, CS_TYPE_UTF8MB4_GENERAL_CI);
-      ObObj obj;
-      obj.set_int(1);
-      ASSERT_TRUE(OB_SUCCESS == session_info_.update_sys_variable_by_name(OB_SV_ENABLE_AGGREGATION_PUSHDOWN, obj));
-      create_system_db();
-      create_system_table();
-      // create schema
-      load_schema_from_file(schema_file_path_);
-      // prevent interference between test schema and the following DDL test cases
-      next_user_table_id_map_.set_refactored(sys_tenant_id_, OB_MIN_USER_OBJECT_ID + 100, 1 /*replace*/);
-
-      //close the recyclebin
-      ObObj obj2;
-      obj2.set_bool(false);
-      ASSERT_TRUE(OB_SUCCESS == session_info_.update_sys_variable_by_name(OB_SV_RECYCLEBIN, obj2));
-      int64_t default_collation = 45;  // utf8mb4_general_ci
-      ASSERT_TRUE(OB_SUCCESS == session_info_.update_sys_variable(SYS_VAR_COLLATION_CONNECTION, default_collation));
-      ObAddr addr;
-      ObPlanCache* pc = new ObPlanCache();
-      ObPsCache* ps = new ObPsCache();
-      ObPCMemPctConf pc_mem_conf;
-      if (OB_FAIL(pc->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
-        LOG_WARN("failed to init request manager", K(ret));
-      } else if (OB_FAIL(ps->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
-        LOG_WARN("failed to init request manager", K(ret));
-      } else if (OB_FAIL(session_info_.get_pc_mem_conf(pc_mem_conf))) {
-        _OB_LOG(WARN,"fail to get pc mem conf, ret=%ld", ret);
-        ASSERT_TRUE(0);
-      } else {
-        session_info_.set_plan_cache(pc);
-        session_info_.set_ps_cache(ps);
-      }
-    }
   }
+  init_schema();
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
 void TestSqlUtils::destroy()
 {
-  ObPlanCache* pc = session_info_.get_plan_cache();
-  ObPsCache* ps = session_info_.get_ps_cache();
+  reset_schema();
+  ObKVGlobalCache::get_instance().destroy();
+  MTL_CTX() = NULL;
+}
+
+void TestSqlUtils::init_schema()
+{
+  int ret = OB_SUCCESS;
+
+  schema_service_ = new MockSchemaService();
+  ASSERT_TRUE(schema_service_);
+  GCTX.schema_service_ = schema_service_;
+
+  const uint64_t tenant_id = 1;
+  ObString tenant("sql_test");
+  ObArenaAllocator *allocator = NULL;
+  if (OB_FAIL(schema_service_->init())) {
+    _OB_LOG(WARN, "schema_service_ init fail, ret=%ld", ret);
+    ASSERT_TRUE(0);
+  } else if (OB_FAIL(schema_service_->get_schema_guard(schema_guard_, schema_version_))) {
+    _OB_LOG(WARN, "schema_guard init fail, ret=%ld", ret);
+    ASSERT_TRUE(0);
+  } else if (OB_SUCCESS != (ret = next_user_table_id_map_.create(16, "HashBucAltTabMa"))) {
+    _OB_LOG(WARN, "create user table id map failed, ret=%ld", ret);
+    ASSERT_TRUE(0);
+  } else if (OB_SUCCESS != (ret = next_user_tablet_id_map_.create(16, "HashBucAltTabMa"))) {
+    _OB_LOG(WARN, "create user tablet id map failed, ret=%ld", ret);
+    ASSERT_TRUE(0);
+  } else if (OB_FAIL(session_info_.init_tenant(tenant, tenant_id))) {
+    _OB_LOG(WARN, "init session info tenant fail, ret=%ld", ret);
+    ASSERT_TRUE(0);
+  } else if (OB_FAIL(session_info_.test_init(0, 0, 0, allocator))) {
+    _OB_LOG(ERROR, "%s", "init session_info error!");
+    ASSERT_TRUE(0);
+  } else {
+    OK(session_info_.load_default_sys_variable(true, true));
+
+    session_info_.set_user(OB_SYS_USER_NAME, OB_SYS_HOST_NAME, OB_SYS_USER_ID);
+    session_info_.set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT | OB_PRIV_BOOTSTRAP);
+    session_info_.set_default_database(OB_SYS_DATABASE_NAME, CS_TYPE_UTF8MB4_GENERAL_CI);
+    ObObj obj;
+    obj.set_int(1);
+    OK(session_info_.update_sys_variable_by_name(OB_SV_ENABLE_AGGREGATION_PUSHDOWN, obj));
+
+    //close the recyclebin
+    ObObj obj2;
+    obj2.set_bool(false);
+    OK(session_info_.update_sys_variable_by_name(OB_SV_RECYCLEBIN, obj2));
+    int64_t default_collation = 45;  // utf8mb4_general_ci
+    OK(session_info_.update_sys_variable(SYS_VAR_COLLATION_CONNECTION, default_collation));
+    ObPlanCache* pc = new ObPlanCache();
+    ObPsCache* ps = new ObPsCache();
+    ObPCMemPctConf pc_mem_conf;
+    if (OB_FAIL(pc->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
+      LOG_WARN("failed to init request manager", K(ret));
+    } else if (OB_FAIL(ps->init(common::OB_PLAN_CACHE_BUCKET_NUMBER, tenant_id))) {
+      LOG_WARN("failed to init request manager", K(ret));
+    } else if (OB_FAIL(session_info_.get_pc_mem_conf(pc_mem_conf))) {
+      _OB_LOG(WARN,"fail to get pc mem conf, ret=%ld", ret);
+      ASSERT_TRUE(0);
+    } else {
+      session_info_.set_plan_cache(pc);
+      session_info_.set_ps_cache(ps);
+      session_info_.set_user_session();
+      init_sql_ctx();
+      create_system_db();
+      create_system_table();
+      // create schema
+      load_schema_from_file(schema_file_path_);
+      init_ls_service();
+    }
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+void TestSqlUtils::init_sql_ctx()
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = NULL;
+
+  exec_ctx_.set_my_session(&session_info_);
+  exec_ctx_.stmt_factory_ = &stmt_factory_;
+  exec_ctx_.expr_factory_ = &expr_factory_;
+  exec_ctx_.set_sql_ctx(&sql_ctx_);
+  sql_ctx_.schema_guard_ = &schema_guard_;
+  sql_ctx_.session_info_ = exec_ctx_.get_my_session();
+  sql_ctx_.schema_guard_ = &schema_guard_;
+
+  if (OB_SUCC(ret)) {
+    exec_ctx_.get_task_executor_ctx()->set_min_cluster_version(CLUSTER_CURRENT_VERSION);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(exec_ctx_.create_physical_plan_ctx())) {
+    OB_LOG(WARN, "Create plan ctx error", K(ret));
+  } else if (OB_ISNULL(query_ctx = stmt_factory_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "query ctx is null", K(ret));
+  } else {
+    query_ctx->sql_schema_guard_.set_schema_guard(&schema_guard_);
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+void TestSqlUtils::reset_schema()
+{
+  reset_sql_ctx();
   sys_user_id_ = OB_SYS_USER_ID;
   next_user_id_ = OB_MIN_USER_OBJECT_ID;
   sys_database_id_ = OB_SYS_DATABASE_ID;
   next_user_database_id_= OB_MIN_USER_OBJECT_ID;
   sys_tenant_id_ = OB_SYS_TENANT_ID;
   next_user_table_id_map_.destroy();
-  session_info_.~ObSQLSessionInfo();
-  new (&session_info_) ObSQLSessionInfo();
-  stmt_factory_.destory();
-  expr_factory_.destory();
-  exec_ctx_.~ObExecContext();
-  new (&exec_ctx_) ObExecContext(allocator_);
+  next_user_tablet_id_map_.destroy();
   schema_guard_.~ObSchemaGetterGuard();
-  new (&schema_guard_) ObSchemaGetterGuard();
-  // destroy
+  GCTX.schema_service_ = NULL;
   if (NULL != schema_service_) {
     delete schema_service_;
+    schema_service_ = NULL;
   }
+  ObPlanCache* pc = session_info_.get_plan_cache();
+  ObPsCache* ps = session_info_.get_ps_cache();
+  session_info_.~ObSQLSessionInfo();
   if (NULL != ps) {
     ps->destroy();
     delete ps;
@@ -315,7 +361,20 @@ void TestSqlUtils::destroy()
     pc->destroy();
     delete pc;
   }
-  ObKVGlobalCache::get_instance().destroy();
+  ObSQLMockSchemaUtils::reset_mock_table();
+  new (&session_info_) ObSQLSessionInfo();
+  new (&schema_guard_) ObSchemaGetterGuard();
+}
+
+void TestSqlUtils::reset_sql_ctx()
+{
+  stmt_factory_.destory();
+  expr_factory_.destory();
+  exec_ctx_.~ObExecContext();
+  sql_ctx_.reset();
+  param_list_.reset();
+  allocator_.reset();
+  new (&exec_ctx_) ObExecContext(allocator_);
 }
 
 void TestSqlUtils::load_schema_from_file(const char *file_path) {
@@ -323,10 +382,23 @@ void TestSqlUtils::load_schema_from_file(const char *file_path) {
     _OB_LOG(INFO, "file_path=%s", file_path);
     std::ifstream if_schema(file_path);
     ASSERT_TRUE(if_schema.is_open());
-    std::string line;
-    while (std::getline(if_schema, line)) {
+
+    char buffer[MAX_BUFFER_SIZE] = {};
+    if_schema.read(buffer, sizeof(buffer));
+    size_t bytes_read = if_schema.gcount();
+    ASSERT_TRUE(bytes_read < sizeof(buffer));
+
+    ObSQLMode mode = SMO_DEFAULT;
+    ObArenaAllocator parser_allocator;
+    ObSEArray<ObString, 4> queries;
+    ObParser parser(parser_allocator, mode);
+    ObMPParseStat parse_stat;
+    OK(parser.split_multiple_stmt(ObString(bytes_read, buffer), queries, parse_stat));
+
+    for (int64_t i = 0; i < queries.count(); ++i) {
       ObStmt *stmt = NULL;
-      ASSERT_NO_FATAL_FAILURE(do_load_sql(line.c_str(), stmt, clp.print_schema_detail_info, JSON_FORMAT));
+      ObString query = queries.at(i).trim();
+      ASSERT_NO_FATAL_FAILURE(do_load_sql(query, stmt, JSON_FORMAT));
       stmt_factory_.destory();
       expr_factory_.destory();
     }
@@ -334,23 +406,23 @@ void TestSqlUtils::load_schema_from_file(const char *file_path) {
 }
 
 void TestSqlUtils::do_load_sql(
-    const char *query_str,
+    const ObString &query_str,
     ObStmt *&stmt,
-    bool is_print,
     enum ParserResultFormat format,
     int64_t expect_error,
-    int64_t case_line)
+    int64_t case_line,
+    MemoryUsage *memory_usage)
 {
-  //ObStmt *stmt = NULL;
-  ObString real_query = ObString::make_string(query_str).trim();
+  int ret = OB_SUCCESS;
+  ObString real_query = query_str.trim();
+  LinkExecCtxGuard link_guard(session_info_, exec_ctx_);
   if (real_query.length() > 0 && *real_query.ptr() != '#') {
     //ignore empty query and comment
-    _OB_LOG(INFO, "query_str: %s", query_str);
-    ASSERT_NO_FATAL_FAILURE(do_resolve(query_str, stmt,is_print, format, expect_error, true, true, case_line));
-    //ASSERT_FALSE(HasFatalFailure()) << "query_str: " << query_str << std::endl;
+    LOG_INFO("do load sql", K(real_query));
+    ASSERT_NO_FATAL_FAILURE(do_resolve(real_query, stmt, format, expect_error, true, true, case_line, memory_usage));
     if (!stmt) {
       // expect error case
-      _OB_LOG_RET(WARN, OB_ERROR, "fail to resolve query_str: %s", query_str);
+      LOG_WARN("fail to resolve query_str", K(real_query));
     } else if (OB_SUCCESS != expect_error) {
     } else {
       if (stmt->get_stmt_type() == stmt::T_CREATE_TABLE) {
@@ -372,31 +444,34 @@ void TestSqlUtils::do_load_sql(
 
 
 void TestSqlUtils::do_resolve(
-    const char* query_str,
+    const ObString &query,
     ObStmt *&stmt,
-    bool is_print,
     enum ParserResultFormat format,
     int64_t expect_error,
     bool parameterized,
     bool need_replace_param_expr,
-    int64_t case_line)
+    int64_t case_line,
+    MemoryUsage *memory_usage)
 {
   UNUSED(need_replace_param_expr);
   ObSQLMode mode = lib::is_oracle_mode() ? (SMO_ORACLE | DEFAULT_ORACLE_MODE) : SMO_DEFAULT;
   ObParser parser(allocator_, mode);
-  ObString query = ObString::make_string(query_str);
   ParseResult parse_result;
   ObArenaAllocator tmp_alloc;
-  OK(parser.parse(query, parse_result));
-  if (true){
-    if (JSON_FORMAT == format) {
-      _OB_LOG(INFO, "%s", CSJ(ObParserResultPrintWrapper(*parse_result.result_tree_)));
-    } else{
-      _OB_LOG(INFO, "%s", CSJ(ObParserResultTreePrintWrapper(*parse_result.result_tree_)));
+  ObPhysicalPlanCtx *pctx = exec_ctx_.get_physical_plan_ctx();
+  {
+    ObMemPerfGuard mem_perf_guard("parse");
+    int64_t max_mem_used = 0;
+    observer::ObProcessMallocCallback pmcb(0, max_mem_used);
+    lib::ObMallocCallbackGuard guard(pmcb);
+    OK(parser.parse(query, parse_result));
+    if (NULL != memory_usage) {
+      memory_usage->parse_mem_used_ = pmcb.get_cur_used();
+      memory_usage->parse_mem_max_used_ = pmcb.get_max_used();
     }
   }
   ParseNode *root = parse_result.result_tree_->children_[0];
-  ParamStore param_store ( (ObWrapperAllocator(tmp_alloc)) );
+  ParamStore &param_store = pctx->get_param_store_for_update();
   ObMaxConcurrentParam::FixParamStore fixed_param_store(OB_MALLOC_NORMAL_BLOCK_SIZE, ObWrapperAllocator(&allocator_));
   bool is_transform_outline = false;
   if (parameterized) {
@@ -414,6 +489,7 @@ void TestSqlUtils::do_resolve(
                                                       NULL,
                                                       fixed_param_store,
                                                       is_transform_outline));
+      pctx->set_original_param_cnt(param_store.count());
     }
   }
   int ret = OB_SUCCESS;
@@ -433,7 +509,17 @@ void TestSqlUtils::do_resolve(
   resolver_ctx.query_ctx_ = stmt_factory_.get_query_ctx();
   resolver_ctx.query_ctx_->set_questionmark_count(param_store.count());
   ObResolver resolver(resolver_ctx);
-  ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
+  {
+    ObMemPerfGuard mem_perf_guard("resolve");
+    int64_t max_mem_used = 0;
+    observer::ObProcessMallocCallback pmcb(0, max_mem_used);
+    lib::ObMallocCallbackGuard guard(pmcb);
+    ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
+    if (NULL != memory_usage) {
+      memory_usage->resolve_mem_used_ = pmcb.get_cur_used();
+      memory_usage->resolve_mem_max_used_ = pmcb.get_max_used();
+    }
+  }
   if (OB_SUCC(ret)) {
     get_hidden_column_value(resolver_ctx, param_list_);
   }
@@ -442,25 +528,6 @@ void TestSqlUtils::do_resolve(
     uint64_t database_id = OB_INVALID_ID;
     ObCreateTableStmt *create_table_stmt = dynamic_cast<ObCreateTableStmt*>(stmt);
     share::schema::ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-    if (table_schema.get_part_array() == NULL) {
-      int64_t part_num = table_schema.get_first_part_num();
-      if (part_num >= 0) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
-          char *name = new char[10];
-          if (name !=  NULL) {
-            snprintf(name, 10, "p%d", static_cast<int32_t>(i));
-            ObPartition *part = new ObPartition;
-            ObString name_string(name);
-            part->set_part_name(name_string);
-            part->set_part_id(i);
-            part->set_part_idx(i);
-            if (OB_FAIL(table_schema.add_partition(*part))) {
-              _OB_LOG(WARN, "add partition to table schema failed, ret %d", ret);
-            }
-          }
-        }
-      }
-    }
     common::ObString database_name = create_table_stmt->get_create_table_arg().db_name_;
     OK(schema_guard_.get_database_id(table_schema.get_tenant_id(), database_name, database_id));
     OB_ASSERT(OB_INVALID_ID != database_id);
@@ -474,9 +541,6 @@ void TestSqlUtils::do_resolve(
     fprintf(stderr, "sql unittest case failed at line:%ld\n", case_line);
   }
   ASSERT_EQ(expect_error, -ret);
-  if (is_print){
-    _OB_LOG(INFO, "%s", CSJ(*stmt));
-  }
   ret = OB_SUCCESS;
   parser.free_result(parse_result);
 }
@@ -548,7 +612,7 @@ void TestSqlUtils::do_create_table(const char *query_str)
 
   ObStmt *stmt = NULL;
   _OB_LOG(INFO, "query_str: %s", query_str);
-  do_resolve(query_str, stmt, false, JSON_FORMAT);
+  do_resolve(query_str, stmt, JSON_FORMAT);
   ASSERT_TRUE(NULL != stmt);
   do_create_table(stmt);
   stmt_factory_.destory();
@@ -559,7 +623,6 @@ void TestSqlUtils::do_create_table(ObStmt *&stmt)
 {
   // add the created table schema
   ObCreateTableStmt *create_table_stmt = dynamic_cast<ObCreateTableStmt*>(stmt);
-  ObSEArray<ObColDesc, 16> col_ids;
   uint64_t database_id = OB_INVALID_ID;
   OK(ObPartitionExecutorUtils::calc_values_exprs(exec_ctx_, *create_table_stmt));
   share::schema::ObTableSchema table_schema;
@@ -577,16 +640,7 @@ void TestSqlUtils::do_create_table(ObStmt *&stmt)
   } else {
     //combine the database_id and tenant_id
     table_schema.set_database_id(database_id);
-    //get the next_table_id of this tenant and database
-    uint64_t next_table_id = get_next_table_id(table_schema.get_tenant_id());
-    table_schema.set_table_id(next_table_id);
-    //table_schema.set_data_table_id( combine_id(next_user_tenant_id_, next_table_id));
-
-    ASSERT_EQ(OB_SUCCESS, table_schema.get_column_ids(col_ids));
-    for (int64_t i = 0; i < col_ids.count(); ++i) {
-      const ObColumnSchemaV2 *col = table_schema.get_column_schema(col_ids.at(i).col_id_);
-      const_cast<ObColumnSchemaV2*>(col)->set_table_id(table_schema.get_table_id());
-    }
+    mock_table_schema_ids(table_schema);
     OK(add_table_schema(table_schema));
     _OB_LOG(INFO, "do_create_table table_name=[%s], table_id=[%lu], tenant_id=[%lu], database_id=[%lu]",
            table_schema.get_table_name(),
@@ -795,6 +849,20 @@ uint64_t TestSqlUtils::get_next_table_id(const uint64_t user_tenant_id)
   return next_table_id;
 }
 
+uint64_t TestSqlUtils::get_next_tablet_id(const uint64_t user_tenant_id)
+{
+  uint64_t next_tablet_id = OB_INVALID_ID;
+  if (OB_HASH_NOT_EXIST == next_user_tablet_id_map_.get_refactored(user_tenant_id, next_tablet_id )){
+    next_tablet_id = ObTabletID::MIN_USER_TABLET_ID + 1;
+    OB_ASSERT(OB_SUCCESS == next_user_tablet_id_map_.set_refactored(user_tenant_id, next_tablet_id));
+    _OB_LOG(INFO, "tenant_id = [%lu] not exist, set next_tablet_id = [%lu]", user_tenant_id, next_tablet_id);
+  } else {
+    ++next_tablet_id;
+    OB_ASSERT(OB_SUCCESS == next_user_tablet_id_map_.set_refactored(user_tenant_id, next_tablet_id, 1 /* replace */));
+    _OB_LOG(INFO, "tenant_id = [%lu] exist, set new next_tablet_id = [%lu]", user_tenant_id, next_tablet_id);
+  }
+  return next_tablet_id;
+}
 
 void TestSqlUtils::generate_index_column_schema(ObCreateIndexStmt &stmt,
                                                 ObTableSchema &index_schema)
@@ -855,6 +923,73 @@ void TestSqlUtils::generate_index_column_schema(ObCreateIndexStmt &stmt,
   index_schema.set_max_used_column_id(max_column_id);
 }
 
+void TestSqlUtils::mock_table_schema_ids(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t table_id = get_next_table_id(table_schema.get_tenant_id());
+  uint64_t tablet_id = OB_INVALID_ID;
+  bool generated = false;
+  ObPartitionLevel part_level = table_schema.get_part_level();
+  ObSEArray<ObColDesc, 16> col_ids;
+  table_schema.set_table_id(table_id);
+  if (OB_FAIL(table_schema.try_generate_subpart_by_template(generated))) {
+    LOG_WARN("failed to genereate subpart by template", K(ret));
+  } else if (part_level == ObPartitionLevel::PARTITION_LEVEL_ZERO) {
+    tablet_id = get_next_tablet_id(table_schema.get_tenant_id());
+    table_schema.set_tablet_id(tablet_id);
+  } else {
+    ObPartition **part_array = table_schema.get_part_array();
+    int64_t part_num = table_schema.get_partition_num();
+    if (OB_ISNULL(part_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part array is null", KR(ret), KP(part_array));
+    }
+    // first level partition id should be continuous, set all partition id first
+    for (int64_t i = 0; i < part_num && OB_SUCC(ret); i++) {
+      uint64_t part_id = get_next_table_id(table_schema.get_tenant_id());
+      if (OB_ISNULL(part_array[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", KR(ret), K(i));
+      } else {
+        part_array[i]->set_table_id(table_id);
+        part_array[i]->set_part_id(part_id);
+        if (PARTITION_LEVEL_ONE == part_level) {
+          tablet_id = get_next_tablet_id(table_schema.get_tenant_id());
+          part_array[i]->set_tablet_id(tablet_id);
+        }
+      }
+    }
+    if (OB_SUCC(ret) && PARTITION_LEVEL_TWO == part_level) {
+      for (int64_t i = 0; i < part_num && OB_SUCC(ret); i++) {
+        ObSubPartition **sub_part_array = NULL;
+        if (OB_ISNULL(part_array[i]) || OB_ISNULL(sub_part_array = part_array[i]->get_subpart_array())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", KR(ret), K(i));
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < part_array[i]->get_subpartition_num(); j++) {
+          uint64_t subpart_id = get_next_table_id(table_schema.get_tenant_id());
+          if (OB_ISNULL(sub_part_array[j])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL ptr", KR(ret), K(i), K(j));
+          } else {
+            tablet_id = get_next_tablet_id(table_schema.get_tenant_id());
+            sub_part_array[j]->set_table_id(table_id);
+            sub_part_array[j]->set_part_id(part_array[i]->get_part_id());
+            sub_part_array[j]->set_sub_part_id(subpart_id);
+            sub_part_array[j]->set_tablet_id(tablet_id);
+          }
+        }
+      }
+    }
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, table_schema.get_column_ids(col_ids));
+  for (int64_t i = 0; i < col_ids.count(); ++i) {
+    const ObColumnSchemaV2 *col = table_schema.get_column_schema(col_ids.at(i).col_id_);
+    const_cast<ObColumnSchemaV2*>(col)->set_table_id(table_schema.get_table_id());
+  }
+}
+
 void TestSqlUtils::generate_index_schema(ObCreateIndexStmt &stmt)
 {
   ObTableSchema index_schema;
@@ -879,13 +1014,11 @@ void TestSqlUtils::generate_index_schema(ObCreateIndexStmt &stmt)
   index_schema.set_tablegroup_id(0);
   index_schema.set_index_status(INDEX_STATUS_AVAILABLE);
   _OB_LOG(INFO, "origin index_schema database id is %ld", index_schema.get_database_id() );
-  //combine the database_id and tenant_id
-  uint64_t next_index_tid = get_next_table_id(index_schema.get_tenant_id());
-  index_schema.set_table_id(next_index_tid);
   index_schema.set_index_status(INDEX_STATUS_AVAILABLE);
   ASSERT_TRUE(NULL != data_table_schema);
   //database id is same as data_table schema
   index_schema.set_database_id(data_table_schema->get_database_id());
+  mock_table_schema_ids(index_schema);
   OK(add_table_schema(index_schema));
   if (data_table_schema != NULL){
     ObTableSchema table_schema;
@@ -925,15 +1058,15 @@ int TestSqlUtils::get_hidden_column_value(
 
 void TestSqlUtils::is_equal_content(const char* tmp_file, const char* result_file)
 {
-  std::ifstream if_test(tmp_file);
+  std::ifstream if_test(tmp_file, std::ios::binary);
   if_test.is_open();
   EXPECT_EQ(true, if_test.is_open());
-  std::istream_iterator<std::string> it_test(if_test);
-  std::ifstream if_expected(result_file);
+  std::ifstream if_expected(result_file, std::ios::binary);
   if_expected.is_open();
   EXPECT_EQ(true, if_expected.is_open());
-  std::istream_iterator<std::string> it_expected(if_expected);
-  bool is_equal = std::equal(it_test, std::istream_iterator<std::string>(), it_expected);
+  std::istreambuf_iterator<char> it_test(if_test);
+  std::istreambuf_iterator<char> it_expected(if_expected);
+  bool is_equal = std::equal(it_test, std::istreambuf_iterator<char>(), it_expected);
   _OB_LOG(INFO, "result file is %s, expect file is %s, is_equal:%d", tmp_file, result_file, is_equal);
   if (is_equal) {
     std::remove(tmp_file);
@@ -1049,4 +1182,12 @@ int TestSqlUtils::parse_json_array(json::Value &value, ObIArray<ObSEArray<ObObj,
   }
   return ret;
 }
+
+void TestSqlUtils::init_ls_service()
+{
+  int ret = OB_SUCCESS;
+  OK(location_service_.init(local_addr_, 8889));
+  GCTX.location_service_ = &location_service_;
+}
+
 }

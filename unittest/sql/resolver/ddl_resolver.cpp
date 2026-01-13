@@ -101,7 +101,6 @@ TEST_F(TestResolver, basic_test)
     //}
     std::string line;
     std::vector<SqlAndError> sql_vector;
-    bool is_print = false;
     int64_t expect_error = 0;
     int64_t use_time = 0;
     char *w;
@@ -133,7 +132,7 @@ TEST_F(TestResolver, basic_test)
     std::vector<SqlAndError>::iterator iter=sql_vector.begin();
     for (; iter != sql_vector.end(); iter++) {
       stmt = NULL;
-      do_load_sql(iter->sql.c_str(),stmt, is_print, TREE_FORMAT, iter->expect_error);
+      do_load_sql(iter->sql.c_str(),stmt, TREE_FORMAT, iter->expect_error);
     }
     gettimeofday(&end, NULL);
     use_time = (long int)(end.tv_sec - start.tv_sec) * 1000000 + (long int)(end.tv_usec - start.tv_usec);;

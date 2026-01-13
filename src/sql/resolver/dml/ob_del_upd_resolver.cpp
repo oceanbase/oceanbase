@@ -4748,7 +4748,7 @@ int ObDelUpdResolver::get_session_columns_for_oracle_temp_table(uint64_t ref_tab
     const share::schema::ObColumnSchemaV2 *column_schema = NULL;
     const share::schema::ObColumnSchemaV2 *column_schema2 = NULL;
     const ObTableSchema *table_schema = NULL;
-    common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> column_exprs;
+    common::ObSEArray<ObColumnRefRawExpr*, 8> column_exprs;
     TableItem *table_item = NULL;
     if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
       ret = OB_ERR_UNEXPECTED;

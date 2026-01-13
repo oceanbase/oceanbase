@@ -270,7 +270,7 @@ int ObInsertLogPlan::generate_osg_share_info(OSGShareInfo *&info)
       OB_UNLIKELY(!get_stmt()->is_insert_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_ISNULL(info = OB_NEWx(OSGShareInfo, (&get_allocator())))) {
+  } else if (OB_ISNULL(info = OB_NEWx(OSGShareInfo, (&get_allocator()), get_allocator()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory");
   } else {
@@ -1319,11 +1319,11 @@ int ObInsertLogPlan::copy_index_dml_infos_for_replace(ObIArray<IndexDMLInfo*> &s
     if (OB_ISNULL(src_dml_infos.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null",K(ret), K(i), K(src_dml_infos));
-    } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+    } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));
     } else {
-      index_dml_info = new (ptr) IndexDMLInfo();
+      index_dml_info = new (ptr) IndexDMLInfo(get_allocator());
       if (OB_FAIL(index_dml_info->assign_basic(*src_dml_infos.at(i)))) {
         LOG_WARN("failed to assign table dml info", K(ret));
       } else if (index_dml_info->is_primary_index_ &&
@@ -1380,10 +1380,10 @@ int ObInsertLogPlan::copy_index_dml_infos_for_insert_up(const ObInsertTableInfo&
       if (OB_ISNULL(src_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null",K(ret), K(i), KPC(table_dml_info), K(index_dml_infos));
-      } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+      } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
-      } else if (OB_FALSE_IT(index_dml_info = new (ptr) IndexDMLInfo())) {
+      } else if (OB_FALSE_IT(index_dml_info = new (ptr) IndexDMLInfo(get_allocator()))) {
       } else if (OB_FAIL(index_dml_info->assign_basic(*src_info))) {
         LOG_WARN("failed to assign table dml info", K(ret));
       } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
@@ -1427,7 +1427,7 @@ int ObInsertLogPlan::prepare_unique_constraint_infos(const ObDmlTableInfo& table
   ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
   const ObTableSchema *index_schema = NULL;
   ObSEArray<ObAuxTableMetaInfo, 16> index_infos;
-  ObUniqueConstraintInfo constraint_info;
+  ObUniqueConstraintInfo *constraint_info = NULL;
   if (OB_ISNULL(session_info) || OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(schema_guard), K(ret));
@@ -1439,15 +1439,19 @@ int ObInsertLogPlan::prepare_unique_constraint_infos(const ObDmlTableInfo& table
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(index_schema->get_simple_index_infos(index_infos))) {
     LOG_WARN("failed to get index index", K(ret));
+  } else if (OB_ISNULL(constraint_info = OB_NEWx(ObUniqueConstraintInfo,
+                                                 (&get_allocator()), get_allocator()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory");
   } else if (OB_FAIL(prepare_unique_constraint_info(*index_schema,
                                                     table_info.table_id_,
-                                                    constraint_info))) {
+                                                    *constraint_info))) {
     LOG_WARN("failed to resolver unique constraint info", K(ret));
   } else if (OB_FAIL(uk_constraint_infos_.push_back(constraint_info))) {
     LOG_WARN("failed to push back constraint info", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); i++) {
-      constraint_info.reset();
+      constraint_info = NULL;
       if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
                                                  index_infos.at(i).table_id_, index_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
@@ -1455,9 +1459,13 @@ int ObInsertLogPlan::prepare_unique_constraint_infos(const ObDmlTableInfo& table
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (!index_schema->is_final_invalid_index() && index_schema->is_unique_index()) {
-        if (OB_FAIL(prepare_unique_constraint_info(*index_schema,
-                                                   table_info.table_id_,
-                                                   constraint_info))) {
+        if (OB_ISNULL(constraint_info = OB_NEWx(ObUniqueConstraintInfo,
+                                               (&get_allocator()), get_allocator()))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory");
+        } else if (OB_FAIL(prepare_unique_constraint_info(*index_schema,
+                                                          table_info.table_id_,
+                                                          *constraint_info))) {
           LOG_WARN("failed to resolver unique constraint info", K(ret));
         } else if (OB_FAIL(uk_constraint_infos_.push_back(constraint_info))) {
           LOG_WARN("failed to push back constraint info", K(ret));
@@ -1575,11 +1583,11 @@ int ObInsertLogPlan::prepare_table_dml_info_for_ddl(const ObInsertTableInfo& tab
       OB_ISNULL(table_item = stmt->get_table_item_by_id(table_info.table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null",K(ret), K(stmt), K(schema_guard), K(session_info), K(table_item));
-  } else if (OB_ISNULL(ptr = optimizer_context_.get_allocator().alloc(sizeof(IndexDMLInfo)))) {
+  } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    index_dml_info = new (ptr) IndexDMLInfo();
+    index_dml_info = new (ptr) IndexDMLInfo(get_allocator());
     if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
                                                table_item->ddl_table_id_, index_schema))) {
       LOG_WARN("failed to get table schema", K(ret));

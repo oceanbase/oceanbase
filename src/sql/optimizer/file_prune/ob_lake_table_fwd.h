@@ -14,6 +14,7 @@
 #define _OCEANBASE_SQL_OPTIMIZER_OB_LAKE_TABLE_FWD_H
 
 #include "common/object/ob_object.h"
+#include "sql/resolver/ob_sql_array.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
 
 namespace oceanbase
@@ -97,10 +98,10 @@ public:
 struct ObOptIcebergFile : public ObIOptLakeTableFile
 {
 public:
-  ObOptIcebergFile()
+  ObOptIcebergFile(common::ObIAllocator &allocator)
   : ObIOptLakeTableFile(LakeFileType::ICEBERG),
     file_url_(), file_size_(0), modification_time_(0),
-    file_format_(iceberg::DataFileFormat::INVALID), delete_files_(), record_count_(0)
+    file_format_(iceberg::DataFileFormat::INVALID), delete_files_(allocator), record_count_(0)
   {}
   virtual int assign(const ObIOptLakeTableFile &other) override;
   virtual void reset() override;
@@ -110,7 +111,7 @@ public:
   int64_t file_size_;
   int64_t modification_time_;
   iceberg::DataFileFormat file_format_;
-  common::ObSEArray<const ObLakeDeleteFile *, 1, common::ModulePageAllocator, true> delete_files_;
+  ObSqlArray<const ObLakeDeleteFile *> delete_files_;
   int64_t record_count_;
 };
 
