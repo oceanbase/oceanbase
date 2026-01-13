@@ -856,14 +856,18 @@ public:
   const ObTabletID& get_lob_meta_tablet_id() const { return lob_meta_tablet_id_; }
   ObTabletID& get_lob_piece_tablet_id() { return lob_piece_tablet_id_; }
   const ObTabletID& get_lob_piece_tablet_id() const { return lob_piece_tablet_id_; }
+  ObTabletID& get_snap_tablet_id() { return snap_tablet_id_; }
+  const ObTabletID& get_snap_tablet_id() const { return snap_tablet_id_; }
   ObIArray<ObString>& get_vals() { return vals_; }
   void reset();
-  TO_STRING_KV(K(ls_id_), K(data_tablet_id_), K(lob_meta_tablet_id_), K(lob_piece_tablet_id_), K(vals_));
+  TO_STRING_KV(K(ls_id_), K(data_tablet_id_), K(lob_meta_tablet_id_),
+      K(lob_piece_tablet_id_), K_(snap_tablet_id), K(vals_));
 public:
   ObLSID ls_id_;
   ObTabletID data_tablet_id_;
   ObTabletID lob_meta_tablet_id_;
   ObTabletID lob_piece_tablet_id_;
+  ObTabletID snap_tablet_id_;
   ObArray<ObString> vals_;
 };
 

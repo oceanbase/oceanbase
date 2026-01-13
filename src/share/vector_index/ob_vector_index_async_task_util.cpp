@@ -1632,6 +1632,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   ObVecIdxSnapshotDataWriteCtx ctx;
   ctx.ls_id_ = ls_id_;
   ctx.data_tablet_id_ = adaptor.get_data_tablet_id();
+  ctx.snap_tablet_id_ = adaptor.get_snap_tablet_id();
 
  // get lob tablet id
   HEAP_VARS_3((ObLSHandle, ls_handle), (ObTabletHandle, data_tablet_handle), (ObTabletBindingMdsUserData, ddl_data))

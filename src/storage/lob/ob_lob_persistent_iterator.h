@@ -48,6 +48,7 @@ protected:
 protected:
   int build_rowkey_range(ObLobAccessParam &param, ObRowkey &min_row_key, ObRowkey &max_row_key, ObNewRange &range);
   int build_rowkey_range(ObLobAccessParam &param, ObObj key_objs[4], ObNewRange &range);
+  int build_full_table_range(ObLobAccessParam &param, ObObj key_objs[4], ObNewRange &range);
   int build_rowkey(ObLobAccessParam &param, ObObj key_objs[4], ObString &seq_id, ObNewRange &range);
   int build_rowkey(ObLobAccessParam &param, ObObj key_objs[4], ObNewRange &range);
   int build_range(ObLobAccessParam &param, ObObj key_objs[4], ObNewRange &range);
