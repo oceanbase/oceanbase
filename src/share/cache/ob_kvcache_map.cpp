@@ -459,7 +459,7 @@ int ObKVCacheMap::erase_all()
           Node *&bucket_ptr = get_bucket_node(i);
           iter = bucket_ptr;
           bucket_ptr = NULL;
-          while (NULL != iter) {
+          while (NULL != iter && OB_SUCC(ret)) {
             if (OB_FAIL(hazptr_holder.protect(protect_success, iter->mb_handle_, iter->seq_num_))) {
               COMMON_LOG(WARN, "protect failed", KP(iter->mb_handle_));
             } else if (protect_success) {
@@ -564,7 +564,7 @@ int ObKVCacheMap::erase_tenant(const uint64_t tenant_id, const bool force_erase)
           Node *&bucket_ptr = get_bucket_node(i);
           prev = NULL;
           iter = bucket_ptr;
-          while (NULL != iter) {
+          while (NULL != iter && OB_SUCC(ret)) {
             if (tenant_id == iter->inst_->tenant_id_) {
               if (OB_FAIL(hazptr_holder.protect(protect_success, iter->mb_handle_, iter->seq_num_))) {
                 COMMON_LOG(WARN, "protect failed", KP(iter->mb_handle_));
@@ -681,7 +681,7 @@ int ObKVCacheMap::clean_garbage_node(int64_t &start_pos, const int64_t clean_num
           Node *&bucket_ptr = get_bucket_node(i);
           prev = NULL;
           iter = bucket_ptr;
-          while (NULL != iter) {
+          while (NULL != iter && OB_SUCC(ret)) {
             if (OB_FAIL(hazptr_holder.protect(protect_success, iter->mb_handle_, iter->seq_num_))) {
               COMMON_LOG(WARN, "protect failed", KP(iter->mb_handle_));
             } else if (protect_success) {
