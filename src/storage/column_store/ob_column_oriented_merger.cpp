@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 
 #include "ob_column_oriented_merger.h"
+#include "storage/compaction/ob_compaction_schedule_util.h"
 
 namespace oceanbase
 {
@@ -466,7 +467,7 @@ int ObCOMerger::merge_partition(ObBasicTabletMergeCtx &ctx, const int64_t idx)
   int ret = OB_SUCCESS;
   SET_MEM_CTX(ctx.mem_ctx_);
   ObMergeLog merge_log;
-
+  DEBUG_SYNC(CONSUME_ALL_MERGE_LOG_PROCESS);
   if (OB_FAIL(prepare_merge(ctx, idx))) {
     STORAGE_LOG(WARN, "Failed to prepare merge partition", K(ret), K(ctx), K(idx));
   } else {
@@ -476,7 +477,13 @@ int ObCOMerger::merge_partition(ObBasicTabletMergeCtx &ctx, const int64_t idx)
     bool need_move_row_iter = false;
     ObICompactionFilter::ObFilterRet filter_ret = ObICompactionFilter::FILTER_RET_MAX;
     while (OB_SUCC(ret) && !merge_helper_->is_iter_end()) {
-      if (OB_FAIL(share::dag_yield())) {
+      if (OB_UNLIKELY(!MERGE_SCHEDULER_PTR->could_major_merge_start())) {
+        ret = OB_CANCELED;
+  #ifdef ERRSIM
+        SERVER_EVENT_SYNC_ADD("merge_errsim", "cancel_merge", "reason", "co_merge_paused");
+  #endif
+        LOG_WARN("major merge has been paused, cancel co merge", K(ret));
+      } else if (OB_FAIL(share::dag_yield())) {
         STORAGE_LOG(WARN, "fail to yield co merge dag", KR(ret));
       }
 #ifdef ERRSIM
