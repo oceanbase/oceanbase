@@ -96,6 +96,17 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
             K(candidates_.candidate_plans_.count()));
       }
     }
+    if (OB_SUCC(ret)) {
+      ObSEArray<ObRawExpr *, 4> view_check_exprs;
+      if (OB_FAIL(update_stmt->get_view_check_exprs(view_check_exprs))) {
+        LOG_WARN("get view check exprs", K(ret));
+      } else if (OB_FAIL(candi_allocate_subplan_filter(view_check_exprs))) {
+        LOG_WARN("failed to allocate subplan filter for view check exprs", K(ret));
+      } else if (!view_check_exprs.empty()) {
+        LOG_TRACE("succeed to allocate subplan filter for where statement",
+            K(candidates_.candidate_plans_.count()), K(view_check_exprs.count()));
+      }
+    }
     // step. allocate 'count' for rownum if needed, Oracle mode only
     if(OB_SUCC(ret)) {
       bool has_rownum = false;

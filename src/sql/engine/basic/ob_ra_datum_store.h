@@ -391,14 +391,14 @@ public:
   inline int64_t get_row_cnt() const { return row_cnt_; }
   inline int64_t get_mem_hold() const { return mem_hold_; }
   inline int64_t get_file_size() const { return file_size_; }
-
+  inline int64_t get_inmemory_rows() const { return inmemory_rows_; }
   void set_mem_hold(int64_t hold);
   void inc_mem_hold(int64_t hold);
   void set_allocator(common::ObIAllocator &alloc) { allocator_ = &alloc; }
   void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
 
   TO_STRING_KV(K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit), K_(mem_hold),
-      K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size), K(blk_mem_list_.get_size()));
+      K_(save_row_cnt), K_(row_cnt), K_(fd), K_(file_size), K_(inmemory_rows), K(blk_mem_list_.get_size()));
 
 private:
   inline static int64_t block_magic(const void *mem)
@@ -456,6 +456,7 @@ private:
   uint32_t row_extend_size_;
   ObSqlMemoryCallback *mem_stat_;
   ObIOEventObserver *io_observer_;
+  int64_t inmemory_rows_;  //only write rows in memory
   DISALLOW_COPY_AND_ASSIGN(ObRADatumStore);
 };
 

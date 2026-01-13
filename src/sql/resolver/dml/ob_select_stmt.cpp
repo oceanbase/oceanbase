@@ -435,10 +435,10 @@ int ObSelectStmt::create_select_list_for_set_stmt(ObRawExprFactory &expr_factory
   return ret;
 }
 
-int ObSelectStmt::update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other)
+int ObSelectStmt::update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other, bool need_update_qb_name)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDMLStmt::update_stmt_table_id(allocator, other))) {
+  if (OB_FAIL(ObDMLStmt::update_stmt_table_id(allocator, other, need_update_qb_name))) {
     LOG_WARN("failed to update stmt table id", K(ret));
   } else if (OB_UNLIKELY(set_query_.count() != other.set_query_.count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -452,7 +452,7 @@ int ObSelectStmt::update_stmt_table_id(ObIAllocator *allocator, const ObSelectSt
           || OB_ISNULL(child_query = set_query_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null statement", K(ret), K(child_query), K(other_child_query));
-      } else if (OB_FAIL(SMART_CALL(child_query->update_stmt_table_id(allocator, *other_child_query)))) {
+      } else if (OB_FAIL(SMART_CALL(child_query->update_stmt_table_id(allocator, *other_child_query, need_update_qb_name)))) {
         LOG_WARN("failed to update stmt table id", K(ret));
       } else { /* do nothing*/ }
     }
