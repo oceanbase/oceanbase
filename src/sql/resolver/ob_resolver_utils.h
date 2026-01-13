@@ -996,6 +996,9 @@ public:
                                         const ObTableSchema &table_schema,
                                         int64_t col_cnt,
                                         ObIArray<ObTriggerRowRefType> &ref_types);
+  static int set_flashback_info_for_view(ObDMLStmt *stmt,
+                                         ObRawExpr* const flashback_query_expr,
+                                         const TableItem::FlashBackQueryType flashback_query_type);
 private:
   static int try_convert_to_unsiged(const ObRawExprResType &restype,
                                     ObRawExpr& src_expr,

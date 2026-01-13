@@ -76,6 +76,9 @@ public:
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
+  static inline bool is_mv_rewrite_supported_table(const TableItem &table)
+  {return table.is_basic_table()
+          && TableItem::NOT_USING == table.flashback_query_type_;}
 
 protected:
 

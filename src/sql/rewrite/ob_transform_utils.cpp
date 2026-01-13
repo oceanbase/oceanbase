@@ -14747,10 +14747,18 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
       LOG_WARN("fail to get real time mv expand view", K(ret));
     } else if (OB_FAIL(generate_view_stmt_from_query_string(expand_view, ctx, view_stmt))) {
       LOG_WARN("fail to genearte real time mview stmt", K(ret), K(expand_view));
+    } else if (OB_ISNULL(view_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("generate unexpected null view stmt", K(ret));
     } else if (OB_FAIL(ctx->temp_table_ignore_stmts_.push_back(view_stmt))) {
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(set_expand_mview_flag(view_stmt))) {
       LOG_WARN("fail to set expand mview flag", K(ret));
+    } else if (TableItem::NOT_USING != rt_mv_table->flashback_query_type_
+               && OB_FAIL(ObResolverUtils::set_flashback_info_for_view(view_stmt,
+                                                                       rt_mv_table->flashback_query_expr_,
+                                                                       rt_mv_table->flashback_query_type_))) {
+      LOG_WARN("fail to set flashback info for expanded mview", K(ret));
     } else if (is_major_refresh_mview
                && OB_FAIL(ObMajorRefreshMJVPrinter::set_real_time_table_scan_flag_for_mr_mv(*view_stmt))) {
       LOG_WARN("fail to set table scan flag for major refresh mview", K(ret));

@@ -11625,6 +11625,58 @@ int ObResolverUtils::collect_trigger_func_ref_column(ObPLFunction *func,
   return ret;
 }
 
+// According to Oracle's settings, for subqueries or views, if a table already
+// has a related flashback property, it will retain its original value.
+// If there is no related flashback property, it will be set to the flashback
+// property specified by the outer view or subquery.
+// For example:
+// select * from ((select * from t1 as of timestamp time1, t2) as of timestamp time2);
+// In this case, table t1 keeps its own flashback timestamp time1, while table t2
+// will be set to the outer flashback timestamp time2.
+int ObResolverUtils::set_flashback_info_for_view(ObDMLStmt *stmt,
+                                                 ObRawExpr* const flashback_query_expr,
+                                                 const TableItem::FlashBackQueryType flashback_query_type)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  bool is_stack_overflow = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(flashback_query_expr)
+      || OB_UNLIKELY(TableItem::NOT_USING == flashback_query_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected input", K(ret), K(stmt), K(flashback_query_expr), K(flashback_query_type));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("check stack overflow failed", K(ret));
+  } else if (OB_UNLIKELY(is_stack_overflow)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("stack is overflow", K(ret));
+  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  } else {
+    // 1. First, set the flashback property for the tables in the current level statement
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
+      TableItem *cur_table = stmt->get_table_item(i);
+      if (OB_ISNULL(cur_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(cur_table), K(i), KPC(stmt));
+      } else if (TableItem::NOT_USING != cur_table->flashback_query_type_) {
+        // do nothing
+      } else if (cur_table->is_basic_table()) {
+        cur_table->flashback_query_expr_ = flashback_query_expr;
+        cur_table->flashback_query_type_ = flashback_query_type;
+      } else { /* do nothing */ }
+    }
+    // 2. Then, recursively set the flashback property for the tables in the child statements
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(set_flashback_info_for_view(child_stmts.at(i),
+                                                         flashback_query_expr,
+                                                         flashback_query_type)))) {
+        LOG_WARN("failed to set flashback info for view", K(ret), K(i), KPC(stmt));
+      } else { /* do nothing */ }
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::calc_returning_param_count(const ParseNode &parse_tree,
                                                 int64_t &returning_param_count)
 {

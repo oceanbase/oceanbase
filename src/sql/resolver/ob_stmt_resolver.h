@@ -121,6 +121,8 @@ public:
   }
   inline uint64_t generate_cte_table_id() { return params_.new_cte_tid_++;}
   inline uint64_t generate_cte_column_base_id() { return common::OB_APP_MIN_COLUMN_ID;}
+  // is_from_existing_mview: the definition of an already created materialized view, resolving it for MV rewrite or real-time MV.
+  inline bool is_from_existing_mview() const { return params_.is_mview_definition_sql_ && !params_.is_from_create_view_; }
   template<class T>
   T *create_stmt()
   {

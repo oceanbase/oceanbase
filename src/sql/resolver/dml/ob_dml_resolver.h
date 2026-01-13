@@ -438,7 +438,6 @@ protected:
                                    ObSQLSessionInfo *session_info,
                                    int64_t &timestamp_ms);
   int check_flashback_expr_validity(ObRawExpr *expr, bool &has_column);
-  int set_flashback_info_for_view(ObSelectStmt *select_stmt, TableItem *table_item);
   int resolve_table_drop_oracle_temp_table(TableItem *&table_item);
   int resolve_base_or_alias_table_item_normal(const uint64_t tenant_id,
                                               const uint64_t catalog_id,

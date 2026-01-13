@@ -2771,7 +2771,9 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       } else if ((current_scope_ == T_UPDATE_SCOPE || current_scope_ == T_INSERT_SCOPE) && !session_info_->get_ddl_info().is_ddl()) {
         ret = OB_ERR_BAD_FIELD_ERROR;
         LOG_WARN("not allowed update insert hidden pk increment column", K(ret));
-      } else if (stmt->get_stmt_type() == stmt::T_SELECT && (current_scope_ == T_FIELD_LIST_SCOPE || current_scope_ == T_WHERE_SCOPE) && !session_info_->is_inner()) {
+      } else if (stmt->get_stmt_type() == stmt::T_SELECT
+                 && (current_scope_ == T_FIELD_LIST_SCOPE || current_scope_ == T_WHERE_SCOPE)
+                 && !(session_info_->is_inner() || is_from_existing_mview())) {
         // 专为排序键表的隐式主键列 __pk_increment 提供支持，因为他是生成列，第一遍解析步伐顺利拦截。
         // 精准定位用户执行的SELECT __pk_increment操作
         // 只有当同时满足以下条件时才进行检查：
@@ -2807,7 +2809,8 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
         //do nothing include is false
       } else if (ObResolverUtils::is_restore_user(*session_info_)
                  || ObResolverUtils::is_drc_user(*session_info_)
-                 || session_info_->is_inner()) {
+                 || session_info_->is_inner()
+                 || is_from_existing_mview()) {
         include_hidden = true;
       } else {
         include_hidden = true;
@@ -3856,7 +3859,9 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
           LOG_WARN("failed to resolve flashback query node", K(ret));
         //针对view需要递归的设置view对应查询的table的flashback query属性
         } else if (time_node->type_ != T_TABLE_FLASHBACK_PROCTIME && table_item->is_view_table_) {
-          if (OB_FAIL(set_flashback_info_for_view(table_item->ref_query_, table_item))) {
+          if (OB_FAIL(ObResolverUtils::set_flashback_info_for_view(table_item->ref_query_,
+                                                                   table_item->flashback_query_expr_,
+                                                                   table_item->flashback_query_type_))) {
             LOG_WARN("failed to set flashback info for view", K(ret));
           } else {
             //针对view的flashback属性经过set_flashback_info_for_view后,已经没用,为了不影响后续判断
@@ -4173,51 +4178,6 @@ int ObDMLResolver::parse_timestamp_string_to_ms(const ObString &timestamp_str,
     }
   }
 
-  return ret;
-}
-
-//针对subquery或者view按照oracle的设置原则，在表已经有相关flashback属性时保持原有的，在没有相关flashback属性时，
-//设置为外层给view或者subquery的flashback属性，比如:
-// select * from ((select * from t1 as of timestamp time1, t2) as of timestamp time1;
-// 这个时候表t1仍保持原有的flashback的时间戳time1，而表t2则设置为外层的flashback时间戳time2
-int ObDMLResolver::set_flashback_info_for_view(ObSelectStmt *select_stmt, TableItem *table_item)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObSelectStmt*, 4> child_stmts;
-  bool is_stack_overflow = false;
-  if (OB_ISNULL(select_stmt) ||OB_ISNULL(table_item) || OB_ISNULL(table_item->flashback_query_expr_)
-      || OB_UNLIKELY(table_item->flashback_query_type_ == TableItem::NOT_USING)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(select_stmt), K(table_item));
-  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("check stack overflow failed", K(ret));
-  } else if (OB_UNLIKELY(is_stack_overflow)) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("stack is overflow", K(ret));
-  } else if (OB_FAIL(select_stmt->get_child_stmts(child_stmts))) {
-    LOG_WARN("failed to get child stmts", K(ret));
-  } else {
-    //1.首先设置本层stmt table的flashback属性
-    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
-      TableItem *cur_table = select_stmt->get_table_item(i);
-      if (OB_ISNULL(cur_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(cur_table));
-      } else if (cur_table->flashback_query_expr_ != NULL &&
-                 cur_table->flashback_query_type_ != TableItem::NOT_USING) {
-        /*do nothing */
-      } else if (cur_table->is_basic_table()) {
-        cur_table->flashback_query_expr_ = table_item->flashback_query_expr_;
-        cur_table->flashback_query_type_ = table_item->flashback_query_type_;
-      } else {/*do nothing*/}
-    }
-    //2.递归设置子查询的table flashback属性
-    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
-      if (OB_FAIL(SMART_CALL(set_flashback_info_for_view(child_stmts.at(i), table_item)))) {
-        LOG_WARN("failed to set flashback info for view", K(ret));
-      } else {/*do nothing*/}
-    }
-  }
   return ret;
 }
 
@@ -6084,7 +6044,9 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
           //针对子查询的flashback属性需要递归的设置
           } else if (time_node->type_ == T_TABLE_FLASHBACK_PROCTIME) {
             // do nothing
-          } else if (OB_FAIL(set_flashback_info_for_view(table_item->ref_query_, table_item))) {
+          } else if (OB_FAIL(ObResolverUtils::set_flashback_info_for_view(table_item->ref_query_,
+                                                                          table_item->flashback_query_expr_,
+                                                                          table_item->flashback_query_type_))) {
             LOG_WARN("failed to set flashback info for view", K(ret));
           } else {
             //针对generated table的flashback属性经过set_flashback_info_for_view后,已经没用,为了不影响后续判断
