@@ -2079,7 +2079,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   } else if (OB_FAIL(fetch_tablet_sstable_array_(
       tablet_id, tablet_ref->tablet_handle_, *table_store_wrapper.get_member(), backup_data_type, is_major_compaction_mview_dep_tablet, mview_dep_scn, sstable_array))) {
     LOG_WARN("failed to fetch tablet sstable array", K(ret), K(tablet_id), KPC(tablet_ref), K(backup_data_type));
-  } else if (OB_FAIL(add_prepare_tablet_item_(tablet_id))) {
+  } else if (OB_FAIL(add_prepare_tablet_item_(tablet_id, total_count))) {
     LOG_WARN("failed to prepare tablet item", K(ret), K(tablet_id));
   } else {
     ObITable::TableKey ss_ddl_table_key;
@@ -2102,15 +2102,13 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
             ss_ddl_table_key = table_key;
           }
         } else {
-          if (OB_FAIL(fetch_all_logic_macro_block_id_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable_ptr, count))) {
+          if (OB_FAIL(fetch_all_logic_macro_block_id_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable_ptr, total_count))) {
             LOG_WARN("failed to fetch all logic macro block id", K(ret), K(tablet_id), KPC(tablet_ref), K(table_key));
-          } else {
-            total_count += count;
           }
         }
       }
     }
-    if (FAILEDx(add_tablet_item_(tablet_id, has_ss_ddl, ss_ddl_table_key))) {
+    if (FAILEDx(add_tablet_item_(tablet_id, has_ss_ddl, ss_ddl_table_key, total_count))) {
       LOG_WARN("failed to add tablet item if need", K(ret), K(tablet_id));
     }
     if (OB_SUCC(ret)) {
@@ -2460,7 +2458,6 @@ int ObBackupTabletProvider::fetch_all_logic_macro_block_id_(const common::ObTabl
     const blocksstable::ObSSTable &sstable, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
-  total_count = 0;
   ObITabletLogicMacroIdReader *macro_id_reader = NULL;
   ObArray<ObBackupMacroBlockId> id_array;
   if (!tablet_id.is_valid()) {
@@ -2483,11 +2480,9 @@ int ObBackupTabletProvider::fetch_all_logic_macro_block_id_(const common::ObTabl
       }
       if (OB_SUCC(ret)) {
         int64_t added_count = 0;
-        if (OB_FAIL(add_macro_block_id_item_list_(tablet_id, table_key, id_array, added_count))) {
+        if (OB_FAIL(add_macro_block_id_item_list_(tablet_id, table_key, id_array, added_count, total_count))) {
           LOG_WARN("failed to add macro block id list", K(ret), K(tablet_id), K(table_key), K(id_array));
-        } else if (id_array.count() > 0) {
-          total_count += added_count;
-        } else {
+        } else if (id_array.count() == 0) {
           break;
         }
       }
@@ -2530,11 +2525,10 @@ int ObBackupTabletProvider::fetch_ddl_macro_id_in_ss_mode_(const common::ObTable
         } else if (!item.is_valid()) {
           ret = OB_INVALID_DATA;
           LOG_WARN("backup item is not valid", K(ret), K(item));
-        } else if (OB_FAIL(push_item_to_queue_(item))) {
+        } else if (OB_FAIL(push_item_to_queue_(item, total_count))) {
           LOG_WARN("failed to push item to queue", K(ret), K(item));
         }  else {
           local_count++;
-          total_count++;
         }
       }
     }
@@ -2546,7 +2540,7 @@ int ObBackupTabletProvider::fetch_ddl_macro_id_in_ss_mode_(const common::ObTable
 }
 
 int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTabletID &tablet_id,
-    const ObITable::TableKey &table_key, const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count)
+    const ObITable::TableKey &table_key, const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
   added_count = 0;
@@ -2563,7 +2557,7 @@ int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTablet
     } else if (!item.is_valid()) {
       ret = OB_INVALID_DATA;
       LOG_WARN("backup item is not valid", K(ret), K(item));
-    } else if (OB_FAIL(push_item_to_queue_(item))) {
+    } else if (OB_FAIL(push_item_to_queue_(item, total_count))) {
       LOG_WARN("failed to push item to queue", K(ret), K(item));
     } else {
       added_count += 1;
@@ -2604,7 +2598,7 @@ bool ObBackupTabletProvider::is_same_type_(const storage::ObITable::TableKey &lh
   return bret;
 }
 
-int ObBackupTabletProvider::add_prepare_tablet_item_(const common::ObTabletID &tablet_id)
+int ObBackupTabletProvider::add_prepare_tablet_item_(const common::ObTabletID &tablet_id, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
@@ -2612,7 +2606,7 @@ int ObBackupTabletProvider::add_prepare_tablet_item_(const common::ObTabletID &t
   backup_data_type.set_user_data_backup();
   if (OB_FAIL(item.set_with_fake(PROVIDER_ITEM_TABLET_SSTABLE_INDEX_BUILDER_PREPARE, tablet_id, backup_data_type))) {
     LOG_WARN("failed to set item", K(ret), K(tablet_id), K(backup_data_type));
-  } else if (OB_FAIL(push_item_to_queue_(item))) {
+  } else if (OB_FAIL(push_item_to_queue_(item, total_count))) {
     LOG_WARN("failed to push item to queue", K(ret), K(item));
   } else {
     LOG_INFO("add tablet item", K(tablet_id), K(backup_data_type));
@@ -2621,7 +2615,7 @@ int ObBackupTabletProvider::add_prepare_tablet_item_(const common::ObTabletID &t
 }
 
 int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id,
-    const bool has_ss_ddl, const storage::ObITable::TableKey &table_key)
+    const bool has_ss_ddl, const storage::ObITable::TableKey &table_key, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
@@ -2633,7 +2627,7 @@ int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id
   } else if (!item.is_valid()) {
     ret = OB_INVALID_DATA;
     LOG_WARN("backup item is not valid", K(ret), K(item));
-  } else if (OB_FAIL(push_item_to_queue_(item))) {
+  } else if (OB_FAIL(push_item_to_queue_(item, total_count))) {
     LOG_WARN("failed to push item to queue", K(ret), K(item));
   } else {
     LOG_INFO("add tablet item", K(tablet_id), K(backup_data_type));
@@ -2746,7 +2740,7 @@ int ObBackupTabletProvider::get_tenant_meta_index_retry_id_(
   return ret;
 }
 
-int ObBackupTabletProvider::push_item_to_queue_(const ObBackupProviderItem &item)
+int ObBackupTabletProvider::push_item_to_queue_(const ObBackupProviderItem &item, int64_t &total_count)
 {
   int ret = OB_SUCCESS;
   if (!item.is_valid()) {
@@ -2754,6 +2748,8 @@ int ObBackupTabletProvider::push_item_to_queue_(const ObBackupProviderItem &item
     LOG_WARN("get invalid arg", K(ret), K(item));
   } else if (OB_FAIL(item_queue_.put_item(item))) {
     LOG_WARN("failed to push back", K(ret));
+  } else {
+    total_count += 1;
   }
   return ret;
 }

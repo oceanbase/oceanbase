@@ -404,18 +404,18 @@ private:
       const storage::ObTabletHandle &tablet_handle, const ObITable::TableKey &table_key,
       const blocksstable::ObSSTable &sstable, int64_t &total_count);
   int add_macro_block_id_item_list_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
-      const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count);
+      const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count, int64_t &total_count);
   int get_backup_data_type_(const storage::ObITable::TableKey &table_key, share::ObBackupDataType &backup_data_type);
   bool is_same_type_(const storage::ObITable::TableKey &lhs, const storage::ObITable::TableKey &rhs);
-  int add_prepare_tablet_item_(const common::ObTabletID &tablet_id);
-  int add_tablet_item_(const common::ObTabletID &tablet_id, const bool has_ss_ddl, const storage::ObITable::TableKey &table_key);
+  int add_prepare_tablet_item_(const common::ObTabletID &tablet_id, int64_t &total_count);
+  int add_tablet_item_(const common::ObTabletID &tablet_id, const bool has_ss_ddl, const storage::ObITable::TableKey &table_key, int64_t &total_count);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
   int check_tablet_status_(const storage::ObTabletHandle &tablet_handle, bool &is_normal, bool &is_split_dst);
   int get_tablet_status_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObTabletStatus &status);
   int get_tenant_meta_index_turn_id_(int64_t &turn_id);
   int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type,
       const int64_t turn_id, int64_t &retry_id);
-  int push_item_to_queue_(const ObBackupProviderItem &item);
+  int push_item_to_queue_(const ObBackupProviderItem &item, int64_t &total_count);
   int pop_item_from_queue_(ObBackupProviderItem &item);
   void free_queue_item_();
 
