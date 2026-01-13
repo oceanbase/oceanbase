@@ -214,8 +214,14 @@ TEST_F(TestSSMicroCacheResize, test_get_micro_block_and_resize_larger)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_get_micro_block_and_resize_larger");
+  const uint64_t tenant_id = MTL_ID();
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  ASSERT_EQ(true, tenant_config.is_valid());
+  tenant_config->_ss_micro_cache_max_block_size = 2 * 1024 * 1024; // 2MB
+  micro_cache->micro_meta_mgr_.max_micro_blk_size_ = 2 * 1024 * 1024;
+
   const int64_t origin_data_blk_cnt = phy_blk_mgr.blk_cnt_info_.micro_data_blk_max_cnt();
   const int64_t total_macro_blk_cnt = origin_data_blk_cnt * 2;
   const int32_t block_size = phy_blk_mgr.block_size_;

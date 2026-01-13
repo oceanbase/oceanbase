@@ -70,7 +70,10 @@ public:
       OK(get_curr_simple_server().init_sql_proxy2());
       scp_tenant_created = true;
     }
-    storage::ObSSBasePrewarmer::OB_SS_PREWARM_CACHE_THRESHOLD = 0;
+    const uint64_t tenant_id = MTL_ID();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    ASSERT_TRUE(tenant_config.is_valid());
+    tenant_config->_ss_micro_cache_max_block_size = 0;
   }
 
   static void TearDownTestCase()

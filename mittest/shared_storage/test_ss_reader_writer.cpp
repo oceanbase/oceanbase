@@ -159,6 +159,7 @@ void TestSSReaderWriter::TearDownTestCase()
 
 void TestSSReaderWriter::SetUp()
 {
+  const uint64_t tenant_id = MTL_ID();
   // construct write info
   write_buf_[0] = '\0';
   const int64_t mid_offset = WRITE_IO_SIZE / 2;
@@ -169,7 +170,7 @@ void TestSSReaderWriter::SetUp()
   write_info_.offset_ = 0;
   write_info_.size_ = WRITE_IO_SIZE;
   write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-  write_info_.mtl_tenant_id_ = MTL_ID();
+  write_info_.mtl_tenant_id_ = tenant_id;
 
   // construct read info
   read_buf_[0] = '\0';
@@ -178,7 +179,15 @@ void TestSSReaderWriter::SetUp()
   read_info_.offset_ = 0;
   read_info_.size_ = WRITE_IO_SIZE;
   read_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-  read_info_.mtl_tenant_id_ = MTL_ID();
+  read_info_.mtl_tenant_id_ = tenant_id;
+
+  // set max_micro_block_size to 2MB
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  ASSERT_TRUE(tenant_config.is_valid());
+  tenant_config->_ss_micro_cache_max_block_size = 2 * 1024 * 1024; // 2MB
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ATOMIC_STORE(&micro_cache->micro_meta_mgr_.max_micro_blk_size_, 2 * 1024 * 1024);
 }
 
 void TestSSReaderWriter::TearDown()

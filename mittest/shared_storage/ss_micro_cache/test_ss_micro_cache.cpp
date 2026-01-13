@@ -239,6 +239,124 @@ TEST_F(TestSSMicroCache, test_add_block_with_small_mem_size)
   sleep(3);
 }
 
+TEST_F(TestSSMicroCache, test_large_micro_block_rejection)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_large_micro_block_rejection");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+
+  const int64_t max_size = micro_cache->get_max_micro_block_size();
+  ASSERT_GT(max_size, 0);
+  const int64_t initial_hit_reject_cnt = cache_stat.hit_stat().reject_add_cnt_;
+  const int64_t initial_prewarm_reject_cnt = cache_stat.prewarm_stat().reject_add_cnt_;
+  const int64_t initial_hit_new_add_cnt = cache_stat.hit_stat().new_add_cnt_;
+  const int64_t initial_prewarm_new_add_cnt = cache_stat.prewarm_stat().new_add_cnt_;
+
+  // ==================== Normal micro block can be added normally ====================
+  {
+    const int64_t normal_size = max_size / 2;
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(1);
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, 1/*offset*/, normal_size);
+    char data_buf[normal_size];
+    MEMSET(data_buf, 'N', normal_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(
+        micro_key, data_buf, normal_size, macro_id.second_id(),
+        ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    ASSERT_EQ(initial_hit_reject_cnt, cache_stat.hit_stat().reject_add_cnt_);
+    ASSERT_EQ(initial_hit_new_add_cnt + 1, cache_stat.hit_stat().new_add_cnt_);
+
+    ObSSMicroBlockMetaHandle micro_meta_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(
+        micro_key, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
+  }
+
+  // ==================== Normal micro block can be added normally (prewarm scenario) ====================
+  {
+    const int64_t normal_size = max_size / 2;
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(5);
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, 1/*offset*/, normal_size);
+    char data_buf[normal_size];
+    MEMSET(data_buf, 'P', normal_size);
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache_for_prewarm(
+        micro_key, data_buf, normal_size, macro_id.second_id(),
+        ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, 5, false));
+    ASSERT_EQ(initial_prewarm_reject_cnt, cache_stat.prewarm_stat().reject_add_cnt_);
+    ASSERT_EQ(initial_prewarm_new_add_cnt + 1, cache_stat.prewarm_stat().new_add_cnt_);
+
+    ObSSMicroBlockMetaHandle micro_meta_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(
+        micro_key, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
+  }
+
+  // ==================== Boundary value test ====================
+  {
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(2);
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, 1/*offset*/, max_size);
+    char data_buf[max_size];
+    MEMSET(data_buf, 'N', max_size);
+    const int64_t before_reject_cnt = cache_stat.hit_stat().reject_add_cnt_;
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(
+        micro_key, data_buf, max_size, macro_id.second_id(),
+        ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+
+    ASSERT_EQ(before_reject_cnt, cache_stat.hit_stat().reject_add_cnt_);
+    ObSSMicroBlockMetaHandle micro_meta_handle;
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(
+        micro_key, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
+  }
+
+  // ==================== Large micro block cannot be added (normal IO) ====================
+  {
+    const int64_t large_size = max_size + 1024;
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(3);
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, 1/*offset*/, large_size);
+    char data_buf[large_size];
+    MEMSET(data_buf, 'L', large_size);
+
+    const int64_t before_hit_reject = cache_stat.hit_stat().reject_add_cnt_;
+    const int64_t before_hit_new_add = cache_stat.hit_stat().new_add_cnt_;
+    ASSERT_EQ(OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE, micro_cache->add_micro_block_cache(
+        micro_key, data_buf, large_size, macro_id.second_id(),
+        ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    ASSERT_EQ(before_hit_reject + 1, cache_stat.hit_stat().reject_add_cnt_);
+    ASSERT_EQ(before_hit_new_add, cache_stat.hit_stat().new_add_cnt_);
+
+    ObSSMicroBlockMetaHandle micro_meta_handle;
+    ASSERT_EQ(OB_ENTRY_NOT_EXIST, micro_meta_mgr.get_micro_block_meta(
+        micro_key, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
+  }
+
+  // ==================== Large micro block cannot be added (prewarm scenario) ====================
+  {
+    const int64_t large_size = max_size + 1024;
+    const MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(4);
+    const ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, 1/*offset*/, large_size);
+    char data_buf[large_size];
+    MEMSET(data_buf, 'P', large_size);
+
+    const int64_t before_prewarm_reject = cache_stat.prewarm_stat().reject_add_cnt_;
+    const int64_t before_prewarm_new_add = cache_stat.prewarm_stat().new_add_cnt_;
+    // In prewarm scenario, large micro blocks will be rejected.
+    // But the return code will be changed to OB_SUCCESS to indicate it's normal state.
+    ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache_for_prewarm(
+        micro_key, data_buf, large_size, macro_id.second_id(),
+        ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, 5, false));
+    ASSERT_EQ(before_prewarm_reject + 1, cache_stat.prewarm_stat().reject_add_cnt_);
+    ASSERT_EQ(before_prewarm_new_add, cache_stat.prewarm_stat().new_add_cnt_);
+
+    ObSSMicroBlockMetaHandle micro_meta_handle;
+    ASSERT_EQ(OB_ENTRY_NOT_EXIST, micro_meta_mgr.get_micro_block_meta(
+        micro_key, micro_meta_handle, ObTabletID::INVALID_TABLET_ID, false));
+  }
+
+  ASSERT_GT(cache_stat.hit_stat().reject_add_cnt_, initial_hit_reject_cnt);
+  ASSERT_GT(cache_stat.prewarm_stat().reject_add_cnt_, initial_prewarm_reject_cnt);
+  LOG_INFO("TEST_CASE: finish test_large_micro_block_rejection");
+}
+
 TEST_F(TestSSMicroCache, test_get_micro_block)
 {
   int ret = OB_SUCCESS;
@@ -374,6 +492,11 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("TEST_CASE: start test_get_micro_block_cache");
+  // set max_micro_block_size to 2MB
+  const uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  ASSERT_EQ(true, tenant_config.is_valid());
+  tenant_config->_ss_micro_cache_max_block_size = 2 * 1024 * 1024;
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
   const int64_t total_data_blk_cnt = 5;
   const int32_t block_size = phy_blk_mgr.block_size_;
@@ -382,6 +505,7 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
 
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
+  micro_cache->micro_meta_mgr_.max_micro_blk_size_ = 2 * 1024 * 1024;
   ASSERT_LT(0, micro_block_info_arr.count());
   TestSSCommonUtil::MicroBlockInfo &cur_info = micro_block_info_arr.at(0);
   ObSSMicroBlockCacheKey cur_micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_,

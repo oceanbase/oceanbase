@@ -2522,6 +2522,12 @@ DEF_INT(_ss_micro_cache_size_max_percentage, OB_TENANT_PARAMETER, "5", "[1, 99]"
         "Range: [1, 99]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_ss_micro_cache_max_block_size, OB_TENANT_PARAMETER, "131072", "[1, 2097152]",
+        "The maximum size (in bytes) of a micro block that can be added to micro cache in shared storage mode. "
+        "Micro blocks larger than this threshold will trigger macro block prefetch instead. "
+        "Default: 131072 (128KB), Range: [1 (1Byte), 2097152 (2MB)]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_MODE_WITH_PARSER(_ss_local_cache_control, OB_TENANT_PARAMETER, "",
         common::ObSSLocalCacheControlParser,
         "switch for ss_local_cache in shared_storage mode",

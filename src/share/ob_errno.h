@@ -4095,6 +4095,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_DEVICE_NOT_MOUNTED__USER_ERROR_MSG "backup device may be not mounted, %s did not read any data written by %s"
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__USER_ERROR_MSG "backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
 #define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__USER_ERROR_MSG "ls archive max scn less than checkpoint scn"
+#define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__USER_ERROR_MSG "micro block is too large and rejected from micro cache"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8629,6 +8630,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9153, backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
 #define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9154, ls archive max scn less than checkpoint scn"
 #define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9154, ls archive max scn less than checkpoint scn"
+#define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9155, micro block is too large and rejected from micro cache"
+#define OB_SS_CACHE_MICRO_BLOCK_TOO_LARGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9155, micro block is too large and rejected from micro cache"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9642,7 +9645,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2517];
+extern int g_all_ob_errnos[2518];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
