@@ -2691,10 +2691,10 @@ int ObDMLService::check_nested_sql_legality(ObExecContext &ctx, common::ObTableI
   return ret;
 }
 
-int ObDMLService::create_anonymous_savepoint(ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint)
+int ObDMLService::create_anonymous_savepoint(ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint, int16_t branch_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(tx_desc, savepoint))) {
+  if (OB_FAIL(ObSqlTransControl::create_anonymous_savepoint(tx_desc, savepoint, branch_id))) {
     LOG_WARN("create savepoint failed", K(ret));
   }
   return ret;

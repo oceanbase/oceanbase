@@ -22,6 +22,8 @@
 #include "sql/engine/px/ob_px_coord_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
 #include "sql/engine/basic/ob_select_into_op.h"
+#include "sql/engine/dml/ob_table_lock_op.h"
+#include "sql/engine/dml/ob_table_insert_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -454,6 +456,26 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
     LOG_WARN("fail assign worker to dfos", K(ret), K(px_expected), K(px_minimal), K(px_admited));
   } else {
     inited_ = true;
+    const ObOpSpec *spec = &root_op_spec;
+    if (has_pdml_op_) {
+      while (NULL != spec) {
+        const ObPhyOperatorType op_type = spec->get_type();
+        if (op_type == PHY_INSERT_ON_DUP
+           || op_type == PHY_REPLACE
+           || (op_type == PHY_LOCK && static_cast<const ObTableLockSpec*>(spec)->is_multi_table_skip_locked_)
+           || (op_type == PHY_INSERT && static_cast<const ObTableInsertSpec*>(spec)->is_ignore_)) {
+          int16_t branch_id = 0;
+          if (OB_FAIL(ObSqlTransControl::alloc_branch_id(exec_ctx, 1, branch_id))) {
+            LOG_WARN("alloc branch id failed", K(ret));
+          } else {
+            exec_ctx.set_branch_id(branch_id);
+            LOG_TRACE("alloc branch id for upper success", K(branch_id), KPC(spec));
+          }
+          break;
+        }
+        spec = spec->get_parent();
+      }
+    }
   }
   return ret;
 }
@@ -464,7 +486,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
                        const ObOpSpec *phy_op,
                        ObDfo *&parent_dfo,
                        const ObDfoInterruptIdGen &dfo_int_gen,
-                       ObPxCoordInfo &px_coord_info) const
+                       ObPxCoordInfo &px_coord_info)
 {
   int ret = OB_SUCCESS;
   bool partition_random_affinitize = true;
@@ -533,6 +555,8 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
         }
       }
     }
+  } else if (phy_op->is_dml_operator() && FALSE_IT(has_pdml_op_ = true)) {
+    // do nothing.
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
     if (ObPXServerAddrUtil::check_build_dfo_with_dml(*phy_op)) {
@@ -542,7 +566,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     LOG_TRACE("set DFO need_branch_id", K(op_type));
     parent_dfo->set_need_branch_id_op(op_type == PHY_INSERT_ON_DUP
                                       || op_type == PHY_REPLACE
-                                      || op_type == PHY_LOCK);
+                                      || (op_type == PHY_LOCK && static_cast<const ObTableLockSpec*>(phy_op)->is_multi_table_skip_locked_));
   } else if (phy_op->get_type() == PHY_TEMP_TABLE_ACCESS && NULL != parent_dfo) {
     parent_dfo->set_temp_table_scan(true);
     const ObTempTableAccessOpSpec *access = static_cast<const ObTempTableAccessOpSpec*>(phy_op);

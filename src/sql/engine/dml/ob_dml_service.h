@@ -268,7 +268,7 @@ public:
   static int set_heap_table_hidden_pk(const ObInsCtDef &ins_ctdef,
                                       const common::ObTabletID &tablet_id,
                                       ObEvalCtx &eval_ctx);
-  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint);
+  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint, int16_t branch_id = 0);
   static int rollback_local_savepoint(transaction::ObTxDesc &tx_desc,
                                       const transaction::ObTxSEQ savepoint,
                                       int64_t expire_ts);
@@ -476,7 +476,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
     //这里后续要删掉，临时处理
     ObChunkDatumStore::StoredRow *store_row = nullptr;
     dsr.store_row_ = const_cast<ObDASWriteBuffer::DmlRow*>(dml_row);
-    if (OB_FAIL(ObDMLService::create_anonymous_savepoint(*tx_desc_, savepoint_no))) {
+    if (OB_FAIL(ObDMLService::create_anonymous_savepoint(*tx_desc_, savepoint_no, write_branch_id_))) {
       SQL_DAS_LOG(WARN, "create anonymous savepoint failed", K(ret));
     } else if (OB_FAIL(single_row_buffer.init(*das_allocator_, ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE, MTL_ID()))) {
       SQL_DAS_LOG(WARN, "init single row buffer failed", K(ret));

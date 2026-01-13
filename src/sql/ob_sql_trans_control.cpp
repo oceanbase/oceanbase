@@ -1753,7 +1753,7 @@ int ObSqlTransControl::create_anonymous_savepoint(ObExecContext &exec_ctx, ObTxS
   return ret;
 }
 
-int ObSqlTransControl::create_anonymous_savepoint(ObTxDesc &tx_desc, ObTxSEQ &savepoint)
+int ObSqlTransControl::create_anonymous_savepoint(ObTxDesc &tx_desc, ObTxSEQ &savepoint, int16_t branch_id)
 {
   int ret = OB_SUCCESS;
   ObTransService *txs = NULL;
@@ -1761,7 +1761,11 @@ int ObSqlTransControl::create_anonymous_savepoint(ObTxDesc &tx_desc, ObTxSEQ &sa
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get_tx_service", K(ret), K(tx_desc.get_tenant_id()), K(MTL_ID()));
   }
-  OZ (txs->create_in_txn_implicit_savepoint(tx_desc, savepoint));
+  if (branch_id == 0) {
+    OZ (txs->create_in_txn_implicit_savepoint(tx_desc, savepoint));
+  } else {
+    OZ (txs->create_branch_savepoint(tx_desc, branch_id, savepoint));
+  }
   return ret;
 }
 

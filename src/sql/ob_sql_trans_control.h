@@ -320,7 +320,7 @@ public:
    *   only support inner stmt savepoint, and can not been used to cross stmt rollback
    */
   static int create_anonymous_savepoint(ObExecContext &exec_ctx, transaction::ObTxSEQ &savepoint);
-  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint);
+  static int create_anonymous_savepoint(transaction::ObTxDesc &tx_desc, transaction::ObTxSEQ &savepoint, int16_t branch_id = 0);
   /*
    * rollback to savepoint
    *

@@ -718,6 +718,7 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
   } else if (OB_FAIL(das_factory.create_das_task_op(op_type, task_op))) {
     LOG_WARN("create das task op failed", K(ret), KPC(task_op));
   } else {
+
     task_op->set_trans_desc(session->get_tx_desc());
     task_op->set_snapshot(&get_exec_ctx().get_das_ctx().get_snapshot());
     task_op->set_write_branch_id(get_exec_ctx().get_das_ctx().get_write_branch_id());
@@ -731,6 +732,7 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
     if (OB_NOT_NULL(di)) {
       task_op->set_plan_line_id(di->get_ash_stat().plan_line_id_);
     }
+    LOG_TRACE("create das task op", K(task_id), K(op_type), K(get_exec_ctx().get_das_ctx().get_write_branch_id()), K(task_op), K(lbt()));
     if (is_do_gts_opt() && OB_FAIL(task_op->init_das_gts_opt_info(session->get_tx_isolation()))) {
       LOG_WARN("fail to init gts opt info", K(ret), K(session->get_tx_isolation()));
     } else if (OB_FAIL(add_aggregated_task(task_op, op_type))) {

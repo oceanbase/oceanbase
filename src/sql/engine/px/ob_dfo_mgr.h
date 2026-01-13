@@ -28,7 +28,7 @@ class ObDfoMgr
 public:
   explicit ObDfoMgr(common::ObIAllocator &allocator) :
       allocator_(allocator), inited_(false),
-      root_dfo_(NULL)
+      root_dfo_(NULL), has_pdml_op_(false)
   {}
   virtual ~ObDfoMgr() = default;
   void destroy();
@@ -61,7 +61,7 @@ private:
                const ObOpSpec *phy_op,
                ObDfo *&parent_dfo,
                const ObDfoInterruptIdGen &dfo_id_gen,
-               ObPxCoordInfo &px_coord_info) const;
+               ObPxCoordInfo &px_coord_info);
   int create_dfo(common::ObIAllocator &allocator,
                  const ObOpSpec *dfo_root_op,
                  ObDfo *&dfo) const;
@@ -71,6 +71,7 @@ protected:
   bool inited_;
   ObDfo *root_dfo_;
   common::ObSEArray<ObDfo *, 2> edges_;
+  bool has_pdml_op_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDfoMgr);
 };
