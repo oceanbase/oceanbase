@@ -551,8 +551,7 @@ int ObDirectLoadOriginTableScanner::reinit_open()
     blocksstable::ObDatumRowkey datum_row_key(datum_row_.storage_datums_,
                                               origin_table->get_meta().rowkey_column_num_);
 
-    if (OB_FAIL(
-          ObTableLoadUtils::deep_copy(datum_row_key, query_range.start_key_, tmp_allocator))) {
+    if (OB_FAIL(datum_row_key.deep_copy(query_range.start_key_, tmp_allocator))) {
       LOG_WARN("fail to deep copy datum row key", KR(ret));
     } else {
       query_range.set_left_open();
