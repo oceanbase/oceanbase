@@ -239,7 +239,6 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
   ObSEArray<ObString, 4> partition_column_names;
   partition_infos.set_block_allocator(block_allocator);
 
-  ObExprRegexpSessionVariables regexp_vars;
   ObString empty_patten;
   const ObTableSchema *table_schema = NULL;
   const share::ObILakeTableMetadata *metadata = NULL;
@@ -247,6 +246,10 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
   ObCachedCatalogMetaGetter catalog_meta_getter{*sql_schema_guard_->get_schema_guard(),
                                                 tmp_allocator};
   int64_t refresh_interval_sec = 0;
+
+  ObSEArray<int64_t, 4> tmp_part_id;
+  ObSEArray<ObString, 4> tmp_part_path;
+  ObSEArray<int64_t, 4> tmp_part_modify_ts;
 
   if (OB_FAIL(sql_schema_guard_->get_table_schema(loc_meta_.ref_table_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(loc_meta_.ref_table_id_));
@@ -285,8 +288,6 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
         }
       }
       ObNewRow ob_part_row;
-      ObArenaAllocator tmp_allocator("HivePartRow", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
-      const ObString &access_info = table_schema->get_external_file_location_access_info();
       if (OB_FAIL(ret)) {
         LOG_WARN("not expected error", K(ret));
       } else if (OB_FAIL(hive::ObHiveTableMetadata::calculate_part_val_from_string(*table_schema,
@@ -375,33 +376,28 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
             LOG_TRACE("add one partition to schema: ", K(partition));
           }
 
-          if (OB_FAIL(ret)) {
-          } else if (i % 10 == 0 && OB_FAIL(THIS_WORKER.check_status())) {
-            LOG_WARN("check status failed", KR(ret));
-          } else if (OB_FAIL(ObExternalTableUtils::collect_external_file_list_with_cache(
-                         table_schema->get_tenant_id(),
-                         partition_info->modify_ts_,
-                         partition_info->path_,
-                         access_info,
-                         empty_patten,
-                         regexp_vars,
-                         allocator_,
-                         refresh_interval_sec * 1000,
-                         filtered_files,
-                         part_index))) {
-            LOG_WARN("failed collect file list with cache",
-                     K(ret),
-                     K(partition_info->modify_ts_),
-                     K(partition_info->path_),
-                     K(access_info));
+          if (OB_SUCC(ret)) {
+            tmp_part_id.push_back(part_index);
+            tmp_part_path.push_back(partition_info->path_);
+            tmp_part_modify_ts.push_back(partition_info->modify_ts_);
           }
-          LOG_TRACE("get file list from cache: ",
-                    K(partition_info->modify_ts_),
-                    K(partition_info->path_),
-                    K(access_info),
-                    K(filtered_files));
         }
       }
+    }
+
+    // 批量获取分区下的文件列表
+    if (tmp_part_path.count() > 0) {
+      OZ(ObExternalTableUtils::collect_external_file_list_with_cache(
+          table_schema->get_tenant_id(),
+          tmp_part_path,
+          tmp_part_id,
+          tmp_part_modify_ts,
+          table_schema->get_external_file_location_access_info(),
+          empty_patten,
+          allocator_,
+          refresh_interval_sec * 1000,
+          filtered_files));
+      LOG_TRACE("get file list from cache: ", K(filtered_files));
     }
 
     if (OB_SUCC(ret) && is_partitioned_ && !selected_part_idxs.empty()) {

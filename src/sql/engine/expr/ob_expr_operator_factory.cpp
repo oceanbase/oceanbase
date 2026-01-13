@@ -522,6 +522,7 @@
 #include "sql/engine/expr/ob_expr_bucket.h"
 #include "sql/engine/expr/ob_expr_void.h"
 #include "sql/engine/expr/ob_expr_md5_concat_ws.h"
+#include "sql/engine/expr/ob_expr_collect_file_list.h"
 
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
@@ -1313,6 +1314,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprFormatProfile);
     REG_OP(ObExprBucket);
     REG_OP(ObExprVectorL2Squared);
+    REG_OP(ObExprCollectFileList);
     REG_OP(ObExprVoid);
   }();
 // 注册oracle系统函数
@@ -1665,6 +1667,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprLocalDynamicFilter);
   REG_OP_ORCL(ObExprFormatProfile);
   REG_OP_ORCL(ObExprCheckLocationAccess);
+  REG_OP_ORCL(ObExprCollectFileList);
   REG_OP_ORCL(ObExprEnhancedAesEncrypt);
 }
 

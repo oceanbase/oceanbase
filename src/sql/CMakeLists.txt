@@ -925,6 +925,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_format_profile.cpp
   engine/expr/ob_expr_bucket.cpp
   engine/expr/ob_expr_void.cpp
+  engine/expr/ob_expr_collect_file_list.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE

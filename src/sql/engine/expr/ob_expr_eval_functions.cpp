@@ -461,6 +461,7 @@
 #include "ob_expr_format_profile.h"
 #include "ob_expr_bucket.h"
 #include "ob_expr_void.h"
+#include "ob_expr_collect_file_list.h"
 #include "ob_expr_md5_concat_ws.h"
 
 namespace oceanbase
@@ -1458,7 +1459,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprMonthsAdd::calc_months_add,                          /* 885 */
   NULL, // ObExprParseDateTime::calc_parse_date_time                  /* 886 */
   NULL, // ObExprIsNan::eval_is_nan,                                  /* 887 */
-  NULL, // ObExprCollectFileList::collect_file_list                   /* 888 */
+  ObExprCollectFileList::collect_file_list,                           /* 888 */
   ObExprVoid::calc_void_expr,                                         /* 889 */
 };
 

@@ -1290,4 +1290,5 @@
 #define N_FORMAT_PROFILE                       "format_profile"
 #define N_BUCKET "bucket"
 #define N_MD5_CONCAT_WS "md5_concat_ws"
+#define N_COLLECT_FILE_LIST                 "collect_file_list"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_
