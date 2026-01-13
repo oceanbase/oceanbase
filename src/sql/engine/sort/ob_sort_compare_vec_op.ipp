@@ -309,6 +309,9 @@ int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::init(
     cmp_end_ = cmp_sort_collations_->count();
     cmp_obj_meta_ = cmp_sk_exprs->at(0)->obj_meta_;
     cs_ = ObCharset::get_charset(cmp_obj_meta_.get_collation_type());
+    end_with_space_ =
+      is_calc_with_end_space(cmp_obj_meta_.get_type(), cmp_obj_meta_.get_type(), lib::is_oracle_mode(),
+                             cmp_obj_meta_.get_collation_type(), cmp_obj_meta_.get_collation_type());
     const ObDatumMeta &datum_data = cmp_sk_exprs->at(0)->datum_meta_;
   }
   if (OB_SUCC(ret) && OB_FAIL(init_cmp_func(*cmp_sk_exprs))) {
@@ -459,7 +462,7 @@ int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::not_null
         reinterpret_cast<const char *>(l) + DATA_OFFSET);
     const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
         reinterpret_cast<const char *>(r) + DATA_OFFSET);
-    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, false);
+    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, end_with_space_);
     cmp = (cmp_ret > 0 ? is_ascending ? -1 : 1 : (cmp_ret < 0 ? is_ascending ? 1 : -1 : 0));
   } else {
     const unsigned char *l_data = reinterpret_cast<const unsigned char *>(
@@ -535,7 +538,7 @@ int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::not_null
   if (!is_basic_cmp) {
     const unsigned char *r_data = reinterpret_cast<const unsigned char *>(
       reinterpret_cast<const char *>(r) + DATA_OFFSET);
-    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, false);
+    int cmp_ret = cs_->coll->strnncollsp(cs_, l_data, l_len, r_data, r_len, end_with_space_);
     cmp = (cmp_ret > 0 ? is_ascending ? -1 : 1 : (cmp_ret < 0 ? is_ascending ? 1 : -1 : 0));
   } else {
     const unsigned char *r_data = reinterpret_cast<const unsigned char *>(

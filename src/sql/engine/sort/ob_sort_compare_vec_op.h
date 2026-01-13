@@ -192,6 +192,7 @@ private:
   static constexpr uint16_t FIXED_DATA_OFFSET = 9 + (is_topn_sort ? 8 : 0) + (has_addon ? 8 : 0);
   common::ObObjMeta cmp_obj_meta_;
   const ObCharsetInfo *cs_{nullptr};
+  bool end_with_space_{false};
   BasicCmpFunc basic_cmp_func_{nullptr};
   BasicNotNullCmpFunc basic_not_null_cmp_func_{nullptr};
   NullSafeRowCmpFunc str_cmp_func_{nullptr};
