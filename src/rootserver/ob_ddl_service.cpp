@@ -87,6 +87,7 @@
 #include "share/ob_mview_args.h"
 #include "storage/mview/ob_mview_refresh.h"
 #include "rootserver/mview/ob_mview_utils.h"
+#include "storage/ddl/ob_ddl_hidden_table_partition_utils.h"
 
 namespace oceanbase
 {
@@ -3805,7 +3806,6 @@ int ObDDLService::create_hidden_table_with_pk_changed(
                   const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
-  const bool bind_tablets = false;
   ObString index_name("");
   const bool is_drop_pk = ObIndexArg::DROP_PRIMARY_KEY == index_action_type;
   const bool is_add_or_alter_pk = (ObIndexArg::ADD_PRIMARY_KEY == index_action_type) || (ObIndexArg::ALTER_PRIMARY_KEY == index_action_type);
@@ -3888,7 +3888,7 @@ int ObDDLService::create_hidden_table_with_pk_changed(
                                               new_table_schema,
                                               alter_table_arg.alter_table_schema_,
                                               &alter_table_arg.sequence_ddl_arg_,
-                                              bind_tablets,
+                                              nullptr/*bind_table_schema*/,
                                               schema_guard,
                                               schema_guard,
                                               ddl_operator,
@@ -5538,7 +5538,6 @@ int ObDDLService::alter_column_group(obrpc::ObAlterTableArg &alter_table_arg,
                                      common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  bool bind_tablets = false;
   uint64_t compat_version = 0;
   if (alter_table_arg.alter_table_schema_.get_column_group_count() == 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -5752,7 +5751,6 @@ int ObDDLService::alter_table_partition_by(
     const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
-  const bool bind_tablets = false;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   OZ (gen_alter_partition_new_table_schema_offline(
       alter_table_arg, alter_table_schema, orig_table_schema, new_table_schema));
@@ -5763,7 +5761,7 @@ int ObDDLService::alter_table_partition_by(
                               new_table_schema,
                               alter_table_arg.alter_table_schema_,
                               &alter_table_arg.sequence_ddl_arg_,
-                              bind_tablets,
+                              nullptr/*bind_table_schema*/,
                               schema_guard,
                               schema_guard,
                               ddl_operator,
@@ -5870,7 +5868,6 @@ int ObDDLService::convert_to_character(
     const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
-  const bool bind_tablets = false;
   bool can_convert = false;
   const ObSQLMode sql_mode = alter_table_arg.alter_table_schema_.get_sql_mode();
   bool is_oracle_mode = false;
@@ -5925,7 +5922,7 @@ int ObDDLService::convert_to_character(
                                 new_table_schema,
                                 alter_table_arg.alter_table_schema_,
                                 &alter_table_arg.sequence_ddl_arg_,
-                                bind_tablets,
+                                nullptr/*bind_table_schema*/,
                                 schema_guard,
                                 schema_guard,
                                 ddl_operator,
@@ -16815,6 +16812,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
     } else if (OB_FAIL(delete_domain_index_columns_and_redistribute_schema(*orig_table_schema, new_table_schema))) {
       LOG_WARN("remove all domain index columns internally failed", KR(ret));
     } else {
+      const ObTableSchema *bind_table_schema = bind_tablets ? orig_table_schema : nullptr;
       ObDDLSQLTransaction trans(schema_service_);
       ObDDLTaskRecord task_record;
       int64_t task_id = 0;
@@ -16904,7 +16902,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                       new_table_schema,
                                                       alter_table_arg.alter_table_schema_,
                                                       &alter_table_arg.sequence_ddl_arg_,
-                                                      bind_tablets,
+                                                      bind_table_schema,
                                                       schema_guard,
                                                       schema_guard,
                                                       ddl_operator,
@@ -16932,7 +16930,6 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         }
       }
       if (OB_SUCC(ret) && alter_table_arg.alter_auto_partition_attr_) {
-        const bool bind_tablets = false;
         ObAlterAutoPartAttrOp alter_auto_part(*this);
         // In the alter table partition by range(xxx) size(xxx) (partitions...) case, 
         // it is necessary to modify attributes related to automatic partitioning here.
@@ -16946,7 +16943,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                     new_table_schema,
                                                     alter_table_arg.alter_table_schema_,
                                                     &alter_table_arg.sequence_ddl_arg_,
-                                                    bind_tablets,
+                                                    nullptr/*bind_table_schema*/,
                                                     schema_guard,
                                                     schema_guard,
                                                     ddl_operator,
@@ -17007,7 +17004,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                     new_table_schema,
                                                     alter_table_arg.alter_table_schema_,
                                                     &alter_table_arg.sequence_ddl_arg_,
-                                                    bind_tablets,
+                                                    bind_table_schema,
                                                     schema_guard,
                                                     schema_guard,
                                                     ddl_operator,
@@ -17025,7 +17022,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                     new_table_schema,
                                     alter_table_arg.alter_table_schema_,
                                     &alter_table_arg.sequence_ddl_arg_,
-                                    false/*bind_tablets*/,
+                                    nullptr/*bind_table_schema*/,
                                     schema_guard,
                                     schema_guard,
                                     ddl_operator,
@@ -17387,7 +17384,6 @@ int ObDDLService::create_hidden_table(
   const uint64_t tenant_id = create_hidden_table_arg.get_tenant_id();
   const int64_t table_id = create_hidden_table_arg.get_table_id();
   const uint64_t dest_tenant_id = tenant_id;
-  bool bind_tablets = true;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *orig_table_schema = NULL;
   const ObDatabaseSchema *orig_database_schema = nullptr;
@@ -17431,7 +17427,8 @@ int ObDDLService::create_hidden_table(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
-    HEAP_VARS_2((ObTableSchema, new_table_schema),
+    HEAP_VARS_3((ObTableSchema, new_table_schema),
+                (ObTableSchema, orig_table_schema_with_partition_pruning),
                 (AlterTableSchema, alter_table_schema)) {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       if (OB_FAIL(new_table_schema.assign(*orig_table_schema))) {
@@ -17439,10 +17436,12 @@ int ObDDLService::create_hidden_table(
       } else {
         ObDDLSQLTransaction trans(schema_service_);
         common::ObArenaAllocator allocator;
+        const ObTableSchema *bind_table_schema = orig_table_schema;
         ObDDLTaskRecord task_record;
         ObTableLockOwnerID owner_id;
         int64_t task_id = 0;
         int64_t refreshed_schema_version = 0;
+        int64_t data_part_idx = 0;
         new_table_schema.set_tenant_id(dest_tenant_id);
         new_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
         new_table_schema.set_table_referenced_by_mv(ObTableReferencedByMVFlag::IS_NOT_REFERENCED_BY_MV);
@@ -17462,6 +17461,25 @@ int ObDDLService::create_hidden_table(
         } else if (OB_UNLIKELY(orig_table_schema->is_offline_ddl_table())) {
           ret = OB_SCHEMA_EAGAIN;
           LOG_WARN("table in offline ddl or direct load, retry", K(ret), K(orig_table_schema->get_table_id()), K(orig_table_schema->get_table_mode()));
+        } else if (create_hidden_table_arg.get_enable_partition_pruning()) {
+          if (OB_FAIL(ObDDLHiddenTablePartitionUtils::check_support_partition_pruning(
+              *orig_table_schema, create_hidden_table_arg.get_tablet_ids(), tenant_id, data_part_idx))) {
+            LOG_WARN("failed to check support hidden table partition pruning",
+                KR(ret), KPC(orig_table_schema), K(create_hidden_table_arg), K(tenant_id));
+          } else if (OB_FAIL(ObDDLHiddenTablePartitionUtils::rebuild_table_schema_with_partition_pruning(
+              *orig_table_schema, data_part_idx, new_table_schema))) {
+            LOG_WARN("failed to rebuild table schema with partition pruning", KR(ret), KPC(orig_table_schema), K(data_part_idx));
+          } else if (OB_FAIL(orig_table_schema_with_partition_pruning.assign(*orig_table_schema))) {
+            LOG_WARN("fail to assign schema", KR(ret), KPC(orig_table_schema));
+          } else if (OB_FAIL(ObDDLHiddenTablePartitionUtils::rebuild_table_schema_with_partition_pruning(
+              *orig_table_schema, data_part_idx, orig_table_schema_with_partition_pruning))) {
+            LOG_WARN("failed to rebuild table schema with partition pruning", KR(ret), KPC(orig_table_schema), K(data_part_idx));
+          } else {
+            bind_table_schema = &orig_table_schema_with_partition_pruning;
+          }
+        }
+
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(alter_table_schema.assign(new_table_schema))) {
           LOG_WARN("fail to assign schema", K(ret));
         } else if (OB_FAIL(create_user_hidden_table(
@@ -17469,7 +17487,7 @@ int ObDDLService::create_hidden_table(
                   new_table_schema,
                   alter_table_schema,
                   nullptr,
-                  bind_tablets,
+                  bind_table_schema,
                   schema_guard,
                   schema_guard,
                   ddl_operator,
@@ -17519,6 +17537,7 @@ int ObDDLService::create_hidden_table(
               }
               if (OB_SUCC(ret)) {
                 alter_table_arg.is_direct_load_partition_ = true;
+                alter_table_arg.enable_hidden_table_partition_pruning_ = create_hidden_table_arg.get_enable_partition_pruning();
               }
             }
 
@@ -17672,7 +17691,6 @@ int ObDDLService::mview_complete_refresh_in_trans(
       if (OB_FAIL(new_container_table_schema.assign(*container_table_schema))) {
         LOG_WARN("fail to assign schema", KR(ret));
       } else {
-        const bool bind_tablets = true;
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
         new_container_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
         ObTableLockOwnerID owner_id;
@@ -17693,7 +17711,7 @@ int ObDDLService::mview_complete_refresh_in_trans(
                                                     new_container_table_schema,
                                                     alter_table_schema,
                                                     nullptr/*sequence_ddl_arg*/,
-                                                    bind_tablets,
+                                                    container_table_schema/*bind_table_schema*/,
                                                     schema_guard,
                                                     schema_guard,
                                                     ddl_operator,
@@ -17841,7 +17859,7 @@ int ObDDLService::recover_restore_table_ddl_task(
         } else if (OB_FAIL(alter_table_schema.assign(dst_table_schema))) {
           LOG_WARN("assign failed", K(ret), K(session_id), K(arg));
         } else if (OB_FAIL(create_user_hidden_table(*src_table_schema, dst_table_schema, alter_table_schema, nullptr/*sequence_ddl_arg*/,
-          false/*bind_tablets*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, 
+          nullptr/*bind_table_schema*/, *src_tenant_schema_guard, *dst_tenant_schema_guard, ddl_operator, 
           dst_tenant_trans, allocator, tenant_data_version, index_name, true /*ignore_cs_replica*/))) {
           LOG_WARN("create user hidden table failed", K(ret), K(arg), K(tenant_data_version));
         } else {
@@ -21394,7 +21412,7 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                            ObTableSchema &hidden_table_schema,
                                            const share::schema::AlterTableSchema &alter_table_schema,
                                            const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
-                                           const bool bind_tablets,
+                                           const ObTableSchema *bind_table_schema,
                                            share::schema::ObSchemaGetterGuard &src_tenant_schema_guard,
                                            share::schema::ObSchemaGetterGuard &dst_tenant_schema_guard,
                                            ObDDLOperator &ddl_operator,
@@ -21541,34 +21559,34 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
       }
     }
     // when need bind tablets, schemas array only store aux tables, need remove data schema
-    if (OB_SUCC(ret) && bind_tablets) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(bind_table_schema)) {
       if (OB_FAIL(schemas.remove(0)) || OB_FAIL(need_create_empty_majors.remove(0))) {
         LOG_WARN("failed to remove data schema.", K(ret));
       }
     }
 
     if (OB_SUCC(ret) && hidden_table_schema.has_tablet()) {
-      if (bind_tablets && OB_FAIL(new_table_tablet_allocator.prepare_like(orig_table_schema))) {
-          LOG_WARN("fail to prepare like", KR(ret), K(orig_table_schema));
-      } else if (!bind_tablets && OB_FAIL(new_table_tablet_allocator.prepare(trans, hidden_table_schema, tablegroup_schema))) {
+      if (OB_NOT_NULL(bind_table_schema) && OB_FAIL(new_table_tablet_allocator.prepare_like(*bind_table_schema))) {
+        LOG_WARN("fail to prepare like", KR(ret), KPC(bind_table_schema));
+      } else if (OB_ISNULL(bind_table_schema) && OB_FAIL(new_table_tablet_allocator.prepare(trans, hidden_table_schema, tablegroup_schema))) {
         LOG_WARN("fail to prepare", KR(ret), K(hidden_table_schema));
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));
-      } else if (!bind_tablets && OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
+      } else if (OB_ISNULL(bind_table_schema) && OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
               schemas,
               ls_id_array,
               tenant_data_version,
               need_create_empty_majors/*need_create_empty_major_sstable*/,
               ignore_cs_replica))) {
         LOG_WARN("create table tablets failed", K(ret), K(hidden_table_schema));
-      } else if (bind_tablets && OB_FAIL(table_creator.add_create_bind_tablets_of_hidden_table_arg(
-              orig_table_schema,
+      } else if (OB_NOT_NULL(bind_table_schema) && OB_FAIL(table_creator.add_create_bind_tablets_of_hidden_table_arg(
+              *bind_table_schema,
               hidden_table_schema,
               ls_id_array,
               tenant_data_version,
               ignore_cs_replica))) {
         LOG_WARN("failed to add arg", K(ret), K(hidden_table_schema));
-      } else if (bind_tablets && schemas.count() > 0 &&
+      } else if (OB_NOT_NULL(bind_table_schema) && schemas.count() > 0 &&
               OB_FAIL(table_creator.add_create_tablets_of_local_aux_tables_arg(
               schemas,
               &hidden_table_schema,
@@ -24117,6 +24135,7 @@ int ObDDLService::swap_orig_and_hidden_table_partitions(obrpc::ObAlterTableArg &
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = alter_table_schema.get_tenant_id();
+  const bool enable_partition_pruning = alter_table_arg.enable_hidden_table_partition_pruning_;
   ObPartition** part_array = alter_table_schema.get_part_array();
   ObArray<ObTabletID> tablet_ids;
   ObArray<ObTabletID> inc_tablet_ids;
@@ -24180,7 +24199,7 @@ int ObDDLService::swap_orig_and_hidden_table_partitions(obrpc::ObAlterTableArg &
           if (OB_FAIL(orig_table_schema->get_part_idx_by_tablet(orig_tablet_id, part_idx, subpart_idx))) {
             LOG_WARN("failed to get part idx by tablet", KR(ret), K(orig_tablet_id));
           } else if (OB_FAIL(hidden_table_schema->get_tablet_and_object_id_by_index(
-              part_idx, subpart_idx, inc_tablet_id, inc_object_id, first_level_part_id))) {
+              enable_partition_pruning ? 0 : part_idx, subpart_idx, inc_tablet_id, inc_object_id, first_level_part_id))) {
             LOG_WARN("failed to get tablet and object id by index", KR(ret), K(part_idx), K(subpart_idx));
           } else if (OB_FAIL(inc_tablet_ids.push_back(inc_tablet_id))) {
             LOG_WARN("failed to add inc tablet id", KR(ret), K(inc_tablet_id));
@@ -25083,14 +25102,13 @@ int ObDDLService::restore_the_table_to_split_completed_state(obrpc::ObAlterTable
           new_table_schema.set_tenant_id(dest_tenant_id);
           new_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
           new_table_schema.reset_hidden_partition_array();
-          bool bind_tablets = true;
           ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
           if (OB_FAIL(create_user_hidden_table(
                               *orig_data_table_schema,
                               new_table_schema,
                               alter_table_arg.alter_table_schema_,
                               nullptr,
-                              bind_tablets,
+                              orig_data_table_schema/*bind_table_schema*/,
                               schema_guard,
                               schema_guard,
                               ddl_operator,

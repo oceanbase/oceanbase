@@ -1417,7 +1417,7 @@ int check_will_be_having_domain_index_operation(
       share::schema::ObTableSchema &hidden_table_schema,
       const share::schema::AlterTableSchema &alter_table_schema,
       const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
-      const bool bind_tablets,
+      const share::schema::ObTableSchema *bind_table_schema,
       share::schema::ObSchemaGetterGuard &src_tenant_schema_guard,
       share::schema::ObSchemaGetterGuard &dst_tenant_schema_guard,
       ObDDLOperator &ddl_operator,

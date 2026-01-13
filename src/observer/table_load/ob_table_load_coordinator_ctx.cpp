@@ -59,6 +59,7 @@ ObTableLoadCoordinatorCtx::~ObTableLoadCoordinatorCtx()
 
 int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
                                     const ObIArray<ObTabletID> &tablet_ids,
+                                    const bool enable_hidden_table_partition_pruning,
                                     ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
@@ -115,7 +116,7 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
       LOG_WARN("fail to init sequence", KR(ret));
     }
     // init partition ids
-    else if (OB_FAIL(init_partition_ids(tablet_ids))) {
+    else if (OB_FAIL(init_partition_ids(tablet_ids, enable_hidden_table_partition_pruning))) {
       LOG_WARN("fail to init partition ids", KR(ret));
     }
     // init empty_insert_tablet_ctx_manager_
@@ -507,7 +508,8 @@ int ObTableLoadCoordinatorCtx::init_session_ctx_array()
   return ret;
 }
 
-int ObTableLoadCoordinatorCtx::init_partition_ids(const ObIArray<ObTabletID> &tablet_ids)
+int ObTableLoadCoordinatorCtx::init_partition_ids(const ObIArray<ObTabletID> &tablet_ids,
+                                                  const bool enable_hidden_table_partition_pruning)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -537,6 +539,41 @@ int ObTableLoadCoordinatorCtx::init_partition_ids(const ObIArray<ObTabletID> &ta
   } else if (OB_ISNULL(target_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("target schema is nullptr", KR(ret));
+  } else if (enable_hidden_table_partition_pruning) {
+    // 隐藏表分区裁剪优化场景
+    if (OB_UNLIKELY(tablet_ids.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tablet ids is empty in hidden table partition pruning", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+      const ObTabletID &origin_tablet_id = tablet_ids.at(i);
+      int64_t part_idx = OB_INVALID_INDEX;
+      int64_t subpart_idx = OB_INVALID_INDEX;
+      ObTabletID tablet_id;
+      ObObjectID object_id;
+      ObObjectID first_level_part_id;
+      if (OB_FAIL(origin_table_schema->get_part_idx_by_tablet(origin_tablet_id,
+                                                              part_idx,
+                                                              subpart_idx))) {
+        LOG_WARN("fail to get part idx by tablet", KR(ret), K(origin_tablet_id), KPC(origin_table_schema));
+      } else if (OB_FAIL(origin_table_schema->get_part_id_and_tablet_id_by_idx(part_idx,
+                                                                               subpart_idx,
+                                                                               object_id,
+                                                                               first_level_part_id,
+                                                                               tablet_id))) {
+        LOG_WARN("fail to get part id and tablet id by idx", KR(ret), K(part_idx), K(subpart_idx), KPC(origin_table_schema));
+      } else if (OB_FAIL(partition_ids_.push_back(ObTableLoadPartitionId(object_id, tablet_id)))) {
+        LOG_WARN("fail to push back", KR(ret));
+      } else if (OB_FAIL(target_table_schema->get_part_id_and_tablet_id_by_idx(0 /*part_idx*/,
+                                                                               subpart_idx,
+                                                                               object_id,
+                                                                               first_level_part_id,
+                                                                               tablet_id))) {
+        LOG_WARN("fail to get part id and tablet id by idx", KR(ret), K(subpart_idx), KPC(target_table_schema));
+      } else if (OB_FAIL(target_partition_ids_.push_back(ObTableLoadPartitionId(object_id, tablet_id)))) {
+        LOG_WARN("fail to push back", KR(ret));
+      }
+    }
   } else if (OB_FAIL(origin_table_schema->get_all_tablet_and_object_ids(all_origin_tablet_ids,
                                                                         all_origin_part_ids))) {
     LOG_WARN("fail to get all origin tablet ids and part ids", KR(ret));

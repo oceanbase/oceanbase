@@ -53,6 +53,7 @@ public:
   static int init_ctx(ObTableLoadTableCtx *ctx,
                       const common::ObIArray<uint64_t> &column_ids,
                       const common::ObIArray<ObTabletID> &tablet_ids,
+                      const bool enable_hidden_table_partition_pruning,
                       ObTableLoadExecCtx *exec_ctx);
   static void abort_ctx(ObTableLoadTableCtx *ctx, int error_code);
   int init();

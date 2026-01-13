@@ -89,8 +89,8 @@ public:
   int init(
       const uint64_t src_tenant_id, 
       const uint64_t dst_tenant_id,
-      int64_t src_table_id,
-      int64_t dest_table_id);
+      const common::ObIArray<common::ObTabletID> &src_tablet_ids,
+      const common::ObIArray<common::ObTabletID> &dest_tablet_ids);
   int sync();
   bool is_inited() const { return is_inited_; }
   TO_STRING_KV(K_(is_inited), K_(is_synced), K_(src_tenant_id), K_(dst_tenant_id), K_(orig_src_tablet_ids), K_(src_tablet_ids),
@@ -255,6 +255,7 @@ protected:
   int sync_table_prefs(common::ObMySQLTransaction &trans);
   int check_and_do_sync_tablet_autoinc_seq(ObSchemaGetterGuard &new_schema_guard);
   int sync_tablet_autoinc_seq();
+  int init_sync_tablet_autoinc_seq_ctx();
   int check_need_rebuild_constraint(const ObTableSchema &table_schema,
                                     ObIArray<uint64_t> &constraint_ids,
                                     bool &need_rebuild_constraint);

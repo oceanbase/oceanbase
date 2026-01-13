@@ -690,6 +690,7 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_inc_clog_callback.cpp
   ddl/ob_ddl_inc_redo_log_writer.cpp
   ddl/ob_ddl_alter_auto_part_attr.cpp
+  ddl/ob_ddl_hidden_table_partition_utils.cpp
 )
 
 ob_set_subtarget(ob_storage common
