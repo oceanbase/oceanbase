@@ -1137,25 +1137,39 @@ int ObStorageHATaskUtils::check_inc_major_ddl_sstable_need_copy_(
     const ObTransID &trans_id = param.uncommit_tx_info_.tx_infos_[0].tx_id_;
     const ObTxSEQ &seq_no = ObTxSEQ::cast_from_int(param.uncommit_tx_info_.tx_infos_[0].sql_seq_);
     ObTableStoreIterator inc_major_iter;
+    ObTableStoreIterator inc_major_ddl_iter;
     // inc_major_ddl_sstables / inc_major_sstables may contain multiple times of direct-load, which is identified by (trans_id, seq_no)
     // for each direct-load, the relationship between inc_major_ddl_sstables and inc_major_sstable is similar to that of ddl_sstables and major_sstable
     // therefore, once we found a direct-load's inc_major_sstable, all its inc_major_ddl_sstables can be skipped
     if (OB_FAIL(table_store_wrapper.get_member()->get_inc_major_sstables(inc_major_iter, trans_id, seq_no))) {
       LOG_WARN("failed to get inc major sstables", KR(ret), K(trans_id), K(seq_no));
+    } else if (OB_FAIL(table_store_wrapper.get_member()->get_inc_major_ddl_sstables(inc_major_ddl_iter, trans_id, seq_no))) {
+      LOG_WARN("failed to get inc major ddl sstables", KR(ret), K(trans_id), K(seq_no));
     } else if (inc_major_iter.count() > 0) {
       need_copy = false;
-    } else if (ddl_sstable_array.empty()) {
+    } else if (0 == inc_major_ddl_iter.count()) {
       need_copy = true;
     } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, sstable_wrapper))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(ddl_sstable_array));
     } else if (nullptr == sstable_wrapper.get_sstable()) {
-      const SCN start_scn = ddl_sstable_array.get_boundary_table(false)->get_start_scn();
-      const SCN end_scn = ddl_sstable_array.get_boundary_table(true)->get_end_scn();
-      if (param.table_key_.scn_range_.start_scn_ >= start_scn
-          && param.table_key_.scn_range_.end_scn_ <= end_scn) {
-        need_copy = false;
+      ObITable *trans_first_inc_major_ddl_sstable = nullptr;
+      ObITable *trans_last_inc_major_ddl_sstable = nullptr;
+      if (OB_FAIL(inc_major_ddl_iter.get_boundary_table(false/*is_last*/, trans_first_inc_major_ddl_sstable))) {
+        LOG_WARN("failed to get boundary table", KR(ret));
+      } else if (OB_FAIL(inc_major_ddl_iter.get_boundary_table(true/*is_last*/, trans_last_inc_major_ddl_sstable))) {
+        LOG_WARN("failed to get boundary table", KR(ret));
+      } else if (OB_ISNULL(trans_first_inc_major_ddl_sstable) || OB_ISNULL(trans_last_inc_major_ddl_sstable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null inc major ddl sstable", KR(ret), KP(trans_first_inc_major_ddl_sstable), KP(trans_last_inc_major_ddl_sstable));
       } else {
-        need_copy = true;
+        const SCN start_scn = trans_first_inc_major_ddl_sstable->get_start_scn();
+        const SCN end_scn = trans_last_inc_major_ddl_sstable->get_end_scn();
+        if (param.table_key_.scn_range_.start_scn_ >= start_scn
+            && param.table_key_.scn_range_.end_scn_ <= end_scn) {
+          need_copy = false;
+        } else {
+          need_copy = true;
+        }
       }
     } else if (OB_FAIL(sstable_wrapper.get_sstable()->get_meta(sst_meta_hdl))) {
       LOG_WARN("failed to get sstable meta handle", K(ret));
