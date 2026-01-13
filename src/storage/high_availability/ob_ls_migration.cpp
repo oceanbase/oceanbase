@@ -56,7 +56,7 @@ ObMigrationCtx::ObMigrationCtx()
     data_tablet_id_array_(),
     ha_table_info_mgr_(),
     check_tablet_info_cost_time_(0),
-    non_existent_tablet_id_array_()
+    non_existent_tablet_ids_()
 {
   local_clog_checkpoint_scn_.set_min();
 }
@@ -88,7 +88,7 @@ void ObMigrationCtx::reset()
   ObIHADagNetCtx::reset();
   check_tablet_info_cost_time_ = 0;
   tablet_simple_info_map_.reuse();
-  non_existent_tablet_id_array_.reset();
+  non_existent_tablet_ids_.reuse();
 }
 
 int ObMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
@@ -135,7 +135,7 @@ void ObMigrationCtx::reuse()
   ObIHADagNetCtx::reuse();
   check_tablet_info_cost_time_ = 0;
   tablet_simple_info_map_.reuse();
-  non_existent_tablet_id_array_.reset();
+  non_existent_tablet_ids_.reuse();
 }
 
 /******************ObCopyTabletCtx*********************/
@@ -296,6 +296,8 @@ int ObMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     LOG_WARN("failed to init tablet group mgr", K(ret), KPC(init_param));
   } else if (OB_FAIL(ctx_->tablet_simple_info_map_.create(MAX_BUCKET_NUM, "SHATaskBucket", "SHATaskNode", MTL_ID()))) {
     LOG_WARN("failed to create tablet simple info map", K(ret));
+  } else if (OB_FAIL(ctx_->non_existent_tablet_ids_.create(MAX_BUCKET_NUM, "MigNonExistBkt", "MigNonExistNod", MTL_ID()))) {
+    LOG_WARN("failed to create non existent tablet ids set", K(ret));
   } else {
     ctx_->tenant_id_ = MTL_ID();
     ctx_->arg_ = init_param->arg_;
@@ -2764,8 +2766,8 @@ int ObTabletMigrationTask::process()
     LOG_WARN("failed to get copy tablet status", K(ret), KPC(copy_tablet_ctx_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
     FLOG_INFO("copy tablet is not exist, skip copy it", KPC(copy_tablet_ctx_));
-    if (OB_FAIL(ctx_->non_existent_tablet_id_array_.push_back(copy_tablet_ctx_->tablet_id_))) {
-      LOG_WARN("failed to push back non existent tablet id", K(ret), KPC(copy_tablet_ctx_));
+    if (OB_FAIL(ctx_->non_existent_tablet_ids_.set_refactored(copy_tablet_ctx_->tablet_id_))) {
+      LOG_WARN("failed to set non existent tablet id", K(ret), KPC(copy_tablet_ctx_));
     } else if (OB_FAIL(update_ha_expected_status_(status))) {
       LOG_WARN("failed to update ha expected status", K(ret), KPC(copy_tablet_ctx_));
     }
@@ -3584,8 +3586,8 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
     } else if (OB_ISNULL(migration_ctx = static_cast<ObMigrationCtx *>(ha_dag_net_ctx_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("migration ctx should not be null", K(ret));
-    } else if (OB_FAIL(migration_ctx->non_existent_tablet_id_array_.push_back(copy_tablet_ctx_->tablet_id_))) {
-      LOG_WARN("failed to push tablet id into array", K(ret), KPC(copy_tablet_ctx_));
+    } else if (OB_FAIL(migration_ctx->non_existent_tablet_ids_.set_refactored(copy_tablet_ctx_->tablet_id_))) {
+      LOG_WARN("failed to set non existent tablet id", K(ret), KPC(copy_tablet_ctx_));
     } else if (OB_FAIL(ls_->get_tablet_svr()->update_tablet_ha_expected_status(tablet->get_reorganization_scn(),
         copy_tablet_ctx_->tablet_id_, expected_status))) {
       if (OB_TABLET_NOT_EXIST == ret) {
@@ -5331,7 +5333,7 @@ int ObMigrationFinishTask::check_split_tablets_ready_(bool &is_ready)
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx should not be null", K(ret));
-  } else if (ctx_->non_existent_tablet_id_array_.empty()) {
+  } else if (ctx_->non_existent_tablet_ids_.empty()) {
     // no non-existent tablets, skip check
   } else if (OB_ISNULL(dag_net_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -5355,13 +5357,13 @@ int ObMigrationFinishTask::check_split_tablets_ready_(bool &is_ready)
     const share::ObLSID &ls_id = ctx_->arg_.ls_id_;
     ObArray<share::ReorganizeTabletPair> tablet_pairs;
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->non_existent_tablet_id_array_.count(); ++i) {
-      const common::ObTabletID &tablet_id = ctx_->non_existent_tablet_id_array_.at(i);
+    for (common::hash::ObHashSet<common::ObTabletID>::const_iterator iter = ctx_->non_existent_tablet_ids_.begin();
+         OB_SUCC(ret) && is_ready && iter != ctx_->non_existent_tablet_ids_.end();
+         ++iter) {
+      const common::ObTabletID &tablet_id = iter->first;
       tablet_pairs.reuse();
 
-      if (!is_ready) {
-        break;
-      } else if (OB_FAIL(share::ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_src(
+      if (OB_FAIL(share::ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_src(
               *sql_proxy, tenant_id, ls_id, tablet_id, tablet_pairs))) {
         LOG_WARN("failed to get split tablet pairs by src", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
       } else if (tablet_pairs.empty()) {

@@ -66,7 +66,7 @@ public:
   // tablet ids of the tablets whose meta can be read initially but later deleted at migration source
   // used to detect split source tablet GC and prevent split log replay blocking
   // (see ObMigrationFinishTask::check_split_tablets_ready_)
-  ObArray<common::ObTabletID> non_existent_tablet_id_array_;
+  common::hash::ObHashSet<common::ObTabletID> non_existent_tablet_ids_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
