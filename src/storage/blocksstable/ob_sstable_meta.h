@@ -329,6 +329,7 @@ public:
   bool is_split_table() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
+  int fsync_block(const ObTabletCreateSSTableParam &param);
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
   int init_data_index_tree_info(

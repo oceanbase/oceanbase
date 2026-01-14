@@ -14,6 +14,7 @@
 
 #include "ob_index_block_builder.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "share/ob_io_device_helper.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "share/compaction/ob_shared_storage_compaction_util.h"
@@ -1553,6 +1554,22 @@ int64_t ObSSTableIndexBuilder::get_tablet_transfer_seq() const
   return data_store_desc_.get_desc().get_tablet_transfer_seq();
 }
 
+int ObSSTableIndexBuilder::fsync_block()
+{
+  int ret = OB_SUCCESS;
+  const bool in_array = roots_[0]->meta_block_info_.in_array();
+  bool all_in_mem = true;
+  for (int64_t i = 0; i < roots_.count(); ++i) {
+    all_in_mem &= !roots_[i]->meta_block_info_.in_disk();
+  }
+  if (in_array || all_in_mem) {
+    // do nothing
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
+    STORAGE_LOG(WARN, "fail to fsync_block", K(ret));
+  }
+  return ret;
+}
+
 int ObSSTableIndexBuilder::close(ObSSTableMergeRes &res,
                                  const int64_t nested_size,
                                  const int64_t nested_offset,
@@ -1653,6 +1670,8 @@ int ObSSTableIndexBuilder::close_with_macro_seq_inner(
   }
   if (OB_FAIL(ret) || roots_.empty() || is_closed_) {
     // do nothing
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(fsync_block())) {
+    STORAGE_LOG(WARN, "fail to fsync_block", K(ret));
   } else if (OB_FAIL(merge_index_tree(pre_warm_param, res, macro_seq, callback))) {
     STORAGE_LOG(WARN, "fail to merge index tree", K(ret), KP(callback));
   } else if (OB_FAIL(build_meta_tree(pre_warm_param, res, ++macro_seq, callback))) {
@@ -1738,6 +1757,7 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
   ObBlockInfo block_info;
   ObStorageObjectHandle read_handle;
   ObDataMacroBlockMeta macro_meta;
+  ObSSTableMacroBlockHeader macro_header;
   ObStorageObjectReadInfo read_info;
   read_info.offset_ = 0;
   read_info.size_ =
@@ -1759,10 +1779,14 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
           container_store_desc_, roots_, macro_meta))) {
         STORAGE_LOG(WARN, "fail to get single macro meta", K(ret));
     } else if (FALSE_IT(read_info.macro_block_id_ = macro_meta.val_.macro_id_)) {
+    } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
+      LOG_WARN("fail to fsync_block", K(ret));
     } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, read_handle))) {
       STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info), K(macro_meta), K(roots_[0]->last_macro_size_));
     } else if (OB_FAIL(read_handle.wait())) {
       STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(read_info));
+    } else if (OB_FAIL(parse_macro_header(read_info.buf_, read_handle.get_data_size(), macro_header))) {
+      STORAGE_LOG(WARN, "fail to parse macro header", K(ret), K(read_info));
     } else {
       ObSharedMacroBlockMgr *shared_block_mgr = MTL(ObSharedMacroBlockMgr*);
       if (OB_FAIL(shared_block_mgr->write_block(
@@ -1871,6 +1895,8 @@ int ObSSTableIndexBuilder::load_single_macro_block(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret),
                 K(read_info.size_));
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
+    LOG_WARN("fail to fsync_block", K(ret));
   } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, read_handle))) {
     STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info), K(macro_meta));
   } else if (OB_FAIL(read_handle.wait())) {

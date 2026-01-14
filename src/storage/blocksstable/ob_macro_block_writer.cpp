@@ -16,6 +16,7 @@
 #include "src/storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
 #include "src/storage/ddl/ob_ddl_clog.h"
+#include "share/ob_io_device_helper.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction/ob_major_pre_warmer.h"
 #endif
@@ -1879,6 +1880,8 @@ int ObMacroBlockWriter::check_write_complete(const MacroBlockId &macro_block_id)
     read_info.buf_ = io_buf_;
   }
   if (OB_FAIL(ret)) {
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
+    LOG_WARN("fail to fsync_block", K(ret));
   } else if (OB_FAIL(ObObjectManager::async_read_object(read_info, read_handle))) {
     STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info));
   } else if (OB_FAIL(read_handle.wait())) {

@@ -280,7 +280,9 @@ int ObSharedMacroBlockMgr::write_block(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
   } else {
-    if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
+    if (!GCTX.is_shared_storage_mode() && OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
+      LOG_WARN("fail to fsync_block", K(ret));
+    } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
       LOG_WARN("fail to async read macro block", K(ret), K(read_info));
     } else if (OB_FAIL(read_handle.wait())) {
       LOG_WARN("fail to wait io finish", K(ret), K(read_info));
