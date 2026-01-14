@@ -141,7 +141,7 @@ private:
                              ObRangeColumnMeta *column_meta, int64_t &start_val_idx, int64_t &end_val_idx);
   int get_calculable_expr_val(const ObRawExpr *expr, ObObj &val, bool &is_valid, const bool ignore_error = true);
   int check_calculable_expr_valid(const ObRawExpr *expr, bool &is_valid, const bool ignore_error = true);
-  int add_precise_constraint(const ObRawExpr *expr, bool is_precise);
+  int add_precise_constraint(const ObRawExpr *expr, bool is_precise, char escape);
   int add_prefix_pattern_constraint(const ObRawExpr *expr);
   int get_final_expr_idx(const ObRawExpr *expr,
                          const ObRangeColumnMeta *column_meta,
