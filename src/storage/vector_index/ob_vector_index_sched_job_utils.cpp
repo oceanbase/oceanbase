@@ -32,15 +32,16 @@ int ObVectorIndexSchedJobUtils::add_scheduler_job(
     const int64_t repeat_interval_ts, const common::ObString &exec_env) {
   int ret = OB_SUCCESS;
   ObSqlString interval_str;
+
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
   } else if (OB_FAIL(interval_str.append_fmt("FREQ=SECONDLY; INTERVAL=%ld", repeat_interval_ts / 1000000L))) {
     LOG_WARN("fail to append interval string", K(ret));
   } else {
-    int64_t start_date_us = start_date.is_null() ? ObTimeUtility::current_time() + repeat_interval_ts
-                                                 : start_date.get_timestamp();
+    int64_t start_date_us = start_date.is_null() ? ObTimeUtility::current_time() + repeat_interval_ts : start_date.get_timestamp();
     int64_t end_date_us = 64060560000000000; // 4000-01-01
+
     HEAP_VAR(ObDBMSSchedJobInfo, job_info) {
       job_info.tenant_id_ = tenant_id;
       job_info.job_ = job_id;
@@ -59,7 +60,6 @@ int ObVectorIndexSchedJobUtils::add_scheduler_job(
       job_info.enabled_ = 1;
       job_info.auto_drop_ = 0;
       job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
-      job_info.interval_ts_ = repeat_interval_ts;
       job_info.exec_env_ = exec_env;
       job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::VECTOR_INDEX_REFRESH_JOB;
       if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(
@@ -125,9 +125,10 @@ int ObVectorIndexSchedJobUtils::remove_vector_index_refresh_job(
 int ObVectorIndexSchedJobUtils::add_vector_index_rebuild_job(common::ObISQLClient &sql_client,
                                                              const uint64_t tenant_id,
                                                              const uint64_t vidx_table_id,
-                                                             const common::ObString &exec_env)
+                                                             const common::ObString &exec_env,
+                                                             const uint64_t paralellism)
 {
-  LOG_INFO("################## [add_vector_index_rebuild_job]", K(tenant_id), K(vidx_table_id), K(exec_env));
+  LOG_INFO("################## [add_vector_index_rebuild_job]", K(tenant_id), K(vidx_table_id), K(exec_env), K(paralellism));
   int ret = OB_SUCCESS;
   int64_t job_id = OB_INVALID_ID;
   common::ObObj start_date;
@@ -137,10 +138,12 @@ int ObVectorIndexSchedJobUtils::add_vector_index_rebuild_job(common::ObISQLClien
   } else {
     ObSqlString job_action;
     ObSqlString rebuild_job_name;
+    const uint64_t real_paralellism = paralellism == 0 ? 1 : paralellism; // make sure default 1
     if (OB_FAIL(job_action.assign_fmt(
-            "DBMS_VECTOR.rebuild_index_inner(%lu, %lf)",
+            "DBMS_VECTOR.rebuild_index_inner(%lu, %lf, \"\", \"\", \"\", %lu)",
             vidx_table_id,
-            ObVectorIndexSchedJobUtils::DEFAULT_REBUILD_TRIGGER_THRESHOLD))) {
+            ObVectorIndexSchedJobUtils::DEFAULT_REBUILD_TRIGGER_THRESHOLD,
+            real_paralellism))) {
       LOG_WARN("failed to generate rebuild index job id", K(ret));
     } else if (OB_FAIL(rebuild_job_name.assign_fmt("%lu_rebuild", vidx_table_id))) {
       LOG_WARN("failed to generate rebuild job name", K(ret));
@@ -185,20 +188,20 @@ int ObVectorIndexSchedJobUtils::get_vector_index_job_info(common::ObISQLClient &
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTenantSchema *tenant_schema = NULL;
-  ObSqlString refresh_job_name;
+  ObSqlString rebuild_job_name;
   if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant schema is null", K(tenant_id)); // skip
-  } else if (OB_FAIL(refresh_job_name.assign_fmt("%lu_refresh", vidx_table_id))) {
+  } else if (OB_FAIL(rebuild_job_name.assign_fmt("%lu_rebuild", vidx_table_id))) {
     LOG_WARN("failed to generate refresh job name", K(ret));
   } else if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(sql_client, tenant_id,
                                                                   tenant_schema->is_oracle_tenant(),
-                                                                  refresh_job_name.string(),
+                                                                  rebuild_job_name.string(),
                                                                   allocator,
                                                                   job_info))) {
-    LOG_WARN("fail to get dbms schedule info", K(ret), K(tenant_id), K(refresh_job_name));
+    LOG_WARN("fail to get dbms schedule info", K(ret), K(tenant_id), K(rebuild_job_name));
   }
   return ret;
 }
