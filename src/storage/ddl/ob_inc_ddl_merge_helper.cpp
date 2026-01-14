@@ -839,8 +839,8 @@ int ObIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &merge
 
   /* update tablet table store */
   if (OB_FAIL(ret)) {
-  } else if (OB_NOT_NULL(inc_major_sstable) && OB_FAIL(verify_inc_major_sstable(*inc_major_sstable, tablet_handle))) {
-    LOG_WARN("failed to verify inc major sstable", KR(ret), KPC(inc_major_sstable), K(tablet_handle));
+  } else if (OB_NOT_NULL(inc_major_sstable) && OB_FAIL(verify_inc_major_sstable(target_ls_id, *inc_major_sstable, tablet_handle))) {
+    LOG_WARN("failed to verify inc major sstable", KR(ret), K(target_ls_id), K(target_tablet_id), KPC(inc_major_sstable));
   } else if (OB_FAIL(update_tablet_table_store(merge_param, co_sstable_array, inc_major_sstable))) {
     LOG_WARN("failed to update tablet table store", K(ret), K(merge_param));
   }
@@ -1005,6 +1005,7 @@ int ObIncMajorDDLMergeHelper::check_sstables_empty(
 }
 
 int ObIncMajorDDLMergeHelper::verify_inc_major_sstable(
+    const ObLSID &ls_id,
     const ObSSTable &inc_major_sstable,
     ObTabletHandle &tablet_handle)
 {
@@ -1014,8 +1015,19 @@ int ObIncMajorDDLMergeHelper::verify_inc_major_sstable(
   ObTxSEQ seq_no;
   ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "VerifyInc"));
   ObTabletDDLCompleteMdsUserData user_data;
+  ObLSHandle ls_handle;
+  ObMigrationStatus migration_status;
+  bool migration_failed = false;
 
-  if (OB_UNLIKELY(!inc_major_sstable.is_inc_major_type_sstable())) {
+  if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id", KR(ret), K(ls_id));
+  } else if (OB_FAIL(ObIncMajorTxHelper::get_ls(ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls", KR(ret), K(ls_id));
+  } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid ls handle", KR(ret), K(ls_handle));
+  } else if (OB_UNLIKELY(!inc_major_sstable.is_inc_major_type_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table type", KR(ret), K(inc_major_sstable));
   } else if (OB_FAIL(inc_major_sstable.get_meta(meta_handle))) {
@@ -1025,6 +1037,13 @@ int ObIncMajorDDLMergeHelper::verify_inc_major_sstable(
     LOG_WARN("unexpected empty inc major sstable", KR(ret), K(meta_handle.get_sstable_meta()));
   } else if (OB_FAIL(ObIncMajorTxHelper::get_trans_id_and_seq_no_from_sstable(&inc_major_sstable, trans_id, seq_no))) {
     LOG_WARN("failed to get trans id and seq no from sstable", KR(ret), K(inc_major_sstable));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_ls_meta().get_migration_status(migration_status))) {
+    LOG_WARN("failed to get migration status", KR(ret), K(ls_id));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL == migration_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL == migration_status) {
+    migration_failed = true;
+    FLOG_INFO("ls migration failed, skip verify inc major sstable", K(trans_id), K(seq_no),
+        K(ls_id), K(tablet_handle.get_obj()->get_tablet_id()), K(migration_status));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
       SCN::max_scn(), allocator, ObTabletDDLCompleteMdsUserDataKey(trans_id), user_data))) {
     LOG_WARN("failed to get inc major direct load info", KR(ret), K(trans_id));
@@ -1036,7 +1055,9 @@ int ObIncMajorDDLMergeHelper::verify_inc_major_sstable(
     LOG_WARN("unexpected invalid end scn", K(ret), K(inc_major_sstable.get_key()), K(user_data));
   }
 
-  SERVER_EVENT_ADD("direct_load", "ddl merge verify inc major sstable",
+  const char *event_name = migration_failed ? "skip ddl merge verify inc major sstable due to the failure of ls migration"
+                                            : "ddl merge verify inc major sstable";
+  SERVER_EVENT_ADD("direct_load", event_name,
                    "tenant_id", MTL_ID(),
                    "ret", ret,
                    "trace_id", *ObCurTraceId::get_trace_id(),

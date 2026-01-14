@@ -83,7 +83,8 @@ private:
   int check_sstables_empty(const ObDDLTabletMergeDagParamV2 &merge_param,
                            const ObTablesHandleArray &table_array,
                            bool &is_empty);
-  int verify_inc_major_sstable(const ObSSTable &inc_major_sstable,
+  int verify_inc_major_sstable(const ObLSID &ls_id,
+                               const ObSSTable &inc_major_sstable,
                                ObTabletHandle &tablet_handle);
   int update_tablet_table_store(
       ObDDLTabletMergeDagParamV2 &dag_merge_param,
