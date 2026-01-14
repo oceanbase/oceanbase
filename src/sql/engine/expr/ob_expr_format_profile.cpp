@@ -51,6 +51,7 @@ int ObExprFormatProfile::calc_result_typeN(ObExprResType &result_type, ObExprRes
   } else {
     result_type.set_varchar();
     result_type.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+    result_type.set_collation_level(CS_LEVEL_COERCIBLE);
     result_type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
   }
   return ret;
