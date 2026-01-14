@@ -103,7 +103,6 @@ private:
   };
 
   bool check_operation_allow() override;
-  int check_has_ivf_index(bool &has_ivf_index);
   int generate_aux_table_info_map(ObIvfAuxTableInfoMap &aux_table_info_map);
   int generate_aux_table_info_map(ObSchemaGetterGuard &schema_guard, const int64_t table_id,
                                   ObIvfAuxTableInfoMap &aux_table_info_map);

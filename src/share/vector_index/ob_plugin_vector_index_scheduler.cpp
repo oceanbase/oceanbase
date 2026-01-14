@@ -277,7 +277,7 @@ void ObPluginVectorIndexLoadScheduler::mark_tenant_need_check()
   LOG_DEBUG("finsh mark tenant need check", KR(ret), K(local_tenant_task_.need_check_));
 }
 
-int ObPluginVectorIndexLoadScheduler::check_is_vector_index_table(const ObTableSchema &table_schema,
+int ObPluginVectorIndexLoadScheduler::check_is_vector_index_table(const ObSimpleTableSchemaV2 &table_schema,
                                                                   bool &is_vector_index_table,
                                                                   bool &is_shared_index_table)
 {
@@ -387,7 +387,7 @@ int ObPluginVectorIndexLoadScheduler::acquire_adapter_in_maintenance(
 
 int ObPluginVectorIndexLoadScheduler::set_shared_table_info_in_maintenance(
   const int64_t table_id,
-  const ObTableSchema *table_schema,
+  const ObSimpleTableSchemaV2 *table_schema,
   ObVecIdxSharedTableInfoMap &shared_table_info_map)
 {
   int ret = OB_SUCCESS;
@@ -444,15 +444,22 @@ int ObPluginVectorIndexLoadScheduler::set_shared_table_info_in_maintenance(
   return ret;
 }
 
+int ObPluginVectorIndexLoadScheduler::check_has_vector_index(bool &has_ivf_index, ObIArray<uint64_t> &vec_table_id_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTTLUtil::get_tenant_vector_index_ids(tenant_id_, has_ivf_index, vec_table_id_array))) {
+    LOG_WARN("fail to get tenant table ids", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
 
 // scan all vector tablet in current tenant/LS
-int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance()
+int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance(ObIArray<uint64_t> &vec_table_id_array)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard guard("ObPluginVectorIndexLoadScheduler::check_and_generate_tablet_tasks",
                     VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD);
   const schema::ObTableSchema *table_schema = nullptr;
-  ObSEArray<uint64_t, DEFAULT_TABLE_ARRAY_SIZE> table_id_array;
 
   ObVecIdxSharedTableInfoMap shared_table_info_map;
   ObMemAttr memattr(tenant_id_, "VecIdxInfo");
@@ -465,20 +472,18 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance()
 
   if (current_memory_config_ != 0) { // has memory for new adapter
 
-    if (OB_FAIL(ObTTLUtil::get_tenant_table_ids(tenant_id_, table_id_array))) {
-        LOG_WARN("fail to get tenant table ids", KR(ret), K_(tenant_id));
-    } else if (!table_id_array.empty()
-                && OB_FAIL(shared_table_info_map.create(DEFAULT_TABLE_ARRAY_SIZE, memattr, memattr))) {
+    if (!vec_table_id_array.empty()
+        && OB_FAIL(shared_table_info_map.create(DEFAULT_TABLE_ARRAY_SIZE, memattr, memattr))) {
       LOG_WARN("fail to create param map", KR(ret));
     }
 
     int64_t start_idx = 0;
     int64_t end_idx = 0;
 
-    while (OB_SUCC(ret) && start_idx < table_id_array.count()) {
+    while (OB_SUCC(ret) && start_idx < vec_table_id_array.count()) {
       ObSchemaGetterGuard schema_guard;
       start_idx = end_idx;
-      end_idx = MIN(table_id_array.count(), start_idx + TBALE_GENERATE_BATCH_SIZE);
+      end_idx = MIN(vec_table_id_array.count(), start_idx + TBALE_GENERATE_BATCH_SIZE);
 
       bool is_vector_index = false;
       bool is_shared_index = false;
@@ -487,11 +492,11 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance()
       }
 
       for (int64_t idx = start_idx; OB_SUCC(ret) && idx < end_idx; ++idx) {
-        const int64_t table_id = table_id_array.at(idx);
-        const ObTableSchema *table_schema = nullptr;
+        const int64_t table_id = vec_table_id_array.at(idx);
+        const ObSimpleTableSchemaV2 *table_schema = nullptr;
         if (is_sys_table(table_id)) {
           // do nothing
-        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
+        } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, table_id, table_schema))) {
           LOG_WARN("failed to get simple schema", KR(ret), K(table_id));
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
@@ -500,10 +505,17 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance()
           // do nothing
         } else if (OB_FAIL(check_is_vector_index_table(*table_schema, is_vector_index, is_shared_index))) {
           LOG_WARN("fail to check is vector index", KR(ret));
-        } else if (is_vector_index
-                  && OB_FAIL(acquire_adapter_in_maintenance(table_id, table_schema, shared_table_info_map))) {
-          // for one vector_index table
-          LOG_WARN("fail to create adapter in maintenance", KR(ret), K(table_id));
+        } else if (is_vector_index) {
+          const ObTableSchema *tmp_table_schema = nullptr;
+          if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, tmp_table_schema))) {
+            LOG_WARN("failed to get simple schema", KR(ret), K(table_id));
+          } else if (OB_ISNULL(tmp_table_schema)) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("table schema is null", KR(ret), K(table_id), K_(tenant_id));
+          } else if (OB_FAIL(acquire_adapter_in_maintenance(table_id, tmp_table_schema, shared_table_info_map))) {
+            // for one vector_index table
+            LOG_WARN("fail to create adapter in maintenance", KR(ret), K(table_id));
+          }
         } else if (is_shared_index
                   && OB_FAIL(set_shared_table_info_in_maintenance(table_id,
                                                                   table_schema,
@@ -557,7 +569,7 @@ int read_tenant_task_status(uint64_t tenant_id,
   return ret;
 }
 
-int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors()
+int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors(bool &has_ivf_index)
 {
   int ret = OB_SUCCESS;
   uint64_t task_trace_base_num = 0;
@@ -567,11 +579,11 @@ int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors()
     LOG_WARN("fail to clear old task ctx", K(ret));
   } else if (OB_FAIL(async_task_exec_.load_task(task_trace_base_num))) {
     LOG_WARN("fail to load tenant sync task", K(ret));
-  } else if (OB_FAIL(ivf_task_exec_.check_and_set_thread_pool())) {
+  } else if (has_ivf_index && OB_FAIL(ivf_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(ret));
   } else if (OB_FAIL(ivf_task_exec_.clear_old_task_ctx_if_need())) {
     LOG_WARN("fail to clear old task ctx", K(ret));
-  } else if (OB_FAIL(ivf_task_exec_.load_task(task_trace_base_num))) {
+  } else if (has_ivf_index && OB_FAIL(ivf_task_exec_.load_task(task_trace_base_num))) {
     LOG_WARN("fail to load tenant sync task", K(ret));
   }
   return ret;
@@ -581,7 +593,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors()
 //    read from sys table with tenant id, special table id & special tablet id, not implemented
 // 2. check if need mem load task
 //    from log replay, or long time not processed
-int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
+int ObPluginVectorIndexLoadScheduler::reload_tenant_task(bool &has_ivf_index)
 {
   int ret = OB_SUCCESS;
   ObVectorIndexTenantStatus tenant_task;
@@ -622,7 +634,7 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
   // vector index async task
   int tmp_ret = OB_SUCCESS;
   if (is_stopped() || !is_leader_) { // skip
-  } else if (OB_TMP_FAIL(check_and_load_task_executors())) {
+  } else if (OB_TMP_FAIL(check_and_load_task_executors(has_ivf_index))) {
     LOG_WARN("fail to check and load task executors", K(tmp_ret));
   }
 
@@ -913,7 +925,7 @@ int ObPluginVectorIndexLoadScheduler::check_ls_task_state(ObPluginVectorIndexMgr
   return ret;
 }
 
-int ObPluginVectorIndexLoadScheduler::check_and_execute_adapter_maintenance_task(ObPluginVectorIndexMgr *&mgr)
+int ObPluginVectorIndexLoadScheduler::check_and_execute_adapter_maintenance_task(ObPluginVectorIndexMgr *&mgr, ObIArray<uint64_t> &vec_table_id_array)
 {
   int ret = OB_SUCCESS;
   bool need_check = false;
@@ -925,7 +937,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_adapter_maintenance_task
   } else if (OB_NOT_NULL(mgr) && OB_FAIL(check_index_adpter_exist(mgr))) {
     LOG_WARN("fail to check exist paritial index adapter", KR(ret));
   } else if (local_tenant_task_.need_check_) {
-    if (OB_FAIL(execute_adapter_maintenance())) {
+    if (OB_FAIL(execute_adapter_maintenance(vec_table_id_array))) {
       LOG_WARN("fail to generate tablet tasks", K_(tenant_id));
     }
     int tmp_ret = OB_SUCCESS;
@@ -1125,12 +1137,14 @@ int ObPluginVectorIndexLoadScheduler::start_task_executors()
   return ret;
 }
 
-int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
+int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks(ObIArray<uint64_t> &vec_table_id_array)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard guard("ObPluginVectorIndexLoadScheduler::check_and_handle_event",
                     VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD);
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  bool schema_changed = false;
+  uint64_t task_trace_base_num = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet ttl manager not init", KR(ret));
@@ -1146,7 +1160,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
   } else {
     // Notice: index_ls_mgr maybe null
     // create / remove adapter, check need update & write mem sync log
-    if (OB_FAIL(check_and_execute_adapter_maintenance_task(index_ls_mgr))) { // Tips: do merge
+    if (OB_FAIL(check_and_execute_adapter_maintenance_task(index_ls_mgr, vec_table_id_array))) { // Tips: do merge
       LOG_WARN("fail to check and execute adapter maintenance task",
         KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     }
@@ -1210,11 +1224,15 @@ void ObPluginVectorIndexLoadScheduler::run_task()
       LOG_WARN("fail to resume async task", K(tmp_ret));
     }
   } else if (check_can_do_work()){
+    bool has_ivf_index = false;
+    ObSEArray<uint64_t, DEFAULT_TABLE_ARRAY_SIZE> vec_table_id_array;
     if (OB_FAIL(check_tenant_memory())) {
       LOG_WARN("check vector index resource failed", KR(ret));
-    } else if (OB_FAIL(reload_tenant_task())) {
+    } else if (OB_FAIL(check_has_vector_index(has_ivf_index, vec_table_id_array))) {
+      LOG_WARN("check vector index schema failed", KR(ret));
+    } else if (OB_FAIL(reload_tenant_task(has_ivf_index))) {
       LOG_WARN("fail to reload tenant task", KR(ret));
-    } else if (OB_FAIL(check_and_execute_tasks())) {
+    } else if (OB_FAIL(check_and_execute_tasks(vec_table_id_array))) {
       LOG_WARN("fail to scan and handle all tenant event", KR(ret));
     }
   }

@@ -4492,6 +4492,38 @@ int ObSchemaMgr::get_table_schemas_in_tenant(
   return ret;
 }
 
+int ObSchemaMgr::get_vector_index_schemas_in_tenant(
+    const uint64_t tenant_id,
+    ObIArray<const ObSimpleTableSchemaV2*> &schema_array) const
+{
+  int ret = OB_SUCCESS;
+  schema_array.reset();
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id));
+  } else {
+    const ObSimpleTableSchemaV2 *schema = NULL;
+    ObTenantTableId tenant_index_schema_id_lower(tenant_id, OB_MIN_ID);
+    ConstTableIterator iter = index_infos_.lower_bound(tenant_index_schema_id_lower,
+        compare_with_tenant_table_id);
+    bool is_stop = false;
+    for (; OB_SUCC(ret) && iter != index_infos_.end() && !is_stop; iter++) {
+      if (OB_ISNULL(schema = *iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr",  K(ret), KP(schema));
+      } else if (tenant_id != schema->get_tenant_id()) {
+        is_stop = true;
+      } else if (schema->is_vec_index() && OB_FAIL(schema_array.push_back(schema))) {
+        LOG_WARN("failed to push back SCHEMA schema", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSchemaMgr::check_database_exists_in_tablegroup(
     const uint64_t tenant_id,
     const uint64_t tablegroup_id,
