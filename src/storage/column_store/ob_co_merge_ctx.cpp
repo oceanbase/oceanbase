@@ -255,7 +255,7 @@ int ObCOTabletMergeCtx::prepare_schema()
   const bool need_medium_info = is_medium_merge(get_merge_type()) || is_major_merge(get_merge_type());
   ObArenaAllocator allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObMediumCompactionInfo *medium_info = nullptr;
-  if (need_medium_info && OB_FAIL(OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(), *get_tablet(), allocator, medium_info)))) {
+  if (need_medium_info && OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(), *get_tablet(), allocator, medium_info))) {
     LOG_WARN("fail to get medium info with merge version", K(ret), KPC(this));
   } else if (OB_FAIL(prepare_cs_replica_param(medium_info))) {
     LOG_WARN("failed to prepare cs replica param", K(ret), K_(static_param), KPC(medium_info));

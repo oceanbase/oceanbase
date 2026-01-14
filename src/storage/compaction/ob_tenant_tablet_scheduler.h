@@ -256,7 +256,7 @@ public:
       const ObDagId& curr_dag_net_id,
       int &schedule_ret);
 #ifdef ERRSIM
-  static void errsim_after_mini_schedule_adaptive(
+  static void errsim_schedule_adaptive(
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
     const ObAdaptiveMergePolicy::AdaptiveCompactionEvent &event,

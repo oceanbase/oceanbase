@@ -1556,10 +1556,10 @@ int ObMediumCompactionScheduleFunc::fill_mds_filter_info(ObMediumCompactionInfo 
   int ret = OB_SUCCESS;
   ObMdsInfoDistinctMgr mds_info_mgr;
   ObVersionRange read_version_range(medium_info.last_medium_snapshot_, medium_info.medium_snapshot_);
-  if (medium_info.storage_schema_.is_global_index_table()
-      && OB_FAIL(mds_info_mgr.init(allocator_, *tablet_handle_.get_obj(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
+  const bool read_mds = medium_info.storage_schema_.is_global_index_table();
+  if (read_mds && OB_FAIL(mds_info_mgr.init(allocator_, *tablet_handle_.get_obj(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
     LOG_WARN("failed to init mds filter info mgr", KR(ret), K(read_version_range));
-  } else if (mds_info_mgr.empty()) {
+  } else if (!read_mds || mds_info_mgr.empty()) {
     medium_info.contain_mds_filter_info_ = false;
     if (ObAdaptiveMergePolicy::AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO == merge_reason_) {
       ret = OB_NO_NEED_MERGE;

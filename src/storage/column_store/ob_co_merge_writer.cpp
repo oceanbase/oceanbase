@@ -813,7 +813,7 @@ int ObCOMergeRowWriter::init(
 
   if (OB_FAIL(ret)) {
   } else if (write_helper_.need_project()) {
-    if (write_helper_.project(default_row, row_, is_all_nop)) {
+    if (OB_FAIL(write_helper_.project(default_row, row_, is_all_nop))) {
       LOG_WARN("fail to project", K(ret), K(default_row), K(row_));
     } else if (OB_FAIL(basic_init(row_ /*default_row*/, merge_param, cg_column_cnt))) {
       LOG_WARN("Failed to init default row", K(ret), K(cg_column_cnt));

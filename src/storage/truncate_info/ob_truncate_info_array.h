@@ -72,7 +72,7 @@ public:
   static bool compare(const ObTruncateInfo *lhs, const ObTruncateInfo *rhs);
   TO_STRING_KV(K_(is_inited), "array_cnt", count(), K_(src), K_(truncate_info_array));
 private:
-  bool inner_is_valid() const { return 0 == count() || (count() >= 0 && allocator_ != nullptr); }
+  bool inner_is_valid() const { return 0 == count() || (count() > 0 && allocator_ != nullptr); }
   void reset_list();
   int inner_append_and_sort(ObTruncateInfo &info);
   ObSEArray<ObTruncateInfo *, 1> truncate_info_array_;
