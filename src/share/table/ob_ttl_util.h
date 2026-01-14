@@ -380,6 +380,7 @@ public:
   static int check_is_normal_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
   static int check_is_rowkey_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
   static int get_tenant_table_ids(const uint64_t tenant_id, common::ObIArray<uint64_t> &table_id_array);
+  static int get_tenant_vector_index_ids(const uint64_t tenant_id, bool &has_ivf_index, common::ObIArray<uint64_t> &table_id_array);
   static int check_task_status_from_sys_table(uint64_t tenant_id, common::ObISQLClient& proxy,
                                               const uint64_t& task_id, const uint64_t& table_id,
                                               ObTabletID& tablet_id, bool &is_exists, bool &is_end_state);
