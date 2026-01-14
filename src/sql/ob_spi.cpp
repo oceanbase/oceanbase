@@ -10821,6 +10821,7 @@ ObSPIExecEnvGuard::~ObSPIExecEnvGuard()
   session_info_.get_retry_info_for_update().clear();
   if (!is_ps_cursor_) {
     session_info_.reset_pl_spi_query_info(query_start_time_bk_);
+    session_info_.set_use_pl_inner_info_string(true);
   }
 }
 

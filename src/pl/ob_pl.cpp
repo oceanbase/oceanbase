@@ -867,11 +867,12 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       } else {
         OZ (session_info.store_top_query_string(session_info.get_current_query_string()));
       }
-      OX (session_info.reset_query_string());
     }
-
-    OX (session_info.set_pl_cur_query_start_time_bak(session_info.get_query_start_time()));
-    OX (session_info.set_pl_internal_time_split_point(ObTimeUtility::current_time()));
+    {
+      ObSQLSessionInfo::LockGuard lock_guard(session_info.get_thread_data_lock());
+      OX (session_info.set_pl_cur_query_start_time_bak(session_info.get_query_start_time()));
+      OX (session_info.set_pl_internal_time_split_point(ObTimeUtility::current_time()));
+    }
     OZ (recursion_ctx_.init(session_info));
     // set top level sql id
     ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
@@ -920,6 +921,13 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     saved_pl_internal_time_split_point_ = session_info.get_pl_internal_time_split_point();
   }
   OX (session_info.set_use_pl_inner_info_string(true));
+  if (OB_SUCC(ret)) {
+    ObString empty_string;
+    saved_cur_query_string_ = session_info.get_current_query_string();
+    saved_cur_query_buf_len_ = session_info.get_cur_query_buf_len();
+    session_info.swap_query_string(empty_string, 0);
+    saved_use_pl_inner_info_string_ = session_info.get_use_pl_inner_info_string();
+  }
   if (OB_SUCC(ret) && OB_NOT_NULL(routine) && is_function_or_trigger && lib::is_mysql_mode() &&
       routine->get_has_parallel_affect_factor()) {
     // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
@@ -1237,7 +1245,10 @@ void ObPLContext::destory(
       session_info.get_control_info().set_sample_pct(flt_sample_pct_);
     }
     session_info.shadow_top_query_string();
-    session_info.set_pl_cur_query_start_time_bak(0);
+    {
+      ObSQLSessionInfo::LockGuard lock_guard(session_info.get_thread_data_lock());
+      session_info.set_pl_cur_query_start_time_bak(0);
+    }
     // 无论如何恢复session上的状态
     session_info.set_pl_stack_ctx(NULL);
     session_info_ = NULL;
@@ -1280,10 +1291,12 @@ void ObPLContext::destory(
       ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
-  if (0 != saved_pl_internal_time_split_point_) {
+  if (saved_cur_query_buf_len_ > 0 || 0 != saved_pl_internal_time_split_point_) {
+    ObSQLSessionInfo::LockGuard lock_guard(session_info.get_thread_data_lock());
+    session_info.swap_query_string(saved_cur_query_string_, saved_cur_query_buf_len_, true);
     session_info.set_pl_internal_time_split_point(saved_pl_internal_time_split_point_);
   }
-  OX (session_info.set_use_pl_inner_info_string(false));
+  OX (session_info.set_use_pl_inner_info_string(saved_use_pl_inner_info_string_));
   if (is_autonomous_) {
     int end_trans_ret = end_autonomous(ctx, session_info, ret == OB_TRANS_XA_BRANCH_FAIL);
     ret = OB_SUCCESS == ret ? end_trans_ret : ret;

@@ -1106,6 +1106,9 @@ public:
       saved_session_ = nullptr;
     }
     saved_has_implicit_savepoint_ = false;
+    saved_cur_query_string_.reset();
+    saved_cur_query_buf_len_ = 0;
+    saved_use_pl_inner_info_string_ = false;
     database_id_ = OB_INVALID_ID;
     need_reset_default_database_ = false;
     session_info_ = NULL;
@@ -1366,6 +1369,9 @@ private:
   bool is_inner_mock_;
   bool is_system_trigger_;
   int64_t saved_pl_internal_time_split_point_;
+  ObString saved_cur_query_string_;
+  int64_t saved_cur_query_buf_len_;
+  bool saved_use_pl_inner_info_string_;
   bool disable_pl_exec_cache_;
   double flt_sample_pct_;
   ObArenaAllocator exec_cache_alloc_;
