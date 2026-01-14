@@ -1842,8 +1842,8 @@ int ObSSIncMajorDDLMergeHelper::prepare_cg_table_key(
   }
 
   if (OB_SUCC(ret)) {
-    ObTabletDDLCompleteMdsUserData user_data;
     ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "SS_INC_MAJOR"));
+    ObTabletDDLCompleteMdsUserData user_data;
     if (OB_FAIL(tablet_handle.get_obj()->get_inc_major_direct_load_info(
                                                 share::SCN::max_scn(),
                                                 allocator,
