@@ -1361,6 +1361,22 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             break;
           }
         case COLUMN_COMMENT: {
+            ObObjType column_type = ObMaxType;
+            const ObColumnSchemaV2 *tmp_column_schema = NULL;
+            cells[cell_idx].reset();
+            if (OB_ISNULL(table_schema_) ||
+                OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema(col_id))) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "table or column schema is null", KR(ret), KP(table_schema_), KP(tmp_column_schema));
+            } else if (FALSE_IT(column_type = tmp_column_schema->get_meta_type().get_type())) {
+            } else {
+              cells[cell_idx].set_string(column_type, ObString(""));
+              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                                    ObCharset::get_default_charset()));
+              if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(cells[cell_idx], *allocator_))) {
+                SERVER_LOG(WARN, "convert lob type obj fail", K(ret), K(cells[cell_idx]));
+              }
+            }
             break;
           }
         case GENERATION_EXPRESSION: {
