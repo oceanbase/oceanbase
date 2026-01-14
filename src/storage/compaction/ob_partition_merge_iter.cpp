@@ -1330,10 +1330,15 @@ int ObPartitionMicroMergeIter::open_curr_micro_block(
                                                         cs_range))) {
         STORAGE_LOG(WARN, "failed to open column block", K(ret), K(curr_block_desc_), K(decompressed_data), K(cs_range));
       }
-    } else {
+    } else if (tmp_open || !micro_block_iter_.is_right_border()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid cs range", K(ret), K(cs_range), K(merge_range_), K(curr_block_desc_.range_),
+      LOG_WARN("invalid cs range", K(ret), K(tmp_open), K(cs_range), K(merge_range_), K(curr_block_desc_.range_),
         K(curr_micro_block_->range_), K(curr_micro_block_->header_.row_count_));
+    } else {
+      iter_end_ = true;
+      macro_block_opened_ = false;
+      micro_block_opened_ = false;
+      ret = OB_ITER_END;
     }
   } else if (OB_FAIL(micro_row_scanner_->set_range(rowkey_range))) {
     LOG_WARN("Failed to set micro scanner range", K(ret));
