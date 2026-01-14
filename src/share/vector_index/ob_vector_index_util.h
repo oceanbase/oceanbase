@@ -637,7 +637,8 @@ public:
 
   static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                   const uint64_t vidx_table_id,
-                                  const common::ObString &exec_env);
+                                  const common::ObString &exec_env,
+                                  const uint64_t paralellism);
   static int remove_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                      const uint64_t vidx_table_id);
   static int get_dbms_vector_job_info(common::ObISQLClient &sql_client,

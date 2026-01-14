@@ -102,4 +102,22 @@ CREATE OR REPLACE PACKAGE BODY dbms_vector
   RETURN VARCHAR(65535);
   PRAGMA INTERFACE(C, DBMS_VECTOR_MYSQL_INDEX_VECTOR_MEMORY_ESTIMATE);
 
+  PROCEDURE do_set_attribute (
+    IN     idx_name                VARCHAR(65535),
+    IN     table_name              VARCHAR(65535),
+    IN     item                    VARCHAR(65535),
+    IN     value                   VARCHAR(65535)
+  );
+  PRAGMA INTERFACE(C, DBMS_VECTOR_MYSQL_SET_ATTRIBUTE);
+
+  PROCEDURE set_attribute(
+    IN     idx_name                VARCHAR(65535),
+    IN     table_name              VARCHAR(65535),
+    IN     item                    VARCHAR(65535),
+    IN     value                   VARCHAR(65535))
+  BEGIN
+    COMMIT;
+    CALL do_set_attribute(idx_name, table_name, item, value);
+  END;
+
 END dbms_vector;

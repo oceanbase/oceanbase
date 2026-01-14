@@ -208,7 +208,8 @@ public:
                            common::ObMySQLTransaction &trans,
                            const common::ObString *ddl_stmt_str = NULL,
                            const bool need_sync_schema_version = true,
-                           const bool is_truncate_table = false);
+                           const bool is_truncate_table = false,
+                           const int64_t create_vec_index_parallel = 0);
   int truncate_table(const ObString *ddl_stmt_str,
                      const share::schema::ObTableSchema &orig_table_schema,
                      const share::schema::ObTableSchema &new_table_schema,

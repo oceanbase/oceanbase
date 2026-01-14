@@ -2076,7 +2076,8 @@ int ObCreateTableHelper::create_tables_()
       } else if (new_table.is_vec_delta_buffer_type() && 
                  OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(get_trans_(), new_table.get_tenant_id(), 
                                                                  new_table.get_table_id(),
-                                                                 new_table.get_exec_env()))) {
+                                                                 new_table.get_exec_env(),
+                                                                 0 /* parallelism=0 */))) { // only create table with index will call here
         LOG_WARN("failed to add dbms_vector jobs", K(ret), K(new_table.get_tenant_id()), K(new_table));
       }
     } // end for

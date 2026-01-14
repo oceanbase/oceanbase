@@ -1422,7 +1422,8 @@ int ObIndexBuilder::do_create_local_index(
                                                          tenant_data_version,
                                                          new_table_schema,
                                                          gen_columns,
-                                                         index_schema))) {
+                                                         index_schema,
+                                                         create_index_arg.parallelism_))) {
           LOG_WARN("fail to create inner expr index", K(ret));
         }
       }

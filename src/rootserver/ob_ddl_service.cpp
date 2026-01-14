@@ -370,7 +370,8 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
                                           const uint64_t tenant_data_version,
                                           ObTableSchema &new_table_schema,
                                           ObIArray<ObColumnSchemaV2*> &new_columns,
-                                          ObTableSchema &index_schema)
+                                          ObTableSchema &index_schema,
+                                          const int64_t create_vec_index_parallel /* =0 */)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -419,7 +420,7 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
                                                    trans))) {
         LOG_WARN("alter table options failed", K(ret), K(new_table_schema));
       } else if (OB_FAIL(ddl_operator.create_table(
-              index_schema, trans, nullptr/*ddl_stmt_str*/, true, false))) {
+              index_schema, trans, nullptr/*ddl_stmt_str*/, true, false, create_vec_index_parallel))) {
         // record the create index operation when index enables rather than schema generates.
         LOG_WARN("failed to create index schema", K(ret));
       }
@@ -528,7 +529,7 @@ int ObDDLService::create_index_table(
       // For create index operation, generate ddl_stmt_str when index enables, but
       // for alter table add index operation, keep generating ddl_stmt_str same as 3.x while generating index schema.
       if (OB_FAIL(create_index_or_mlog_table_in_trans(table_schema,
-              nullptr/* ddl_stmt_str */, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/, tenant_data_version))) {
+              nullptr/* ddl_stmt_str */, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/, tenant_data_version, arg.parallelism_))) {
         LOG_WARN("create_table_in_trans failed", KR(ret), K(arg), K(table_schema));
       }
     }
@@ -2900,7 +2901,8 @@ int ObDDLService::create_index_or_mlog_table_in_trans(
     ObMySQLTransaction *sql_trans,
     share::schema::ObSchemaGetterGuard &schema_guard,
     const bool need_check_tablet_cnt,
-    const uint64_t tenant_data_version)
+    const uint64_t tenant_data_version,
+    const int64_t create_vec_index_parallel /* =0 */ )
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
@@ -2918,7 +2920,10 @@ int ObDDLService::create_index_or_mlog_table_in_trans(
       LOG_WARN("failed to start trans", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else if (OB_FAIL(ddl_operator.create_table(table_schema,
                                                  trans,
-                                                 ddl_stmt_str))) {
+                                                 ddl_stmt_str,
+                                                 true,
+                                                 false,
+                                                 create_vec_index_parallel))) {
       LOG_WARN("failed to create table schema, ", KR(ret));
 		} else if (OB_FAIL(ddl_operator.insert_temp_table_info(trans, table_schema))) {
 			LOG_WARN("failed to insert temp table info!", KR(ret));
@@ -7658,7 +7663,8 @@ int ObDDLService::generate_aux_index_schema_(
                                           tenant_data_version,
                                           nonconst_data_schema,
                                           gen_columns,
-                                          index_schema))) {
+                                          index_schema,
+                                          create_index_arg.parallelism_))) {
         LOG_WARN("fail to create inner expr index", K(ret));
       }
     }

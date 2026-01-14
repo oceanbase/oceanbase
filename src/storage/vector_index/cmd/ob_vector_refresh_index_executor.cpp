@@ -474,7 +474,8 @@ int ObVectorRefreshIndexExecutor::resolve_and_check_table_valid(
     const ObString &idx_col_name,
     const share::schema::ObTableSchema *&base_table_schema,
     const share::schema::ObTableSchema *&domain_table_schema,
-    const share::schema::ObTableSchema *&index_id_table_schema) {
+    const share::schema::ObTableSchema *&index_id_table_schema,
+    const bool skip_col_name_check) {
   int ret = OB_SUCCESS;
   ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
   ObCollationType cs_type = CS_TYPE_INVALID;
@@ -578,6 +579,7 @@ int ObVectorRefreshIndexExecutor::resolve_and_check_table_valid(
     }
     // check index column match
     if (OB_FAIL(ret)) {
+    } else if (skip_col_name_check) { // only for set_attribute
     } else if (!idx_col_name.empty() &&
               OB_FAIL(get_vector_index_column_name(
                   base_table_schema, domain_table_schema,
@@ -1030,6 +1032,160 @@ int ObVectorRefreshIndexExecutor::do_refresh_with_retry()
   return ret;
 }
 
+/*
+
+DBMS_VECTOR.rebuild_index_inner(500013, 0.200000, "", "", "", 8)
+
+*/
+
+int ObVectorRefreshIndexExecutor::get_parallel_value(const ObString &parallel_str, int64_t &parallel_int)
+{
+  int ret = OB_SUCCESS;
+  if (parallel_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parallel number", K(ret), K(parallel_str));
+  } else {
+    ObString tmp_parallel_str = parallel_str.trim();
+    const char *str = tmp_parallel_str.ptr();
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_parallel_str.length(); ++i) {
+      if (str[i] < '0' || str[i] > '9') {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid parallel number", K(ret), K(parallel_str));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      parallel_int = std::atoi(parallel_str.ptr());
+    }
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::set_attribute(pl::ObPLExecCtx &ctx, const ObVectorRebuildIndexArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ctx_ = ctx.exec_ctx_;
+  pl_ctx_ = &ctx;
+  CK(OB_NOT_NULL(ctx_));
+  CK(OB_NOT_NULL(session_info_ = ctx_->get_my_session()));
+  CK(OB_NOT_NULL(ctx_->get_sql_ctx()));
+  CK(OB_NOT_NULL(ctx_->get_sql_ctx()->schema_guard_));
+  OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
+  OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_), session_info_->get_server_sid()));
+  OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
+      tenant_id_, DATA_VERSION_4_3_5_5,
+      "tenant's data version is below 4.3.5.5, refreshing vector index is not "
+      "supported."));
+  
+  const share::schema::ObTableSchema *base_table_schema = nullptr;
+  const share::schema::ObTableSchema *domain_table_schema = nullptr;
+  const share::schema::ObTableSchema *index_id_table_schema = nullptr;
+  ObSqlString rebuild_job_name;
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(resolve_and_check_table_valid(
+      arg.idx_name_, arg.table_name_, arg.idx_vector_col_, 
+      base_table_schema, domain_table_schema, index_id_table_schema, true))) {
+    LOG_WARN("failed to resolver and check table valid", K(ret), K(arg));
+  } else if (!domain_table_schema->is_vec_delta_buffer_type()) {
+    LOG_WARN("failed to set attribute", K(ret));
+  } else if (OB_FAIL(rebuild_job_name.assign_fmt("%lu_rebuild", domain_table_schema->get_table_id()))) {
+    LOG_WARN("failed to generate refresh job name", K(ret));
+  } else if (OB_FAIL(set_attribute_inner(rebuild_job_name.string(), arg.attribute_, arg.value_))) {
+    LOG_WARN("fail to do refresh", KR(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::set_attribute_inner(
+    const ObString &rebuild_job_name, const ObString &attribute, const ObString &value)
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_id = MTL_ID();
+  ObArenaAllocator allocator;
+  dbms_scheduler::ObDBMSSchedJobInfo job_info;
+  ObMySQLTransaction trans;
+  if (rebuild_job_name.empty() || value.empty() || attribute.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(rebuild_job_name), K(value));
+  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+    LOG_WARN("failed to start trans", KR(ret));
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::get_dbms_sched_job_info(*GCTX.sql_proxy_, 
+                                                                              tenant_id, 
+                                                                              false, // is_oracle_tenant
+                                                                              rebuild_job_name,
+                                                                              allocator,
+                                                                              job_info))) {
+    LOG_WARN("get job failed", K(ret));
+    if (ret == OB_ENTRY_NOT_EXIST) {
+      ret = OB_ERR_EVENT_NOT_EXIST;
+    }
+  } else {
+    ObString attribute_str;
+    if (OB_FAIL(ob_simple_low_to_up(allocator, attribute, attribute_str))) {
+      LOG_WARN("string low to up failed", K(ret), K(attribute));
+    } else if (0 == attribute_str.compare("PARALLEL")) {
+      ObString &job_action = job_info.get_job_action();
+      ObString tmp_job_action;
+      ObArray<ObString> tmp_param_strs;
+      ObSqlString new_job_action_str;
+      int64_t parallel_value = 0; // default 1
+
+      if (OB_FAIL(get_parallel_value(value, parallel_value))) {
+        LOG_WARN("fail to get parallel value", K(ret), K(value));
+      } else if (OB_FAIL(ob_write_string(allocator, job_action, tmp_job_action))) {
+        LOG_WARN("fail to write string", K(ret), K(job_action));
+      } else if (tmp_job_action.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected job action", K(ret), K(tmp_job_action));
+      } else if (OB_FAIL(split_on(tmp_job_action, ',', tmp_param_strs))) {
+        LOG_WARN("fail to split func expr", K(ret), K(tmp_job_action));
+      } else if (tmp_param_strs.count() < 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected job action", K(ret), K(tmp_param_strs));
+      } else {
+        // need param 1 and param2
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_param_strs.count(); ++i) {
+          ObString tmp_split_str = tmp_param_strs.at(i).trim();
+          if (i < 2 && OB_FAIL(new_job_action_str.append_fmt("%.*s, ", tmp_split_str.length(), tmp_split_str.ptr()))) {
+            LOG_WARN("fail to append fmt", K(ret), K(tmp_split_str));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(new_job_action_str.append_fmt("\"\", \"\", \"\", %ld)", parallel_value))) {
+            LOG_WARN("fail to append fmt", K(ret), K(value), K(parallel_value));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObString job_action("job_action");
+        ObObj job_action_str;
+        job_action_str.set_char(new_job_action_str.string());
+        OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, job_action, job_action_str));
+      }
+
+    } else if (0 == attribute_str.compare("REBUILD_REPEAT_INTERVAL")) {
+      ObString repeat_interval("repeat_interval");
+      ObObj repeat_interval_obj;
+      repeat_interval_obj.set_char(value);
+      OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, repeat_interval, repeat_interval_obj));
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support attribute", K(ret), K(attribute));
+    }
+  }
+
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  LOG_INFO("set repeat interval", K(ret), K(rebuild_job_name), K(attribute), K(value));
+  return ret;
+}
+
 int ObVectorRefreshIndexExecutor::do_rebuild() {
   int ret = OB_SUCCESS;
   ObVectorRefreshIndexCtx refresh_ctx;
@@ -1055,6 +1211,8 @@ int ObVectorRefreshIndexExecutor::do_rebuild() {
     LOG_WARN("fail to init refresher", KR(ret), K(refresh_ctx));
   } else if (OB_FAIL(refresher.refresh())) {
     LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
+  } else if (OB_FAIL(update_repeat_interval_if_need(refresh_ctx))) {
+    LOG_WARN("fail to update repeat interval if need", K(ret));
   }
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -1097,6 +1255,8 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
       LOG_WARN("fail to init refresher", KR(ret), K(refresh_ctx));
     } else if (OB_FAIL(refresher.refresh())) {
       LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
+    } else if (OB_FAIL(update_repeat_interval_if_need(refresh_ctx))) {
+      LOG_WARN("fail to update repeat interval if need", K(ret));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -1115,6 +1275,51 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
       }
     } else {
       break;
+    }
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::update_repeat_interval_if_need(ObVectorRefreshIndexCtx &refresh_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (refresh_ctx.tmp_repeat_interval_.empty() || refresh_ctx.database_id_ == OB_INVALID_ID) {
+    LOG_INFO("do not update repeat interval", K(ret), K(refresh_ctx));
+  } else {
+    ObSchemaGetterGuard schema_guard;
+    ObRefreshSchemaStatus schema_status;
+    schema_status.tenant_id_ = tenant_id_;
+    int64_t lastest_schema_version = OB_INVALID_VERSION;
+    const ObTableSchema *domain_table_schema = nullptr;
+
+    if (OB_FAIL(GCTX.schema_service_->get_schema_version_in_inner_table(*GCTX.sql_proxy_, schema_status, lastest_schema_version))) {
+      LOG_WARN("fail to get latest schema version in inner table", K(ret));
+    } else if (OB_FAIL(GCTX.schema_service_->async_refresh_schema(tenant_id_, lastest_schema_version))) {
+      LOG_WARN("fail to async refresh schema", K(ret), K(tenant_id_), K(lastest_schema_version));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, 
+                                                     refresh_ctx.database_id_, 
+                                                     refresh_ctx.domain_index_name_,
+                                                     true, /* is index */
+                                                     domain_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(tenant_id_), K(refresh_ctx.domain_index_name_));
+    }
+    
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(domain_table_schema) && domain_table_schema->is_vec_delta_buffer_type()) {
+      const uint64_t domain_table_id = domain_table_schema->get_table_id();
+      ObSqlString rebuild_job_name;
+      ObString attribute("rebuild_repeat_interval");
+      if (!domain_table_schema->is_vec_delta_buffer_type()) {
+        LOG_WARN("failed to set attribute", K(ret));
+      } else if (OB_FAIL(rebuild_job_name.assign_fmt("%lu_rebuild", domain_table_id))) {
+        LOG_WARN("failed to generate refresh job name", K(ret));
+      } else if (OB_FAIL(set_attribute_inner(rebuild_job_name.string(), attribute, refresh_ctx.tmp_repeat_interval_))) {
+        LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
+      } else {
+        LOG_INFO("update repeat interval", K(refresh_ctx), K(rebuild_job_name.string()));
+      }
     }
   }
   return ret;

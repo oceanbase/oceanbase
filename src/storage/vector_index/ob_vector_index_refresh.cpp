@@ -312,8 +312,6 @@ int ObVectorIndexRefresher::do_refresh() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", K(ret));
   } else if (OB_FALSE_IT(tenant_id = refresh_ctx_->tenant_id_)) {
-  } else if (OB_FAIL(lock_domain_table_for_refresh())) {
-    LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret), KPC(ctx_));
@@ -384,7 +382,9 @@ int ObVectorIndexRefresher::do_refresh() {
              K(domain_table_schema->get_table_name_str()));
   } else if (domain_table_row_cnt < refresh_ctx_->refresh_threshold_) {
     // refreshing is not triggered.
-  }
+  } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
+    LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
+  } 
 #ifndef DBMS_VECTOR_MOCK_TEST
   else if (OB_FAIL(get_vector_index_col_names(domain_table_schema,
                                               true,
@@ -559,6 +559,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   bool triggered = true;
   bool rebuild_index_online = false;
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
+  dbms_scheduler::ObDBMSSchedJobInfo job_info;
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("refresh_ctx is null", K(ret));
@@ -569,8 +570,6 @@ int ObVectorIndexRefresher::do_rebuild() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", K(ret));
   } else if (OB_FALSE_IT(tenant_id = refresh_ctx_->tenant_id_)) {
-  } else if (OB_FAIL(lock_domain_table_for_refresh())) {
-    LOG_WARN("fail to lock domain for refresh", KR(ret));
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret), KPC(ctx_));
@@ -643,6 +642,22 @@ int ObVectorIndexRefresher::do_rebuild() {
       LOG_WARN("fail to construct rebuild index params", K(ret), K(refresh_ctx_->idx_parameters_));
     }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (domain_table_schema->is_vec_delta_buffer_type() &&          // only hnsw index here, because ivf not support refresh 
+             OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(*GCTX.sql_proxy_, tenant_id,
+                                                                 domain_table_schema->get_table_id(), 
+                                                                 refresh_ctx_->allocator_,
+                                                                 schema_guard,
+                                                                 job_info))) {
+    LOG_WARN("fail to get dbms_vector job info", K(ret), K(tenant_id), K(domain_table_schema->get_table_id()));
+  } else {
+    refresh_ctx_->tmp_repeat_interval_ = job_info.get_repeat_interval();
+    refresh_ctx_->domain_index_name_ = domain_table_schema->get_table_name_str();
+    refresh_ctx_->database_id_ = domain_table_schema->get_database_id();
+    LOG_WARN("get last repeat interval and database_id", K(ret), K(*refresh_ctx_));
+  }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, 
                                                       domain_table_schema->get_database_id(), 
@@ -677,13 +692,12 @@ int ObVectorIndexRefresher::do_rebuild() {
                                          refresh_ctx_->scn_, 
                                          index_id_table_row_cnt))) {
     LOG_WARN("fail to get index_id_table row count", KR(ret), K(index_id_tb_schema->get_table_name_str()));
-  } else if (0 != base_table_row_cnt &&
-             (index_id_table_row_cnt + domain_table_row_cnt) * 1.0 /
-                     base_table_row_cnt <
-                 refresh_ctx_->delta_rate_threshold_) {
+  } else if (0 != base_table_row_cnt && (index_id_table_row_cnt + domain_table_row_cnt) * 1.0 / base_table_row_cnt < refresh_ctx_->delta_rate_threshold_) {
     // rebuilding is not triggered.
     triggered = false;
     LOG_WARN("no need to start rebuild", K(base_table_row_cnt));
+  } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
+    LOG_WARN("fail to lock domain for rebuild", KR(ret));
   } 
   
   if (OB_FAIL(ret)) {

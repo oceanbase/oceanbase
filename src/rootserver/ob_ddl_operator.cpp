@@ -1487,7 +1487,8 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
                                 ObMySQLTransaction &trans,
                                 const ObString *ddl_stmt_str/*=NULL*/,
                                 const bool need_sync_schema_version,
-                                const bool is_truncate_table /*false*/)
+                                const bool is_truncate_table /*false*/,
+                                const int64_t create_vec_index_parallel /* =0 */)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -1571,7 +1572,8 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
   if (OB_SUCC(ret) && table_schema.is_vec_delta_buffer_type() &&
       OB_FAIL(ObVectorIndexUtil::add_dbms_vector_jobs(trans, tenant_id, 
                                                       table_schema.get_table_id(),
-                                                      table_schema.get_exec_env()))) {
+                                                      table_schema.get_exec_env(),
+                                                      create_vec_index_parallel))) {
     LOG_WARN("failed to add dbms_vector jobs", K(ret), K(tenant_id), K(table_schema));
   }
   return ret;

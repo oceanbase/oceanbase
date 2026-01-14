@@ -14,6 +14,7 @@
 
 #include "share/schema/ob_schema_struct.h"
 #include "sql/resolver/ob_schema_checker.h"
+#include "storage/vector_index/ob_vector_index_refresh.h"
 
 namespace oceanbase {
 namespace pl {
@@ -66,12 +67,15 @@ public:
   static constexpr double DEFAULT_REBUILD_THRESHOLD = 0.2;
   ObVectorRebuildIndexArg()
       : delta_rate_threshold_(DEFAULT_REBUILD_THRESHOLD),
-        idx_parallel_creation_(1) {}
+        idx_parallel_creation_(1),
+        attribute_(),
+        value_() {}
   bool is_valid() const { return !idx_name_.empty() && !table_name_.empty(); }
   TO_STRING_KV(K_(idx_name), K_(table_name), K_(idx_vector_col),
                K_(delta_rate_threshold), K_(idx_organization),
                K_(idx_distance_metrics), K_(idx_parameters),
-               K_(idx_parallel_creation));
+               K_(idx_parallel_creation),
+               K_(attribute), K_(value));
 
 public:
   ObString idx_name_;
@@ -85,6 +89,8 @@ public:
   ObString idx_distance_metrics_; // DEFAULT: EUCLIDEAN
   ObString idx_parameters_; // parameters for different vector-index algorithm
   int64_t idx_parallel_creation_; // DEFAULT: 1
+  ObString attribute_;
+  ObString value_;
 };
 
 struct ObVectorRebuildIndexInnerArg {
@@ -134,6 +140,9 @@ public:
                       const ObVectorRebuildIndexArg &arg);
   int execute_rebuild_inner(pl::ObPLExecCtx &ctx,
                       const ObVectorRebuildIndexInnerArg &arg);
+  
+
+  int set_attribute(pl::ObPLExecCtx &ctx, const ObVectorRebuildIndexArg &arg);
 
   static int resolve_table_name(const ObCollationType cs_type,
                                 const ObNameCaseMode case_mode,
@@ -159,6 +168,10 @@ private:
   static int get_vector_index_column_name(
       const share::schema::ObTableSchema *base_table_schema,
       const share::schema::ObTableSchema *index_id_schema, ObString &col_name);
+  
+  int get_parallel_value(const ObString &parallel_str, int64_t &parallel_int);
+  int update_repeat_interval_if_need(ObVectorRefreshIndexCtx &refresh_ctx);
+  int set_attribute_inner(const ObString &rebuild_job_name, const ObString &attribute, const ObString &value);
   int generate_vector_aux_index_name(VectorIndexAuxType index_type,
                                      const uint64_t data_table_id,
                                      const ObString &index_name,
@@ -185,7 +198,8 @@ private:
       const ObString &idx_col_name,
       const share::schema::ObTableSchema *&base_table_schema,
       const share::schema::ObTableSchema *&delta_buf_table_schema,
-      const share::schema::ObTableSchema *&index_id_table_schema);
+      const share::schema::ObTableSchema *&index_id_table_schema,
+      const bool skip_col_name_check = false);
   int resolve_table_id_and_check_table_valid(
       const int64_t idx_table_id,
       const share::schema::ObTableSchema *&base_table_schema,

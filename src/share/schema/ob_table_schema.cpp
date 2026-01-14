@@ -4121,6 +4121,7 @@ void ObTableSchema::reset()
   dynamic_partition_policy_.reset();
   external_location_id_ = OB_INVALID_ID;
   external_sub_path_.reset();
+
   ObSimpleTableSchemaV2::reset();
 }
 
