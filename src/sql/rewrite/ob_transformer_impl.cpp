@@ -139,6 +139,10 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
     ctx_->cbqt_policy_ = TransPolicy::ENABLE_TRANS;
   } else if (OB_FAIL(session_info->get_optimizer_cost_based_transformation(opt_param_val))) {
     LOG_WARN("failed to get optimizer cost based transformation", K(ret));
+  } else if (session_info->get_ddl_info().is_refreshing_mview()
+             && !session_info->get_ddl_info().is_mview_complete_refresh()
+             && OB_FALSE_IT(opt_param_val = TransPolicy::DISABLE_TRANS)) {
+    // disable the cost-based transform for mview fast refresh by covering the session variable
   } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_integer_opt_param(
                             ObOptParamHint::OPTIMIZER_COST_BASED_TRANSFORMATION, opt_param_val))) {
     LOG_WARN("failed to get integer opt param", K(ret));
