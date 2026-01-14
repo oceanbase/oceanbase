@@ -164,7 +164,8 @@ enum ObDDLTaskType
   PARTITION_SPLIT_RECOVERY_TASK = 13,
   PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14,
   SWITCH_VEC_INDEX_NAME_TASK = 15,
-  SWITCH_MLOG_NAME_TASK = 16
+  SWITCH_MLOG_NAME_TASK = 16,
+  GET_SPECIFIC_TABLE_TABLETS = 17
 };
 
 enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
@@ -1214,6 +1215,13 @@ public:
             (is_string_lob || (CS_TYPE_BINARY != obj_meta.get_collation_type() && !is_domain_index));
   }
   
+  static int get_rs_specific_table_tablets(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id, 
+    const uint64_t index_table_id, 
+    const uint64_t task_id,
+    ObIArray<ObTabletID> &tablet_ids);
+
   static int get_sys_ls_leader_addr(
     const uint64_t cluster_id, 
     const uint64_t tenant_id, 
