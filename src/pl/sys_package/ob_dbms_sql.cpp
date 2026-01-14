@@ -1735,6 +1735,7 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
         *(cursor->get_cursor_handler()->get_result_set()), spi_cursor, 0, is_iter_end));
     } else {
       ObSPICursor *orig_spi_cursor = cursor->get_spi_cursor();
+      OZ (spi_cursor->row_desc_.reserve(orig_spi_cursor->fields_.count()));
       for (int64_t i = 0; OB_SUCC(ret) && i < orig_spi_cursor->fields_.count(); ++i) {
         ObDataType type;
         type.set_meta_type(orig_spi_cursor->fields_.at(i).type_.get_meta());
