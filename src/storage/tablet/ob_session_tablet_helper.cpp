@@ -128,6 +128,11 @@ int ObSessionTabletCreateHelper::do_work()
       const int64_t timeout_us = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
       const uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
       transaction::tablelock::ObLockTableRequest table_lock_arg;
+      share::schema::ObLatestSchemaGuard latest_schema_guard(schema_service, tenant_id_);
+      uint64_t table_id_get_from_guard = OB_INVALID_ID;
+      ObTableType table_type = MAX_TABLE_TYPE;
+      int64_t schema_version = OB_INVALID_VERSION;
+
       table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
       table_lock_arg.timeout_us_ = timeout_us;
       table_lock_arg.table_id_ = table_id;
@@ -137,9 +142,17 @@ int ObSessionTabletCreateHelper::do_work()
         LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
       } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::SHARE, timeout_us, trans_))) {
         LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
+      } else if (OB_FAIL(latest_schema_guard.get_table_id(table_schema->get_database_id(), table_schema->get_session_id(), table_schema->get_table_name(),
+                               table_id_get_from_guard, table_type, schema_version))) {
+        // When ObLatestSchemaGuard::get_table_schema is invoked on a non-RS side（e.g. executer),
+        // requesting a non-existent table may return error `-4002`.
+        // To address this, check whether the target table exists before calling ObLatestSchemaGuard::get_table_schema.
+        LOG_WARN("fail to get table id", KR(ret), K(table_schema->get_database_id()), K(table_schema->get_table_name()));
+      } else if (OB_INVALID_ID == table_id_get_from_guard) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table not exist", KR(ret), K(table_schema->get_database_id()), K(table_schema->get_table_name()));
       } else {
         const share::schema::ObTableSchema *latest_table_schema = nullptr;
-        share::schema::ObLatestSchemaGuard latest_schema_guard(schema_service, tenant_id_);
         const share::schema::ObTablegroupSchema *tablegroup_schema = nullptr;
         if (OB_FAIL(latest_schema_guard.get_table_schema(table_ids_.at(0), latest_table_schema))) {
           LOG_WARN("failed to get table schema", KR(ret), K(table_ids_.at(0)));
