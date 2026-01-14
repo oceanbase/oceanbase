@@ -291,15 +291,14 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
     const ObString &select_sql_string = mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str().empty() ?
       mview_table_schema->get_view_schema().get_view_definition_str() :
       mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str();
-    std::string select_sql(mview_select_sql.ptr());
     std::string real_sql;
     ObSqlString insert_columns;
     if (nested_consistent_refresh) {
-      if (mview_select_sql.empty()) {
+      if (OB_UNLIKELY(mview_select_sql.empty())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("nested sync refresh with empty sql string", K(mview_select_sql), K(mview_table_id));
       } else if (OB_FAIL(ObMViewRefreshHelper::replace_all_snapshot_zero(
-                         select_sql, snapshot_version, real_sql, is_oracle_mode))) {
+                         mview_select_sql, snapshot_version, real_sql, is_oracle_mode))) {
         LOG_WARN("fail to replace snapshot", K(ret));
       }
     }

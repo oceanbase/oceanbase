@@ -553,8 +553,9 @@ int ObMViewRefresher::complete_refresh()
       LOG_WARN("fail to assign based schema object infos", KR(ret));
     } else if(refresh_ctx_->target_data_sync_scn_.is_valid() &&
               OB_FAIL(gen_complete_refresh_sql_string_(select_string, str_alloc))) {
-      LOG_WARN("fail to generetae refresh sql string", K(ret));
-    } else if (OB_FALSE_IT(arg.select_sql_ = select_string)) {
+      LOG_WARN("fail to generate refresh sql string", K(ret));
+    } else {
+      arg.select_sql_ = select_string;
     }
   }
   // do mview complete refresh rpc
