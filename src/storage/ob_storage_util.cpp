@@ -58,8 +58,8 @@ OB_INLINE static int pad_on_local_buf(const ObString &space_pattern,
   int ret = OB_SUCCESS;
   char *buf = nullptr;
   const int32_t pad_len = length + pad_whitespace_length * space_pattern.length();
-  const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
-  if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
+  const int32_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
+  if (OB_ISNULL((buf = (char*) padding_alloc.alloc(static_cast<int64_t>(buf_len))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "no memory", K(ret));
   } else {
@@ -143,8 +143,8 @@ int pad_column(const common::ObAccuracy accuracy, sql::ObEvalCtx &ctx, sql::ObEx
     if (cur_len < length) {
       char *ptr = nullptr;
       const int32_t pad_len = datum.pack_ + (length - cur_len) * space_pattern.length();
-      const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
-      if (OB_ISNULL(ptr = expr.get_str_res_mem(ctx, buf_len))) {
+      const int32_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
+      if (OB_ISNULL(ptr = expr.get_str_res_mem(ctx, static_cast<int64_t>(buf_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "no memory", K(ret));
       } else {
