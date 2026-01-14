@@ -18,6 +18,8 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/compaction/ob_column_checksum_calculator.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
+#include "storage/lob/ob_lob_access_param.h"
+#include "storage/lob/ob_lob_persistent_iterator.h"
 
 
 namespace oceanbase
@@ -126,12 +128,45 @@ public:
   int init_scan_param(ObTableScanParam& scan_param);
 
 private:
+  int direct_delete_lob_data();
+  int inner_direct_delete_lob_data(transaction::ObTxDesc *tx_desc, const uint64_t timeout_us);
+  int check_lob_data();
+  int inner_check_lob_data(transaction::ObTxDesc *tx_desc, const uint64_t timeout_us);
+  int prepare_lob_param(
+      ObLobAccessParam &lob_param, transaction::ObTxDesc *tx_desc,
+      ObIAllocator &allocator, const uint64_t timeout_us);
+
+private:
   bool is_inited_;
   ObDeleteLobMetaRowParam *param_;
   ObCollationType collation_type_;
   DISALLOW_COPY_AND_ASSIGN(ObDeleteLobMetaRowTask);
 };
 
+class ObVecIdxSnapTableLobDelIter : public ObLobPersistWriteIter
+{
+public:
+  ObVecIdxSnapTableLobDelIter():
+    info_(), datum_row_(), scan_iter_(nullptr),
+    tablet_id_(0), del_cnt_(0)
+  {}
+
+  int init(ObLobAccessParam *param, ObLobMetaIterator *scan_iter, const uint64_t tablet_id);
+  int prepare_seq_no(ObLobAccessParam& param);
+  virtual ~ObVecIdxSnapTableLobDelIter() {}
+  virtual int get_next_row(blocksstable::ObDatumRow *&row);
+  virtual void reset() { datum_row_.reset(); }
+
+  TO_STRING_KV(K_(tablet_id), K_(del_cnt), KPC_(param));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObVecIdxSnapTableLobDelIter);
+private:
+  ObLobMetaInfo info_;
+  blocksstable::ObDatumRow datum_row_;
+  ObLobMetaIterator *scan_iter_;
+  uint64_t tablet_id_;
+  uint64_t del_cnt_;
+};
 
 } // end namespace table
 } // end namespace oceanbase

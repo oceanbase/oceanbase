@@ -14,6 +14,7 @@
 #include "ob_delete_lob_meta_row_task.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/access/ob_table_scan_iterator.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -432,6 +433,8 @@ int ObDeleteLobMetaRowTask::process()
                                                                       timeout_us,
                                                                       true))) {
           LOG_WARN("failed to delete lob column", K(ret));
+        } else {
+          LOG_INFO("delete lob column success", KPC(datum_row));
         }
       }
       if (ret == OB_ITER_END) {
@@ -452,6 +455,14 @@ int ObDeleteLobMetaRowTask::process()
         LOG_WARN("fail to revert scan iter", K(ret));
       }
     }
+    if (OB_TMP_FAIL(direct_delete_lob_data())) {
+      LOG_WARN("direct delete lob data fail", K(tmp_ret), KPC(param_));
+    } else if (OB_TMP_FAIL(check_lob_data())) {
+      LOG_WARN("check lob data fail", K(tmp_ret), KPC(param_));
+    }
+    if (OB_TMP_FAIL(ret) && OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
 
     if (OB_NOT_NULL(tmp_dag)) {
       ObDeleteLobMetaRowDag *dag = nullptr;
@@ -469,6 +480,227 @@ int ObDeleteLobMetaRowTask::process()
     if (OB_FAIL(ret)) {
       param_->delete_lob_meta_ret_ = ret;
       ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObDeleteLobMetaRowTask::direct_delete_lob_data()
+{
+  int ret = OB_SUCCESS;
+  int end_trans_ret = OB_SUCCESS;
+  transaction::ObTxDesc *tx_desc = nullptr;
+  const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
+  if (OB_FAIL(ObInsertLobColumnHelper::start_trans(param_->ls_id_, false/*is_for_read*/, timeout_us, tx_desc))) {
+    LOG_WARN("fail to get tx_desc", K(ret));
+  } else if (OB_FAIL(inner_direct_delete_lob_data(tx_desc, timeout_us))) {
+    LOG_WARN("inner_direct_delete_lob_data fail", K(ret));
+  }
+  if (nullptr != tx_desc) {
+    if (OB_SUCCESS != (end_trans_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, INT64_MAX))) {
+      LOG_WARN("fail to end read trans", K(ret));
+      ret = end_trans_ret;
+    } else {
+      LOG_INFO("direct delete lob end trans", K(param_->tablet_id_.id()));
+    }
+  }
+  return ret;
+}
+
+int ObDeleteLobMetaRowTask::inner_direct_delete_lob_data(transaction::ObTxDesc *tx_desc, const uint64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator("VILobDel", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
+  storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
+  ObLobMetaIterator *scan_iter = nullptr;
+  ObVecIdxSnapTableLobDelIter del_iter;
+  ObLobAccessParam lob_param;
+  if (OB_ISNULL(txs) || OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not be null", K(ret), KP(txs), KP(lob_mngr));
+  } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, param_->ls_id_, timeout_us, lob_param.snapshot_))) {
+    LOG_WARN("fail to get snapshot", K(ret));
+  } else if (OB_FAIL(prepare_lob_param(lob_param, tx_desc, tmp_allocator, timeout_us))) {
+    LOG_WARN("prepare lob param fail", K(ret));
+  } else if (OB_FAIL(lob_mngr->scan_lob_meta(lob_param, scan_iter))) {
+    LOG_WARN("scan lob meta fail", K(ret), K(lob_param));
+  } else if (OB_ISNULL(scan_iter)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("scan iter is nullptr", K(ret));
+  } else if (OB_FAIL(del_iter.init(&lob_param, scan_iter, param_->tablet_id_.id()))) {
+    LOG_WARN("init del iter fail", K(ret));
+  } else if (OB_FAIL(lob_mngr->delete_lob_meta(lob_param, del_iter))) {
+    LOG_WARN("del lob meta fail", K(ret), K(lob_param));
+  } else {
+    LOG_INFO("direct delete lob data sucess", K(tx_desc->get_tx_id()), K(del_iter), KPC(param_));
+  }
+
+  // revert_scan_iter if it is not null, even though ret != OB_SUCCESS
+  if (nullptr != scan_iter && nullptr != lob_mngr) {
+    if (OB_SUCCESS != lob_mngr->revert_scan_iter(scan_iter)) {
+      LOG_WARN("fail to revert scan iter", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDeleteLobMetaRowTask::check_lob_data()
+{
+  int ret = OB_SUCCESS;
+  int end_trans_ret = OB_SUCCESS;
+  transaction::ObTxDesc *tx_desc = nullptr;
+  const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
+  if (OB_FAIL(ObInsertLobColumnHelper::start_trans(param_->ls_id_, true/*is_for_read*/, timeout_us, tx_desc))) {
+    LOG_WARN("fail to get tx_desc", K(ret));
+  } else if (OB_FAIL(inner_check_lob_data(tx_desc, timeout_us))) {
+    LOG_WARN("inner_check_lob_data fail", K(ret));
+  }
+  if (nullptr != tx_desc) {
+    if (OB_SUCCESS != (end_trans_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, INT64_MAX))) {
+      LOG_WARN("fail to end read trans", K(ret));
+      ret = end_trans_ret;
+    } else {
+      LOG_INFO("direct delete lob end trans", K(param_->tablet_id_.id()));
+    }
+  }
+  return ret;
+}
+
+int ObDeleteLobMetaRowTask::inner_check_lob_data(transaction::ObTxDesc *tx_desc, const uint64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator("VILobCheck", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  transaction::ObTransService *txs = MTL(transaction::ObTransService*);
+  storage::ObLobManager* lob_mngr = MTL(storage::ObLobManager*);
+  ObLobMetaIterator *scan_iter = nullptr;
+  ObLobAccessParam lob_param;
+  if (OB_ISNULL(txs) || OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not be null", K(ret), KP(txs), KP(lob_mngr));
+  } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, param_->ls_id_, timeout_us, lob_param.snapshot_))) {
+    LOG_WARN("fail to get snapshot", K(ret));
+  } else if (OB_FAIL(prepare_lob_param(lob_param, tx_desc, tmp_allocator, timeout_us))) {
+    LOG_WARN("prepare lob param fail", K(ret));
+  } else if (OB_FAIL(lob_mngr->scan_lob_meta(lob_param, scan_iter))) {
+    LOG_WARN("scan lob meta fail", K(ret), K(lob_param));
+  } else if (OB_ISNULL(scan_iter)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("scan iter is nullptr", K(ret));
+  } else {
+    int64_t cnt = 0;
+    ObLobMetaInfo info;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(scan_iter->get_next_row(info))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("get next meta info failed.", K(ret));
+        }
+      } else if (info.lob_id_.tablet_id_ == param_->tablet_id_.id()) {
+        ++cnt;
+        LOG_ERROR("there are not delete lob meta row", K(info), K(cnt));
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+    if (OB_SUCC(ret)) {
+      if (cnt > 0) {
+        LOG_ERROR("there are not delete lob meta row, need retry", K(cnt), K(param_->tablet_id_));
+      } else {
+        LOG_INFO("all vector index lob is deleted", K(param_->tablet_id_));
+      }
+    }
+  }
+  // revert_scan_iter if it is not null, even though ret != OB_SUCCESS
+  if (nullptr != scan_iter && nullptr != lob_mngr) {
+    if (OB_SUCCESS != lob_mngr->revert_scan_iter(scan_iter)) {
+      LOG_WARN("fail to revert scan iter", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDeleteLobMetaRowTask::prepare_lob_param(
+    ObLobAccessParam &lob_param, transaction::ObTxDesc *tx_desc,
+    ObIAllocator &allocator, const uint64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  lob_param.tx_desc_ = tx_desc;
+  lob_param.sql_mode_ = SMO_DEFAULT;
+  lob_param.ls_id_ = param_->ls_id_;
+  lob_param.coll_type_ = CS_TYPE_BINARY;
+  lob_param.allocator_ = &allocator;
+  lob_param.lob_common_ = nullptr;
+  lob_param.timeout_ = timeout_us;
+  lob_param.scan_backward_ = false;
+  lob_param.offset_ = 0;
+  lob_param.set_tmp_allocator(&allocator);
+  lob_param.used_seq_cnt_ = 0;
+  lob_param.total_seq_cnt_ = 1;
+  lob_param.is_full_table_scan_ = true;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(param_->ls_id_));
+  } else if (OB_ISNULL(ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls should not be null", K(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(param_->tablet_id_, tablet_handle))) {
+    LOG_WARN("fail to get tablet handle", K(ret), K(param_->tablet_id_));
+  } else {
+    lob_param.tablet_id_ = tablet_handle.get_obj()->get_data_tablet_id();
+  }
+  return ret;
+}
+
+int ObVecIdxSnapTableLobDelIter::init(ObLobAccessParam *param, ObLobMetaIterator *scan_iter, const uint64_t tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(param) || OB_ISNULL(scan_iter)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("param or scan_iter is null", K(ret), KP(param), KP(scan_iter));
+  } else if (OB_FAIL(datum_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+    LOG_WARN("init new datum row failed", K(ret));
+  } else if (OB_FAIL(prepare_seq_no(*param))) {
+    LOG_WARN("prepare seq no", K(ret));
+  } else {
+    param_ = param;
+    scan_iter_ = scan_iter;
+    tablet_id_ = tablet_id;
+  }
+  return ret;
+}
+
+int ObVecIdxSnapTableLobDelIter::prepare_seq_no(ObLobAccessParam& lob_param)
+{
+  int ret = OB_SUCCESS;
+  lob_param.used_seq_cnt_ = 0;
+  if (OB_FAIL(lob_param.tx_desc_->get_and_inc_tx_seq(
+      lob_param.parent_seq_no_.get_branch(), lob_param.total_seq_cnt_, lob_param.seq_no_st_))) {
+    LOG_WARN("alloc seq_no fail", K(ret), K(lob_param));
+  }
+  return ret;
+}
+
+int ObVecIdxSnapTableLobDelIter::get_next_row(blocksstable::ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  row = nullptr;
+  while (OB_SUCC(ret) && nullptr == row) {
+    if (OB_FAIL(scan_iter_->get_next_row(info_))) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("get next meta info failed.", K(ret));
+      }
+    } else if (info_.lob_id_.tablet_id_ != tablet_id_) {// skip
+    } else if (OB_FALSE_IT(param_->used_seq_cnt_ = 0)) {
+      LOG_WARN("prepare seq no", K(ret));
+    } else if (OB_FAIL(update_seq_no())) {
+      LOG_WARN("update_seq_no fail", K(ret));
+    } else {
+      ObPersistentLobApator::set_lob_meta_row(datum_row_, info_);
+      row = &datum_row_;
+      ++del_cnt_;
+      LOG_TRACE("delete one lob meta row", K(info_.lob_id_), K(del_cnt_), K(datum_row_), K(param_->dml_base_param_->spec_seq_no_));
     }
   }
   return ret;
