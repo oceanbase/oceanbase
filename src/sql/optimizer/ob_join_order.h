@@ -3214,6 +3214,7 @@ struct MergeKeyInfoHelper
                                   uint64_t used_column_id,
                                   const ObTableSchema &index_schema,
                                   bool &found);
+    bool is_expanded_realtime_major_refresh_mview() const;
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:

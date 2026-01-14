@@ -224,6 +224,21 @@ private:
                                               ObIArray<ObRawExpr*> &extracted_preds);
   int add_constraint_for_convert_case_when_by_then(ObIArray<ObRawExpr *> &false_null_exprs,
                                                    ObIArray<ObRawExpr *> &true_exprs);
+
+  int replace_nullsafe_equal_condition(ObDMLStmt *stmt, bool &trans_happened);
+  int inner_replace_nullsafe_equal_condition(ObDMLStmt *stmt,
+                                             ObRawExpr *&expr,
+                                             ObNotNullContext &not_null_ctx,
+                                             bool &trans_happened);
+  int do_replace_nullsafe_equal_condition(ObDMLStmt *stmt,
+                                          ObRawExpr *&expr,
+                                          ObNotNullContext &not_null_ctx,
+                                          bool &trans_happened);
+  int recursive_replace_nullsafe_equal_join_conditions(ObDMLStmt *stmt,
+                                                        TableItem *table,
+                                                        ObNotNullContext &not_null_ctx,
+                                                        bool &trans_happened);
+
 };
 }
 }

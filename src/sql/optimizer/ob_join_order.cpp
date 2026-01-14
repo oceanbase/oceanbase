@@ -582,8 +582,9 @@ int ObJoinOrder::compute_base_table_path_plan_type(AccessPath *path)
     } else if (sharding_info->is_distributed()) {
       path->phy_plan_type_ = ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED;
     }
-    if (path->use_das_ ||
-        (path->is_global_index_ && path->est_cost_info_.index_meta_info_.is_index_back_)) {
+    if (!table_meta_info_.is_broadcast_table_ &&
+        (path->use_das_ ||
+        (path->is_global_index_ && path->est_cost_info_.index_meta_info_.is_index_back_))) {
       path->location_type_ = ObPhyPlanType::OB_PHY_PLAN_UNCERTAIN;
     }
   }
@@ -1560,10 +1561,15 @@ int ObJoinOrder::check_opt_rule_use_das(const uint64_t table_id,
   create_basic_path = false;
   IndexInfoEntry *index_info_entry = NULL;
   if (is_rescan) {
-    create_das_path = true;
-    create_basic_path = (table_meta_info_.is_broadcast_table_
+    if (!is_expanded_realtime_major_refresh_mview()) {
+      create_das_path = true;
+      create_basic_path = (table_meta_info_.is_broadcast_table_
                          || (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS)))
                         ? false : true;
+    } else {
+      create_das_path = table_meta_info_.is_broadcast_table_;
+      create_basic_path = !table_meta_info_.is_broadcast_table_;
+    }
   } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id, index_info_entry))) {
     LOG_WARN("failed to get index info entry", K(table_id), K(index_id), K(ret));
   } else if (OB_ISNULL(index_info_entry)) {
@@ -22843,4 +22849,16 @@ int ObJoinOrder::get_lake_table_partition_values(ObIArray<ObString> &partition_v
     LOG_TRACE("using global statistics for default lake table", K(table_meta_info_.lake_table_format_));
   }
   return ret;
+}
+
+bool ObJoinOrder::is_expanded_realtime_major_refresh_mview() const
+{
+  const ObDMLStmt *stmt = NULL;
+  bool bret = false;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    // do nothing
+  } else if (stmt->is_select_stmt()) {
+    bret = static_cast<const ObSelectStmt*>(stmt)->is_expanded_realtime_major_refresh_mview();
+  }
+  return bret;
 }
