@@ -67,7 +67,11 @@ private:
     WRITE_IOPS,
     DELETE_CNT,
     DELETE_FAIL_CNT,
-    DELETE_IOPS
+    DELETE_IOPS,
+    READ_BANDWIDTH,
+    READ_DELAY_US,
+    WRITE_BANDWIDTH,
+    WRITE_DELAY_US,
   };
 
 private:

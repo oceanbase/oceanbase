@@ -1987,6 +1987,16 @@ int ObIOHandle::check_is_finished(bool &is_finished)
   return ret;
 }
 
+void ObIOHandle::get_remained_io_timeout_ms(int64_t &real_wait_timeout_ms) const
+{
+  const int64_t timeout_ms = ((result_->time_log_.begin_ts_ > 0
+                               ? result_->time_log_.begin_ts_ + result_->timeout_us_ - ObTimeUtility::current_time()
+                               : 0) / 1000L);
+  real_wait_timeout_ms = (result_->is_limit_net_bandwidth_req_
+                          ? timeout_ms
+                          : min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms));
+}
+
 int ObIOHandle::wait(const int64_t wait_timeout_ms)
 {
   int ret = OB_SUCCESS;
@@ -2000,18 +2010,11 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
   } else if (0 == wait_timeout_ms) {
     ret = OB_EAGAIN;
   } else if (UINT64_MAX == wait_timeout_ms) {
-    const int64_t timeout_ms =
-        ((result_->time_log_.begin_ts_ > 0
-                ? result_->time_log_.begin_ts_ + result_->timeout_us_ - ObTimeUtility::current_time()
-                : 0)) /
-        1000L;
-    ObWaitEventGuard wait_guard(result_->flag_.get_wait_event(), timeout_ms);
-    const int64_t real_wait_timeout = (result_->is_limit_net_bandwidth_req_
-                                       ? timeout_ms
-                                       : min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms));
-
+    int64_t real_wait_timeout = 0;
+    get_remained_io_timeout_ms(real_wait_timeout);
     if (real_wait_timeout > 0) {
       int64_t wait_ms = real_wait_timeout;
+      ObWaitEventGuard wait_guard(result_->flag_.get_wait_event(), wait_ms);
       if (OB_FAIL(result_->wait(wait_ms))) {
         if (OB_TIMEOUT == ret) {
           LOG_WARN("fail to wait result condition due to spurious wakeup", K(ret), K(wait_ms), K(*result_));
@@ -2023,7 +2026,7 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
       ret = OB_TIMEOUT;
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {  // 10s
         LOG_WARN(
-            "real_wait_timeout is unexpected < 0", K(ret), K(real_wait_timeout), K(timeout_ms), K(result_), K(lbt()));
+            "real_wait_timeout is unexpected < 0", K(ret), K(real_wait_timeout), K(result_), K(lbt()));
       }
     }
     ObLocalDiagnosticInfo::set_io_time(

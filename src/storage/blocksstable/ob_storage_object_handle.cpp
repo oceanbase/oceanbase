@@ -359,16 +359,25 @@ int ObStorageObjectHandle::ss_update_object_type_rw_stat(const blocksstable::ObS
       LOG_WARN("local cache service is null", KR(ret), K(MTL_ID()));
     } else {
       ObIOFlag io_flag;
+      int64_t io_time_us = 0;
       if (OB_FAIL(io_handle_.get_io_flag(io_flag))) {
         LOG_WARN("fail to get io flag", KR(ret));
+      } else if (OB_TIMEOUT == result) {
+        int64_t tmp_real_wait_timeout_ms = 0;
+        io_handle_.get_remained_io_timeout_ms(tmp_real_wait_timeout_ms);
+        io_time_us = tmp_real_wait_timeout_ms * 1000L;
+      } else if (OB_FAIL(io_handle_.get_io_time_us(io_time_us))) {
+        LOG_WARN("fail to get io time", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else {
         ObIOMode mode = io_flag.get_mode();
         if (mode == ObIOMode::READ) {
           IGNORE_RETURN local_cache_service->update_object_type_stat(object_type, ObSSObjectTypeStatType::READ,
-            io_flag.is_sync(), result, delta_cnt, get_data_size());
+            io_flag.is_sync(), result, delta_cnt, get_data_size(), io_time_us/*delta_time_us*/);
         } else if (mode == ObIOMode::WRITE) {
           IGNORE_RETURN local_cache_service->update_object_type_stat(object_type, ObSSObjectTypeStatType::WRITE,
-            io_flag.is_sync(), result, delta_cnt, get_data_size());
+            io_flag.is_sync(), result, delta_cnt, get_data_size(), io_time_us/*delta_time_us*/);
         } else {
           LOG_WARN("unexpected io mode", KR(ret), K(mode));
         }

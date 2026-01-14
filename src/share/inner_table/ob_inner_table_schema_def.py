@@ -17548,6 +17548,10 @@ def_table_schema(
     ('delete_cnt', 'int'),
     ('delete_fail_cnt', 'int'),
     ('delete_iops', 'int'),
+    ('read_bandwidth', 'int'),
+    ('read_delay_us', 'int'),
+    ('write_bandwidth', 'int'),
+    ('write_delay_us', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -44997,7 +45001,39 @@ def_table_schema(
     WRITE_IOPS,
     DELETE_CNT,
     DELETE_FAIL_CNT,
-    DELETE_IOPS
+    DELETE_IOPS,
+    READ_BANDWIDTH,
+    CASE
+      WHEN READ_BANDWIDTH >= 1024*1024*1024*1024*1024
+        THEN CONCAT(ROUND(READ_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')
+      WHEN READ_BANDWIDTH >= 1024*1024*1024*1024
+        THEN CONCAT(ROUND(READ_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')
+      WHEN READ_BANDWIDTH >= 1024*1024*1024
+        THEN CONCAT(ROUND(READ_BANDWIDTH/1024/1024/1024,2), 'GB/s')
+      WHEN READ_BANDWIDTH >= 1024*1024
+        THEN CONCAT(ROUND(READ_BANDWIDTH/1024/1024,2), 'MB/s')
+      WHEN READ_BANDWIDTH >= 1024
+        THEN CONCAT(ROUND(READ_BANDWIDTH/1024,2), 'KB/s')
+      ELSE
+        CONCAT(ROUND(READ_BANDWIDTH,2), 'B/s')
+    END AS READ_BANDWIDTH_DISPLAY,
+    READ_DELAY_US,
+    WRITE_BANDWIDTH,
+    CASE
+      WHEN WRITE_BANDWIDTH >= 1024*1024*1024*1024*1024
+        THEN CONCAT(ROUND(WRITE_BANDWIDTH/1024/1024/1024/1024/1024,2), 'PB/s')
+      WHEN WRITE_BANDWIDTH >= 1024*1024*1024*1024
+        THEN CONCAT(ROUND(WRITE_BANDWIDTH/1024/1024/1024/1024,2), 'TB/s')
+      WHEN WRITE_BANDWIDTH >= 1024*1024*1024
+        THEN CONCAT(ROUND(WRITE_BANDWIDTH/1024/1024/1024,2), 'GB/s')
+      WHEN WRITE_BANDWIDTH >= 1024*1024
+        THEN CONCAT(ROUND(WRITE_BANDWIDTH/1024/1024,2), 'MB/s')
+      WHEN WRITE_BANDWIDTH >= 1024
+        THEN CONCAT(ROUND(WRITE_BANDWIDTH/1024,2), 'KB/s')
+      ELSE
+        CONCAT(ROUND(WRITE_BANDWIDTH,2), 'B/s')
+    END AS WRITE_BANDWIDTH_DISPLAY,
+    WRITE_DELAY_US
   FROM oceanbase.__all_virtual_ss_object_type_io_stat
   """.replace("\n", " ")
 )
@@ -45028,7 +45064,13 @@ def_table_schema(
     WRITE_IOPS,
     DELETE_CNT,
     DELETE_FAIL_CNT,
-    DELETE_IOPS
+    DELETE_IOPS,
+    READ_BANDWIDTH,
+    READ_BANDWIDTH_DISPLAY,
+    READ_DELAY_US,
+    WRITE_BANDWIDTH,
+    WRITE_BANDWIDTH_DISPLAY,
+    WRITE_DELAY_US
   FROM oceanbase.GV$OB_SS_OBJECT_TYPE_IO_STAT
   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
   """.replace("\n", " ")

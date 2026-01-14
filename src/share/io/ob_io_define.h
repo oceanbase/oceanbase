@@ -745,6 +745,7 @@ public:
   ObIOCallback *get_io_callback();
   bool need_trace() const;
   storage::ObStorageCheckID get_check_id() const { return storage::ObStorageCheckID::IO_HANDLE; }
+  void get_remained_io_timeout_ms(int64_t &real_wait_timeout_ms) const;
   TO_STRING_KV("io_result", result_);
 
 private:
