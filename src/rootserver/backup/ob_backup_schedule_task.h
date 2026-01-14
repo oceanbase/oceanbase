@@ -277,7 +277,8 @@ public:
   int check_replica_status_for_backup(
       const share::ObLSReplica &replica, 
       char *buf, 
-      const int64_t size, 
+      const int64_t size,
+      int64_t &pos, 
       bool &can_do_backup);
 private:
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, 
