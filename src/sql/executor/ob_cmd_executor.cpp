@@ -195,6 +195,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   ObString sql_text;
   ObSQLSessionInfo *my_session = ctx.get_my_session();
   bool is_ddl_or_dcl_stmt = false;
+  bool is_xa_stmt = false;
   int64_t ori_query_timeout;
   int64_t ori_trx_timeout;
   omt::ObMultiTenant *omt = GCTX.omt_;
@@ -911,22 +912,27 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         break;
       }
       case stmt::T_XA_START: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaStartStmt, ObXaStartExecutor);
         break;
       }
       case stmt::T_XA_END: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaEndStmt, ObXaEndExecutor);
         break;
       }
       case stmt::T_XA_PREPARE: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaPrepareStmt, ObXaPrepareExecutor);
         break;
       }
       case stmt::T_XA_COMMIT: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaCommitStmt, ObXaCommitExecutor);
         break;
       }
       case stmt::T_XA_ROLLBACK: {
+        is_xa_stmt = true;
         DEFINE_EXECUTE_CMD(ObXaRollBackStmt, ObXaRollbackExecutor);
         break;
       }
@@ -1163,7 +1169,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
     }
   }
-  if (!sql_text.empty()) {
+  if (!sql_text.empty() && !is_xa_stmt) {
     SERVER_EVENT_ADD("sql", "execute_cmd",
                      "cmd_type", cmd.get_cmd_type(),
                      "sql_text", ObHexEscapeSqlStr(sql_text),
