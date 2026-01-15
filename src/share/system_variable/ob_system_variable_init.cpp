@@ -11495,7 +11495,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[839].default_value_ = "1" ;
+      ObSysVars[839].default_value_ = "0" ;
       ObSysVars[839].info_ = "Whether can transform the PL/SQL select into from dual statement to an assignment statement" ;
       ObSysVars[839].name_ = "plsql_can_transform_sql_to_assign" ;
       ObSysVars[839].data_type_ = ObIntType ;

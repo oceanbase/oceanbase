@@ -256,6 +256,7 @@ struct ObPLObjectKey : public ObILibCacheKey
     PROFILE = 1,
     CODE_COVERAGE = 2,
     DEBUG = 4,
+    PLSQL_TRANSFORM_TO_ASSIGN = 8,
   };
 
   uint64_t  db_id_;

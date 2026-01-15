@@ -1510,6 +1510,26 @@ int ObResultSet::ExternalRetrieveInfo::recount_dynamic_param_info(
 
 // Check if the statement is a simple SELECT INTO FROM DUAL statement
 // that can be optimized (no WHERE, GROUP BY, HAVING, aggregation, window functions, etc.)
+static bool has_query_ref_expr(const ObRawExpr *expr)
+{
+  bool has_subquery = false;
+  if (OB_ISNULL(expr)) {
+    // do nothing
+  } else if (T_FUN_SUBQUERY == expr->get_expr_type()
+            || T_REF_QUERY == expr->get_expr_type()
+            || T_OP_ARG_CASE == expr->get_expr_type() // can not cg expr
+            || IS_AGGR_FUN(expr->get_expr_type())
+            || (T_FUN_SYS_ORA_DECODE == expr->get_expr_type() && oceanbase::lib::is_oracle_mode())) { // not support in pl
+    // found subquery or agg func
+    has_subquery = true;
+  } else {
+    for (int64_t i = 0; !has_subquery && i < expr->get_param_count(); ++i) {
+      has_subquery = has_query_ref_expr(expr->get_param_expr(i));
+    }
+  }
+  return has_subquery;
+}
+
 static bool is_simple_select_into_from_dual(const ObSelectStmt &select_stmt,
                                              int64_t into_exprs_count,
                                              const ObFixedArray<ObRawExpr*, ObIAllocator> &into_exprs)
@@ -1527,6 +1547,15 @@ static bool is_simple_select_into_from_dual(const ObSelectStmt &select_stmt,
         && !select_stmt.has_having()                                // No HAVING
         && !select_stmt.has_window_function()                      // No window functions
         && !select_stmt.is_set_stmt();                             // No UNION/INTERSECT/EXCEPT
+    // Check if any select expression contains subquery
+    if (can_transform) {
+      for (int64_t i = 0; can_transform && i < select_stmt.get_select_items().count(); ++i) {
+        const ObRawExpr *expr = select_stmt.get_select_item(i).expr_;
+        if (has_query_ref_expr(expr)) {
+          can_transform = false;
+        }
+      }
+    }
   }
   return can_transform;
 }
