@@ -252,7 +252,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> sp_proc_stmt_return
 %type <node> sql_stmt_prefix sql_stmt ident simple_ident
 %type <node> into_clause
-%type <node> sp_name sp_call_name opt_sp_param_list opt_sp_fparam_list sp_param_list sp_fparam_list
+%type <node> sp_ident sp_name sp_call_name opt_sp_param_list opt_sp_fparam_list sp_param_list sp_fparam_list
 %type <node> sp_param sp_fparam sp_alter_chistics
 %type <node> opt_sp_definer sp_create_chistics sp_create_chistic sp_chistic opt_parentheses user opt_host_name
 %type <node> param_type sp_cparams opt_sp_cparam_list cexpr sp_cparam opt_sp_cparam_with_assign
@@ -736,28 +736,57 @@ cexpr:
  *
  *****************************************************************************/
 sp_name:
-    ident '.' ident
+    sp_ident '.' sp_ident
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_NAME, 2, $1, $3);
     }
-  | ident
+  | sp_ident
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_NAME, 2, NULL, $1);
     }
 ;
 
 sp_call_name:
-    ident '.' ident '.' ident
+    sp_ident '.' sp_ident '.' sp_ident
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ACCESS_NAME, 3, $1, $3, $5);
     }
-  | ident '.' ident
+  | sp_ident '.' sp_ident
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ACCESS_NAME, 3, NULL, $1, $3);
     }
-  | ident
+  | sp_ident
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_ACCESS_NAME, 3, NULL, NULL, $1);
+    }
+;
+
+sp_ident:
+    ident
+    {
+      $$ = $1;
+    }
+  | SQL_KEYWORD
+    {
+      /*
+       * MySQL defines LOGS as a keyword, but OB MySQL mode expects `logs` to be usable as an
+       * object name in PL-handled DDL (e.g. DROP/CREATE PROCEDURE logs).
+       *
+       * In PL lexer, SQL keywords are collapsed to SQL_KEYWORD, so we whitelist LOGS here
+       * by checking the original text and converting it to an identifier node.
+       */
+      int start = @1.first_column;
+      while (start <= @1.last_column && ISSPACE(parse_ctx->stmt_str_[start])) {
+        start++;
+      }
+      int len = @1.last_column - start + 1;
+      if (4 == len && 0 == strncasecmp(parse_ctx->stmt_str_ + start, "logs", 4)) {
+        get_non_reserved_node($$, parse_ctx->mem_pool_, @1.first_column, @1.last_column);
+        $$->pl_str_off_ = @1.first_column;
+      } else {
+        obpl_mysql_yyerror(&@1, parse_ctx, "Syntax Error\n");
+        YYERROR;
+      }
     }
 ;
 
