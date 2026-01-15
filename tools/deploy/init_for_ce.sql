@@ -53,3 +53,6 @@ alter system set _enable_var_assign_use_das = true tenant = all_meta;
 alter system set _enable_spf_batch_rescan = true tenant = sys;
 alter system set _enable_spf_batch_rescan = true tenant = all_user;
 alter system set _enable_spf_batch_rescan = true tenant = all_meta;
+alter system set _ob_mysql_run_definer_pl_as_invoker = false tenant sys;
+alter system set _ob_mysql_run_definer_pl_as_invoker = false tenant all_user;
+alter system set _ob_mysql_run_definer_pl_as_invoker = false tenant all_meta;
