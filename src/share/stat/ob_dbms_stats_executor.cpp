@@ -2022,8 +2022,8 @@ int ObDbmsStatsExecutor::determine_auto_sample_table(ObExecContext &ctx, ObTable
 int ObDbmsStatsExecutor::try_use_prefix_index_refine_min_max(ObExecContext &ctx, ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
-  uint64_t index_tids[OB_MAX_INDEX_PER_TABLE + 2];
-  int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
+  uint64_t index_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 2];
+  int64_t index_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   const share::schema::ObTableSchema *table_schema = NULL;
   ObSEArray<uint64_t, 4> refine_columns;
