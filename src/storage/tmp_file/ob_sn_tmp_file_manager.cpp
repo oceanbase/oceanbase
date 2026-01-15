@@ -62,7 +62,31 @@ int ObSNTenantTmpFileManager::start_sub_module_()
 int ObSNTenantTmpFileManager::stop_sub_module_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   write_cache_.stop();
+
+  // truncate all tmp files to release all tmp data on disk
+  class TruncateAllFilesFunctor final
+  {
+  public:
+    bool operator()(const ObTmpFileKey &key, const ObITmpFileHandle &tmp_file_handle)
+    {
+      int ret = OB_SUCCESS;
+      int64_t file_size = 0;
+      if (OB_ISNULL(tmp_file_handle.get())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid tmp file pointer", KR(ret), K(key), KPC(tmp_file_handle.get()));
+      } else if (FALSE_IT(file_size = tmp_file_handle.get()->get_file_size())) {
+      } else if (OB_FAIL(tmp_file_handle.get()->truncate(file_size))) {
+        LOG_WARN("fail to truncate tmp file", KR(ret), K(key), KPC(tmp_file_handle.get()));
+      }
+      return OB_SUCCESS == ret;
+    }
+  };
+  TruncateAllFilesFunctor truncate_op;
+  if (OB_TMP_FAIL(files_.for_each(truncate_op))) {
+    LOG_WARN("fail to iterate tmp files for truncation", KR(tmp_ret));
+  }
   LOG_INFO("ObSNTenantTmpFileManager stop successful", K(tenant_id_), KP(this));
   return ret;
 }
