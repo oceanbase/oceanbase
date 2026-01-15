@@ -2376,7 +2376,7 @@ void ObLogHandler::refresh_proposer_member_info() const
   } else if (OB_UNLIKELY(is_in_stop_state_)) {
     CLOG_LOG(TRACE, "ObLogHandler is not running", K_(id));
   } else {
-    libpalf_proposer_config_mgr_.try_refresh_member_info();
+    libpalf_proposer_config_mgr_.try_refresh_member_info(libpalf::RefreshType::PERIODIC_REFRESH);
   }
 }
 
