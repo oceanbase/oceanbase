@@ -308,7 +308,7 @@ TEST_F(TestSSMCPrewarmStruct, parallel_append_hot_macro_infos)
   ASSERT_NE(nullptr, micro_cache);
   ObSSMicroCacheStat &micro_cache_stat = micro_cache->get_micro_cache_stat();
   ObSSMicroCachePrewarmStat &prewarm_stat = micro_cache_stat.prewarm_stat_;
-  ASSERT_EQ(total_micro_cnt, prewarm_stat.major_compaction_add_cnt_);
+  ASSERT_EQ(total_micro_cnt, prewarm_stat.major_compaction_pwm_stat_.add_cnt());
 }
 
 TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
@@ -367,7 +367,7 @@ TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
   ASSERT_NE(nullptr, micro_cache);
   ObSSMicroCacheStat &micro_cache_stat = micro_cache->get_micro_cache_stat();
   ObSSMicroCachePrewarmStat &prewarm_stat = micro_cache_stat.prewarm_stat_;
-  ASSERT_EQ(0, prewarm_stat.major_compaction_add_cnt_);
+  ASSERT_EQ(0, prewarm_stat.major_compaction_pwm_stat_.add_cnt());
 }
 
 

@@ -709,12 +709,12 @@ TEST_F(TestSSMicroCache, test_add_micro_block_cache)
   ASSERT_EQ(false, micro_meta_handle()->is_in_ghost());
   ASSERT_EQ(static_cast<uint64_t>(ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE), micro_meta_handle()->access_type());
 
-  ASSERT_EQ(0, micro_cache->cache_stat_.prewarm_stat().major_compaction_get_cnt_);
+  ASSERT_EQ(0, micro_cache->cache_stat_.prewarm_stat().major_compaction_pwm_stat_.get_cnt());
   micro_meta_handle.reset();
   const uint64_t effective_tablet_id = micro_key.get_macro_tablet_id().id();
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(micro_key, micro_meta_handle, effective_tablet_id, true));
   ASSERT_EQ(0, micro_meta_handle()->access_type());
-  ASSERT_EQ(1, micro_cache->cache_stat_.prewarm_stat().major_compaction_get_cnt_);
+  ASSERT_EQ(1, micro_cache->cache_stat_.prewarm_stat().major_compaction_pwm_stat_.get_cnt());
 }
 
 /*  parallelly add micro_block randomly. */
