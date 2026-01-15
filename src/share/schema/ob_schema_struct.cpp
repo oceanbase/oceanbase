@@ -8439,8 +8439,7 @@ ObViewSchema &ObViewSchema::operator =(const ObViewSchema &src_schema)
 
     if (OB_FAIL(deep_copy_str(src_schema.view_definition_, view_definition_))) {
       LOG_WARN("Fail to deep copy view definition, ", K(ret));
-    }
-    if (OB_FAIL(deep_copy_str(src_schema.expand_view_definition_for_mv_, expand_view_definition_for_mv_))) {
+    } else if (OB_FAIL(deep_copy_str(src_schema.expand_view_definition_for_mv_, expand_view_definition_for_mv_))) {
       LOG_WARN("Fail to deep copy expand view definition for mv, ", K(ret));
     }
     if (OB_FAIL(ret)) {
