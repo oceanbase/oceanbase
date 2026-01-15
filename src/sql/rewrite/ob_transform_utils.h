@@ -1977,7 +1977,6 @@ public:
                                                  ObIArray<ColumnItem> &uppper_col_items,
                                                  ObIArray<SelectItem> &view_sel_items,
                                                  uint64_t mv_table_id);
-
   static int generate_view_stmt_from_query_string(const ObString &expand_view,
                                                   ObTransformerCtx *ctx,
                                                   ObSelectStmt *&view_stmt);

@@ -252,9 +252,11 @@ int ObTransformMVRewrite::gen_base_table_map(const ObIArray<TableItem*> &from_ta
       if (OB_ISNULL(from_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret), K(i));
-      } else if (!(from_table->is_basic_table() || from_table->is_link_table())
-                 || OB_INVALID_ID == from_table->ref_id_) {
+      } else if (!is_mv_rewrite_supported_table(*from_table)) {
         // do nothing
+      } else if (OB_UNLIKELY(common::OB_INVALID_ID == from_table->ref_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid ref id", K(ret), KPC(from_table));
       } else if (NULL == (num = from_table_num.get(from_table->ref_id_))) {
         if (OB_FAIL(from_table_num.set_refactored(from_table->ref_id_, 1))) {
           LOG_WARN("failed to set refactored", K(ret), K(from_table->ref_id_));
@@ -270,9 +272,11 @@ int ObTransformMVRewrite::gen_base_table_map(const ObIArray<TableItem*> &from_ta
       if (OB_ISNULL(to_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null table", K(ret), K(i));
-      } else if (!(to_table->is_basic_table() || to_table->is_link_table())
-                 || OB_INVALID_ID == to_table->ref_id_) {
+      } else if (!is_mv_rewrite_supported_table(*to_table)) {
         // do nothing
+      } else if (OB_UNLIKELY(common::OB_INVALID_ID == to_table->ref_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid ref id", K(ret), KPC(to_table));
       } else if (NULL == (idx = to_table_map.get(to_table->ref_id_))) {
         ObSEArray<int64_t,4> temp_array;
         if (OB_FAIL(temp_array.push_back(i))) {
@@ -349,8 +353,7 @@ int ObTransformMVRewrite::inner_gen_base_table_map(int64_t from_table_idx,
     if (OB_ISNULL(from_table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("from table item is NULL", K(ret), K(from_table_idx));
-    } else if (!(from_table->is_basic_table() || from_table->is_link_table())
-               || OB_INVALID_ID == from_table->ref_id_
+    } else if (!is_mv_rewrite_supported_table(*from_table)
                || NULL == (to_idx = to_table_map.get(from_table->ref_id_))) {
       // table does not exists in to_tables, map from_table to nothing
       current_map.at(from_table_idx) = -1;
