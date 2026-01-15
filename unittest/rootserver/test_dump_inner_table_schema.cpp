@@ -143,9 +143,9 @@ TEST_F(TestDumpInnerTableSchema, check)
         ASSERT_STREQ(info.inner_table_column_names_, info1.inner_table_column_names_);
         ASSERT_EQ(info.row_count_, info1.row_count_);
         for (int j = 0; j < info.row_count_; j++) {
-          ASSERT_EQ(info.inner_table_table_ids_[j], info.inner_table_table_ids_[j]);
-          ASSERT_STREQ(info.inner_table_rows_[j], info.inner_table_rows_[j]);
-          ASSERT_EQ(info.row_checksum_[j], info.row_checksum_[j]);
+          ASSERT_EQ(info.inner_table_table_ids_[j], info1.inner_table_table_ids_[j]);
+          ASSERT_STREQ(info.inner_table_rows_[j], info1.inner_table_rows_[j]);
+          ASSERT_EQ(info.row_checksum_[j], info1.row_checksum_[j]);
         }
       }
     }
