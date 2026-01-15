@@ -91,6 +91,9 @@ public:
   static int check_filter_row(const ObInsCtDef &ins_ctdef,
                               ObEvalCtx &eval_ctx,
                               bool &is_skipped);
+  static int check_filter_row(const ObUpdCtDef &upd_ctdef,
+                              ObEvalCtx &eval_ctx,
+                              bool &is_skipped);
   static int check_error_ret_by_row(const ObInsCtDef &ins_ctdef,
                                     ObTableModifyOp &dml_op,
                                     const int errcode);
