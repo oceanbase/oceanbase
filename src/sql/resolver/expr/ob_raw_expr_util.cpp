@@ -1215,20 +1215,37 @@ do {                                                                            
           } else if (T_OBJ_ACCESS_REF == iexpr->get_expr_type()) {
             ObObjAccessRawExpr* obj = static_cast<ObObjAccessRawExpr*>(iexpr);
             uint64_t pkg_id = OB_INVALID_ID;
+            uint64_t sub_id = OB_INVALID_ID;
             uint64_t var_id = OB_INVALID_ID;
+            ObUDFParamDesc::OutType obj_access_out_type = ObUDFParamDesc::OBJ_ACCESS_OUT;
             OZ (pl::ObPLResolver::set_write_property(
-                iexpr, *(params.expr_factory_), params.session_info_, params.schema_checker_->get_schema_guard(), true));
-            if (obj->get_access_idxs().count() > 0 &&
-                OB_NOT_NULL(obj->get_access_idxs().at(0).get_sysfunc_) &&
-                T_OP_GET_PACKAGE_VAR == obj->get_access_idxs().at(0).get_sysfunc_->get_expr_type()) {
+              iexpr, *(params.expr_factory_), params.session_info_, params.schema_checker_->get_schema_guard(), true));
+            if (OB_FAIL(ret)) {
+            } else if (obj->get_access_idxs().count() <= 0) {
+            } else if (OB_NOT_NULL(obj->get_access_idxs().at(0).get_sysfunc_) &&
+                       T_OP_GET_SUBPROGRAM_VAR == obj->get_access_idxs().at(0).get_sysfunc_->get_expr_type()) {
+              const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(obj->get_access_idxs().at(0).get_sysfunc_);
+              CK (OB_NOT_NULL(f_expr) && f_expr->get_param_count() >= 3);
+              GET_CONST_EXPR_VALUE(f_expr->get_param_expr(0), pkg_id);
+              GET_CONST_EXPR_VALUE(f_expr->get_param_expr(1), sub_id);
+              GET_CONST_EXPR_VALUE(f_expr->get_param_expr(2), var_id);
+              obj_access_out_type = ObUDFParamDesc::SUBPROGRAM_VAR_OUT;
+            } else if (OB_NOT_NULL(obj->get_access_idxs().at(0).get_sysfunc_) &&
+                       T_OP_GET_PACKAGE_VAR == obj->get_access_idxs().at(0).get_sysfunc_->get_expr_type()) {
               const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(obj->get_access_idxs().at(0).get_sysfunc_);
               CK (OB_NOT_NULL(f_expr) && f_expr->get_param_count() >= 2);
               GET_CONST_EXPR_VALUE(f_expr->get_param_expr(0), pkg_id);
               GET_CONST_EXPR_VALUE(f_expr->get_param_expr(1), var_id);
+              obj_access_out_type = ObUDFParamDesc::PACKAGE_VAR_OUT;
+            } else if (obj->get_access_idxs().at(0).is_local()
+                       && obj->get_var_indexs().count() > obj->get_access_idxs().at(0).var_index_) {
+                var_id = obj->get_var_indexs().at(obj->get_access_idxs().at(0).var_index_);
+            } else {
+              var_id = obj->get_access_idxs().at(0).var_index_;
             }
             OZ (udf_raw_expr->add_param_desc(
                 ObUDFParamDesc(pl::ObPLRoutineParamMode::PL_PARAM_OUT == mode ? ObUDFParamDesc::OBJ_ACCESS_OUT : ObUDFParamDesc::OBJ_ACCESS_INOUT,
-                              var_id, OB_INVALID_ID, pkg_id)));
+                              var_id, sub_id, pkg_id, obj_access_out_type)));
           } else if (T_QUESTIONMARK == iexpr->get_expr_type()) {
             ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
             pl::ObPLDataType param_type;

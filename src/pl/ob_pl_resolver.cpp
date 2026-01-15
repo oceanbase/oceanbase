@@ -14002,25 +14002,44 @@ int ObPLResolver::resolve_udf_info(
       CK (OB_NOT_NULL(udf_raw_expr = udf_info.ref_expr_));
       for (int64_t i = 0; OB_SUCC(ret) && i < udf_raw_expr->get_params_desc().count(); ++i) {
         int64_t position = udf_raw_expr->get_param_position(i);
+        const ObUDFParamDesc &param_desc = udf_raw_expr->get_params_desc().at(i);
         if (position != OB_INVALID_INDEX
-            && udf_raw_expr->get_params_desc().at(i).is_local_out()) {
+            && (param_desc.is_local_out()
+                || param_desc.is_obj_access_out()
+                || param_desc.is_subprogram_var_out()
+                || param_desc.is_package_var_out())) {
           const ObPLVar *var = NULL;
           ObIRoutineParam *iparam = NULL;
           CK (OB_NOT_NULL(routine_info));
           OZ (routine_info->get_routine_param(i, iparam));
-          CK (OB_NOT_NULL(var = table->get_symbol(position)));
-          if (OB_SUCC(ret) && var->is_readonly()) {
-            ret = OB_ERR_VARIABLE_IS_READONLY;
-            LOG_WARN("variable is read only", K(ret), K(position), KPC(var));
+          CK (OB_NOT_NULL(iparam));
+          if (OB_SUCC(ret) && iparam->is_self_param()) {
+            continue;
           }
-          if (OB_SUCC(ret) && var->get_name().prefix_match(ANONYMOUS_ARG)) {
+          if (param_desc.is_subprogram_var_out() || param_desc.is_obj_access_subprogram_var_out()) {
+            OZ (get_subprogram_var(current_block_->get_namespace(), param_desc.get_subprogram_id(),
+                                   param_desc.get_index(), var));
+          } else if (param_desc.is_package_var_out() || param_desc.is_obj_access_package_var_out()) {
+            OZ (current_block_->get_namespace().get_package_var(resolve_ctx_, param_desc.get_package_id(),
+                                                                param_desc.get_index(), var));
+          } else {
+            CK (OB_NOT_NULL(var = table->get_symbol(position)));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(var)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("variable not found", K(ret), K(position), K(param_desc));
+          } else if (var->get_name().prefix_match(ANONYMOUS_ARG)) {
             ObPLVar* shadow_var = const_cast<ObPLVar*>(var);
             OX (shadow_var->set_readonly(false));
             if (OB_SUCC(ret) && iparam->is_inout_param()) {
               shadow_var->set_name(ANONYMOUS_INOUT_ARG);
             }
+          } else if (var->is_readonly()) {
+            ret = OB_ERR_VARIABLE_IS_READONLY;
+            LOG_WARN("variable is read only", K(ret), K(position), KPC(var));
           }
-          if (OB_SUCC(ret)) {
+          if (OB_SUCC(ret) && param_desc.is_local_out()) {
             const ObPLDataType &pl_type = var->get_type();
             if (pl_type.is_obj_type()
                 && pl_type.get_data_type()->get_obj_type() != ObNullType) {
