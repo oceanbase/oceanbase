@@ -29,7 +29,9 @@ ObAllVirtualMemstoreInfo::ObAllVirtualMemstoreInfo()
     ls_iter_guard_(),
     ls_tablet_iter_(ObMDSGetTabletMode::READ_ALL_COMMITED),
     tables_handle_(),
-    memtable_array_pos_(0)
+    memtable_array_pos_(0),
+    compatible_fixed_(false),
+    column_offset_11_type_(ObNullType)
 {
 }
 
@@ -50,6 +52,8 @@ void ObAllVirtualMemstoreInfo::reset()
   memset(freeze_time_dist_, 0, OB_MAX_CHAR_LENGTH);
   memset(compaction_info_buf_, 0, sizeof(compaction_info_buf_));
   ObVirtualTableScannerIterator::reset();
+  compatible_fixed_ = false;
+  column_offset_11_type_ = ObNullType;
 }
 
 void ObAllVirtualMemstoreInfo::release_last_tenant()
@@ -216,6 +220,8 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
   } else if (OB_ISNULL(mt)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "mt shouldn't NULL here", K(ret), K(mt));
+  } else if (!compatible_fixed_ && OB_FAIL(fix_compatible_columns_())) {
+    SERVER_LOG(WARN, "fix_compatible_columns_ failed", K(ret));
   } else {
     ObMtStat& mt_stat = mt->get_mt_stat();
     const int64_t col_count = output_column_ids_.count();
@@ -281,7 +287,14 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
         case OB_APP_MIN_COLUMN_ID + 11:
           // unsynced_count, since 4.3 memtable's unsynced_count is not used
           // reuse this field for max_end_scn
-          cur_row_.cells_[i].set_uint64(mt->get_max_end_scn().get_val_for_inner_table_field());
+          if (column_offset_11_type_ == ObIntType) {
+            cur_row_.cells_[i].set_int(0);
+          } else if (column_offset_11_type_ == ObUInt64Type) {
+            cur_row_.cells_[i].set_uint64(mt->get_max_end_scn().get_val_for_inner_table_field());
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "invalid column_offset_11_type_", K(ret), K(column_offset_11_type_));
+          }
           break;
         case OB_APP_MIN_COLUMN_ID + 12:
           // write_ref_count
@@ -366,6 +379,37 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
     row = &cur_row_;
   }
 
+  return ret;
+}
+
+int ObAllVirtualMemstoreInfo::fix_compatible_columns_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "table_schema_ is NULL", K(ret));
+  } else {
+    //  since 4.3.3 (unsynced_count, 'int') -> ('max_end_scn', 'uint')
+    uint64_t column_id_11 = OB_APP_MIN_COLUMN_ID + 11;
+    const ObColumnSchemaV2 *col_schema = table_schema_->get_column_schema(column_id_11);
+    if (OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "col_schema is NULL", K(ret));
+    } else if (col_schema->get_data_type() == ObIntType) {
+      column_offset_11_type_ = ObIntType;
+    } else if (col_schema->get_data_type() == ObUInt64Type) {
+      column_offset_11_type_ = ObUInt64Type;
+    } else if (col_schema->get_data_type() == common::ObNumberType) {
+      // oracle mode, int and uint cast to number type (15)
+      column_offset_11_type_ = ObUInt64Type;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "col_schema is not int or uint64 type", K(ret), K(col_schema->get_data_type()), KPC(col_schema));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    compatible_fixed_ = true;
+  }
   return ret;
 }
 

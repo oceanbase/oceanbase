@@ -51,6 +51,7 @@ private:
   int get_next_tablet(storage::ObTabletHandle &tablet_handle);
   int get_next_memtable(storage::ObITabletMemtable *&mt);
   void get_freeze_time_dist(const ObMtStat& mt_stat);
+  int fix_compatible_columns_();
 private:
   common::ObAddr addr_;
   int64_t ls_id_;
@@ -61,6 +62,8 @@ private:
   int64_t memtable_array_pos_;
   char freeze_time_dist_[OB_MAX_CHAR_LENGTH];
   char compaction_info_buf_[common::OB_COMPACTION_INFO_LENGTH];
+  bool compatible_fixed_;
+  int64_t column_offset_11_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualMemstoreInfo);
 };
