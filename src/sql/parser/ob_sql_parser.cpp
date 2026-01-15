@@ -22,6 +22,7 @@
 #endif
 #include "sql/parser/parser_utility.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/charset/ob_charset.h"
 #include <openssl/md5.h>
 
 
@@ -56,6 +57,8 @@ int ObSQLParser::parse_and_gen_sqlid(void *malloc_pool,
 {
   int ret = OB_SUCCESS;
   ParseResult *parse_result = (ParseResult *)parse_malloc(sizeof(ParseResult), malloc_pool);
+  common::ObCollationType collation_connection = static_cast<common::ObCollationType>(collation_connection_);
+  common::ObCollationType nls_collation = static_cast<common::ObCollationType>(nls_collation_);
   if (OB_ISNULL(parse_result)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -76,6 +79,15 @@ int ObSQLParser::parse_and_gen_sqlid(void *malloc_pool,
     parse_result->may_bool_value_ = false;
     parse_result->is_external_table_ = false;
     parse_result->sql_mode_ = sql_mode_;
+    // charset, collation
+    parse_result->connection_collation_ = collation_connection;
+    parse_result->is_not_utf8_connection_ = ObCharset::is_valid_collation(collation_connection)
+                                            ? (ObCharset::charset_type_by_coll(collation_connection) != CHARSET_UTF8MB4)
+                                            : false;
+    parse_result->charset_info_ = ObCharset::get_charset(collation_connection);
+    parse_result->charset_info_oracle_db_ = ObCharset::is_valid_collation(nls_collation)
+                                            ? ObCharset::get_charset(nls_collation)
+                                            : NULL;
 
     int64_t new_length = str_len + 1;
     char *buf = (char *)parse_malloc(new_length, parse_result->malloc_pool_);
