@@ -325,6 +325,9 @@ void TestIndexBlockDataPrepare::SetUp()
   } else {
     prepare_data();
   }
+  if (!GCTX.is_shared_storage_mode()) {
+    ASSERT_EQ(OB_SUCCESS, LOCAL_DEVICE_INSTANCE.fsync_block());
+  }
 }
 void TestIndexBlockDataPrepare::TearDown()
 {

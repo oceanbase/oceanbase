@@ -15,6 +15,7 @@
 #include "ob_sstable_meta.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
+#include "share/ob_io_device_helper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -736,6 +737,19 @@ bool ObSSTableMeta::check_meta() const
       && macro_info_.is_valid();
 }
 
+int ObSSTableMeta::fsync_block(const ObTabletCreateSSTableParam &param)
+{
+  int ret = OB_SUCCESS;
+  const bool root_block_in_disk = param.root_block_addr_.is_disked();
+  const bool macro_meta_in_disk = param.data_block_macro_meta_addr_.is_disked();
+  if (root_block_in_disk || macro_meta_in_disk) {
+    if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) {
+      LOG_WARN("fail to fsync_block", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSSTableMeta::init(
     const ObTabletCreateSSTableParam &param,
     common::ObArenaAllocator &allocator)
@@ -756,6 +770,8 @@ int ObSSTableMeta::init(
     LOG_WARN("sstable state is not match.", K(ret), K(basic_meta_.status_));
   } else if (OB_FAIL(macro_info_.init_macro_info(allocator, param))) {
     LOG_WARN("fail to init macro info", K(ret), K(param));
+  } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(fsync_block(param))) {
+    LOG_WARN("fail to fsync block", K(ret));
   } else if (OB_FAIL(load_root_block_data(allocator))) {
     LOG_WARN("fail to load root block data", K(ret), K(param));
   } else if (OB_UNLIKELY(!check_meta())) {
