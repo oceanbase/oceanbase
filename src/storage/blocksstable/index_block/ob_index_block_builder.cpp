@@ -2207,9 +2207,8 @@ int ObBaseIndexBlockBuilder::init(const ObDataStoreDesc &data_store_desc,
                    index_block_aggregator_.init(data_store_desc, allocator))) {
       STORAGE_LOG(WARN, "fail to init index block aggregator", K(ret));
     } else if (OB_FAIL(micro_block_adaptive_splitter_.init(
-                   index_store_desc_->get_macro_store_size(),
-                   MIN_INDEX_MICRO_BLOCK_ROW_CNT /*min_micro_row_count*/,
-                   true /*is_use_adaptive*/))) {
+                   *index_store_desc_,
+                   MIN_INDEX_MICRO_BLOCK_ROW_CNT /*min_micro_row_count*/))) {
       STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret),
                   "macro_store_size",
                   index_store_desc_->get_macro_store_size());
@@ -2527,6 +2526,7 @@ void ObBaseIndexBlockBuilder::block_to_row_desc(
   row_desc.has_lob_out_row_ = micro_block_desc.has_lob_out_row_;
   row_desc.is_last_row_last_flag_ = micro_block_desc.is_last_row_last_flag_;
   row_desc.is_first_row_first_flag_ = micro_block_desc.is_first_row_first_flag_;
+  row_desc.single_version_rows_ = micro_block_desc.single_version_rows_;
   row_desc.aggregated_row_ = micro_block_desc.aggregated_row_;
   row_desc.is_serialized_agg_row_ = false;
   // This flag only valid in macro level.
@@ -2762,6 +2762,7 @@ int ObBaseIndexBlockBuilder::insert_and_update_index_tree(const ObDatumRow *inde
             micro_writer_->get_block_size(), micro_writer_->get_row_count(),
             index_store_desc_->get_micro_block_size(),
             macro_writer_->get_macro_data_size(), false /*is_keep_freespace*/,
+            false /*is_last_row_last_flag*/,
             is_split))) {
       STORAGE_LOG(WARN, "Failed to check need split", K(ret),
                   "micro_block_size", index_store_desc_->get_micro_block_size(),
@@ -4268,10 +4269,8 @@ int ObIndexBlockRebuilder::inner_get_macro_meta(
   } else if (OB_UNLIKELY(!meta_block.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "invalid micro block data", K(ret), K(meta_block));
-  } else if (OB_FAIL(micro_reader_helper.get_reader(meta_block.get_store_type(),
-                                                    micro_reader))) {
-    STORAGE_LOG(WARN, "fail to get micro reader by store type", K(ret),
-                K(meta_block.get_store_type()));
+  } else if (OB_FAIL(micro_reader_helper.get_reader(*meta_block.get_micro_header(), micro_reader))) {
+    STORAGE_LOG(WARN, "fail to get micro reader", K(ret), "header", *meta_block.get_micro_header());
   } else if (OB_FAIL(micro_reader->init(meta_block, nullptr))) {
     STORAGE_LOG(WARN, "fail to init micro reader", K(ret));
   } else if (OB_FAIL(datum_row.init(

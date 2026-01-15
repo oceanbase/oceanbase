@@ -103,7 +103,7 @@ void clear_tx_data()
 };
 
 
-class TestDeleteInsertMerge : public TestMergeBasic
+class TestDeleteInsertMerge : public TestMergeBasic, public ::testing::WithParamInterface<bool>
 {
 public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
@@ -166,6 +166,9 @@ TestDeleteInsertMerge::TestDeleteInsertMerge()
 
 void TestDeleteInsertMerge::SetUp()
 {
+  // toggle row store type by parameter: false -> FLAT_ROW_STORE, true -> CS_ENCODING_ROW_STORE
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
   ObMultiVersionSSTableTest::SetUp();
 }
 
@@ -282,7 +285,7 @@ void TestDeleteInsertMerge::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
 }
 
-TEST_F(TestDeleteInsertMerge, test_committed_multi_update)
+TEST_P(TestDeleteInsertMerge, test_committed_multi_update)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -402,7 +405,7 @@ TEST_F(TestDeleteInsertMerge, test_committed_multi_update)
 }
 
 // insert1 -> delete2-> insert2 -> delete3-> insert3 ==> insert3
-TEST_F(TestDeleteInsertMerge, test_insert_update_one_trans)
+TEST_P(TestDeleteInsertMerge, test_insert_update_one_trans)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -542,7 +545,7 @@ TEST_F(TestDeleteInsertMerge, test_insert_update_one_trans)
 }
 
 // delete1 -> insert1 -> delete2 -> insert2 -> delete3 -> insert3 ==> delete1 -> insert3
-TEST_F(TestDeleteInsertMerge, test_delete_insert_one_trans)
+TEST_P(TestDeleteInsertMerge, test_delete_insert_one_trans)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -682,7 +685,7 @@ TEST_F(TestDeleteInsertMerge, test_delete_insert_one_trans)
 }
 
 // delete1 -> insert1 -> delete2 -> insert2 -> delete3 ==> delete1
-TEST_F(TestDeleteInsertMerge, test_multi_delete_one_trans)
+TEST_P(TestDeleteInsertMerge, test_multi_delete_one_trans)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -824,7 +827,7 @@ TEST_F(TestDeleteInsertMerge, test_multi_delete_one_trans)
 }
 
 // insert1 -> delete2 -> insert2 -> delete3 ==> delete3
-TEST_F(TestDeleteInsertMerge, test_insert_delete_one_trans)
+TEST_P(TestDeleteInsertMerge, test_insert_delete_one_trans)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -958,7 +961,7 @@ TEST_F(TestDeleteInsertMerge, test_insert_delete_one_trans)
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_multi_dml_in_one_trans)
+TEST_P(TestDeleteInsertMerge, test_multi_dml_in_one_trans)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1053,7 +1056,7 @@ TEST_F(TestDeleteInsertMerge, test_multi_dml_in_one_trans)
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_accross_multi_macro)
+TEST_P(TestDeleteInsertMerge, test_accross_multi_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1162,7 +1165,7 @@ TEST_F(TestDeleteInsertMerge, test_accross_multi_macro)
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_accross_multi_sstable)
+TEST_P(TestDeleteInsertMerge, test_accross_multi_sstable)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1275,7 +1278,7 @@ TEST_F(TestDeleteInsertMerge, test_accross_multi_sstable)
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_accross_multi_sstable2)
+TEST_P(TestDeleteInsertMerge, test_accross_multi_sstable2)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1388,7 +1391,7 @@ TEST_F(TestDeleteInsertMerge, test_accross_multi_sstable2)
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_delete_accross_multi_sstable)
+TEST_P(TestDeleteInsertMerge, test_delete_accross_multi_sstable)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1499,7 +1502,7 @@ TEST_F(TestDeleteInsertMerge, test_delete_accross_multi_sstable)
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_insert_accross_multi_sstable_with_last_check)
+TEST_P(TestDeleteInsertMerge, test_insert_accross_multi_sstable_with_last_check)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1610,7 +1613,7 @@ TEST_F(TestDeleteInsertMerge, test_insert_accross_multi_sstable_with_last_check)
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_insert_accross_multi_sstable_with_last_check2)
+TEST_P(TestDeleteInsertMerge, test_insert_accross_multi_sstable_with_last_check2)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1725,7 +1728,7 @@ TEST_F(TestDeleteInsertMerge, test_insert_accross_multi_sstable_with_last_check2
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_multi_delete_accross_multi_sstable_with_last_check)
+TEST_P(TestDeleteInsertMerge, test_multi_delete_accross_multi_sstable_with_last_check)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1833,7 +1836,7 @@ TEST_F(TestDeleteInsertMerge, test_multi_delete_accross_multi_sstable_with_last_
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_multi_delete_accross_multi_sstable_with_shadow)
+TEST_P(TestDeleteInsertMerge, test_multi_delete_accross_multi_sstable_with_shadow)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1944,7 +1947,7 @@ TEST_F(TestDeleteInsertMerge, test_multi_delete_accross_multi_sstable_with_shado
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_shadow_delete)
+TEST_P(TestDeleteInsertMerge, test_shadow_delete)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2029,7 +2032,7 @@ TEST_F(TestDeleteInsertMerge, test_shadow_delete)
   merger.reset();
 }
 
-TEST_F(TestDeleteInsertMerge, test_recycle_by_ha_status)
+TEST_P(TestDeleteInsertMerge, test_recycle_by_ha_status)
 {
   ObTabletMergeDagParam param;
   ObTabletMergeCtx merge_context(param, allocator_);
@@ -2119,6 +2122,11 @@ TEST_F(TestDeleteInsertMerge, test_recycle_by_ha_status)
   handle2.reset();
   merger.reset();
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestDeleteInsertMerge,
+  ::testing::Values(false, true));
 
 }
 }

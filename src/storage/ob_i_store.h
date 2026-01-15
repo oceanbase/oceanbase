@@ -183,7 +183,7 @@ public:
   }
 
   static int add_extra_rowkey_cols(ObColDescIArray &store_out_cols);
-  static int get_extra_rowkey_col_cnt() {
+  constexpr static int get_extra_rowkey_col_cnt() {
     return ObMultiVersionExtraRowkeyIds::MAX_EXTRA_ROWKEY;
   }
 };

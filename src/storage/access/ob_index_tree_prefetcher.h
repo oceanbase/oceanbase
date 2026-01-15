@@ -590,12 +590,20 @@ public:
   }
   OB_INLINE bool is_not_border(ObMicroIndexInfo &index_info)
   { return !index_info.is_left_border() && !index_info.is_right_border(); }
+  OB_INLINE bool can_skip_fetch_by_base_version(ObMicroIndexInfo &index_info)
+  {
+    OB_ASSERT(nullptr != index_info.row_header_);
+    return (sstable_->is_minor_sstable() || sstable_->is_mini_sstable()) &&
+           !index_info.contain_uncommitted_row() &&
+           index_info.get_max_merged_trans_version() <= access_ctx_->trans_version_range_.base_version_ &&
+           index_info.row_header_->is_mvcc_all_in();
+  }
   OB_INLINE bool can_index_filter_skip(ObMicroIndexInfo &index_info, ObSampleFilterExecutor *sample_executor)
   {
     return (nullptr == sample_executor || is_not_border(index_info))
         && index_info.has_agg_data()
-        && index_info.can_blockscan()
-        && (!iter_param_->has_lob_column_out() || !index_info.has_lob_out_row())
+        && (sstable_->is_major_sstable() || iter_param_->enable_inc_skip_index())
+        && (index_info.can_blockscan() || iter_param_->is_delete_insert_)
         && index_info.is_filter_uncertain();
   }
   virtual bool read_wait()
@@ -705,7 +713,7 @@ protected:
       ObMicroIndexInfo &index_block_info,
       ObMicroBlockDataHandle &micro_handle);
   int prefetch_multi_data_block(const int64_t max_prefetch_idx);
-  void update_table_store_stat(ObTableScanStoreStat &table_store_stat, const ObMicroIndexInfo &index_info);
+  void update_table_store_stat(ObTableScanStoreStat &table_store_stat, const ObMicroIndexInfo &index_info, bool is_agg=false/* filter or aggregate */);
 
   struct ObIndexBlockReadHandle {
     ObIndexBlockReadHandle() :

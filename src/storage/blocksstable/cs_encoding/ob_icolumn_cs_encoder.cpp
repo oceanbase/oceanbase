@@ -39,6 +39,7 @@ ObIColumnCSEncoder::ObIColumnCSEncoder()
 
 int ObIColumnCSEncoder::init(const ObColumnCSEncodingCtx &ctx,
                              const int64_t column_index,
+                             const ObObjMeta col_type,
                              const int64_t row_count)
 {
   int ret = OB_SUCCESS;
@@ -54,10 +55,10 @@ int ObIColumnCSEncoder::init(const ObColumnCSEncodingCtx &ctx,
       LOG_WARN("sub column init common fail", K(ret), K(column_index), KPC(ctx.semistruct_ctx_));
     }
   } else if (!ctx.encoding_ctx_->is_valid() || column_index < 0
-      || column_index >= ctx.encoding_ctx_->column_cnt_ || 0 == row_count) {
+      || column_index > ctx.encoding_ctx_->column_cnt_ || 0 == row_count) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ctx), K(column_index), K(row_count));
-  } else if (OB_FAIL(init_common_(ctx, column_index, ctx.encoding_ctx_->col_descs_->at(column_index).col_type_, row_count))) {
+  } else if (OB_FAIL(init_common_(ctx, column_index, col_type, row_count))) {
     LOG_WARN("init common fail", K(ret), K(column_index), K(ctx));
   }
   if (OB_SUCC(ret)) {

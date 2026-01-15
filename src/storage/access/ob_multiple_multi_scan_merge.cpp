@@ -184,6 +184,9 @@ int ObMultipleMultiScanMerge::construct_iters()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
                 "di_base_iter cnt", get_di_base_iter_cnt(), "table cnt", tables_.count(), KP(this));
+  } else if (OB_NOT_NULL(access_param_->get_op()) && access_param_->get_op()->is_vectorized() &&
+             FALSE_IT(access_param_->get_op()->get_eval_ctx().reuse(access_param_->get_op()->get_batch_size()))) {
+    // for check_skip_by_monotonicity called by initing iters in construct_iters
   } else if (get_di_base_table_cnt() > 0 && OB_FAIL(di_base_sstable_row_scanner_->construct_iters(true/*is_multi_scan*/))) {
     STORAGE_LOG(WARN, "fail to construct di base iters", K(ret));
   } else if (tables_.count() > get_di_base_table_cnt()) {

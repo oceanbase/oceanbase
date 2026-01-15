@@ -30,13 +30,13 @@ ObSemiStructColumnEncoder::ObSemiStructColumnEncoder():
 
 ObSemiStructColumnEncoder::~ObSemiStructColumnEncoder() {}
 
-int ObSemiStructColumnEncoder::init(const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const int64_t row_count)
+int ObSemiStructColumnEncoder::init(const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const ObObjMeta col_type, const int64_t row_count)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(ObIColumnCSEncoder::init(ctx, column_index, row_count))) {
+  } else if (OB_FAIL(ObIColumnCSEncoder::init(ctx, column_index, col_type, row_count))) {
     LOG_WARN("init base column encoder failed", K(ret), K(ctx), K(column_index), K(row_count));
   } else {
     column_header_.type_ = type_;

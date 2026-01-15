@@ -443,6 +443,7 @@ public:
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
   bool is_first_row_first_flag_;
+  bool single_version_rows_;  // only used for delta sstable
 };
 
 
@@ -478,6 +479,7 @@ public:
   inline bool contain_uncommitted_row() const { return aggregate_info_.contain_uncommitted_row_; }
   inline bool is_last_row_last_flag() const { return aggregate_info_.is_last_row_last_flag_; }
   inline bool is_first_row_first_flag() const { return aggregate_info_.is_first_row_first_flag_; }
+  inline bool is_single_version_rows() const { return aggregate_info_.single_version_rows_; }
   inline int64_t get_max_merged_trans_version() const { return aggregate_info_.max_merged_trans_version_; }
   TO_STRING_KV(K_(skip_index_aggregator), K_(aggregate_info),
       K_(need_data_aggregate), K_(has_reused_null_agg_in_this_micro_block), K_(is_inited));

@@ -93,7 +93,7 @@ public:
                                       const int64_t col_offset,
                                        const ObObjMeta &col_meta,
                                       const ObIArray<ObObj> &ref_objs,
-                                      ObMicroBlockCSDecoder &decoder,
+                                      ObMicroBlockCSDecoder<> &decoder,
                                       const int64_t res_count);
 
 public:
@@ -407,7 +407,7 @@ int ObPdFilterTestBase::check_column_store_white_filter(
     const int64_t col_offset,
     const ObObjMeta &col_meta,
     const ObIArray<ObObj> &ref_objs,
-    ObMicroBlockCSDecoder &decoder,
+    ObMicroBlockCSDecoder<> &decoder,
     const int64_t res_count)
 {
   int ret = OB_SUCCESS;
@@ -577,5 +577,5 @@ int ObPdFilterTestBase::check_column_store_white_filter(
   LOG_INFO(">>>>>>>>>>FINISH DECODER<<<<<<<<<<<"); \
   LOG_INFO(">>>>>>>>>>START PD FILTER<<<<<<<<<<<"); \
   ObMicroBlockData full_transformed_data; \
-  ObMicroBlockCSDecoder decoder; \
+  ObMicroBlockCSDecoder<> decoder; \
   ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));

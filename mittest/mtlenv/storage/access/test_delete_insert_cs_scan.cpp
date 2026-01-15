@@ -488,7 +488,7 @@ public:
   }
 };
 
-class TestDeleteInsertCSScan : public TestMergeBasic
+class TestDeleteInsertCSScan : public TestMergeBasic, public ::testing::WithParamInterface<bool>
 {
 public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
@@ -591,6 +591,9 @@ TestDeleteInsertCSScan::TestDeleteInsertCSScan()
 
 void TestDeleteInsertCSScan::SetUp()
 {
+  // toggle row store type by parameter: false -> FLAT_ROW_STORE, true -> CS_ENCODING_ROW_STORE
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
   ObMultiVersionSSTableTest::SetUp();
 }
 
@@ -823,7 +826,29 @@ int TestDeleteInsertCSScan::create_pushdown_filter(
                      *white_node, op_);
     column_exprs = &(white_node->column_exprs_);
     white_node->op_type_ = op_type;
-    pushdown_filter = filter;
+
+    void* expr_buf = nullptr;
+    sql::ObExpr* expr = nullptr;
+    sql::ObExpr** args = nullptr;
+
+    if (OB_ISNULL(expr_buf = query_allocator_.alloc(3 * sizeof(sql::ObExpr)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to alloc memory for expr", KR(ret));
+    } else if (OB_ISNULL(args = static_cast<ObExpr**>(query_allocator_.alloc(2 * sizeof(sql::ObExpr*))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "Failed to alloc memory for expr", KR(ret));
+    } else {
+      expr = static_cast<sql::ObExpr *>(expr_buf);
+      expr->arg_cnt_ = 2;
+      expr->args_ = args;
+      expr->args_[0] = expr + 1;
+      expr->args_[1] = expr + 2;
+      expr->args_[0]->type_ = T_REF_COLUMN;
+      expr->args_[1]->type_ = T_INT;
+      expr->args_[1]->obj_meta_.set_int();
+      white_node->expr_ = expr;
+      pushdown_filter = filter;
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -1067,7 +1092,7 @@ void TestDeleteInsertCSScan::test_keep_order_blockscan(
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_co_scan)
+TEST_P(TestDeleteInsertCSScan, test_co_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1183,7 +1208,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_co_scan_with_reverted_delete_row)
+TEST_P(TestDeleteInsertCSScan, test_co_scan_with_reverted_delete_row)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1296,7 +1321,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_scan_with_reverted_delete_row)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_co_filter)
+TEST_P(TestDeleteInsertCSScan, test_co_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1392,7 +1417,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_multi_version_row_filter)
+TEST_P(TestDeleteInsertCSScan, test_multi_version_row_filter)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1588,7 +1613,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_version_row_filter)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_multi_co_scan)
+TEST_P(TestDeleteInsertCSScan, test_multi_co_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1703,7 +1728,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_co_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_minor_major_version_overlap)
+TEST_P(TestDeleteInsertCSScan, test_minor_major_version_overlap)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1810,7 +1835,7 @@ TEST_F(TestDeleteInsertCSScan, test_minor_major_version_overlap)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_minor_major_version_overlap2)
+TEST_P(TestDeleteInsertCSScan, test_minor_major_version_overlap2)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1919,7 +1944,7 @@ TEST_F(TestDeleteInsertCSScan, test_minor_major_version_overlap2)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
+TEST_P(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2038,7 +2063,7 @@ TEST_F(TestDeleteInsertCSScan, test_multi_minor_major_version_overlap)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_co_filter_with_uncommit)
+TEST_P(TestDeleteInsertCSScan, test_co_filter_with_uncommit)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2195,7 +2220,7 @@ TEST_F(TestDeleteInsertCSScan, test_co_filter_with_uncommit)
   clear_tx_data();
 }
 
-TEST_F(TestDeleteInsertCSScan, test_refresh_table)
+TEST_P(TestDeleteInsertCSScan, test_refresh_table)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2339,7 +2364,7 @@ TEST_F(TestDeleteInsertCSScan, test_refresh_table)
   scan_merge.reset();
 }
 
-TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_basic)
+TEST_P(TestDeleteInsertCSScan, keep_order_blockscan_basic)
 {
   const char *major_data[1];
   major_data[0] =
@@ -2380,7 +2405,7 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_basic)
   test_keep_order_blockscan(major_data, inc_data, expected, 10, {{1, 4}, {5, 10}});
 }
 
-TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_simple)
+TEST_P(TestDeleteInsertCSScan, keep_order_blockscan_simple)
 {
   const char *major_data[1];
   major_data[0] =
@@ -2421,7 +2446,7 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_simple)
   test_keep_order_blockscan(major_data, inc_data, expected, 10, {{5, 10}, {1, 4}});
 }
 
-TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_first_range_major_empty)
+TEST_P(TestDeleteInsertCSScan, keep_order_blockscan_first_range_major_empty)
 {
   const char *major_data[1];
   major_data[0] =
@@ -2464,7 +2489,7 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_first_range_major_empty)
       major_data, inc_data, expected, 11, {{10, 11}, {1, 9}});
 }
 
-TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_second_range_major_empty)
+TEST_P(TestDeleteInsertCSScan, keep_order_blockscan_second_range_major_empty)
 {
   const char *major_data[1];
   major_data[0] =
@@ -2508,6 +2533,11 @@ TEST_F(TestDeleteInsertCSScan, keep_order_blockscan_second_range_major_empty)
   test_keep_order_blockscan(
       major_data, inc_data, expected, 11, {{10, 11}, {1, 9}});
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestDeleteInsertCSScan,
+  ::testing::Values(false, true));
 
 }
 }

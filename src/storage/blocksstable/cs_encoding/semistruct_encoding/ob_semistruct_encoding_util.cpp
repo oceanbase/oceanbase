@@ -394,8 +394,6 @@ static uint64_t calc_hash_bucket_num(const int64_t row_count)
 int ObSemiStructColumnEncodeCtx::scan_sub_column_datums(const int64_t column_index, const ObObjType obj_type, const ObColDatums &col_datums, ObColumnCSEncodingCtx &sub_col_ctx)
 {
   int ret = OB_SUCCESS;
-  ObColDesc sub_col_desc;
-  sub_col_desc.col_type_.set_type(obj_type);
   const ObObjTypeStoreClass store_class = get_store_class_map()[ob_obj_type_class(obj_type)];
 
   // build hashtable
@@ -418,15 +416,15 @@ int ObSemiStructColumnEncodeCtx::scan_sub_column_datums(const int64_t column_ind
     if (OB_FAIL(hashtable_factory_.create(bucket_num, node_num, ht))) {
       LOG_WARN("create hashtable failed", K(ret), K(bucket_num), K(node_num));
     } else if (FALSE_IT(builder = static_cast<ObDictEncodingHashTableBuilder *>(ht))) {
-    } else if (OB_FAIL(builder->build(col_datums, sub_col_desc))) {
-      LOG_WARN("build hash table failed", K(ret), K(sub_col_desc));
+    } else if (OB_FAIL(builder->build(col_datums, store_class))) {
+      LOG_WARN("build hash table failed", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
     sub_col_ctx.ht_ = ht;
     if (OB_FAIL(ObCSEncodingUtil::build_cs_column_encoding_ctx(store_class, -1/*precision_bytes*/, sub_col_ctx))) {
-      LOG_WARN("build_column_encoding_ctx failed", K(ret), K(obj_type), K(sub_col_desc), KP(ht), K(store_class));
+      LOG_WARN("build_column_encoding_ctx failed", K(ret), K(obj_type), KP(ht), K(store_class));
     } else if (ht != nullptr && OB_FAIL(hashtables_.push_back(ht))) {
       LOG_WARN("failed to push back", K(ret));
     }
@@ -674,7 +672,9 @@ int ObSemiStructColumnEncodeCtx::alloc_and_init_encoder(const int64_t column_ind
   } else {
     sub_col_ctxs_.at(column_index).try_set_need_sort(e->get_type(), ob_obj_type_class(obj_type),
         false/*has_outrow_lob*/, encoding_ctx_.major_working_cluster_version_);
-    if (OB_FAIL(e->init(sub_col_ctxs_.at(column_index), column_index, datums_->count()))) {
+    const ObColumnCSEncodingCtx& col_ctx = sub_col_ctxs_.at(column_index);
+    ObObjMeta col_type = col_ctx.encoding_ctx_->col_descs_->at(column_index).col_type_;
+    if (OB_FAIL(e->init(col_ctx, column_index, col_type, datums_->count()))) {
       LOG_WARN("init column encoder failed", K(ret), K(column_index));
     }
     if (OB_FAIL(ret)) {

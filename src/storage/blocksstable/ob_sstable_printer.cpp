@@ -469,6 +469,9 @@ void ObSSTablePrinter::print_micro_header(const ObMicroBlockHeader *micro_block_
   print_line("data_zlength", micro_block_header->data_zlength_);
   print_line("data_checksum", micro_block_header->data_checksum_);
   print_line("max_merged_trans_version", micro_block_header->max_merged_trans_version_);
+  if (ObRowStoreType::CS_ENCODING_ROW_STORE == micro_block_header->row_store_type_) {
+    print_line("has_row_header", micro_block_header->has_row_header_);
+  }
   if (micro_block_header->has_column_checksum_) {
     for (int64_t i = 0; i < micro_block_header->column_count_; ++i) {
       if (isatty(fileno(stderr)) > 0) {
@@ -697,15 +700,15 @@ void ObSSTablePrinter::print_cs_encoding_column_meta(
   } else if (ObCSColumnHeader::Type::SEMISTRUCT == type) {
     print_semistruct_column_meta(start, len, col_header, row_cnt);
   } else {
-    print_line("has_nullbitmap", (0 != len));
+    print_line("has_null_or_nop_bitmap", (0 != len));
   }
-  P_LBRACE();
-  if (hex_print_buf != nullptr) {
+  if (hex_print_buf != nullptr && hex_buf_size > 0) {
+    P_LBRACE();
     to_hex_cstr(start, len, hex_print_buf, hex_buf_size);
     P_VALUE_STR_B(hex_print_buf);
+    P_RBRACE();
+    P_END();
   }
-  P_RBRACE();
-  P_END();
   print_end_line();
 }
 

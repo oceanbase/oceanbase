@@ -1209,10 +1209,15 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
         int64_t pd_level = tenant_config.is_valid() ? tenant_config->_pushdown_storage_level : 0;
         bool pd_blockscan = false;
         bool pd_filter = false;
-        bool enable_skip_index = tenant_config.is_valid() ? tenant_config->_enable_skip_index : false;
+        bool enable_base_skip_index = tenant_config.is_valid() ? tenant_config->_enable_skip_index : false;
+        bool enable_inc_skip_index = tenant_config.is_valid() ? tenant_config->_enable_skip_index : false;
         bool enable_prefetch_limit = tenant_config.is_valid() ? tenant_config->_enable_prefetch_limiting : false;
         bool enable_column_store = true; // in filter was generated only use column store
         bool enable_filter_reordering = tenant_config.is_valid() ? tenant_config->_enable_filter_reordering : false;
+        int tmp_ret = OB_E(EventTable::EN_DISABLE_INC_SKIP_INDEX_SCAN) OB_SUCCESS;
+        if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+          enable_inc_skip_index = false;
+        }
         if (OB_FAIL(op.get_plan()->get_optimizer_context().get_global_hint().opt_params_.
               get_integer_opt_param(ObOptParamHint::PUSHDOWN_STORAGE_LEVEL, pd_level))) {
           LOG_WARN("failed to get pushdown storage level hint", K(ret));
@@ -1220,7 +1225,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
           pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
           pd_filter = ObPushdownFilterUtils::is_filter_pushdown_enabled(pd_level);
           scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_flags(
-            pd_blockscan, pd_filter, enable_skip_index, enable_column_store, enable_prefetch_limit, enable_filter_reordering);
+              pd_blockscan, pd_filter, enable_base_skip_index, enable_column_store,
+              enable_prefetch_limit, enable_filter_reordering, enable_inc_skip_index);
           scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config.is_valid() ? tenant_config->storage_rowsets_size : 0;
           if (pd_blockscan && pd_filter) {
             scan_ctdef.has_local_dynamic_filter_ = true;

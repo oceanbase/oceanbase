@@ -1585,10 +1585,15 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, external_sub_path, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, semistruct_properties, table_schema, true/*skip null*/, true/*ignore column error*/, "");
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, skip_index_level, table_schema, ObSkipIndexLevel,
+        true/*skip null*/, true/*ignore column error*/, ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
     if (OB_SUCC(ret)) {
       bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
     }
+    ObString delta_format(ObStoreFormat::get_delta_format_name(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE));
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, delta_format, table_schema, /* skip_null */ true, /* ignore_column_error */ true, delta_format);
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));
@@ -4835,6 +4840,16 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
     }
 
+    if (OB_SUCC(ret)) {
+      ObString delta_format(
+          ObStoreFormat::get_delta_format_name(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE));
+      EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result,
+                                                              delta_format,
+                                                              table_schema,
+                                                              /* skip_null */ true,
+                                                              /* ignore_column_error */ true,
+                                                              delta_format);
+    }
   }
   return ret;
 }

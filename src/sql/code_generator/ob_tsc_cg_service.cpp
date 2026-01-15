@@ -983,7 +983,8 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogTableScan &op,
   int ret = OB_SUCCESS;
   bool pd_blockscan = false;
   bool pd_filter = false;
-  bool enable_skip_index = false;
+  bool enable_base_skip_index = false;
+  bool enable_inc_skip_index = false;
 
   if (is_sys_table(ref_table_id) || is_virtual_table(ref_table_id)) {
     // do nothing
@@ -992,7 +993,8 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogTableScan &op,
   } else {
     pd_blockscan = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_blockscan_pushdown();
     pd_filter = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_filter_pushdown();
-    enable_skip_index = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_apply_skip_index();
+    enable_base_skip_index = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_apply_base_skip_index();
+    enable_inc_skip_index = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_apply_inc_skip_index();
     // pushdown filter only support scan now
     if (pd_blockscan) {
       if (log_op_def::LOG_TABLE_SCAN == op_type) {
@@ -1020,11 +1022,14 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogTableScan &op,
         }
       }
     }
-    enable_skip_index = enable_skip_index && pd_filter;
+    enable_base_skip_index = enable_base_skip_index && pd_filter;
+    enable_inc_skip_index = enable_inc_skip_index && pd_filter;
     scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_blockscan_pushdown(pd_blockscan);
     scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_filter_pushdown(pd_filter);
-    scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_enable_skip_index(enable_skip_index);
-    LOG_TRACE("chaser debug pd block", K(ref_table_id), K(op_type), K(pd_blockscan), K(pd_filter), K(enable_skip_index));
+    scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_enable_base_skip_index(enable_base_skip_index);
+    scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_enable_inc_skip_index(enable_inc_skip_index);
+    LOG_TRACE("chaser debug pd block", K(ref_table_id), K(op_type), K(pd_blockscan), K(pd_filter),
+              K(enable_base_skip_index), K(enable_inc_skip_index));
   }
   return ret;
 }

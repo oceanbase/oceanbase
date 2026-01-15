@@ -248,6 +248,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"delay_key_write", DELAY_KEY_WRITE},
   {"delete", DELETE},
   {"delete_insert", DELETE_INSERT},
+  {"delta_format", DELTA_FORMAT},
   {"depth", DEPTH},
   {"des_key_file", DES_KEY_FILE},
   {"destination", DESTINATION},
@@ -1208,6 +1209,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"url", URL},
   {"credential", CREDENTIAL},
   {"micro_block_format_version", MICRO_BLOCK_FORMAT_VERSION},
+  {"skip_index_level", SKIP_INDEX_LEVEL},
   {"INCONSISTENT", INCONSISTENT},
   {"INDIVIDUAL", INDIVIDUAL},
 };

@@ -1591,21 +1591,6 @@ int ObMicroBlockDecoder::update_cached_decoders(char *cache, const int64_t cache
   return ret;
 }
 
-int ObMicroBlockDecoder::get_row_header(
-    const int64_t row_idx,
-    const ObRowHeader *&row_header)
-{
-  UNUSEDx(row_idx);
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    row_header = &get_major_store_row_header();
-  }
-  return ret;
-}
-
 int ObMicroBlockDecoder::get_row_count(int64_t &row_count)
 {
   int ret = OB_SUCCESS;
@@ -1616,17 +1601,6 @@ int ObMicroBlockDecoder::get_row_count(int64_t &row_count)
     row_count = header_->row_count_;
   }
   return ret;
-}
-
-int ObMicroBlockDecoder::get_multi_version_info(
-    const int64_t row_idx,
-    const int64_t schema_rowkey_cnt,
-    const ObRowHeader *&row_header,
-    int64_t &trans_version,
-    int64_t &sql_sequence)
-{
-  UNUSEDx(row_idx, schema_rowkey_cnt, row_header, trans_version, sql_sequence);
-  return OB_NOT_SUPPORTED;
 }
 
 int ObMicroBlockDecoder::filter_pushdown_filter(

@@ -166,7 +166,7 @@ int ObMicroBlockWriter<EnableNewFlatFormat>::inner_init()
     if (!data_buffer_.is_inited()) {
       if (OB_FAIL(data_buffer_.init(DEFAULT_DATA_BUFFER_SIZE))) {
         STORAGE_LOG(WARN, "fail to init data buffer", K(ret), K(data_buffer_));
-         } else if (OB_FAIL(index_buffer_.init(DEFAULT_DATA_BUFFER_SIZE, DEFAULT_INDEX_BUFFER_SIZE))) {
+      } else if (OB_FAIL(index_buffer_.init(DEFAULT_DATA_BUFFER_SIZE, DEFAULT_INDEX_BUFFER_SIZE))) {
         STORAGE_LOG(WARN, "fail to init index buffer", K(ret), K(index_buffer_));
       }
     }

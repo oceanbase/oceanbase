@@ -69,6 +69,7 @@ public:
 
   virtual bool has_lob_out_row() const override { return has_lob_out_row_; }
   bool is_single_version_rows() const { return is_single_version_rows_; }
+  virtual const ObMicroBlockHeader* get_micro_header() const override final { return nullptr; }
 
   /********** derived from ObIMicroBlockReader **********/
   TO_STRING_KV(K_(is_inited), K_(has_lob_out_row), K_(is_single_version_rows), K_(is_delete_insert), K_(reader_type),

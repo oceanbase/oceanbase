@@ -158,22 +158,12 @@ int ObClusteredIndexBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_s
   const bool need_pre_aggregation =
       nullptr != data_store_desc.sstable_index_builder_
       && full_agg_metas.count() > 0;
-  bool agg_meta_valid_for_minor = true;
-  for (int64_t i = 0; i < full_agg_metas.count(); ++i) {
-    const ObSkipIndexColMeta &agg_meta = full_agg_metas.at(i);
-    if (!non_baseline_enabled_agg_type(agg_meta.get_col_type())) {
-      agg_meta_valid_for_minor = false;
-    }
-  }
 
   if (!need_pre_aggregation) {
     // Skip
   } else if (OB_ISNULL(task_allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task allocator is null", K(ret));
-  } else if (OB_UNLIKELY(!data_store_desc.is_major_or_meta_merge_type() && !agg_meta_valid_for_minor)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid agg meta for mini / minor sstable", K(ret));
   } else {
     char *aggregator_buf = nullptr;
     if (OB_ISNULL(aggregator_buf = static_cast<char *>(
@@ -530,9 +520,8 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
   const int64_t rowkey_column_count = micro_block_header->rowkey_column_count_;
   if (OB_FAIL(micro_reader_helper.init(temp_allocator))) {
     LOG_WARN("fail to init micro reader helper", K(ret));
-  } else if (OB_FAIL(micro_reader_helper.get_reader(
-                 micro_block_data.get_store_type(), micro_block_reader))) {
-    LOG_WARN("fail to get micro reader", K(ret), K(micro_block_data.get_store_type()));
+  } else if (OB_FAIL(micro_reader_helper.get_reader(*micro_block_data.get_micro_header(), micro_block_reader))) {
+    LOG_WARN("fail to get micro reader", K(ret), "header", *micro_block_data.get_micro_header());
   } else if (OB_FAIL(micro_block_reader->init(micro_block_data, nullptr))) {
     LOG_WARN("fail to init micro block reader", K(ret));
   }

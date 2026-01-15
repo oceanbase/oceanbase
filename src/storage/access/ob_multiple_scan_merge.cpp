@@ -191,6 +191,9 @@ int ObMultipleScanMerge::construct_iters()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret),
                       K(iters_.count()), K(get_di_base_iter_cnt()), K(tables_), KPC(di_base_sstable_row_scanner_));
+  } else if (OB_NOT_NULL(access_param_->get_op()) && access_param_->get_op()->is_vectorized() &&
+             FALSE_IT(access_param_->get_op()->get_eval_ctx().reuse(access_param_->get_op()->get_batch_size()))) {
+    // for check_skip_by_monotonicity called by initing iters in construct_iters
   } else if (get_di_base_table_cnt() > 0 && OB_FAIL(di_base_sstable_row_scanner_->construct_iters(false/*is_multi_scan*/))) {
     STORAGE_LOG(WARN, "fail to construct di base iters", K(ret));
   } else if (tables_.count() > get_di_base_table_cnt()) {
@@ -278,10 +281,6 @@ int ObMultipleScanMerge::locate_blockscan_border()
     }
     border_key.scan_index_ = INT32_MAX;
   } else {
-    if (OB_NOT_NULL(access_param_->get_op()) && access_param_->get_op()->is_vectorized()) {
-      access_param_->get_op()->get_eval_ctx().reuse(access_param_->get_op()->get_batch_size());
-    }
-
     ObScanMergeLoserTreeItem item;
     // 1. push iters [1, consumer_cnt_] into loser tree
     for (int64_t i = 1; OB_SUCC(ret) && i < consumer_cnt_; ++i) {

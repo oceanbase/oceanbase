@@ -33,7 +33,7 @@ public:
   ObSemiStructColumnEncoder(const ObSemiStructColumnEncoder&) = delete;
   ObSemiStructColumnEncoder &operator=(const ObSemiStructColumnEncoder&) = delete;
 
-  int init(const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const int64_t row_count) override;
+  int init(const ObColumnCSEncodingCtx &ctx, const int64_t column_index, const ObObjMeta col_type, const int64_t row_count) override;
   void reuse() override;
   int store_column(ObMicroBufferWriter &buf_writer) override;
   int64_t estimate_store_size() const override;

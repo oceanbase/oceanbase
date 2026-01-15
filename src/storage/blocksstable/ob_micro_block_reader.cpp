@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "storage/blocksstable/ob_datum_row.h"
 #define USING_LOG_PREFIX STORAGE
 #include "ob_micro_block_reader.h"
 #include "storage/access/ob_aggregated_store.h"
@@ -682,55 +683,6 @@ int ObMicroBlockReader<EnableNewFlatFormat>::get_row(const int64_t index, ObDatu
 }
 
 template<bool EnableNewFlatFormat>
-int ObMicroBlockReader<EnableNewFlatFormat>::get_row_header(
-    const int64_t row_idx,
-    const ObRowHeader *&row_header)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("reader not init", K(ret));
-  } else if (OB_UNLIKELY(nullptr == header_ || row_idx >= header_->row_count_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Id is NULL", K(ret), K(row_idx), KPC_(header));
-  } else if (OB_FAIL(flat_row_reader_.read_row_header(
-              data_begin_ + index_data_[row_idx],
-              index_data_[row_idx + 1] - index_data_[row_idx],
-              row_header))) {
-    LOG_WARN("failed to setup row", K(ret), K(row_idx));
-  }
-  return ret;
-}
-
-template<bool EnableNewFlatFormat>
-int ObMicroBlockReader<EnableNewFlatFormat>::get_logical_row_cnt(
-    const int64_t last,
-    int64_t &row_idx,
-    int64_t &row_cnt) const
-{
-  int ret = OB_SUCCESS;
-  const ObRowHeader *row_header = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("reader not init", K(ret));
-  } else if (OB_UNLIKELY(nullptr == header_ || last >= header_->row_count_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(row_idx), K(last), KPC_(header));
-  } else {
-    while (OB_SUCC(ret) && row_idx <= last) {
-      if (OB_ISNULL(row_header = reinterpret_cast<const ObRowHeader*>(data_begin_ + index_data_[row_idx]))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("row_header is NULL", K(ret), K(row_idx), KP(data_begin_), KP(index_data_));
-      } else if (row_header->get_row_multi_version_flag().is_first_multi_version_row()) {
-        row_cnt += row_header->get_row_flag().get_delta();
-      }
-      row_idx++;
-    }
-  }
-  return ret;
-}
-
-template<bool EnableNewFlatFormat>
 int ObMicroBlockReader<EnableNewFlatFormat>::get_row_count(int64_t &row_count)
 {
   int ret = OB_SUCCESS;
@@ -747,22 +699,17 @@ int ObMicroBlockReader<EnableNewFlatFormat>::get_row_count(int64_t &row_count)
 template<bool EnableNewFlatFormat>
 int ObMicroBlockReader<EnableNewFlatFormat>::get_multi_version_info(
     const int64_t row_idx,
-    const int64_t schema_rowkey_cnt,
-    const ObRowHeader *&row_header,
-    int64_t &trans_version,
-    int64_t &sql_sequence)
+    MultiVersionInfo& multi_version_info)
 {
   int ret = OB_SUCCESS;
-  row_header = nullptr;
+  const ObRowHeader *row_header = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(nullptr == header_ ||
-                         row_idx < 0 || row_idx >= row_count_ ||
-                         0 > schema_rowkey_cnt ||
-                         header_->column_count_ < schema_rowkey_cnt + 2)) {
+                         row_idx < 0 || row_idx >= row_count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(row_idx), K_(row_count), K(schema_rowkey_cnt),
+    LOG_WARN("invalid argument", K(ret), K(row_idx), K_(row_count),
              KPC_(header), K(lbt()));
   } else if (OB_FAIL(flat_row_reader_.read_row_header(
               data_begin_ + index_data_[row_idx],
@@ -771,27 +718,49 @@ int ObMicroBlockReader<EnableNewFlatFormat>::get_multi_version_info(
     LOG_WARN("fail to setup row", K(ret), K(row_idx), K(index_data_[row_idx + 1]),
              K(index_data_[row_idx]), KP(data_begin_));
   } else {
-    ObStorageDatum datum;
-    const int64_t read_col_idx =
-      row_header->get_row_multi_version_flag().is_uncommitted_row()
-      ? schema_rowkey_cnt + 1 : schema_rowkey_cnt;
-    if (OB_FAIL(flat_row_reader_.read_column(
-                data_begin_ + index_data_[row_idx],
-                index_data_[row_idx + 1] - index_data_[row_idx],
-                read_col_idx,
-                datum))) {
-      LOG_WARN("fail to read column", K(ret), K(read_col_idx));
-    } else {
-      if (!row_header->get_row_multi_version_flag().is_uncommitted_row()) {
-        // get trans_version for committed row
-        sql_sequence = 0;
-        trans_version = row_header->get_row_multi_version_flag().is_ghost_row() ? 0 : -datum.get_int();
-      } else {
-        // get sql_sequence for uncommitted row
-        trans_version = INT64_MAX;
-        sql_sequence = -datum.get_int();
-      }
-    }
+    multi_version_info.dml_row_flag_ = row_header->get_row_flag();
+    multi_version_info.mvcc_row_flag_ = row_header->get_row_multi_version_flag();
+    multi_version_info.trans_id_ = row_header->get_trans_id();
+  }
+  return ret;
+}
+
+// notice, trans_version of ghost row is min(0)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockReader<EnableNewFlatFormat>::get_multi_version_info(
+    const int64_t row_idx,
+    const int64_t schema_rowkey_cnt,
+    MultiVersionInfo& multi_version_info,
+    int64_t &trans_version,
+    int64_t &sql_sequence)
+{
+  int ret = OB_SUCCESS;
+  ObStorageDatum datum;
+  int64_t read_col_idx;
+  if (OB_FAIL(get_multi_version_info(row_idx, multi_version_info))) {
+    LOG_WARN("failed to get multi version info", K(ret), K(row_idx));
+  } else if (0 > schema_rowkey_cnt || header_->column_count_ < schema_rowkey_cnt + 2) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(row_idx), K_(row_count), K(schema_rowkey_cnt),
+             KPC_(header), K(lbt()));
+  } else if (!multi_version_info.mvcc_row_flag_.is_uncommitted_row() && multi_version_info.mvcc_row_flag_.is_ghost_row()) {
+    trans_version = 0;
+    sql_sequence = 0;
+  } else if (FALSE_IT(read_col_idx = schema_rowkey_cnt + (multi_version_info.mvcc_row_flag_.is_uncommitted_row() ? 1 : 0))) {
+  } else if (OB_FAIL(flat_row_reader_.read_column(
+                 data_begin_ + index_data_[row_idx],
+                 index_data_[row_idx + 1] - index_data_[row_idx],
+                 read_col_idx,
+                 datum))) {
+    LOG_WARN("fail to read column", K(ret), K(read_col_idx));
+  } else if (multi_version_info.mvcc_row_flag_.is_uncommitted_row()) {
+      // get sql_sequence for uncommitted row
+      trans_version = INT64_MAX;
+      sql_sequence = -datum.get_int();
+  } else {
+      // get trans_version for committed row
+      trans_version = -datum.get_int();
+      sql_sequence = 0;
   }
 
   return ret;

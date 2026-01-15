@@ -114,7 +114,7 @@ struct MultiVersionDIResult
 
 const static int SCHEMA_ROWKEY_CNT = 2;
 
-class TestMultiVersionDeleteInsertBlockscan : public ObMultiVersionSSTableTest
+class TestMultiVersionDeleteInsertBlockscan : public ObMultiVersionSSTableTest, public ::testing::WithParamInterface<bool>
 {
 public:
   TestMultiVersionDeleteInsertBlockscan();
@@ -159,6 +159,9 @@ TestMultiVersionDeleteInsertBlockscan::TestMultiVersionDeleteInsertBlockscan()
 void TestMultiVersionDeleteInsertBlockscan::SetUp()
 {
   ObMultiVersionSSTableTest::SetUp();
+  // toggle row store type by parameter: false -> FLAT_ROW_STORE, true -> CS_ENCODING_ROW_STORE
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
 }
 
 void TestMultiVersionDeleteInsertBlockscan::TearDown()
@@ -2036,55 +2039,60 @@ void TestMultiVersionDeleteInsertBlockscan::test_with_uncommitted_lock_row()
   clear_tx_data();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_preprocess_bitmap_basic)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_preprocess_bitmap_basic)
 {
   test_preprocess_bitmap_basic();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_preprocess_bitmap_version_range)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_preprocess_bitmap_version_range)
 {
   test_preprocess_bitmap_version_range();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_preprocess_bitmap_uncommitted)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_preprocess_bitmap_uncommitted)
 {
   test_preprocess_bitmap_uncommitted();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_basic)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_basic)
 {
   test_get_next_compacted_row_basic();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_cached_row1)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_cached_row1)
 {
   test_get_next_compacted_row_with_cached_row1();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_cached_row2)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_cached_row2)
 {
   test_get_next_compacted_row_with_cached_row2();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_filtered_row)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_get_next_compacted_row_with_filtered_row)
 {
   test_get_next_compacted_row_with_filtered_row();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_meet_empty_range_block)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_meet_empty_range_block)
 {
   test_meet_empty_range_block();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_shadow_row_output)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_shadow_row_output)
 {
   test_shadow_row_output();
 }
 
-TEST_F(TestMultiVersionDeleteInsertBlockscan, test_with_uncommitted_lock_row)
+TEST_P(TestMultiVersionDeleteInsertBlockscan, test_with_uncommitted_lock_row)
 {
   test_with_uncommitted_lock_row();
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestMultiVersionDeleteInsertBlockscan,
+  ::testing::Values(false, true));
 }
 }
 

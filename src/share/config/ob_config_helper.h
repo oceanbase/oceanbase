@@ -17,6 +17,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/hash_func/murmur_hash.h"
 #include "lib/hash/ob_hashutils.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "share/ob_define.h"
 
 namespace oceanbase

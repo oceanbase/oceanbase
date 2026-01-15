@@ -94,7 +94,7 @@ protected:
       const ObITableReadInfo &index_read_info,
       const bool is_left_border,
       const bool is_right_border);
-  int set_reader(const ObRowStoreType store_type);
+  int set_reader(const ObMicroBlockHeader& header);
 private:
   OB_INLINE bool check_column_checksums(const ObMicroBlockHeader *header) const
   {

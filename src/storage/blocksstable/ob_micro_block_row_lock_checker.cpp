@@ -69,13 +69,13 @@ int ObMicroBlockRowLockChecker::inner_get_next_row(
 }
 
 int ObMicroBlockRowLockChecker::check_row(
-    const transaction::ObTransID &trans_id,
-    const ObRowHeader *row_header,
-    ObStoreRowLockState &lock_state,
+    const ObDmlRowFlag /* row_flag */,
+    const ObMultiVersionRowFlag mvcc_row_flag,
+    const transaction::ObTransID trans_id,
+    ObStoreRowLockState& lock_state,
     bool &need_stop)
 {
   int ret = OB_SUCCESS;
-  const ObMultiVersionRowFlag multi_version_flag = row_header->get_row_multi_version_flag();
   const bool row_is_decided = lock_state.is_row_decided();
   bool is_ghost_row_flag = false;
   need_stop = false;
@@ -83,14 +83,14 @@ int ObMicroBlockRowLockChecker::check_row(
   if (!row_is_decided) {
     // Case1: Row is aborted.
     need_stop = false;
-  } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(multi_version_flag,
+  } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(mvcc_row_flag,
                                                   is_ghost_row_flag))) {
-    LOG_WARN("Failed to check ghost row", K(ret), K(multi_version_flag));
+    LOG_WARN("Failed to check ghost row", K(ret), K(mvcc_row_flag));
   } else if (is_ghost_row_flag) {
     // Case2: We encounter the ghost row which means the version node is
     // faked, and the row has already ended. So, we believe that the next
     // iteration will find OB_ITER_END.
-    LOG_INFO("encounter a ghost row", K(ret), K(trans_id), K(lock_state));
+    LOG_INFO("encounter a ghost row", K(ret), K(lock_state));
     need_stop = false;
     lock_state.lock_dml_flag_ = ObDmlFlag::DF_NOT_EXIST;
   } else {
@@ -113,7 +113,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null param", K(ret), KP_(read_info));
   } else {
-    const ObRowHeader *row_header = nullptr;
+    MultiVersionInfo multi_version_info;
     int64_t sql_sequence = 0;
     const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
     memtable::ObMvccAccessCtx &ctx = context_->store_ctx_->mvcc_acc_ctx_;
@@ -133,15 +133,11 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
       } else if (!is_major_sstable) {
         if (OB_FAIL(reader_->get_multi_version_info(current,
                                                     rowkey_cnt,
-                                                    row_header,
+                                                    multi_version_info,
                                                     trans_version,
                                                     sql_sequence))) {
-          LOG_WARN("failed to get multi version info", K(ret), K_(current), KPC(row_header),
-                   KPC_(lock_state), K(sql_sequence), K_(macro_id));
-        } else if (OB_ISNULL(row_header)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("row header is null", K(ret));
-        } else if (row_header->get_row_multi_version_flag().is_uncommitted_row()) {
+          LOG_WARN("failed to get multi version info", K(ret), K_(current), K(rowkey_cnt), KPC_(lock_state), K_(macro_id));
+        } else if (multi_version_info.mvcc_row_flag_.is_uncommitted_row()) {
           ObTxTableGuards &tx_table_guards = ctx.get_tx_table_guards();
           transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
           ObStoreRowLockState uncommited_lock_state;
@@ -149,7 +145,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("tx table guard is invalid", KR(ret), K(ctx));
           } else if (OB_FAIL(tx_table_guards.check_row_locked(read_trans_id,
-                                                              row_header->get_trans_id(),
+                                                              multi_version_info.trans_id_,
                                                               tx_sequence,
                                                               sstable_->get_end_scn(),
                                                               uncommited_lock_state))) {
@@ -158,24 +154,24 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
                      transaction::is_effective_trans_version(trans_version) &&
                      OB_FAIL(check_truncate_part_filter(current,
                                                         trans_version,
-                                                        row_header->get_row_multi_version_flag().is_ghost_row(),
+                                                        multi_version_info.mvcc_row_flag_.is_ghost_row(),
                                                         is_filtered))) {
             LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
           } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
           } else if (is_filtered) {
           } else if (FALSE_IT(*lock_state = uncommited_lock_state)) {
           } else if (lock_state->is_lock_decided()) {
-            lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
+            lock_state->lock_dml_flag_ = multi_version_info.dml_row_flag_.get_dml_flag();
           }
         } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
-                   OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, row_header->get_row_multi_version_flag().is_ghost_row(), is_filtered))) {
+                   OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, multi_version_info.mvcc_row_flag_.is_ghost_row(), is_filtered))) {
           LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
         } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
         } else if (is_filtered) {
         } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
           LOG_ERROR("convert failed", K(ret), K(trans_version));
         } else {
-          lock_state->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
+          lock_state->lock_dml_flag_ = multi_version_info.dml_row_flag_.get_dml_flag();
         }
       } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
                  OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, false, is_filtered))) {
@@ -189,12 +185,12 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         bool need_stop = false;
         if (is_major_sstable) {
           check_row_in_major_sstable(need_stop);
-        } else if (OB_FAIL(check_row(read_trans_id, row_header, *lock_state, need_stop))) {
-          LOG_WARN("Failed to check row", K(ret), K(ret), KPC_(range), K(read_trans_id), KPC(row_header),
-                   K(sql_sequence), KPC(lock_state));
+        } else if (OB_FAIL(check_row(multi_version_info.dml_row_flag_, multi_version_info.mvcc_row_flag_, read_trans_id, *lock_state, need_stop))) {
+          LOG_WARN("Failed to check row", K(ret), K(ret), KPC_(range), K(read_trans_id), K(multi_version_info),
+          K(sql_sequence), KPC(lock_state));
         }
         STORAGE_LOG(DEBUG, "check row lock on sstable", K(ret), KPC_(range), K(need_stop),
-                    K(read_trans_id), KPC(row_header), KPC(lock_state), K(current));
+                    K(read_trans_id), K(multi_version_info), KPC(lock_state), K(current));
         if (OB_SUCC(ret) && need_stop) {
           break;
         }
@@ -317,13 +313,13 @@ int ObMicroBlockRowLockMultiChecker::inner_get_next_row(
 }
 
 int ObMicroBlockRowLockMultiChecker::check_row(
-    const transaction::ObTransID &trans_id,
-    const ObRowHeader *row_header,
-    ObStoreRowLockState &lock_state,
+    const ObDmlRowFlag row_flag,
+    const ObMultiVersionRowFlag mvcc_row_flag,
+    const transaction::ObTransID trans_id,
+    ObStoreRowLockState& lock_state,
     bool &need_stop)
 {
   int ret = OB_SUCCESS;
-  const ObMultiVersionRowFlag multi_version_flag = row_header->get_row_multi_version_flag();
   const bool row_is_decided = lock_state.is_row_decided();
   const int64_t rowkey_idx = rowkey_current_idx_ - 1;
   bool is_ghost_row_flag = false;
@@ -332,9 +328,9 @@ int ObMicroBlockRowLockMultiChecker::check_row(
   if (!row_is_decided) {
     // Case1: Row is aborted.
     need_stop = false;
-  } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(multi_version_flag,
+  } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(mvcc_row_flag,
                                                   is_ghost_row_flag))) {
-    LOG_WARN("Failed to check ghost row", K(ret), K(multi_version_flag));
+    LOG_WARN("Failed to check ghost row", K(ret), K(mvcc_row_flag));
   } else if (is_ghost_row_flag) {
     // Case2: We encounter the ghost row which means the version node is
     // faked, and the row has already ended. So, we believe that the next
@@ -348,19 +344,19 @@ int ObMicroBlockRowLockMultiChecker::check_row(
       need_stop = true;
       LOG_DEBUG("Find lock conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                K_(current), K_(start), K_(last), K_(macro_id), KPC(row_header));
+                K_(current), K_(start), K_(last), K_(macro_id));
     } else if (lock_state.trans_version_ > snapshot_version_) {
       rows_info_->set_row_conflict_error(rowkey_idx, OB_TRANSACTION_SET_VIOLATION);
       need_stop = true;
       LOG_DEBUG("Find tsv conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                K_(current), K_(start), K_(last), K_(macro_id), KPC(row_header));
-    } else if (check_exist_ && DF_DELETE != row_header->get_row_flag().get_dml_flag()) {
+                K_(current), K_(start), K_(last), K_(macro_id));
+    } else if (check_exist_ && DF_DELETE != row_flag.get_dml_flag()) {
       rows_info_->set_row_conflict_error(rowkey_idx, OB_ERR_PRIMARY_KEY_DUPLICATE);
       need_stop = !rows_info_->need_find_all_duplicate_key();;
       LOG_DEBUG("Find duplication in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                K_(current), K_(start), K_(last), K_(macro_id), KPC(row_header));
+                K_(current), K_(start), K_(last), K_(macro_id));
     } else {
       rows_info_->set_row_checked(rowkey_idx);
     }
@@ -368,7 +364,7 @@ int ObMicroBlockRowLockMultiChecker::check_row(
 
   LOG_DEBUG("check decided row in multi row checker of mini/minor sstable", K(rowkey_idx),
             K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx),
-            K(rows_info_->rowkeys_[rowkey_idx]), K(lock_state), KPC(row_header));
+            K(rows_info_->rowkeys_[rowkey_idx]), K(lock_state), K(row_flag), K(mvcc_row_flag), K(trans_id));
 
   return ret;
 }
@@ -396,10 +392,8 @@ int ObMicroBlockRowLockMultiChecker::seek_forward()
 {
   int ret = OB_SUCCESS;
   ObIMicroBlockReader *micro_block_reader = reader_;
-  bool need_search_duplicate_row = false;
-  if (ObIMicroBlockReader::Reader == reader_->get_type() || ObIMicroBlockReader::NewFlatReader == reader_->get_type()) {
-    need_search_duplicate_row = !sstable_->is_major_type_sstable() && !static_cast<ObIMicroBlockFlatReaderBase *>(reader_)->single_version_rows();
-  }
+  const bool is_inc_major_or_major = sstable_->is_inc_major_related_sstable() || sstable_->is_major_sstable();
+  bool need_search_duplicate_row = !is_inc_major_or_major && !reader_->get_micro_header()->single_version_rows_;
   const int64_t row_count = micro_block_reader->row_count();
   while (OB_SUCC(ret)) {
     if (rowkey_current_idx_ == rowkey_end_idx_) {

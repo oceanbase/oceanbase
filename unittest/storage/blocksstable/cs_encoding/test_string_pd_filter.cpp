@@ -38,7 +38,7 @@ TEST_F(TestStringPdFilter, test_string_decoder_filter_varchar)
     const int64_t null_cnt = has_null ? 20 : 0;
     const int64_t row_cnt = 100 + null_cnt;
 
-    ObMicroBlockCSEncoder encoder;
+    ObMicroBlockCSEncoder<> encoder;
     ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
     encoder.is_all_column_force_raw_ = is_force_raw;
     ObDatumRow row_arr[row_cnt];
@@ -138,7 +138,7 @@ TEST_F(TestStringPdFilter, test_string_decoder_filter_char)
     const int64_t null_cnt = has_null ? 20 : 0;
     const int64_t row_cnt = 100 + null_cnt;
 
-    ObMicroBlockCSEncoder encoder;
+    ObMicroBlockCSEncoder<> encoder;
     ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
     encoder.is_all_column_force_raw_ = is_force_raw;
     ObDatumRow row_arr[row_cnt];
@@ -236,7 +236,7 @@ TEST_F(TestStringPdFilter, test_fixed_string_decoder_filter)
     bool has_null = flag;
     const int64_t null_cnt = has_null ? 200 : 0;
     const int64_t row_cnt = 1000 + null_cnt;
-    ObMicroBlockCSEncoder encoder;
+    ObMicroBlockCSEncoder<> encoder;
     ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
     encoder.is_all_column_force_raw_ = is_force_raw;
     ObDatumRow row_arr[row_cnt];
@@ -302,7 +302,7 @@ TEST_F(TestStringPdFilter, test_string_all_null_decoder)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::STRING; // var string
 
   const int64_t row_cnt = 120;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {

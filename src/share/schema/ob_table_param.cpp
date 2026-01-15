@@ -1098,6 +1098,11 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_type_ = column->get_meta_type();
         tmp_col_desc.col_order_ = column->get_column_order();
         tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
+        int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
+        if (!tmp_col_extend.skip_index_attr_.has_skip_index() && (is_cs || tmp_ret != OB_SUCCESS) &&
+            ObMergeEngineStoreFormat::is_merge_engine_support_delta_sstable_skip_index(table_schema.get_merge_engine_type())) {
+          tmp_col_extend.skip_index_attr_.set_min_max();
+        }
         if (tmp_col_desc.col_type_.is_lob_storage() && (!IS_CLUSTER_VERSION_BEFORE_4_1_0_0)) {
           tmp_col_desc.col_type_.set_has_lob_header();
         }
@@ -1178,6 +1183,9 @@ int ObTableParam::construct_columns_and_projector(
             common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID != column_id) {
           access_virtual_col_cnt_++;
         }
+        if (common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id) {
+          tmp_col_extend.skip_index_attr_.set_min_max();
+        }
       } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The column is NULL", K(ret), K(table_schema.get_table_id()), K(column_id), K(i));
@@ -1199,6 +1207,11 @@ int ObTableParam::construct_columns_and_projector(
           }
           col_index = idx;
           tmp_col_extend.skip_index_attr_ = column_schema->get_skip_index_attr();
+          int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
+          if (!tmp_col_extend.skip_index_attr_.has_skip_index() && (is_cs || tmp_ret != OB_SUCCESS) &&
+              ObMergeEngineStoreFormat::is_merge_engine_support_delta_sstable_skip_index(table_schema.get_merge_engine_type())) {
+            tmp_col_extend.skip_index_attr_.set_min_max();
+          }
         }
       }
 

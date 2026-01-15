@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "object/ob_obj_type.h"
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_ddl_resolver.h"
 #include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
@@ -3151,6 +3152,86 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster by table in data version less than 4.4.1");
         } else {
           // do nothing
+        }
+        break;
+      }
+      case T_DELTA_FORMAT: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("set delta format in data version less than 4.5.1.0 is not supported", K(ret), K(tenant_id), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "set delta format in data version less than 4.5.1.0 is not supported");
+        } else if (OB_UNLIKELY(is_index_option)) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "specify delta format in index option", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify delta format in index tablet");
+        } else if (option_node->num_child_ != 1) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "option_node child is null", K(ret), K(option_node->num_child_), K(option_node->children_[0]));
+        } else if (OB_ISNULL(option_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "option_node child is null", K(ret), K(option_node->num_child_), K(option_node->children_[0]));
+        } else if (OB_ISNULL(stmt_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "stmt is null", K(ret));
+        } else {
+          ObString delta_format(
+              static_cast<int32_t>(option_node->children_[0]->str_len_),
+              (char *)(option_node->children_[0]->str_value_));
+          ObRowStoreType row_store_type;
+          ObTableSchema *table_schema;
+          if (OB_LIKELY(stmt::T_CREATE_TABLE == stmt_->get_stmt_type())) {
+            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+            table_schema = &arg.schema_;
+          } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+            if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::DELTA_FORMAT))) {
+              SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
+            } else {
+              table_schema = &static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg().alter_table_schema_;
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "get unexpected stmt type", K(ret), K(stmt_->get_stmt_type()));
+          }
+          CK(OB_NOT_NULL(table_schema));
+          if (FAILEDx(table_schema->set_delta_format(delta_format))) {
+            SQL_RESV_LOG(WARN, "failed to resolve delta format str", K(ret), K(delta_format));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "delta format should be 'flat' or 'encoding'");
+          }
+        }
+        break;
+      }
+      case T_SKIP_INDEX_LEVEL: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "set skip index level less than 4.5.1.0 not support", KR(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "set skip index level less than 4.5.1.0");
+        } else if (is_index_option) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "specify skip_index_level in index option", KR(ret));
+        } else if (option_node->num_child_ != 1 || OB_ISNULL(option_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "option_node child is null", KR(ret), "num_child", option_node->num_child_);
+        } else {
+          ObSkipIndexLevel skip_index_level = static_cast<ObSkipIndexLevel>(option_node->children_[0]->value_);
+          if (OB_LIKELY(stmt::T_CREATE_TABLE == stmt_->get_stmt_type())) {
+            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+            arg.schema_.set_skip_index_level(skip_index_level);
+          } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+            ObAlterTableArg &arg = static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg();
+            arg.alter_table_schema_.set_skip_index_level(skip_index_level);
+            if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::SKIP_INDEX_LEVEL))) {
+              SQL_RESV_LOG(WARN, "fail to set skip_index_levelto bitset in ob ddl resolver", KR(ret));
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "get unexpected stmt type", KR(ret), K(stmt_->get_stmt_type()));
+          }
         }
         break;
       }

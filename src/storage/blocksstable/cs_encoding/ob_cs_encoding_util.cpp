@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_cs_encoding_util.h"
+#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
 
 namespace oceanbase
 {

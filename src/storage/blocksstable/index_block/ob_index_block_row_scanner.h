@@ -102,7 +102,7 @@ int fix_micro_header_and_transform(
     char *&allocated_buf);
   static int get_transformed_upper_mem_size(const ObITableReadInfo *table_read_info, const char *raw_block_data, int64_t &mem_limit);
 private:
-  int get_reader(const ObRowStoreType store_type, ObIMicroBlockReader *&micro_reader);
+  int get_reader(const ObMicroBlockHeader &header, ObIMicroBlockReader *&micro_reader);
 private:
   ObArenaAllocator allocator_;
   ObMicroBlockReaderHelper micro_reader_helper_;

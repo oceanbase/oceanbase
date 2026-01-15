@@ -342,7 +342,7 @@ int ObMacroMetaTempStore::get_macro_meta_from_block_buf(const ObSSTableMacroBloc
     LOG_WARN("meta block invalid", K(ret), K(meta_block));
   } else if (OB_FAIL(micro_reader_helper.init(allocator_))) {
     LOG_WARN("fail to init micro reader helper", K(ret));
-  } else if (OB_FAIL(micro_reader_helper.get_reader(meta_block.get_store_type(), micro_reader))) {
+  } else if (OB_FAIL(micro_reader_helper.get_reader(*meta_block.get_micro_header(), micro_reader))) {
     LOG_WARN("failed to get micro reader", K(ret));
   } else if (OB_FAIL(micro_reader->init(meta_block, nullptr))) {
     LOG_WARN("failed to init micro reader", K(ret));

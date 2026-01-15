@@ -98,6 +98,7 @@ struct ObTabletExeMergeCtx : public ObTabletMergeCtx
 {
   DEFAULT_CONSTRUCTOR(ObTabletExeMergeCtx, ObTabletMergeCtx);
 protected:
+  virtual int prepare_schema() override;
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int cal_merge_param() override;
   int get_tables_by_key(ObGetMergeTablesResult &get_merge_table_result);

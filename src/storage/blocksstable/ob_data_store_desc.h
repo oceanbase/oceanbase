@@ -96,7 +96,7 @@ public:
       K_(enable_macro_block_bloom_filter),
       K_(progressive_merge_round),
       K_(need_submit_io),
-      K_(is_delete_insert_table),
+      K_(merge_engine_type),
       K_(encoding_granularity),
       K_(reorganization_scn),
       K_(semistruct_properties),
@@ -137,7 +137,7 @@ public:
   // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
   // indicate whether to submit io to write maroc block data to disk.
   bool need_submit_io_;
-  bool is_delete_insert_table_;
+  ObMergeEngineType merge_engine_type_;
   uint64_t encoding_granularity_;
   int64_t micro_block_format_version_;
   share::SCN reorganization_scn_;
@@ -154,15 +154,14 @@ struct ObColDataStoreDesc
   bool is_valid() const;
   int assign(const ObColDataStoreDesc &desc);
   int init(
-    const bool is_major,
     const share::schema::ObMergeSchema &merge_schema,
     const uint16_t table_cg_idx,
-    const int64_t major_working_cluster_version);
-  int init(const bool is_major,
-          const share::schema::ObMergeSchema &merge_schema,
-          const storage::ObStorageColumnGroupSchema &cg_schema,
-          const uint16_t table_cg_idx,
-          const int64_t major_working_cluster_version);
+    const ObStaticDataStoreDesc &static_desc);
+  int init(
+    const share::schema::ObMergeSchema &merge_schema,
+    const storage::ObStorageColumnGroupSchema &cg_schema,
+    const uint16_t table_cg_idx,
+    const ObStaticDataStoreDesc &static_desc);
   // be carefule to cal mock function
   int mock_valid_col_default_checksum_array(int64_t column_cnt);
   OB_INLINE int add_col_desc(const ObObjMeta meta, int64_t col_idx);
@@ -176,10 +175,9 @@ struct ObColDataStoreDesc
 private:
   // simplified do not generate skip index, do not init agg_meta_array
   int generate_skip_index_meta(
-      const bool is_major,
       const share::schema::ObMergeSchema &schema,
       const storage::ObStorageColumnGroupSchema *cg_schema,
-      const int64_t major_working_cluster_version);
+      const ObStaticDataStoreDesc &static_desc);
   void fresh_col_meta(const share::schema::ObMergeSchema &merge_schema);
   int gene_col_default_checksum_array(
       const share::schema::ObMergeSchema &merge_schema);
@@ -187,6 +185,10 @@ private:
       const share::schema::ObMergeSchema &merge_schema);
   int init_col_default_checksum_array(
       const int64_t column_cnt);
+  int init_skip_idx_attrs(
+    const bool is_full_column_sstable,
+    const share::schema::ObMergeSchema &schema,
+    ObArray<ObSkipIndexColumnAttr> &skip_idx_attrs);
   int generate_single_cg_skip_index_meta(
     const ObSkipIndexColumnAttr &skip_idx_attr_by_user,
     const storage::ObStorageColumnGroupSchema &cg_schema,
@@ -250,6 +252,10 @@ public:
   {
     return data_store_type_ == ObMacroBlockCommonHeader::SSTableMacroMeta;
   }
+  OB_INLINE bool is_for_data() const
+  {
+    return data_store_type_ == ObMacroBlockCommonHeader::SSTableData;
+  }
   OB_INLINE bool is_major_merge_type() const { return compaction::is_major_merge_type(get_merge_type()); }
   OB_INLINE bool is_major_or_meta_merge_type() const { return compaction::is_major_or_meta_merge_type(get_merge_type()); }
   OB_INLINE bool is_use_pct_free() const { return get_macro_block_size() != get_macro_store_size(); }
@@ -286,7 +292,7 @@ public:
   }
   bool micro_index_clustered() const;
   bool is_delete_insert_merge() const
-  { return get_is_delete_insert_table() && !is_major_merge_type(); }
+  { return is_delete_insert_merge_engine() && !is_major_merge_type(); }
   bool enable_macro_block_bloom_filter() const;
 
   OB_INLINE int64_t get_micro_block_format_version() const
@@ -324,7 +330,7 @@ public:
   STATIC_DESC_FUNC(bool, need_submit_io);
   STATIC_DESC_FUNC(int64_t, concurrent_cnt);
   STATIC_DESC_FUNC(share::SCN, reorganization_scn);
-  STATIC_DESC_FUNC(bool, is_delete_insert_table);
+  STATIC_DESC_FUNC(ObMergeEngineType, merge_engine_type);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
   COL_DESC_FUNC(int64_t, row_column_count);
@@ -343,6 +349,9 @@ public:
   OB_INLINE int64_t get_micro_block_size() const { return micro_block_size_; }
   OB_INLINE common::ObRowStoreType get_row_store_type() const { return row_store_type_; }
   OB_INLINE const share::ObSemistructProperties& get_semistruct_properties() const { return static_desc_->semistruct_properties_; }
+  OB_INLINE bool is_delete_insert_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT; }
+  OB_INLINE bool is_partial_update_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE; }
+  OB_INLINE bool is_insert_only_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
   static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   // emergency magic table id is 10000
   static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;
@@ -367,8 +376,7 @@ private:
   int cal_row_store_type(const ObMergeSchema &merge_schema,
                          const ObRowStoreType row_store_type,
                          const compaction::ObMergeType merge_type);
-  int get_emergency_row_store_type(const ObMergeSchema &merge_schema);
-
+  int get_emergency_row_store_type();
 public:
   ObStaticDataStoreDesc *static_desc_;
   ObColDataStoreDesc *col_desc_;

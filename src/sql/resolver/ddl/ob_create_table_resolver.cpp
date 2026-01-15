@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "share/ob_fts_index_builder_util.h"
@@ -513,6 +514,61 @@ int ObCreateTableResolver::set_default_merge_engine_type_(share::schema::ObTable
   return ret;
 }
 
+int ObCreateTableResolver::set_default_delta_format_(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_user_table()) {
+    table_schema.set_minor_row_store_type(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session_info_ is null!", KR(ret), KP_(session_info));
+  } else {
+    uint64_t tenant_id = session_info_->get_effective_tenant_id(), tenant_version;
+    ObRowStoreType row_store_type = ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    } else if (tenant_version < DATA_VERSION_4_5_1_0) {
+    } else {
+      ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (OB_LIKELY(tenant_config.is_valid())) {
+        ObString delta_format = tenant_config->default_delta_format.get_value_string();
+        OZ(ObStoreFormat::resolve_delta_row_store_type(delta_format, row_store_type));
+      } else {
+        LOG_WARN("invalid tenant config, delta format is set to flat", K(tenant_id));
+      }
+    }
+    OX(table_schema.set_minor_row_store_type(row_store_type));
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::set_default_skip_index_level_(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (!table_schema.is_user_table()) {
+    table_schema.set_skip_index_level(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session_info_ is null!", KR(ret), KP_(session_info));
+  } else {
+    uint64_t tenant_id = session_info_->get_effective_tenant_id(), tenant_version;
+    ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    } else if (tenant_version < DATA_VERSION_4_5_1_0 || !tenant_config.is_valid()) {
+      table_schema.set_skip_index_level(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
+    } else if (0 == tenant_config->default_skip_index_level) {
+      table_schema.set_skip_index_level(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY);
+    } else if (1 == tenant_config->default_skip_index_level) {
+      table_schema.set_skip_index_level(ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE);
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("skip index level is not supported", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -789,6 +845,10 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "set table options (micro_block_format_version) failed", K(ret));
             } else if (OB_FAIL(set_default_merge_engine_type_(table_schema))) {
               SQL_RESV_LOG(WARN, "set default merge engine type failed", K(ret));
+            } else if (OB_FAIL(set_default_delta_format_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set default delta format failed", K(ret));
+            } else if (OB_FAIL(set_default_skip_index_level_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set default skip index level failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {

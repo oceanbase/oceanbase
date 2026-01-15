@@ -161,7 +161,7 @@ int ObDictEncodingHashTable::sort_dict(ObCmpFunc &cmp_func)
   return ret;
 }
 
-int ObDictEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObColDesc &col_desc)
+int ObDictEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObObjTypeStoreClass store_class)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(!is_created_)) {
@@ -173,7 +173,6 @@ int ObDictEncodingHashTableBuilder::build(const ObColDatums &col_datums, const O
   } else {
     row_count_ = col_datums.count();
     const uint64_t mask = (bucket_num_ - 1);
-    ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
     const bool is_integer = store_class == ObIntSC || store_class == ObUIntSC;
     if (is_integer) {
       for (int64_t row_idx = 0; row_idx < row_count_; ++row_idx) {

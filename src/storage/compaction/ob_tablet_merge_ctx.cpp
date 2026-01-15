@@ -354,6 +354,18 @@ void ObTabletMiniMergeCtx::record_uncommitted_sstable_cnt()
 /*
  *  ----------------------------------------------ObTabletExeMergeCtx--------------------------------------------------
  */
+
+int ObTabletExeMergeCtx::prepare_schema()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTabletMergeCtx::prepare_schema())) {
+    LOG_WARN("failed to prepare schema", KR(ret));
+  } else if (OB_FAIL(update_storage_schema_if_needed(*const_cast<ObStorageSchema *>(static_param_.schema_)))) {
+    LOG_WARN("failed to try update storage schema", KR(ret), "schema_version", static_param_.schema_->schema_version_);
+  }
+  return ret;
+}
+
 int ObTabletExeMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_table_result)
 {
   int ret = OB_SUCCESS;

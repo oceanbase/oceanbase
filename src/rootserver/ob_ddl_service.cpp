@@ -1223,7 +1223,6 @@ int ObDDLService::try_format_partition_schema(ObPartitionSchema &partition_schem
   return ret;
 }
 
-
 int ObDDLService::get_uk_cst_id_for_self_ref(const ObIArray<ObTableSchema> &table_schemas,
                                              const ObCreateForeignKeyArg &foreign_key_arg,
                                              ObForeignKeyInfo &foreign_key_info)
@@ -2749,6 +2748,32 @@ int ObDDLService::set_raw_table_options(
             LOG_WARN("fail to check dynamic partition is supported", KR(ret), K(new_table_schema));
           } else if (OB_FAIL(ObDynamicPartitionManager::check_is_valid(new_table_schema))) {
             LOG_WARN("fail to check dynamic partition policy is valid", KR(ret), K(new_table_schema));
+          }
+          break;
+        }
+        case ObAlterTableArg::DELTA_FORMAT: {
+          uint64_t data_version;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+            LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
+          } else if (data_version < DATA_VERSION_4_5_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("delta format less than 4.5.1.0 is not supported", KR(ret), K(data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "delta format is");
+          } else if (OB_FAIL(new_table_schema.set_delta_format(alter_table_schema.get_delta_format()))) {
+            LOG_WARN("fail to set delta format", KR(ret), K(alter_table_schema.get_delta_format()), K(new_table_schema));
+          }
+          break;
+        }
+        case ObAlterTableArg::SKIP_INDEX_LEVEL: {
+          uint64_t compat_version = 0;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", KR(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_5_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("skip index level less than 4.5.1.0 not support", KR(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "skip index level less than 4.5.1.0");
+          } else {
+            new_table_schema.set_skip_index_level(alter_table_schema.get_skip_index_level());
           }
           break;
         }

@@ -78,7 +78,7 @@ int clear_tx_data()
 };
 
 
-class TestMultiVersionMerge : public TestMergeBasic
+class TestMultiVersionMerge : public TestMergeBasic, public ::testing::WithParamInterface<bool>
 {
 public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
@@ -162,6 +162,9 @@ TestMultiVersionMerge::TestMultiVersionMerge()
 
 void TestMultiVersionMerge::SetUp()
 {
+  // toggle row store type by parameter: false -> FLAT_ROW_STORE, true -> CS_ENCODING_ROW_STORE
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
   ObMultiVersionSSTableTest::SetUp();
 }
 
@@ -439,7 +442,7 @@ void TestMultiVersionMerge::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
 
 
 
-TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtered)
+TEST_P(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtered)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -538,7 +541,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_and_second_macro_is_filtere
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_inc_merge)
+TEST_P(TestMultiVersionMerge, rowkey_cross_three_macro_inc_merge)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -646,7 +649,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_inc_merge)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
+TEST_P(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -765,7 +768,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_is_last)
+TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_is_last)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -857,7 +860,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_is_last)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_last)
+TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_last)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -973,7 +976,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_shadow)
+TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_shadow)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1093,7 +1096,7 @@ TEST_F(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_full_merge)
+TEST_P(TestMultiVersionMerge, rowkey_cross_three_macro_full_merge)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1201,7 +1204,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_three_macro_full_merge)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
+TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1352,7 +1355,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
+TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1508,7 +1511,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
+TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1671,7 +1674,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
+TEST_P(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1777,7 +1780,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
+TEST_P(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1898,7 +1901,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version)
+TEST_P(TestMultiVersionMerge, test_merge_with_greater_multi_version)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1982,7 +1985,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit)
+TEST_P(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2089,7 +2092,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
+TEST_P(TestMultiVersionMerge, test_merge_with_ghost_row)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2219,7 +2222,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, compare_dml_flag)
+TEST_P(TestMultiVersionMerge, compare_dml_flag)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2304,7 +2307,7 @@ TEST_F(TestMultiVersionMerge, compare_dml_flag)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, get_last_after_reuse)
+TEST_P(TestMultiVersionMerge, get_last_after_reuse)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2403,7 +2406,7 @@ TEST_F(TestMultiVersionMerge, get_last_after_reuse)
   handle2.reset();
   merger.reset();
 }
-TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_version_start)
+TEST_P(TestMultiVersionMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_version_start)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2495,7 +2498,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_two_macro_with_commit_scn_less_multi_
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_than_multi_version)
+TEST_P(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_than_multi_version)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2612,7 +2615,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, shadow_row_is_last_in_macro)
+TEST_P(TestMultiVersionMerge, shadow_row_is_last_in_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2713,7 +2716,7 @@ TEST_F(TestMultiVersionMerge, shadow_row_is_last_in_macro)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
+TEST_P(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2831,7 +2834,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, range_cross_macro)
+TEST_P(TestMultiVersionMerge, range_cross_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -2939,7 +2942,7 @@ TEST_F(TestMultiVersionMerge, range_cross_macro)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
+TEST_P(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3077,7 +3080,7 @@ TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
 }
 
 
-TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
+TEST_P(TestMultiVersionMerge, test_major_range_cross_macro)
 {
   int ret = OB_SUCCESS;
   fake_freeze_info();
@@ -3176,7 +3179,7 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row)
+TEST_P(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3289,7 +3292,7 @@ TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row2)
+TEST_P(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row2)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3406,7 +3409,7 @@ TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row2)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
+TEST_P(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3517,7 +3520,7 @@ TEST_F(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, check_shadow_row_fuse)
+TEST_P(TestMultiVersionMerge, check_shadow_row_fuse)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3625,7 +3628,7 @@ TEST_F(TestMultiVersionMerge, check_shadow_row_fuse)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, check_shadow_row_with_first)
+TEST_P(TestMultiVersionMerge, check_shadow_row_with_first)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3738,7 +3741,7 @@ TEST_F(TestMultiVersionMerge, check_shadow_row_with_first)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, check_shadow_row_lost)
+TEST_P(TestMultiVersionMerge, check_shadow_row_lost)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -3857,7 +3860,7 @@ TEST_F(TestMultiVersionMerge, check_shadow_row_lost)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, single_trans_replayed_in_multi_sst)
+TEST_P(TestMultiVersionMerge, single_trans_replayed_in_multi_sst)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -4021,7 +4024,7 @@ TEST_F(TestMultiVersionMerge, single_trans_replayed_in_multi_sst)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMerge, across_multi_blocks)
+TEST_P(TestMultiVersionMerge, across_multi_blocks)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -4658,6 +4661,11 @@ TEST_F(TestMultiVersionMerge, across_multi_blocks)
   handle1.reset();
   scan_merge.reset();
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestMultiVersionMerge,
+  ::testing::Values(false, true));
 
 }
 }

@@ -146,6 +146,8 @@ private:
   int check_building_domain_index_legal();
   int set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema);
   int resolve_clustering_key_option(const ParseNode *node, const int64_t clustering_key_index);
+  int set_default_delta_format_(share::schema::ObTableSchema &table_schema);
+  int set_default_skip_index_level_(share::schema::ObTableSchema &table_schema);
   int check_stmt_is_empty_set(ObSelectStmt *select_stmt, bool &is_empty_set);
 
 private:

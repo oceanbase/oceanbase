@@ -269,5 +269,33 @@ int ObIMicroBlockReader::get_column_datum(
   return ret;
 }
 
+int ObIMicroBlockReader::get_logical_row_cnt(const int64_t last, int64_t &row_idx,
+                                  int64_t &row_cnt)
+{
+  int ret = OB_SUCCESS;
+  const ObRowHeader *row_header = nullptr;
+  int64_t row_count;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("reader not init", K(ret));
+  } else if (OB_FAIL(get_row_count(row_count))) {
+    LOG_WARN("Failed to get row count");
+  } else if (last >= row_count) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(row_idx), K(last));
+  } else {
+    while (OB_SUCC(ret) && row_idx <= last) {
+      MultiVersionInfo multi_version_info;
+      if (OB_FAIL(get_multi_version_info(row_idx, multi_version_info))) {
+        LOG_WARN("Failed to get multi version info", K(row_idx), K(row_count));
+      } else if (multi_version_info.mvcc_row_flag_.is_first_multi_version_row()) {
+        row_cnt += multi_version_info.dml_row_flag_.get_delta();
+      }
+      row_idx++;
+    }
+  }
+  return ret;
+}
+
 }
 }

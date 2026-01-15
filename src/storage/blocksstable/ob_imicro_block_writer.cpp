@@ -53,6 +53,7 @@ void ObMicroBlockDesc::reset()
   original_size_ = 0;
   is_last_row_last_flag_ = false;
   is_first_row_first_flag_ = false;
+  single_version_rows_ = false;
 }
 
 /**
@@ -126,6 +127,7 @@ int ObMicroBlockDesc::deep_copy(
         dst.has_lob_out_row_ = has_lob_out_row_;
         dst.is_last_row_last_flag_ = is_last_row_last_flag_;
         dst.is_first_row_first_flag_ = is_first_row_first_flag_;
+        dst.single_version_rows_ = single_version_rows_;
 
         if (nullptr != aggregated_row_) {
           if (OB_ISNULL(row_buffer = allocator.alloc(sizeof(ObSkipIndexAggResult)))) {
@@ -189,6 +191,7 @@ int ObIMicroBlockWriter::build_micro_block_desc(ObMicroBlockDesc &micro_block_de
     micro_block_desc.original_size_ = get_original_size();
     micro_block_desc.is_last_row_last_flag_ = is_last_row_last_flag();
     micro_block_desc.is_first_row_first_flag_ = is_first_row_first_flag();
+    micro_block_desc.single_version_rows_ = micro_block_desc.header_->single_version_rows_;
     // fill micro header for bugfix on micro block that bypass compression/encryption
     // since these fields will be only filled on compression in current implementation
     micro_header->data_length_ = micro_block_desc.buf_size_;

@@ -15,7 +15,7 @@
 namespace oceanbase {
 namespace storage {
 
-class TestIncMajorDeleteInsertScan : public TestScanBasic
+class TestIncMajorDeleteInsertScan : public TestScanBasic, public ::testing::WithParamInterface<bool>
 {
 public:
   TestIncMajorDeleteInsertScan();
@@ -40,14 +40,18 @@ void TestIncMajorDeleteInsertScan::TearDownTestCase()
 TestIncMajorDeleteInsertScan::TestIncMajorDeleteInsertScan()
     : TestScanBasic("test_inc_major_delete_insert_scan") {}
 
-void TestIncMajorDeleteInsertScan::SetUp() { TestScanBasic::SetUp(); }
+void TestIncMajorDeleteInsertScan::SetUp() {
+  const bool use_cs_encoding = GetParam();
+  row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
+  TestScanBasic::SetUp();
+}
 
 void TestIncMajorDeleteInsertScan::TearDown()
 {
   TestScanBasic::TearDown();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_mixed_sst_scan)
+TEST_P(TestIncMajorDeleteInsertScan, test_mixed_sst_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -289,7 +293,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_mixed_sst_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_out_of_version_inc_major)
+TEST_P(TestIncMajorDeleteInsertScan, test_out_of_version_inc_major)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -474,7 +478,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_out_of_version_inc_major)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_multi_inc_major_scan)
+TEST_P(TestIncMajorDeleteInsertScan, test_multi_inc_major_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -697,7 +701,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_multi_inc_major_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_scan_with_refresh_di_base)
+TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_di_base)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -861,7 +865,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_scan_with_refresh_di_base)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_number_changed)
+TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_number_changed)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1004,7 +1008,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_number_changed
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_inc_major_changed)
+TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_inc_major_changed)
 {
 
   int ret = OB_SUCCESS;
@@ -1138,7 +1142,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_scan_with_refresh_retry_inc_major_chan
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_scan_with_refresh_single_row)
+TEST_P(TestIncMajorDeleteInsertScan, test_scan_with_refresh_single_row)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1336,7 +1340,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_scan_with_refresh_single_row)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_multi_range_scan)
+TEST_P(TestIncMajorDeleteInsertScan, test_multi_range_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1523,7 +1527,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_multi_range_scan)
   multi_scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_di_base_sstable_row_scanner_with_iter_pool)
+TEST_P(TestIncMajorDeleteInsertScan, test_di_base_sstable_row_scanner_with_iter_pool)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1660,7 +1664,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_di_base_sstable_row_scanner_with_iter_
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_no_minor_sstable_scan)
+TEST_P(TestIncMajorDeleteInsertScan, test_no_minor_sstable_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1819,7 +1823,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_no_minor_sstable_scan)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_no_minor_sstable_multi_scan)
+TEST_P(TestIncMajorDeleteInsertScan, test_no_minor_sstable_multi_scan)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -1985,7 +1989,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_no_minor_sstable_multi_scan)
   multi_scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_double_refresh_table)
+TEST_P(TestIncMajorDeleteInsertScan, test_double_refresh_table)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2191,7 +2195,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_double_refresh_table)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_switch_table)
+TEST_P(TestIncMajorDeleteInsertScan, test_switch_table)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2346,7 +2350,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_switch_table)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_switch_param)
+TEST_P(TestIncMajorDeleteInsertScan, test_switch_param)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2491,7 +2495,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_switch_param)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_delete_insert_continue_overwrite_major)
+TEST_P(TestIncMajorDeleteInsertScan, test_delete_insert_continue_overwrite_major)
 {
 int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2762,7 +2766,7 @@ int ret = OB_SUCCESS;
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_apply_filter_empty)
+TEST_P(TestIncMajorDeleteInsertScan, test_apply_filter_empty)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2822,7 +2826,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_apply_filter_empty)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_multi_block)
+TEST_P(TestIncMajorDeleteInsertScan, test_multi_block)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -2999,7 +3003,7 @@ TEST_F(TestIncMajorDeleteInsertScan, test_multi_block)
   scan_merge.reset();
 }
 
-TEST_F(TestIncMajorDeleteInsertScan, test_refresh_table_intermediate)
+TEST_P(TestIncMajorDeleteInsertScan, test_refresh_table_intermediate)
 {
   int ret = OB_SUCCESS;
   ObTableStoreIterator table_store_iter;
@@ -3214,6 +3218,11 @@ TEST_F(TestIncMajorDeleteInsertScan, test_refresh_table_intermediate)
   handle4.reset();
   scan_merge.reset();
 }
+
+INSTANTIATE_TEST_CASE_P(
+  FlatAndCSEncoding,
+  TestIncMajorDeleteInsertScan,
+  ::testing::Values(false, true));
 
 } // namespace storage
 } // namespace oceanbase

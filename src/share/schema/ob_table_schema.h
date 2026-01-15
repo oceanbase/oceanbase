@@ -36,6 +36,7 @@
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "storage/ob_micro_block_format_version_helper.h"
 #include "share/semistruct/ob_semistruct_properties.h"
+#include "storage/blocksstable/index_block/ob_index_block_util.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info.h"
 namespace oceanbase
 {
@@ -201,6 +202,7 @@ inline bool not_compat_for_queuing_mode(const uint64_t min_data_version)
 const char *table_mode_flag_to_str(const ObTableModeFlag &table_mode);
 #define QUEUING_MODE_NOT_COMPAT_WARN_STR "moderate/super/extreme table mode is not supported in data_version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3 or 4.3.0 <= data_version < 4.3.2"
 #define QUEUING_MODE_NOT_COMPAT_USER_ERROR_STR            "moderate/super/extreme table mode in data_version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3 or 4.3.0 <= data_version < 4.3.2"
+#define SKIP_IDNEX_ROW_SIZE_LIMIT_COEFF 1.0f
 
 enum ObTablePKMode
 {
@@ -667,6 +669,22 @@ struct ObBackUpTableModeOp
   }
 };
 
+struct ColTypeComparator {
+  const ObSEArray<ObObjMeta, 16> &column_types;
+
+  ColTypeComparator(const ObSEArray<ObObjMeta, 16> &col_types) : column_types(col_types) {}
+
+  bool operator()(const int64_t lhs, const int64_t rhs) const {
+    int64_t lhs_priority = blocksstable::get_col_type_skip_index_priority(column_types.at(lhs).get_type());
+    int64_t rhs_priority = blocksstable::get_col_type_skip_index_priority(column_types.at(rhs).get_type());
+    if (lhs_priority != rhs_priority) {
+      return lhs_priority < rhs_priority;
+    } else {
+      return lhs < rhs;
+    }
+  }
+};
+
 // add virtual function in ObMergeSchema, should edit ObStorageSchema & ObTableSchema
 class ObMergeSchema
 {
@@ -715,6 +733,7 @@ public:
   virtual inline ObIndexType get_index_type() const { return INDEX_TYPE_MAX; }
   virtual inline ObIndexStatus get_index_status() const { return INDEX_STATUS_MAX; }
   virtual inline bool is_index_table() const = 0;
+  virtual int get_is_column_store(bool &is_column_store) const { UNUSED(is_column_store); return common::OB_NOT_SUPPORTED; }
 
   virtual int get_store_column_ids(common::ObIArray<ObColDesc> &column_ids, const bool full_col) const
   {
@@ -778,11 +797,7 @@ public:
     UNUSED(column_descs);
     return common::OB_NOT_SUPPORTED;
   }
-  virtual int get_skip_index_col_attr(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const
-  {
-    UNUSED(skip_idx_attrs);
-    return common::OB_NOT_SUPPORTED;
-  }
+  int get_skip_index_col_attr(const bool is_major, const int64_t data_version, common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const;
   virtual int get_mv_mode_struct(ObMvMode &mv_mode) const
   {
     UNUSED(mv_mode);
@@ -797,6 +812,18 @@ public:
   {
     return EMPTY_STRING;
   }
+
+protected:
+  virtual int get_skip_index_col_attr_by_schema(const bool is_major,
+                                                common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs,
+                                                ObSEArray<ObObjMeta, 16> *column_types=nullptr) const
+  {
+    UNUSEDx(is_major, skip_idx_attrs, column_types);
+    return common::OB_NOT_SUPPORTED;
+  }
+  int get_delta_skip_index_adaptively(const bool is_major, common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const;
+
+public:
   DECLARE_PURE_VIRTUAL_TO_STRING;
   const static int64_t INVAID_RET = -1;
   static common::ObString EMPTY_STRING;
@@ -899,6 +926,12 @@ public:
     { return (ObTableAutoIncrementMode)table_mode_.auto_increment_mode_; }
   inline bool is_order_auto_increment_mode() const
   { return ORDER == (ObTableAutoIncrementMode)table_mode_.auto_increment_mode_; }
+  inline void set_minor_row_store_type(const common::ObRowStoreType minor_row_store_type) { minor_row_store_type_ = minor_row_store_type; }
+  inline ObRowStoreType get_minor_row_store_type() const override final { return minor_row_store_type_; }
+  int set_delta_format(const ObString& delta_format);
+  ObString get_delta_format() const {
+    return ObString(ObStoreFormat::get_delta_format_name(minor_row_store_type_));
+  }
 
   inline void set_table_rowid_mode(const ObTableRowidMode table_rowid_mode)
     { table_mode_.rowid_mode_ = table_rowid_mode; }
@@ -1879,7 +1912,6 @@ public:
   // whether table should check merge progress
   int is_need_check_merge_progress(bool &need_check) const;
   int get_multi_version_column_descs(common::ObIArray<ObColDesc> &column_descs) const;
-  virtual int get_skip_index_col_attr(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const override;
   template <typename Allocator>
   static int build_index_table_name(Allocator &allocator,
                                     const uint64_t data_table_id,
@@ -1907,7 +1939,7 @@ public:
   //
   bool is_column_store_supported() const { return is_column_store_supported_; }
   void set_column_store(const bool support_column_store) { is_column_store_supported_ = support_column_store; }
-  int get_is_column_store(bool &is_column_store) const;
+  virtual int get_is_column_store(bool &is_column_store) const override;
   uint64_t get_max_used_column_group_id() const { return max_used_column_group_id_; }
   uint64_t get_next_single_column_group_id() const { return max_used_column_group_id_ > ROWKEY_COLUMN_GROUP_ID ? max_used_column_group_id_ + 1 : ROWKEY_COLUMN_GROUP_ID + 1; }
   int check_is_normal_cgs_at_the_end(bool &is_normal_cgs_at_the_end) const;
@@ -2309,6 +2341,9 @@ protected:
   int add_column_group_to_hash_array(ObColumnGroupSchema *column_group,
                                      const KeyType &key,
                                      ArrayType *&array);
+  virtual int get_skip_index_col_attr_by_schema(const bool is_major,
+                                                common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs,
+                                                ObSEArray<ObObjMeta, 16> *column_types=nullptr) const;
 protected:
   int add_cst_to_cst_array(ObConstraint *cst);
   int remove_cst_from_cst_array(const ObConstraint *cst);

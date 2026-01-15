@@ -247,6 +247,7 @@ int ObDatumRow::from_store_row(const storage::ObStoreRow &store_row)
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDatumRow is not inited", K(ret), K(*this));
   } else if (OB_FAIL(reserve(store_row.row_val_.count_))) {
     STORAGE_LOG(WARN, "Failed to reserve datums", K(ret), K(store_row));

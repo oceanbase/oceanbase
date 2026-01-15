@@ -18,6 +18,7 @@
 #include "ob_row_reader.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/basic/ob_truncate_filter_struct.h"
+#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {
@@ -28,20 +29,6 @@ struct PushdownFilterInfo;
 }
 namespace blocksstable
 {
-
-class ObIMicroBlockFlatReaderBase : public ObIMicroBlockReader
-{
-public:
-    ObIMicroBlockFlatReaderBase() = default;
-    virtual ~ObIMicroBlockFlatReaderBase() = default;
-
-    virtual bool single_version_rows() = 0;
-    virtual bool committed_single_version_rows() = 0;
-
-    virtual int get_logical_row_cnt(const int64_t last,
-                                    int64_t &row_idx,
-                                    int64_t &row_cnt) const = 0;
-};
 
 template<bool EnableNewFlatFormat>
 class ObIMicroBlockFlatReader
@@ -70,7 +57,7 @@ protected:
 };
 
 template<bool EnableNewFlatFormat = true>
-class ObMicroBlockReader : public ObIMicroBlockFlatReader<EnableNewFlatFormat>, public ObIMicroBlockFlatReaderBase
+class ObMicroBlockReader : public ObIMicroBlockFlatReader<EnableNewFlatFormat>, public ObIMicroBlockReader
 {
 public:
   using ObIMicroBlockFlatReader<EnableNewFlatFormat>::header_;
@@ -98,20 +85,16 @@ public:
       const ObMicroBlockData &block_data,
 	  const ObStorageDatumUtils *datum_utils) override;
   virtual int get_row(const int64_t index, ObDatumRow &row) override;
-  virtual int get_row_header(
-      const int64_t row_idx,
-      const ObRowHeader *&row_header) override;
-  int get_logical_row_cnt(
-      const int64_t last,
-      int64_t &row_idx,
-      int64_t &row_cnt) const override;
   virtual int get_row_count(int64_t &row_count) override;
   virtual int get_multi_version_info(
       const int64_t row_idx,
+      MultiVersionInfo& multi_version_info) override final;
+  virtual int get_multi_version_info(
+      const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
-      const ObRowHeader *&row_header,
+      MultiVersionInfo& multi_version_info,
       int64_t &trans_version,
-      int64_t &sql_sequence);
+      int64_t &sql_sequence) override final;
   // Filter interface for filter pushdown
   int filter_pushdown_filter(
       const sql::ObPushdownFilterExecutor *parent,
@@ -181,8 +164,6 @@ public:
       const ObDatumRowkey &rowkey,
       const int64_t begin_idx,
       int64_t &row_idx) override;
-  OB_INLINE bool single_version_rows() override { return nullptr != header_ && header_->single_version_rows_; }
-  OB_INLINE bool committed_single_version_rows() override { return single_version_rows() && !header_->contain_uncommitted_rows(); }
 
   // For column store
   virtual int find_bound(
@@ -208,6 +189,8 @@ public:
       const bool need_init_vector) override;
   virtual bool has_lob_out_row() const override final
   { return nullptr != header_ && header_->has_lob_out_row(); }
+  virtual const ObMicroBlockHeader *get_micro_header() const override final
+  { return header_; }
 
 protected:
   virtual int find_bound(

@@ -1298,11 +1298,11 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     STORAGE_LOG(INFO, "not supported root block", K(root_desc));
     ASSERT_TRUE(false);
   }
+  ObMicroBlockData root_block(root_buf, root_size);
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(merge_root_index_builder_->index_store_desc_.get_desc().row_store_type_, micro_reader));
-  ObMicroBlockData root_block(root_buf, root_size);
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block.get_micro_header(), micro_reader));
   ObDatumRow row;
   OK(row.init(allocator_, merge_root_index_builder_->index_store_desc_.get_desc().col_desc_->row_column_count_));
   OK(micro_reader->init(root_block, nullptr));

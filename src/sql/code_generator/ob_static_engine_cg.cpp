@@ -6161,7 +6161,8 @@ int ObStaticEngineCG::generate_tsc_flags(const ObLogTableScan &op, ObDASScanCtDe
   int ret = OB_SUCCESS;
   bool pd_blockscan = false;
   bool pd_filter = false;
-  bool enable_skip_index = false;
+  bool enable_base_skip_index = false;
+  bool enable_inc_skip_index = false;
   bool enable_prefetch_limit = false;
   bool enable_column_store = false;
   bool enable_filter_reordering = false;
@@ -6214,12 +6215,18 @@ int ObStaticEngineCG::generate_tsc_flags(const ObLogTableScan &op, ObDASScanCtDe
       const int64_t io_read_gap_size = io_read_batch_size * (has_io_gap_percentage_hint ? hint_io_gap_percentage : tenant_config->_io_read_redundant_limit_percentage) / 100;
       pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
       pd_filter = ObPushdownFilterUtils::is_filter_pushdown_enabled(pd_level);
-      enable_skip_index = tenant_config->_enable_skip_index;
+      enable_base_skip_index = tenant_config->_enable_skip_index;
+      enable_inc_skip_index = tenant_config->_enable_skip_index;
+      int tmp_ret = OB_E(EventTable::EN_DISABLE_INC_SKIP_INDEX_SCAN) OB_SUCCESS;
+      if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+        enable_inc_skip_index = false;
+      }
       enable_prefetch_limit = tenant_config->_enable_prefetch_limiting;
       enable_column_store = op.use_column_store();
       enable_filter_reordering = tenant_config->_enable_filter_reordering;
-      scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
-                                                          enable_column_store, enable_prefetch_limit, enable_filter_reordering);
+      scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_base_skip_index,
+                                                          enable_column_store, enable_prefetch_limit,
+                                                          enable_filter_reordering, enable_inc_skip_index);
       scan_ctdef.table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
       scan_ctdef.table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
       scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;

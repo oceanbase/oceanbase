@@ -353,6 +353,7 @@ public:
 
   /* UTILITY FUNC */
   int swap_tablet();
+  int update_storage_schema_if_needed(ObStorageSchema &new_schema);
   static bool need_swap_tablet(
     ObProtectedMemtableMgrHandle &memtable_mgr_handle,
     const int64_t row_count,
@@ -407,7 +408,7 @@ protected:
     const ObMediumCompactionInfo &next_medium_info,
     const int64_t last_major_snapshot,
     const bool force_check);
-
+  int try_update_storage_schema(ObStorageSchema &new_schema);
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
 public:

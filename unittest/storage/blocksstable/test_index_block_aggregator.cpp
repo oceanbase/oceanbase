@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 #define protected public
 #define private public
+#include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "storage/blocksstable/index_block/ob_index_block_aggregator.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
 #include "storage/blocksstable/encoding/ob_micro_block_encoder.h"
@@ -40,6 +41,12 @@ public:
   virtual ~TestIndexBlockAggregator() {}
   virtual void SetUp() {}
   virtual void TearDown() {}
+  static void SetUpTestCase() {
+    ASSERT_EQ(OB_SUCCESS, storage::MockTenantModuleEnv::get_instance().init());
+  }
+  static void TearDownTestCase() {
+    storage::MockTenantModuleEnv::get_instance().destroy();
+  }
   void init_schema(const int64_t col_count, const int64_t rowkey_count, const ObObjType *col_obj_types);
   void init_data_encoder(const ObRowStoreType row_store_type, ObIMicroBlockWriter *&micro_writer);
   void init_min_max_meta(const int64_t idx_col_count, const int64_t *min_max_col_idxs);
@@ -146,8 +153,8 @@ void TestIndexBlockAggregator::init_data_encoder(
   ctx_.compressor_type_ = common::ObCompressorType::NONE_COMPRESSOR;
   ctx_.need_calc_column_chksum_ = true;
   if (ObRowStoreType::CS_ENCODING_ROW_STORE == row_store_type) {
-    micro_writer = OB_NEWx(ObMicroBlockCSEncoder, &allocator_);
-    ASSERT_EQ(OB_SUCCESS, static_cast<ObMicroBlockCSEncoder *>(micro_writer)->init(ctx_));
+    micro_writer = OB_NEWx(ObMicroBlockCSEncoder<>, &allocator_);
+    ASSERT_EQ(OB_SUCCESS, static_cast<ObMicroBlockCSEncoder<> *>(micro_writer)->init(ctx_));
   } else if (ObRowStoreType::ENCODING_ROW_STORE == row_store_type) {
     micro_writer = OB_NEWx(ObMicroBlockEncoder, &allocator_);
     ASSERT_EQ(OB_SUCCESS, static_cast<ObMicroBlockEncoder *>(micro_writer)->init(ctx_));

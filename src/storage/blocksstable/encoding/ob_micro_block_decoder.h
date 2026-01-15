@@ -237,16 +237,7 @@ public:
   //when the incoming datum_utils is nullptr, it indicates not calling locate_range or find_bound
   virtual int init(const ObMicroBlockData &block_data, const ObStorageDatumUtils *datum_utils) override;
   virtual int get_row(const int64_t index, ObDatumRow &row) override;
-  virtual int get_row_header(
-      const int64_t row_idx,
-      const ObRowHeader *&row_header) override;
   virtual int get_row_count(int64_t &row_count) override;
-  virtual int get_multi_version_info(
-      const int64_t row_idx,
-      const int64_t schema_rowkey_cnt,
-      const ObRowHeader *&row_header,
-      int64_t &trans_version,
-      int64_t &sql_sequence);
   virtual int compare_rowkey(
       const ObDatumRowkey &rowkey,
       const int64_t index,
@@ -427,6 +418,10 @@ private:
       ObStorageDatum &decoded_datum,
       common::ObBitmap &result_bitmap);
   int get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx);
+  virtual const ObMicroBlockHeader* get_micro_header() const override final
+  {
+    return header_;
+  }
 
 private:
   const ObMicroBlockHeader *header_;

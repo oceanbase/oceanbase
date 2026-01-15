@@ -454,6 +454,7 @@ void ObMultiVersionSSTableTest::reset_writer(
   seq_param.start_ = start_seq.macro_data_seq_;
   ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
   ASSERT_EQ(OB_SUCCESS, macro_writer_.open(data_desc_.get_desc(), 0/*parallel_idx*/, seq_param, pre_warm_param, cleaner_));
+  macro_writer_.micro_block_adaptive_splitter_.need_reduce_cross_mb_multi_version_rows_ = false;
 }
 
 void ObMultiVersionSSTableTest::prepare_one_macro(

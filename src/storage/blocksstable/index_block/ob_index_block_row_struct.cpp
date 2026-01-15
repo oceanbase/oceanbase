@@ -56,6 +56,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc()
     has_lob_out_row_(false),
     is_last_row_last_flag_(false),
     is_first_row_first_flag_(false),
+    single_version_rows_(false),
     is_serialized_agg_row_(false),
     is_clustered_index_(false),
     has_macro_block_bloom_filter_(false)
@@ -94,6 +95,7 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc(const ObDataStoreDesc &data_store_desc)
     has_lob_out_row_(false),
     is_last_row_last_flag_(false),
     is_first_row_first_flag_(false),
+    single_version_rows_(false),
     is_serialized_agg_row_(false),
     is_clustered_index_(false),
     has_macro_block_bloom_filter_(false)
@@ -172,6 +174,7 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
     is_serialized_agg_row_ = false;
     is_last_row_last_flag_ = index_row_header->is_last_row_last_flag_;
     is_first_row_first_flag_ = index_row_header->is_first_row_first_flag_;
+    single_version_rows_ = index_row_header->single_version_rows_;
 
     const char *agg_row_buf = nullptr;
     int64_t agg_buf_size = 0;
@@ -465,6 +468,7 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     header_->row_count_ = desc.row_count_;
     header_->is_last_row_last_flag_ = desc.is_last_row_last_flag_;
     header_->is_first_row_first_flag_ = desc.is_first_row_first_flag_;
+    header_->single_version_rows_ = desc.single_version_rows_;
     write_pos_ += sizeof(ObIndexBlockRowHeader);
 
     // Set macro id to special value (DEFAULT_IDX_ROW_MACRO_ID) for index micro

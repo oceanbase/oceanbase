@@ -47,14 +47,14 @@ public:
       uint8_t row_index_byte_    :3;
       uint8_t extend_value_bit_  :3;
       uint8_t reserved_          :2;
-    }; // For encoding format
+    }; // For pax encoding format
     struct {
       uint8_t single_version_rows_: 1;
       uint8_t contain_uncommitted_rows_: 1;
       uint8_t is_last_row_last_flag_ : 1;
       uint8_t is_first_row_first_flag_ : 1;
       uint8_t not_used_ : 4;
-    }; // For flat format
+    }; // For flat / cs encoding format
     uint8_t opt_;
   };
   union {
@@ -103,6 +103,7 @@ public:
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
   int deep_copy(char *buf, const int64_t buf_len, int64_t &pos, ObMicroBlockHeader *&new_header) const;
   uint32_t get_serialize_size() const { return get_serialize_size(column_count_, has_column_checksum_); }
+  int64_t get_stored_column_count() const { return column_count_ + (has_row_header_ ? 1 : 0); }
 
   OB_INLINE ObRowStoreType get_row_store_type() const { return static_cast<ObRowStoreType>(row_store_type_); }
 

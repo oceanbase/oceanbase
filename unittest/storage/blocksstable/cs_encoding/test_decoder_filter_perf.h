@@ -561,7 +561,7 @@ protected:
 
   ObMicroBlockRawEncoder raw_encoder_; // for pax, raw encoding
   ObMicroBlockEncoder encoder_;
-  ObMicroBlockCSEncoder cs_encoder_;
+  ObMicroBlockCSEncoder<> cs_encoder_;
   ObRowGenerate row_generate_;
   ObRowGenerate cs_row_generate_;
   ObMicroBlockEncodingCtx ctx_;
@@ -991,7 +991,7 @@ void TestDecoderFilterPerf::init_encoding_ctx(
 #define TEST_BUILD_FILTER_DECODER() \
   ObMicroBlockData data; \
   ObMicroBlockDecoder decoder; \
-  ObMicroBlockCSDecoder cs_decoder; \
+  ObMicroBlockCSDecoder<> cs_decoder; \
   ObIMicroBlockDecoder *cur_decoder = nullptr; \
   ObMicroBlockDesc micro_block_desc; \
   char* buf = NULL; \

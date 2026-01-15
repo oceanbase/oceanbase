@@ -156,8 +156,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_open(
       if (iter_param_->enable_pd_aggregate() &&
           !iter_param_->is_use_column_store() &&
           nullptr != block_row_store_ &&
-          iter_param_->enable_skip_index() &&
-          !sstable_->is_multi_version_table()) {
+          iter_param_->enable_base_skip_index()) {
         if (iter_param_->plan_use_new_format()) {
           prefetcher_.agg_store_ = static_cast<ObAggStoreBase *>(static_cast<ObAggregatedStoreVec *>(block_row_store_));
         } else {
@@ -507,12 +506,13 @@ template<typename PrefetchType>
 int ObSSTableRowScanner<PrefetchType>::refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  if (nullptr != block_row_store_) {
-    if (OB_FAIL(prefetcher_.refresh_blockscan_checker(prefetcher_.cur_micro_data_fetch_idx_ + 1, rowkey))) {
-      LOG_WARN("Failed to prepare blockscan check info", K(ret), K(rowkey), KPC(this));
-    } else {
-      LOG_DEBUG("refresh blockscan", K(ret), K(rowkey));
-    }
+  // not support blockscan in middle of micro block, no need to check blockscan when scan not finished
+  if (nullptr == block_row_store_ ||
+      (!is_di_base_iter_ && !sstable_->is_co_sstable() && nullptr != micro_scanner_ && OB_ITER_END != micro_scanner_->end_of_block())) {
+  } else if (OB_FAIL(prefetcher_.refresh_blockscan_checker(prefetcher_.cur_micro_data_fetch_idx_ + 1, rowkey))) {
+    LOG_WARN("Failed to prepare blockscan check info", K(ret), K(rowkey), KPC(this));
+  } else {
+    LOG_DEBUG("refresh blockscan", K(ret), K(rowkey));
   }
   return ret;
 }

@@ -24,6 +24,7 @@
 #include "ob_micro_block_header.h"
 #include "sql/engine/expr/ob_expr_add.h"
 #include "storage/column_store/ob_column_store_util.h"
+#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {
@@ -322,16 +323,19 @@ public:
   //when the incoming datum_utils is nullptr, it indicates not calling locate_range or find_bound
   virtual int init(const ObMicroBlockData &block_data, const ObStorageDatumUtils *datum_utils) {return OB_NOT_SUPPORTED; }
   virtual int get_row(const int64_t index, ObDatumRow &row) = 0;
-  virtual int get_row_header(
-      const int64_t row_idx,
-      const ObRowHeader *&row_header) { return OB_NOT_SUPPORTED; }
   virtual int get_row_count(int64_t &row_count) { return OB_NOT_SUPPORTED; }
-  virtual int get_multi_version_info(
-      const int64_t row_idx,
-      const int64_t schema_rowkey_cnt,
-      const ObRowHeader *&row_header,
-      int64_t &trans_version,
-      int64_t &sql_sequence) { return OB_NOT_SUPPORTED; }
+  virtual int get_multi_version_info(const int64_t row_idx, MultiVersionInfo &multi_version_info)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int get_multi_version_info(const int64_t row_idx,
+                                     const int64_t schema_rowkey_cnt,
+                                     MultiVersionInfo& multi_version_info,
+                                     int64_t &trans_version,
+                                     int64_t &sql_sequence)
+  {
+    return OB_NOT_SUPPORTED;
+  }
   int locate_range(
       const ObDatumRange &range,
       const bool is_left_border,
@@ -513,6 +517,9 @@ public:
   {
     return is_padding_mode && obj_meta.is_fixed_len_char_type();
   }
+  int get_logical_row_cnt(const int64_t last, int64_t &row_idx,
+                          int64_t &row_cnt);
+  virtual const ObMicroBlockHeader* get_micro_header() const = 0;
 
   virtual int get_rows(const common::ObIArray<int32_t> &cols_projector,
                        const common::ObIArray<const share::schema::ObColumnParam *> &col_params,

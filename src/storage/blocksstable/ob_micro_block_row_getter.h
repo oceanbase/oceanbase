@@ -28,7 +28,6 @@ struct ObSSTableReadHandle;
 namespace blocksstable
 {
 class ObMacroBlockReader;
-class ObCSEncodeBlockGetReader;
 
 class ObIMicroBlockRowFetcher {
 public:
@@ -48,7 +47,7 @@ public:
       reader_->original_data_length() / reader_->row_count() : 0;
   }
 protected:
-  int prepare_reader(const ObRowStoreType store_type);
+  int prepare_reader(const ObMicroBlockHeader &header);
   const storage::ObTableIterParam *param_;
   storage::ObTableAccessContext *context_;
   const blocksstable::ObSSTable *sstable_;

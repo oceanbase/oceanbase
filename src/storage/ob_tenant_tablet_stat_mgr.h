@@ -289,13 +289,23 @@ private:
   ObTabletStatBucket<PAST_BUCKET_CNT> past_buckets_;
 };
 
+struct DynamicTableOptions {
+  DynamicTableOptions()
+    : mode_(share::schema::ObTableModeFlag::TABLE_MODE_NORMAL),
+      minor_row_store_type_(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE)
+  {}
+  void refresh(const share::schema::ObSimpleTableSchemaV2 &table_schema);
+  share::schema::ObTableModeFlag mode_;
+  ObRowStoreType minor_row_store_type_;
+  TO_STRING_KV(K_(mode), K_(minor_row_store_type));
+};
 
 class ObTabletStreamNode : public ObDLinkBase<ObTabletStreamNode>
 {
 public:
   using QueuingMode = share::schema::ObTableModeFlag;
   explicit ObTabletStreamNode(const int64_t flag = 0)
-    : stream_(), flag_(flag), mode_(QueuingMode::TABLE_MODE_NORMAL) {}
+      : stream_(), flag_(flag), dynamic_table_option_() {}
   ~ObTabletStreamNode() { reset(); }
   void reset() { stream_.reset(); }
   void clear_stat() { stream_.clear_stat(); }
@@ -304,7 +314,7 @@ public:
 public:
   ObTabletStream stream_;
   const int64_t flag_;
-  QueuingMode mode_;
+  DynamicTableOptions dynamic_table_option_;
 };
 
 
@@ -415,11 +425,19 @@ public:
       const ObIArray<ObTabletID> &tablet_ids);
   void process_stats();
   void refresh_all(const int64_t step);
-  void refresh_queuing_mode();
+  void refresh_dynamic_table_options();
+  int get_dynamic_table_options(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const DynamicTableOptions*& dynamic_table_options);
   int get_queuing_cfg(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       ObTableQueuingModeCfg& queuing_cfg);
+  int get_minor_row_store_type(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      ObRowStoreType& minor_row_store_type);
   int64_t get_last_update_time() { return report_stat_task_.last_update_time_; }
   bool is_high_tenant_cpu_load() const { return get_load_shedding_factor() >= ObTenantSysLoadShedder::DEFAULT_LOAD_SHEDDING_FACTOR; }
   int64_t get_load_shedding_factor() const { return load_shedder_.get_load_shedding_factor(); }

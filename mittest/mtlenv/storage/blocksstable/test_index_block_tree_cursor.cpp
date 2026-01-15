@@ -454,7 +454,7 @@ TEST_F(TestIndexBlockTreeCursor, test_get_cs_range)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(root_index_builder_->index_store_desc_.get_desc().get_row_store_type(), micro_reader));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block_data_buf_.get_micro_header(), micro_reader));
 
   OK(row.init(allocator_, root_index_builder_->index_store_desc_.get_desc().get_row_column_count()));
   OK(micro_reader->init(root_block_data_buf_, nullptr));

@@ -3386,6 +3386,11 @@ int ObTableSqlService::gen_table_dml_without_check(
         && OB_FAIL(dml.add_column("semistruct_properties", ObHexEscapeSqlStr(semistruct_properties))))
       || (data_version >= DATA_VERSION_4_4_1_0
           && OB_FAIL(dml.add_column("micro_block_format_version", table.get_micro_block_format_version())))
+      || (data_version >= DATA_VERSION_4_5_1_0
+          && OB_FAIL(dml.add_column("delta_format",
+            ObHexEscapeSqlStr(ObStoreFormat::get_delta_format_name(table.get_minor_row_store_type())))))
+      || (data_version >= DATA_VERSION_4_5_1_0
+          && OB_FAIL(dml.add_column("skip_index_level", table.get_skip_index_level())))
       || (((data_version >= MOCK_DATA_VERSION_4_3_5_5 && data_version < DATA_VERSION_4_4_0_0)
            || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
            || (data_version >= DATA_VERSION_4_5_1_0))
@@ -3528,6 +3533,9 @@ int ObTableSqlService::gen_table_dml(
   } else if (!ObMicroBlockFormatVersionHelper::check_version_valid(table.get_micro_block_format_version(), data_version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can't set micro block format version in current version", KR(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_5_1_0 && !ObStoreFormat::is_row_store_type_with_flat(table.get_minor_row_store_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can't set non-flat delta format in current version", K(data_version), "minor_row_store_type", table.get_minor_row_store_type());
   } else if (OB_FAIL(gen_table_dml_without_check(exec_tenant_id, table,
           update_object_status_ignore_version, data_version, dml))) {
     LOG_WARN("failed to gen_table_dml_with_data_version", KR(ret), KDV(data_version));

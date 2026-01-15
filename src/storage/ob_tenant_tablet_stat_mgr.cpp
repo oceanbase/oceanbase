@@ -395,6 +395,12 @@ int ObTabletStream::get_all_tablet_stat(common::ObIArray<ObTabletStat> &tablet_s
   return ret;
 }
 
+/************************************* ObDynamicTableOption *************************************/
+void DynamicTableOptions::refresh(const share::schema::ObSimpleTableSchemaV2 &table_schema)
+{
+  mode_ = table_schema.get_table_mode_flag();
+  minor_row_store_type_ = table_schema.get_minor_row_store_type();
+}
 
 /************************************* ObTabletStreamPool *************************************/
 ObTabletStreamPool::ObTabletStreamPool()
@@ -791,7 +797,7 @@ int ObTenantTabletStatMgr::get_latest_tablet_stat(
     } else {
       stream_node->stream_.get_latest_stat(tablet_stat);
       total_tablet_stat = stream_node->stream_.get_total_stats();
-      mode = stream_node->mode_;
+      mode = stream_node->dynamic_table_option_.mode_;
     }
   }
   return ret;
@@ -833,7 +839,7 @@ int ObTenantTabletStatMgr::get_all_tablet_stats(
     if (OB_NOT_NULL(cur_node = bucket_it->second)) {
       cur_stat.reset();
       cur_node->stream_.get_latest_stat(cur_stat);
-      if (is_queuing_table_mode(cur_node->mode_)) {
+      if (is_queuing_table_mode(cur_node->dynamic_table_option_.mode_)) {
         if (OB_FAIL(tablet_stats.push_back(cur_stat))) {
           LOG_WARN("failed to add tablet stat", K(ret), K(cur_stat));
         }
@@ -1060,7 +1066,7 @@ void ObTenantTabletStatMgr::refresh_sys_stat()
   load_shedder_.refresh_sys_load();
 }
 
-void ObTenantTabletStatMgr::refresh_queuing_mode()
+void ObTenantTabletStatMgr::refresh_dynamic_table_options()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1097,7 +1103,7 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
       ObSEArray<uint64_t, 64> table_ids;
       tablet_ids.reserve(stream_cnt);
       table_ids.reserve(stream_cnt);
-      common::hash::ObHashMap<uint64_t, ObTableModeFlag> table_mode_map;
+      common::hash::ObHashMap<uint64_t, DynamicTableOptions> table_options_map;
       TabletStreamMap::iterator iter = stream_map_.begin();
       for ( ; iter != stream_map_.end() && OB_SUCC(ret); ++iter) {
         if (OB_FAIL(tablet_ids.push_back(iter->first.tablet_id_))) {
@@ -1111,8 +1117,8 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
       } else if (OB_UNLIKELY(tablet_ids.count() != stream_cnt || table_ids.count() != stream_cnt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected tablet ids or table ids", K(ret), K(tablet_ids), K(table_ids));
-      } else if (OB_FAIL(table_mode_map.create(DEFAULT_BUCKET_NUM, ObMemAttr(tenant_id, "TabStatModeMap")))) {
-        LOG_WARN("failed to init table_mode_map", K(ret));
+      } else if (OB_FAIL(table_options_map.create(DEFAULT_BUCKET_NUM, ObMemAttr(tenant_id, "TabStatModeMap")))) {
+        LOG_WARN("failed to init table_options_map", K(ret));
       } else {
         iter = stream_map_.begin();
         ObTabletStreamNode *stream_node = nullptr;
@@ -1121,33 +1127,32 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
           const ObTabletStatKey &key = iter->first;
           stream_node = iter->second;
           int64_t table_id = table_ids.at(idx);
-          ObTableModeFlag tmp_mode_flag = TABLE_MODE_MAX;
+          DynamicTableOptions tmp_options;
           if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
             // TODO(chengkong): tablet id may be invalid in some cases like offline ddl or drop table.
             LOG_WARN("failed to fetch table id from inner table, may be recycled or never exists, skip it", "tablet_id", tablet_ids.at(idx));
           } else if (OB_UNLIKELY(key.tablet_id_ != tablet_ids.at(idx))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("key mismatch with tablet id", K(ret), K(key), K(tablet_ids.at(idx)));
-          } else if (OB_FAIL(table_mode_map.get_refactored(table_id, tmp_mode_flag))) {
+          } else if (OB_FAIL(table_options_map.get_refactored(table_id, tmp_options))) {
             if (OB_HASH_NOT_EXIST == ret) {
               if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_id, table_schema))) {
                 LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
               } else if (OB_ISNULL(table_schema)) {
                 LOG_WARN("get nullptr table schema, skip this tablet", K(tenant_id), K(table_id));
-              } else if (FALSE_IT(tmp_mode_flag = table_schema->get_table_mode_flag())) {
-              } else if (FALSE_IT(stream_node->mode_ = tmp_mode_flag)) {
+              } else if (FALSE_IT(stream_node->dynamic_table_option_.refresh(*table_schema))) {
               } else if (FALSE_IT(update_schema_cnt++)) {
-              } else if (OB_TMP_FAIL(table_mode_map.set_refactored(table_id, tmp_mode_flag))) {
-                LOG_WARN("failed to set table mode, try set next round", K(tmp_ret), K(table_id), K(tmp_mode_flag));
+              } else if (OB_TMP_FAIL(table_options_map.set_refactored(table_id, stream_node->dynamic_table_option_))) {
+                LOG_WARN("failed to set table mode, try set next round", K(tmp_ret), K(table_id));
               }
             } else {
               LOG_WARN("failed to get table mode from map", K(ret), K(table_id));
             }
           } else {
-            stream_node->mode_ = tmp_mode_flag;
+            stream_node->dynamic_table_option_ = tmp_options;
             update_schema_cnt++;
           }
-          if (ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME == tmp_mode_flag) {
+          if (ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME == tmp_options.mode_) {
             cur_extreme_table_cnt++;
           }
           // prevent hunging schema memory too long
@@ -1166,10 +1171,10 @@ void ObTenantTabletStatMgr::refresh_queuing_mode()
   LOG_INFO("refresh queuing mode", K(ret), K(tenant_id), K(stream_cnt), K(update_schema_cnt), K_(extreme_tablet_cnt), K(cost_time));
 }
 
-int ObTenantTabletStatMgr::get_queuing_cfg(
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    ObTableQueuingModeCfg& queuing_cfg)
+int ObTenantTabletStatMgr::get_dynamic_table_options(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const DynamicTableOptions*& dynamic_table_options)
 {
   int ret = OB_SUCCESS;
   const ObTabletStatKey key(ls_id, tablet_id);
@@ -1185,13 +1190,53 @@ int ObTenantTabletStatMgr::get_queuing_cfg(
     if (OB_FAIL(stream_map_.get_refactored(key, stream_node))) {
       if (OB_HASH_NOT_EXIST != ret) {
         LOG_WARN("failed to get history stat", K(ret), K(key));
-      } else {
-        ret = OB_SUCCESS;
       }
     } else {
-      queuing_cfg = ObTableQueuingModeCfg::get_basic_config(stream_node->mode_);
-      LOG_DEBUG("success get queuing cfg", K(ret), K(ls_id), K(tablet_id), K(queuing_cfg));
+      dynamic_table_options = &stream_node->dynamic_table_option_;
     }
+  }
+  return ret;
+}
+
+int ObTenantTabletStatMgr::get_queuing_cfg(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    ObTableQueuingModeCfg& queuing_cfg)
+{
+  INIT_SUCC(ret);
+  const DynamicTableOptions* dynamic_table_options = nullptr;
+  if (OB_FAIL(get_dynamic_table_options(ls_id, tablet_id, dynamic_table_options))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get dynamic table options", K(ret), K(ls_id), K(tablet_id));
+    } else {
+      queuing_cfg = ObTableQueuingModeCfg::get_basic_config(ObTableModeFlag::TABLE_MODE_NORMAL);
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_ISNULL(dynamic_table_options)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dynamic table options is null", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    queuing_cfg = ObTableQueuingModeCfg::get_basic_config(dynamic_table_options->mode_);
+  }
+  return ret;
+}
+
+int ObTenantTabletStatMgr::get_minor_row_store_type(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    ObRowStoreType& minor_row_store_type)
+{
+  INIT_SUCC(ret);
+  const DynamicTableOptions* dynamic_table_options = nullptr;
+  if (OB_FAIL(get_dynamic_table_options(ls_id, tablet_id, dynamic_table_options))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get dynamic table options", K(ret), K(ls_id), K(tablet_id));
+    }
+  } else if (OB_ISNULL(dynamic_table_options)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dynamic table options is null", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    minor_row_store_type = dynamic_table_options->minor_row_store_type_;
   }
   return ret;
 }
@@ -1211,7 +1256,7 @@ void ObTenantTabletStatMgr::TabletStatUpdater::runTimerTask()
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "tablet streams not refresh too long", K(interval_step));
     }
     mgr_.refresh_all(interval_step);
-    mgr_.refresh_queuing_mode();
+    mgr_.refresh_dynamic_table_options();
     last_update_time_ = ObTimeUtility::current_time();
     FLOG_INFO("TenantTabletStatMgr refresh all tablet stream", K(MTL_ID()), K(interval_step), KPC(global_iter_pool));
   }

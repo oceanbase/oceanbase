@@ -1335,9 +1335,9 @@ int ObDataMicroBlockCache::write_extra_buf(const ObRowStoreType row_store_type,
   int64_t decoder_size = 0;
 
   if (ObStoreFormat::is_row_store_type_with_cs_encoding(row_store_type)) {
-    if (OB_FAIL(ObMicroBlockCSDecoder::get_decoder_cache_size(block_buf, block_size, decoder_size))) {
+    if (OB_FAIL(ObMicroBlockCSDecoder<>::get_decoder_cache_size(block_buf, block_size, decoder_size))) {
       LOG_WARN("Fail to get decoder cache size", K(ret));
-    } else if (OB_FAIL(ObMicroBlockCSDecoder::cache_decoders(extra_buf, decoder_size, block_buf, block_size))) {
+    } else if (OB_FAIL(ObMicroBlockCSDecoder<>::cache_decoders(extra_buf, decoder_size, block_buf, block_size))) {
       LOG_WARN("Fail to set cache decoder", K(ret));
     }
   } else if (OB_FAIL(ObMicroBlockDecoder::get_decoder_cache_size(block_buf, block_size, decoder_size))) {

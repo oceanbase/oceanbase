@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/ob_errno.h"
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "share/schema/ob_schema_printer.h"
 
@@ -2064,6 +2065,17 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       SHARE_SCHEMA_LOG(WARN, "fail to print merge engine", K(ret));
     }
   }
+  if (OB_SUCC(ret)
+      && !strict_compat_
+      && !is_index_tbl
+      && !is_no_table_options(sql_mode)
+      && table_schema.is_user_table()
+      && ObMergeEngineStoreFormat::is_merge_engine_support_delta_sstable_skip_index(table_schema.get_merge_engine_type())) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SKIP_INDEX_LEVEL = %d ",
+                                table_schema.get_skip_index_level()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print skip index level", K(ret));
+    }
+  }
 
   if (OB_SUCC(ret) && !strict_compat_ && !is_oracle_mode && !is_index_tbl) {
     if (OB_FAIL(print_semistruct_encodng_options(table_schema, buf, buf_len, pos))) {
@@ -2081,6 +2093,25 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl && table_schema.with_dynamic_partition_policy()) {
     if (OB_FAIL(print_dynamic_partition_policy(table_schema, buf, buf_len, pos))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print store format", K(ret), K(table_schema));
+    }
+  }
+
+  if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode) &&
+      ObStoreFormat::is_row_store_type_with_encoding(table_schema.get_minor_row_store_type())) {
+    ObString delta_format_name =
+        ObStoreFormat::get_delta_format_name(table_schema.get_minor_row_store_type());
+    if (delta_format_name.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected empty delta format name!",
+               K(delta_format_name),
+               K(table_schema.get_minor_row_store_type()));
+    } else if (OB_FAIL(databuff_printf(buf,
+                                       buf_len,
+                                       pos,
+                                       "DELTA_FORMAT = '%.*s' ",
+                                       delta_format_name.length(),
+                                       delta_format_name.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print delta format", K(ret));
     }
   }
 
@@ -2658,6 +2689,16 @@ int ObSchemaPrinter::print_table_definition_table_options(
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MERGE_ENGINE = %s ",
                                 ObMergeEngineStoreFormat::get_merge_engine_type_name(table_schema.get_merge_engine_type())))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print merge engine", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)
+      && !strict_compat_
+      && !is_index_tbl
+      && table_schema.is_user_table()
+      && ObMergeEngineStoreFormat::is_merge_engine_support_delta_sstable_skip_index(table_schema.get_merge_engine_type())) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SKIP_INDEX_LEVEL = %d ",
+                                table_schema.get_skip_index_level()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print skip index level", K(ret));
     }
   }
   return ret;

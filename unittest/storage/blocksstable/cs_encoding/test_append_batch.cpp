@@ -69,7 +69,7 @@ TEST_F(TestAppendBatch, test_integer_append)
 
   const int64_t row_cnt = 400;
   const int64_t batch_size = 100;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   ObDatumRow row_arr[row_cnt];
@@ -187,7 +187,7 @@ TEST_F(TestAppendBatch, test_string_append)
   ASSERT_EQ(OB_SUCCESS, vec_formats.push_back(VectorFormat::VEC_UNIFORM));
   ASSERT_EQ(OB_SUCCESS, vec_formats.push_back(VectorFormat::VEC_UNIFORM_CONST));
 
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   const int64_t row_cnt = 400;
   ObDatumRow row_arr[row_cnt];

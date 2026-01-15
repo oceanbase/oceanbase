@@ -185,7 +185,7 @@ public:
                        K_(macro_id));
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row);
-  int set_reader(const ObRowStoreType store_type);
+  int set_reader(const ObMicroBlockHeader &header);
   int set_base_scan_param(const bool is_left_bound_block,
                           const bool is_right_bound_block);
   int locate_range_pos(
@@ -366,12 +366,12 @@ protected:
       bool &have_uncommited_row,
       int64_t &trans_version,
       int64_t &sql_sequence,
-      const int64_t index,
-      const ObRowHeader *&row_header);
+      const ObMultiVersionRowFlag &mvcc_row_flag,
+      const transaction::ObTransID &trans_id);
   int check_foreign_key(
       const int64_t trans_version,
       const int64_t sql_sequence,
-      const ObRowHeader *row_header);
+      const transaction::ObTransID trans_id);
   void reuse_cur_micro_row();
 private:
   void reuse_prev_micro_row();
@@ -408,6 +408,7 @@ protected:
   bool read_row_direct_flag_;
   ObDatumRow prev_micro_row_;
   ObDatumRow tmp_row_;
+  int64_t schema_rowkey_count_;
 private:
   storage::ObNopPos nop_pos_;
   common::ObArenaAllocator cell_allocator_;

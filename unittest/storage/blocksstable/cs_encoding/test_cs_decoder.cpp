@@ -17,6 +17,9 @@
 #define private public
 #include "ob_cs_encoding_test_base.h"
 #include "common/ob_version_def.h"
+#include "storage/mockcontainer/mock_ob_iterator.h"
+
+#define OK(expr) ASSERT_EQ(OB_SUCCESS, (expr))
 
 namespace oceanbase
 {
@@ -38,7 +41,132 @@ public:
 
   virtual void SetUp() {}
   virtual void TearDown() { reuse(); }
+  int prepare_for_multi_version_data
+      (const ObObjType *col_types,
+       const int64_t rowkey_cnt,
+       const int64_t column_cnt);
+  template<bool has_row_header>
+  void test_new_column();
 };
+
+int TestCSDecoder::prepare_for_multi_version_data(
+    const ObObjType *col_types,
+    const int64_t rowkey_cnt,
+    const int64_t column_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObCSEncodingTestBase::prepare(col_types, rowkey_cnt, column_cnt))) {
+    LOG_WARN("fail to prepare", K(ret));
+  } else {
+    ctx_.column_encodings_ = nullptr;
+    ctx_.need_calc_column_chksum_ = false;
+  }
+  return ret;
+}
+
+template<bool HAS_ROW_HEADER>
+void TestCSDecoder::test_new_column()
+{
+  // store 3 columns, read 4 columns
+  const int64_t rowkey_cnt = 3;
+  const int64_t col_cnt = 3;
+  ObObjType col_types[col_cnt] = {ObIntType, ObIntType, ObIntType};
+  OK(prepare_for_multi_version_data(col_types, rowkey_cnt, col_cnt));
+
+  ObSEArray<ObColDesc, 4> col_descs;
+  for (int64_t i = 0; i < col_cnt; ++i) {
+    OK(col_descs.push_back(col_descs_[i]));
+  }
+  ObColDesc added_col_desc;
+  added_col_desc.col_type_.set_int();
+  OK(col_descs.push_back(added_col_desc));
+  ObSEArray<ObColumnParam *, 4> cols_param;
+  for (int64_t i = 0; i < col_cnt + 1; ++i) {
+    ObColumnParam *col_param = nullptr;
+    void *buf;
+    ASSERT_NE(nullptr, buf = allocator_.alloc(sizeof(ObColumnParam)));
+    col_param = new (buf) ObColumnParam(allocator_);
+    OK(cols_param.push_back(col_param));
+  }
+  ObObj added_col_default_value;
+  added_col_default_value.set_int(100);
+  cols_param[col_cnt]->set_orig_default_value(added_col_default_value);
+  read_info_.reset();
+  OK(read_info_.init(allocator_,
+                     col_cnt + 1,
+                     rowkey_cnt,
+                     lib::is_oracle_mode(),
+                     col_descs,
+                     nullptr,
+                     &cols_param));
+
+  const int64_t row_cnt = 100;
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  ObDatumRow row_arr[row_cnt];
+  int64_t row_cnt_without_null[col_cnt] = {row_cnt, row_cnt, row_cnt};
+  ObMicroBlockCSEncoder<HAS_ROW_HEADER> encoder;
+  OK(encoder.init(ctx_));
+  encoder.set_micro_block_merge_verify_level(MICRO_BLOCK_MERGE_VERIFY_LEVEL::NONE);
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(row_arr[i].init(allocator_, col_cnt));
+  }
+
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(row_generate_.get_next_row(i - 50, row_arr[i]));
+    if (HAS_ROW_HEADER) {
+      row_arr[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+      row_arr[i].mvcc_row_flag_.set_compacted_multi_version_row(true);
+      row_arr[i].mvcc_row_flag_.set_first_multi_version_row(true);
+      row_arr[i].mvcc_row_flag_.set_uncommitted_row(false);
+      row_arr[i].mvcc_row_flag_.set_last_multi_version_row(true);
+      row_arr[i].mvcc_row_flag_.set_shadow_row(false);
+      row_arr[i].mvcc_row_flag_.set_ghost_row(false);
+      row_arr[i].trans_id_.reset();
+    } else {
+      row_arr[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      row_arr[i].mvcc_row_flag_.reset();
+      row_arr[i].trans_id_.reset();
+    }
+    OK(encoder.append_row(row_arr[i]));
+  }
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(row_arr[i].reserve(col_cnt + 1, true));
+    row_arr[i].storage_datums_[col_cnt].set_int(100);
+    if (HAS_ROW_HEADER) {
+      row_arr[i].row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
+      row_arr[i].mvcc_row_flag_.set_compacted_multi_version_row(true);
+      row_arr[i].mvcc_row_flag_.set_first_multi_version_row(true);
+      row_arr[i].mvcc_row_flag_.set_uncommitted_row(false);
+      row_arr[i].mvcc_row_flag_.set_last_multi_version_row(true);
+      row_arr[i].mvcc_row_flag_.set_shadow_row(false);
+      row_arr[i].mvcc_row_flag_.set_ghost_row(false);
+      row_arr[i].trans_id_.reset();
+    } else {
+      row_arr[i].row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      row_arr[i].mvcc_row_flag_.reset();
+      row_arr[i].trans_id_.reset();
+    }
+  }
+  OK(build_micro_block_desc(encoder, micro_block_desc, header));
+  LOG_INFO("finish build_micro_block_desc", K(micro_block_desc));
+
+  ObMicroBlockData full_transformed_data;
+  ObMicroBlockCSDecoder<HAS_ROW_HEADER> decoder;
+  OK(init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+  ObDatumRow row;
+  OK(row.init(col_cnt));
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(decoder.get_row(i, row));
+    ASSERT_EQ(row_arr[i].storage_datums_[rowkey_cnt].get_int(), row.storage_datums_[rowkey_cnt].get_int());
+    ASSERT_EQ(row_arr[i].storage_datums_[rowkey_cnt + 1].get_int(), row.storage_datums_[rowkey_cnt + 1].get_int());
+    ASSERT_EQ(row_arr[i].storage_datums_[rowkey_cnt + 2].get_int(), row.storage_datums_[rowkey_cnt + 2].get_int());
+    ASSERT_EQ(row_arr[i].row_flag_.get_serialize_flag(), row.row_flag_.get_serialize_flag());
+    ASSERT_EQ(row_arr[i].mvcc_row_flag_.flag_, row.mvcc_row_flag_.flag_);
+    ASSERT_EQ(row_arr[i].trans_id_, row.trans_id_);
+  }
+}
 
 TEST_P(TestCSDecoder, test_integer_decoder)
 {
@@ -53,7 +181,7 @@ TEST_P(TestCSDecoder, test_integer_decoder)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER;
 
   const int64_t row_cnt = 120;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   encoder.is_all_column_force_raw_ = is_force_raw;
   ObDatumRow row_arr[row_cnt];
@@ -178,7 +306,7 @@ TEST_P(TestCSDecoder, test_string_decoder)
   ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER;
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::STRING;
 
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   encoder.is_all_column_force_raw_ = is_force_raw;
   const int64_t row_cnt = 120;
@@ -291,7 +419,7 @@ TEST_P(TestCSDecoder, test_dict_decoder)
 
   const int64_t row_cnt = 120;
   int64_t row_cnt_without_null[col_cnt] = {row_cnt, row_cnt, row_cnt, row_cnt};
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   encoder.is_all_column_force_raw_ = is_force_raw;
   ObDatumRow row_arr[row_cnt];
@@ -362,7 +490,7 @@ TEST_F(TestCSDecoder, test_null_dict_decoder)
   ctx_.column_encodings_[3] = ObCSColumnHeader::Type::STR_DICT;
 
   const int64_t row_cnt = 100;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {
@@ -466,7 +594,7 @@ TEST_P(TestCSDecoder, test_all_object_type_decoder)
     compressor_type = ObCompressorType::NONE_COMPRESSOR;
   }
   ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt, compressor_type));
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   for (int64_t i = 0; i < col_cnt; ++i) {
     if (i % 2 && specify_dict) {
       const ObObjTypeStoreClass store_class = get_store_class_map()[ob_obj_type_class(col_types[i])];
@@ -547,7 +675,7 @@ TEST_P(TestCSDecoder, test_decoder_with_all_stream_encoding_types)
   ctx_.column_encodings_[3] = ObCSColumnHeader::Type::INTEGER;
   ctx_.column_encodings_[4] = ObCSColumnHeader::Type::INT_DICT;
 
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   void *row_arr_buf = allocator_.alloc(sizeof(ObDatumRow) * row_cnt);
   ASSERT_TRUE(nullptr != row_arr_buf);
@@ -648,7 +776,7 @@ TEST_F(TestCSDecoder, test_dict_const_ref_decoder)
   ctx_.column_encodings_[2] = ObCSColumnHeader::Type::INT_DICT;
   ctx_.column_encodings_[3] = ObCSColumnHeader::Type::STR_DICT;
   ctx_.column_encodings_[4] = ObCSColumnHeader::Type::INT_DICT;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   void *row_arr_buf = allocator_.alloc(sizeof(ObDatumRow) * row_cnt);
   ASSERT_TRUE(nullptr != row_arr_buf);
@@ -709,7 +837,7 @@ TEST_F(TestCSDecoder, test_decimal_int_decoder)
   ctx_.column_encodings_[6] = ObCSColumnHeader::Type::STR_DICT;
   int64_t row_cnt = 1000;
   const int64_t distinct_cnt = 100;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
   void *row_arr_buf = allocator_.alloc(sizeof(ObDatumRow) * row_cnt);
@@ -792,6 +920,212 @@ TEST_F(TestCSDecoder, test_decimal_int_decoder)
 
   int64_t row_cnt_without_null[col_cnt] = {row_cnt, row_cnt - 1, row_cnt - 1, row_cnt - 1, row_cnt - 1, 2, row_cnt - 1};
   ASSERT_EQ(OB_SUCCESS, check_get_row_count(header, micro_block_desc, row_cnt_without_null, col_cnt, false));
+}
+
+TEST_F(TestCSDecoder, decode_row_header)
+{
+  const int64_t rowkey_cnt = 3;
+  const int64_t col_cnt = 3;
+  ObObjType col_types[col_cnt] = {ObIntType, ObIntType, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare_for_multi_version_data(col_types, rowkey_cnt, col_cnt));
+
+  const char* data =
+	"bigint	bigint  bigint flag	  multi_version_row_flag  trans_id\n"
+	"1	    -1      0      INSERT	CLF	                    trans_id_0\n"
+	"2	    -1      0      INSERT	CLF	                    trans_id_0\n"
+	"3	    -1      0      DELETE	CF	                    trans_id_0\n"
+	"4	    -1      0      UPDATE	C	                      trans_id_0\n"
+	"5	    -1      0      INSERT	CL	                    trans_id_0\n"
+	"6	    -1      0      INSERT	CLF	                    trans_id_0\n"
+	"7	    -1      0      INSERT	CLF	                    trans_id_0\n"
+	"8	    MIN     0      DELETE	UCFL	                  trans_id_1\n"
+	"9	    -1      0      UPDATE	C	                      trans_id_0\n"
+	"10	    -1      0      INSERT	CL	                    trans_id_0\n";
+
+
+  const int64_t row_cnt = 10;
+  ObMicroBlockCSEncoder<true> encoder;
+  OK(encoder.init(ctx_));
+  encoder.set_micro_block_merge_verify_level(MICRO_BLOCK_MERGE_VERIFY_LEVEL::NONE);
+  ObDatumRow row_arr[row_cnt];
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(row_arr[i].init(allocator_, col_cnt));
+  }
+
+  ObMockIterator data_iter;
+  OK(data_iter.from(data));
+  const ObStoreRow* store_row = nullptr;
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(data_iter.get_next_row(store_row));
+    OK(row_arr[i].from_store_row(*store_row));
+    OK(encoder.append_row(row_arr[i]));
+  }
+
+  int64_t row_cnt_without_null[col_cnt] = {row_cnt};
+
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  OK(build_micro_block_desc(encoder, micro_block_desc, header));
+  LOG_INFO("finish build_micro_block_desc", K(micro_block_desc));
+
+  ObMicroBlockData full_transformed_data;
+  ObMicroBlockCSDecoder<true> decoder;
+  OK(init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+  ObDatumRow row;
+  OK(row.init(col_cnt));
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(decoder.get_row(i, row));
+    ASSERT_EQ(row_arr[i].storage_datums_[rowkey_cnt].get_int(), row.storage_datums_[rowkey_cnt].get_int());
+    ASSERT_EQ(row_arr[i].storage_datums_[rowkey_cnt + 1].get_int(), row.storage_datums_[rowkey_cnt + 1].get_int());
+    ASSERT_EQ(row_arr[i].storage_datums_[rowkey_cnt + 2].get_int(), row.storage_datums_[rowkey_cnt + 2].get_int());
+    ASSERT_EQ(row_arr[i].row_flag_.get_serialize_flag(), row.row_flag_.get_serialize_flag());
+    ASSERT_EQ(row_arr[i].mvcc_row_flag_.flag_, row.mvcc_row_flag_.flag_);
+    ASSERT_EQ(row_arr[i].trans_id_, row.trans_id_);
+  }
+}
+
+TEST_F(TestCSDecoder, new_column_without_row_header)
+{
+  test_new_column<false>();
+}
+
+TEST_F(TestCSDecoder, new_column_with_row_header)
+{
+  test_new_column<true>();
+}
+
+TEST_F(TestCSDecoder, multi_version_for_multi_version_cols)
+{
+  const int64_t schema_rowkey_cnt = 1;
+  const int64_t rowkey_cnt = schema_rowkey_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  const int64_t col_cnt = rowkey_cnt + 1;
+  ObObjType col_types[col_cnt] = {ObIntType, ObIntType, ObIntType, ObIntType};
+  ASSERT_EQ(OB_SUCCESS, prepare_for_multi_version_data(col_types, rowkey_cnt, col_cnt));
+
+  const char* data =
+	"bigint	bigint  bigint bigint flag	  multi_version_row_flag  trans_id\n"
+	"1	    -4      0      3      UPDATE	F	                      trans_id_0\n"
+	"1	    -3      0      2      UPDATE	N                       trans_id_0\n"
+	"1	    -2      0      1      UPDATE	N	                      trans_id_0\n"
+	"1	    -1      0      0      INSERT	L	                      trans_id_0\n"
+	"2	    -3      0      2      UPDATE	F	                      trans_id_0\n"
+	"2	    -2      0      1      UPDATE	N	                      trans_id_0\n"
+	"2	    -1      0      0      INSERT	L	                      trans_id_0\n"
+	"3	    MIN     -1     0      DELETE	UCFL	                  trans_id_1\n"
+	"4	    -1      0      0      UPDATE	CLF	                    trans_id_0\n"
+	"5	    -1      0      0      INSERT	CLF	                    trans_id_0\n";
+
+  const int64_t row_cnt = 10;
+  ObMicroBlockCSEncoder<true> encoder;
+  OK(encoder.init(ctx_));
+  encoder.set_micro_block_merge_verify_level(MICRO_BLOCK_MERGE_VERIFY_LEVEL::NONE);
+
+  ObMockIterator data_iter;
+  OK(data_iter.from(data));
+  const ObStoreRow* store_row = nullptr;
+  ObDatumRow row_arr[row_cnt];
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(row_arr[i].init(allocator_, col_cnt));
+  }
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    OK(data_iter.get_next_row(store_row));
+    OK(row_arr[i].from_store_row(*store_row));
+    OK(encoder.append_row(row_arr[i]));
+  }
+
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroBlockHeader *header = nullptr;
+  OK(build_micro_block_desc(encoder, micro_block_desc, header));
+
+  ObSEArray<ObColDesc, 1> cols_desc;
+  // request the all the columns
+  for (int64_t i = 0; i < col_cnt; ++i) {
+    OK(cols_desc.push_back(col_descs_[i]));
+  }
+  read_info_.reset();
+  OK(read_info_.init(allocator_, col_cnt, schema_rowkey_cnt, lib::is_oracle_mode(), cols_desc));
+  ObMicroBlockData full_transformed_data;
+  ObMicroBlockCSDecoder<true> decoder;
+  OK(init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+  data_iter.from(data);
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    MultiVersionInfo multi_version_info;
+    int64_t trx_ver, sql_seq;
+    OK(decoder.get_multi_version_info(i, schema_rowkey_cnt, multi_version_info, trx_ver, sql_seq));
+    ASSERT_EQ(-row_arr[i].storage_datums_[schema_rowkey_cnt].get_int(), trx_ver);
+    ASSERT_EQ(-row_arr[i].storage_datums_[schema_rowkey_cnt + 1].get_int(), sql_seq);
+  }
+
+  ObCSEncodeBlockGetReader<true> get_reader;
+  ObDatumRowkey rowkey;
+  ObDatumRow row;
+  OK(row.init(col_cnt));
+  ObMicroBlockAddr block_addr;
+  for (int32_t i = 1; i <= 5; ++i) {
+    ObStorageDatum datum;
+    datum.set_int(i);
+    rowkey.assign(&datum, 1);
+    ObDatumRow tmp_row;
+    OK(tmp_row.init(1));
+    tmp_row.storage_datums_[0].set_int(i);
+    OK(get_reader.get_row(block_addr, full_transformed_data, rowkey, read_info_,
+                          row));
+    auto found = std::lower_bound(row_arr, row_arr + row_cnt, tmp_row,
+                                  [](const ObDatumRow &a, const ObDatumRow &b) {
+                                    return a.storage_datums_[0].get_int() <
+                                           b.storage_datums_[0].get_int();
+                                  });
+    ASSERT_EQ(found->storage_datums_[0].get_int(), i);
+    ASSERT_TRUE(found->mvcc_row_flag_.is_first_multi_version_row());
+    ASSERT_EQ(row, *found);
+    int64_t trans_version;
+    LOG_INFO("rowkey", K(rowkey));
+    OK(get_reader.get_row_and_trans_version(block_addr, full_transformed_data, rowkey, read_info_,
+                          row, trans_version));
+
+    ASSERT_EQ(-found->storage_datums_[1].get_int(), trans_version);
+  }
+
+  // only request the first column
+  cols_desc.reuse();
+  OK(cols_desc.push_back(col_descs_[0]));
+  read_info_.reset();
+  OK(read_info_.init(allocator_, col_cnt, schema_rowkey_cnt, lib::is_oracle_mode(), cols_desc));
+  decoder.reset();
+  OK(init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
+
+  data_iter.from(data);
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    MultiVersionInfo multi_version_info;
+    int64_t trx_ver, sql_seq;
+    OK(decoder.get_multi_version_info(i, schema_rowkey_cnt, multi_version_info, trx_ver, sql_seq));
+    ASSERT_EQ(-row_arr[i].storage_datums_[schema_rowkey_cnt].get_int(), trx_ver);
+    ASSERT_EQ(-row_arr[i].storage_datums_[schema_rowkey_cnt + 1].get_int(), sql_seq);
+  }
+
+  get_reader.reset();
+  for (int32_t i = 1; i <= 5; ++i) {
+    ObStorageDatum datum;
+    datum.set_int(i);
+    rowkey.assign(&datum, 1);
+    ObDatumRow tmp_row;
+    OK(tmp_row.init(1));
+    tmp_row.storage_datums_[0].set_int(i);
+    auto found = std::lower_bound(row_arr, row_arr + row_cnt, tmp_row,
+                                  [](const ObDatumRow &a, const ObDatumRow &b) {
+                                    return a.storage_datums_[0].get_int() <
+                                           b.storage_datums_[0].get_int();
+                                  });
+    ASSERT_EQ(found->storage_datums_[0].get_int(), i);
+    ASSERT_TRUE(found->mvcc_row_flag_.is_first_multi_version_row());
+    int64_t trans_version;
+    OK(get_reader.get_row_and_trans_version(block_addr, full_transformed_data, rowkey, read_info_,
+                          row, trans_version));
+
+    ASSERT_EQ(-found->storage_datums_[1].get_int(), trans_version);
+  }
 }
 
 INSTANTIATE_TEST_CASE_P(TestDecoder, TestCSDecoder, Combine(Bool(), Bool(), Bool()));

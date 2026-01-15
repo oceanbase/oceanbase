@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "common/ob_store_format.h"
+#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {

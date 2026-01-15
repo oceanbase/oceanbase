@@ -810,6 +810,10 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support this micro block format version for this version", KR(ret), K_(tenant_id), K(compat_version), K(arg));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than needed, this micro block format version is");
+  } else if (compat_version < DATA_VERSION_4_5_1_0 && arg.schema_.get_skip_index_level() != ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support skip index level for this version", KR(ret), K_(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support skip index level");
   } else if (OB_UNLIKELY(OB_INVALID_ID != arg.schema_.get_table_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create table with table_id in 4.x is not supported",
@@ -833,6 +837,16 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
     LOG_WARN("not support to create mysql tmp table", KR(ret), K_(tenant_id), K(compat_version), K(arg.schema_));
+  } else if (compat_version < DATA_VERSION_4_5_1_0 && !ObStoreFormat::is_row_store_type_with_flat(
+      arg.schema_.get_minor_row_store_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create table with non-flat delta format is not supported for this version",
+             KR(ret),
+             K(compat_version),
+             "minor_row_store_type",
+             arg.schema_.get_minor_row_store_type());
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "create table with non-flat delta format under this version is");
   } else if (arg.schema_.is_duplicate_table()) { // check compatibility for duplicate table
     bool is_compatible = false;
     if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id_, is_compatible))) {

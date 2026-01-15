@@ -1516,9 +1516,78 @@ int ObBasicTabletMergeCtx::update_storage_schema_by_memtable(
       K(memtable_handles), K(schema));
   }
 
+  OZ(update_storage_schema_if_needed(schema));
+
   if (OB_SUCC(ret)) {
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
     FLOG_INFO("get storage schema to merge", "param", get_dag_param(), K(schema));
+  }
+  return ret;
+}
+
+int ObBasicTabletMergeCtx::update_storage_schema_if_needed(ObStorageSchema &schema_on_tablet)
+{
+  INIT_SUCC(ret);
+  ObRowStoreType minor_row_store_type = ObRowStoreType::MAX_ROW_STORE;
+  if (!schema_on_tablet.is_column_info_simplified()) {
+  } else {
+    if (OB_FAIL(MTL(ObTenantTabletStatMgr *)
+                    ->get_minor_row_store_type(get_ls_id(), get_tablet_id(),
+                                               minor_row_store_type))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to get minor row store type", KR(ret));
+      } else {
+        minor_row_store_type = schema_on_tablet.get_minor_row_store_type();
+        ret = OB_SUCCESS;
+      }
+    } else {
+      schema_on_tablet.set_minor_row_store_type(minor_row_store_type);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!ObStoreFormat::is_minor_row_store_type_valid(
+                   minor_row_store_type)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid minor row store type", KR(ret),
+               K(minor_row_store_type));
+    } else if (!ObStoreFormat::is_row_store_type_with_encoding(
+                   minor_row_store_type)) {
+    } else if (OB_FAIL(try_update_storage_schema(schema_on_tablet))) {
+      LOG_WARN("failed to try update storage schema", KR(ret),
+               K(schema_on_tablet));
+    }
+  }
+
+  return ret;
+}
+
+int ObBasicTabletMergeCtx::try_update_storage_schema(ObStorageSchema &new_schema)
+{
+  INIT_SUCC(ret);
+  const uint64_t tenant_id = MTL_ID();
+  const uint64_t tablet_id = get_tablet_id().id();
+  const ObSchema *schema = nullptr;
+  if (OB_FAIL(
+          ObMultiVersionSchemaService::get_instance().get_latest_schema(mem_ctx_.get_allocator(),
+                                                                        ObSchemaType::TABLE_SCHEMA,
+                                                                        tenant_id,
+                                                                        tablet_id,
+                                                                        schema))) {
+    // cannot get latest schema
+    // discard error code and continue mini / minor compaction
+    LOG_WARN("failed to get table schema, storage schema will not be updated.",
+             K(ret),
+             K(tenant_id),
+             K(tablet_id));
+    ret = OB_SUCCESS;
+  } else if (OB_ISNULL(schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null schema!", KP(schema));
+  } else {
+    const ObTableSchema &table_schema = static_cast<const ObTableSchema &>(*schema);
+    if (new_schema.is_column_info_simplified() &&
+        OB_FAIL(new_schema.update_column_info(table_schema))) {
+      LOG_WARN("failed to update column info", K(new_schema), K(schema));
+    }
   }
   return ret;
 }

@@ -392,12 +392,6 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
     table_shared_flag_.set_shared_sstable();
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(ObStoreFormat::is_row_store_type_with_encoding(root_row_store_type_))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("split empty minor sstable do not support encoding row store", K(ret), K(root_row_store_type_),
-              K(basic_meta), KPC(this));
-  }
   return ret;
 }
 

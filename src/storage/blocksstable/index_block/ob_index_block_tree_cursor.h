@@ -206,9 +206,6 @@ public:
       int64_t &micro_count);
 
 private:
-  int set_reader(const ObRowStoreType store_type);
-  template <typename T>
-  int init_reader(T *&cache_reader_ptr);
   // TODO: prefetch
   int get_next_level_block(
       const MacroBlockId &macro_block_id,

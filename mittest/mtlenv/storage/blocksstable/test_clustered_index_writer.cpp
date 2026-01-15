@@ -102,7 +102,8 @@ bool TestClusteredIndexWriter::is_equal(ObMicroBlockDesc &l, ObMicroBlockDesc &r
       || l.block_checksum_ != r.block_checksum_ || l.row_count_delta_ != r.row_count_delta_
       || l.contain_uncommitted_row_ != r.contain_uncommitted_row_ || l.can_mark_deletion_ != r.can_mark_deletion_
       || l.has_string_out_row_ != r.has_string_out_row_ || l.has_lob_out_row_ != r.has_lob_out_row_
-      || l.is_last_row_last_flag_ != r.is_last_row_last_flag_) {
+      || l.is_last_row_last_flag_ != r.is_last_row_last_flag_ || l.is_first_row_first_flag_ != r.is_first_row_first_flag_
+      || l.single_version_rows_ != r.single_version_rows_) {
         res = false;
   } else if (l.header_->header_checksum_ != r.header_->header_checksum_
       || l.header_->data_checksum_ != r.header_->data_checksum_){

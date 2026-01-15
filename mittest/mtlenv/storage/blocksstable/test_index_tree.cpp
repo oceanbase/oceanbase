@@ -926,7 +926,7 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder.index_store_desc_.get_desc().row_store_type_, micro_reader));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(header, micro_reader));
   OK(micro_reader->init(root_block, nullptr));
 
   ObDatumRow index_row;
@@ -1207,7 +1207,7 @@ TEST_F(TestIndexTree, test_multi_writers_with_close)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder.index_store_desc_.get_desc().row_store_type_, micro_reader));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block.get_micro_header(), micro_reader));
   ret = micro_reader->init(root_block, nullptr);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -1312,7 +1312,7 @@ TEST_F(TestIndexTree, test_meta_builder)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sst_builder->index_store_desc_.get_desc().row_store_type_, micro_reader));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block.get_micro_header(), micro_reader));
   ASSERT_EQ(OB_SUCCESS, micro_reader->init(root_block, nullptr));
 
   blocksstable::ObDatumRow row;
@@ -1350,7 +1350,7 @@ TEST_F(TestIndexTree, test_meta_builder_data_root)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sst_builder->index_store_desc_.get_desc().row_store_type_, micro_reader));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block.get_micro_header(), micro_reader));
   ASSERT_EQ(OB_SUCCESS, micro_reader->init(root_block, nullptr));
 
   blocksstable::ObDatumRow row;
@@ -1453,7 +1453,7 @@ TEST_F(TestIndexTree, test_meta_builder_mem_and_disk)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sst_builder->index_store_desc_.get_desc().row_store_type_, micro_reader));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block.get_micro_header(), micro_reader));
   ASSERT_EQ(OB_SUCCESS, micro_reader->init(root_block, nullptr));
 
   blocksstable::ObDatumRow meta_row;
@@ -1968,7 +1968,7 @@ TEST_F(TestIndexTree, test_writer_try_to_append_row)
       estimate_size = micro_block_desc.original_size_ + micro_block_desc.header_->header_size_;
     } else if (ObRowStoreType::CS_ENCODING_ROW_STORE == j) {
       estimate_size = micro_block_desc.original_size_
-          + static_cast<ObMicroBlockCSEncoder *>(micro_writer)->all_headers_size_;
+          + static_cast<ObMicroBlockCSEncoder<> *>(micro_writer)->all_headers_size_;
     } else if (ObRowStoreType::ENCODING_ROW_STORE == j || ObRowStoreType::SELECTIVE_ENCODING_ROW_STORE == j) {
       estimate_size = micro_block_desc.original_size_
           + static_cast<ObMicroBlockEncoder *>(micro_writer)->header_size_;
@@ -2086,8 +2086,8 @@ TEST_F(TestIndexTree, test_rebuilder)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder1.index_store_desc_.get_desc().row_store_type_, micro_reader1));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder2.index_store_desc_.get_desc().row_store_type_, micro_reader2));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block1.get_micro_header(), micro_reader1));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block2.get_micro_header(), micro_reader2));
 
   OK(micro_reader1->init(root_block1, nullptr));
   OK(micro_reader2->init(root_block2, nullptr));
@@ -2220,7 +2220,6 @@ TEST_F(TestIndexTree, test_cg_row_offset)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder.index_store_desc_.get_desc().row_store_type_, micro_reader));
 
   for (int i = 0; i < size_arr.size(); ++i) {
     ObSSTableIndexBuilder *sst_builder = nullptr;
@@ -2231,6 +2230,7 @@ TEST_F(TestIndexTree, test_cg_row_offset)
 
     ObDatumRow row;
     OK(row.init(allocator_, index_desc.get_desc().col_desc_->row_column_count_));
+    OK(reader_helper.get_reader(*root_block.get_micro_header(), micro_reader));
     OK(micro_reader->init(root_block, nullptr));
     ObIndexBlockRowParser idx_row_parser;
     int64_t rows_cnt = -1;
@@ -2296,10 +2296,10 @@ TEST_F(TestIndexTree, test_absolute_offset)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder.index_store_desc_.get_desc().row_store_type_, micro_reader));
-
-
   ObMicroBlockData root_block(res2.root_desc_.buf_, res2.root_desc_.addr_.size_);
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block.get_micro_header(), micro_reader));
+
+
   ObDatumRow row;
   OK(row.init(allocator_, index_desc.get_desc().col_desc_->row_column_count_));
   OK(micro_reader->init(root_block, nullptr));
@@ -2454,8 +2454,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_disable_dump_disk)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder1.index_store_desc_.get_desc().row_store_type_, micro_reader1));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder2.index_store_desc_.get_desc().row_store_type_, micro_reader2));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block1.get_micro_header(), micro_reader1));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block2.get_micro_header(), micro_reader2));
 
   OK(micro_reader1->init(root_block1, nullptr));
   OK(micro_reader2->init(root_block2, nullptr));
@@ -2566,8 +2566,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_mem)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder1.index_store_desc_.get_desc().row_store_type_, micro_reader1));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder2.index_store_desc_.get_desc().row_store_type_, micro_reader2));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block1.get_micro_header(), micro_reader1));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block2.get_micro_header(), micro_reader2));
 
   OK(micro_reader1->init(root_block1, nullptr));
   OK(micro_reader2->init(root_block2, nullptr));
@@ -2677,8 +2677,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_disk)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder1.index_store_desc_.get_desc().row_store_type_, micro_reader1));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder2.index_store_desc_.get_desc().row_store_type_, micro_reader2));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block1.get_micro_header(), micro_reader1));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block2.get_micro_header(), micro_reader2));
 
   OK(micro_reader1->init(root_block1, nullptr));
   OK(micro_reader2->init(root_block2, nullptr));
@@ -2863,8 +2863,8 @@ TEST_F(TestIndexTree, test_cg_compaction_all_mem)
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder1->index_store_desc_.get_desc().row_store_type_, micro_reader1));
-  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder2.index_store_desc_.get_desc().row_store_type_, micro_reader2));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block1.get_micro_header(), micro_reader1));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(*root_block2.get_micro_header(), micro_reader2));
 
   OK(micro_reader1->init(root_block1, nullptr));
   OK(micro_reader2->init(root_block2, nullptr));
@@ -2985,7 +2985,6 @@ TEST_F(TestIndexTree, test_cg_compaction_mem_and_disk)
     info.macro_block_id_ = cur_id;
     macro_handle.reset();
     OK(ObBlockManager::read_block(info, macro_handle));
-    ASSERT_NE(macro_handle.get_buffer(), nullptr);
     ASSERT_EQ(macro_handle.get_data_size(), macro_block_size);
     OK(rebuilder_mem.get_macro_meta(macro_handle.get_buffer(), macro_block_size, cur_id, meta_allocator, macro_meta));
     absolute_row_offset += macro_meta->val_.row_count_;

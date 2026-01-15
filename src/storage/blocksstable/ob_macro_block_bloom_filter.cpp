@@ -158,7 +158,7 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlock &micro_block)
       LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block));
     } else if (OB_FAIL(reader_helper.init(temp_allocator))) {
       LOG_WARN("fail to init micro reader helper", K(ret));
-    } else if (OB_FAIL(reader_helper.get_reader(row_store_type, reader))) {
+    } else if (OB_FAIL(reader_helper.get_reader(*decompressed_data.get_micro_header(), reader))) {
       LOG_WARN("fail to get reader", K(ret), K(micro_block));
     } else if (OB_ISNULL(reader)) {
       ret = OB_ERR_UNEXPECTED;
@@ -221,7 +221,7 @@ int ObMicroBlockBloomFilter::insert_micro_block(const ObMicroBlockDesc &micro_bl
       LOG_WARN("fail to decrypt and decompress micro data", K(ret), K(micro_block_desc), K(micro_index_data));
     } else if (OB_FAIL(reader_helper.init(temp_allocator))) {
       LOG_WARN("fail to init micro reader helper", K(ret));
-    } else if (OB_FAIL(reader_helper.get_reader(row_store_type, reader))) {
+    } else if (OB_FAIL(reader_helper.get_reader(*decompressed_data.get_micro_header(), reader))) {
       LOG_WARN("fail to get reader", K(ret), K(micro_block_desc), K(micro_index_data));
     } else if (OB_ISNULL(reader)) {
       ret = OB_ERR_UNEXPECTED;

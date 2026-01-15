@@ -56,6 +56,7 @@ struct ObMicroBlockDesc
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
   bool is_first_row_first_flag_;
+  bool single_version_rows_;  // only used for delta sstable
 
   ObMicroBlockDesc() { reset(); }
   bool is_valid() const;
@@ -89,6 +90,7 @@ struct ObMicroBlockDesc
       K_(has_lob_out_row),
       K_(is_last_row_last_flag),
       K_(is_first_row_first_flag),
+      K_(single_version_rows),
       K_(original_size));
 
   DISALLOW_COPY_AND_ASSIGN(ObMicroBlockDesc);

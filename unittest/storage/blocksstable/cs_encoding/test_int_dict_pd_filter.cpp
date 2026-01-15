@@ -40,7 +40,7 @@ TEST_F(TestIntDictPdFilter, test_int_dict_decoder)
     const int64_t null_cnt = has_null ? 20 : 0;
     const int64_t row_cnt = 100 + null_cnt;
 
-    ObMicroBlockCSEncoder encoder;
+    ObMicroBlockCSEncoder<> encoder;
     ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
     ObDatumRow row_arr[row_cnt];
     for (int64_t i = 0; i < row_cnt; ++i) {
@@ -139,7 +139,7 @@ TEST_F(TestIntDictPdFilter, test_positive_int_dict_decoder)
     bool has_null = flag;
     const int64_t null_cnt = has_null ? 20 : 0;
     const int64_t row_cnt = 100 + null_cnt;
-    ObMicroBlockCSEncoder encoder;
+    ObMicroBlockCSEncoder<> encoder;
     ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
     encoder.is_all_column_force_raw_ = is_force_raw;
     ObDatumRow row_arr[row_cnt];
@@ -194,7 +194,7 @@ TEST_F(TestIntDictPdFilter, test_int_dict_const_decoder)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT; // integer dict
 
   const int64_t row_cnt = 120;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {
@@ -280,7 +280,7 @@ TEST_F(TestIntDictPdFilter, test_int_dict_null_const_decoder)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT; // integer dict
 
   const int64_t row_cnt = 120;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {
@@ -345,7 +345,7 @@ TEST_F(TestIntDictPdFilter, test_int_dict_const_without_null_decoder)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT; // integer dict
 
   const int64_t row_cnt = 1200;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   encoder.is_all_column_force_raw_ = is_force_raw;
   ObDatumRow row_arr[row_cnt];
@@ -438,7 +438,7 @@ TEST_F(TestIntDictPdFilter, test_all_null_int_dict_const_decoder)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT; // integer dict
 
   const int64_t row_cnt = 120;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   encoder.is_all_column_force_raw_ = is_force_raw;
   ObDatumRow row_arr[row_cnt];
@@ -492,7 +492,7 @@ TEST_F(TestIntDictPdFilter, test_exceed_range_compare_filter)
   ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INT_DICT;
 
   const int64_t row_cnt = 2;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {
@@ -553,7 +553,7 @@ TEST_F(TestIntDictPdFilter, test_singed_and_unsigned_compare_filter)
   ctx_.column_encodings_[2] = ObCSColumnHeader::Type::INT_DICT;
 
   const int64_t row_cnt = 2;
-  ObMicroBlockCSEncoder encoder;
+  ObMicroBlockCSEncoder<> encoder;
   ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
   ObDatumRow row_arr[row_cnt];
   for (int64_t i = 0; i < row_cnt; ++i) {

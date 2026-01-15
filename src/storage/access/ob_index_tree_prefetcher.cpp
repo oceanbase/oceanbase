@@ -21,6 +21,7 @@ using namespace common;
 using namespace blocksstable;
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_DISABLE_SKIP_FETCH_BY_BASE_VERSION);
 
 void ObIndexTreePrefetcher::reset()
 {
@@ -1361,12 +1362,14 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
                       && OB_FAIL(sample_executor->check_sample_block(block_info, cur_level_ + 1, tree_handles_[cur_level_].fetch_idx_,
                                                                    micro_data_prefetch_idx_))) {
             LOG_WARN("Failed to check if can skip micro block in sample", K(ret), K_(cur_level), K(block_info), KPC(sample_executor));
+          } else if (EN_DISABLE_SKIP_FETCH_BY_BASE_VERSION == OB_SUCCESS && can_skip_fetch_by_base_version(block_info)) {
+            continue;
           } else if (nullptr != sstable_index_filter
                       && can_index_filter_skip(block_info, sample_executor)
                       && OB_FAIL(sstable_index_filter->check_range(iter_param_->read_info_,
                                   block_info, *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
-          } else if (block_info.is_filter_always_false()) {
+          } else if (block_info.can_skip_fetch()) {
             update_table_store_stat(access_ctx_->table_store_stat_, block_info);
             continue;
           } else if (nullptr != agg_store_ && OB_FAIL(agg_store_->can_use_index_info(block_info, can_agg))) {
@@ -1375,7 +1378,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             if (OB_FAIL(agg_store_->fill_index_info(block_info, false))) {
               LOG_WARN("Fail to agg index info", K(ret), K(block_info), KPC_(agg_store), KPC(this));
             } else {
-              update_table_store_stat(access_ctx_->table_store_stat_, block_info);
+              update_table_store_stat(access_ctx_->table_store_stat_, block_info, true/* is_agg */);
               LOG_DEBUG("Success to agg index info", K(ret), K(block_info), KPC_(agg_store));
               continue;
             }
@@ -1387,7 +1390,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             LOG_WARN("fail to prefetch_block_data", K(ret), K(block_info));
           }
 
-          if OB_SUCC(ret) {
+          if (OB_SUCC(ret)) {
             prefetched_cnt++;
             micro_data_prefetch_idx_++;
             tree_handles_[cur_level_].current_block_read_handle().end_prefetched_row_idx_++;
@@ -1910,13 +1913,15 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
                   && OB_FAIL(sample_executor->check_sample_block(index_info, level, parent.fetch_idx_,
                                                                prefetch_idx_ + 1))) {
         LOG_WARN("Failed to check if can skip perfetch micro block in sample", K(ret), K(level), K(index_info), KPC(sample_executor));
+      } else if (EN_DISABLE_SKIP_FETCH_BY_BASE_VERSION == OB_SUCCESS && prefetcher.can_skip_fetch_by_base_version(index_info)) {
+        //skip fetch by base version
       } else if (nullptr != sstable_index_filter
                   && prefetcher.can_index_filter_skip(index_info, sample_executor)
                   && OB_FAIL(sstable_index_filter->check_range(prefetcher.iter_param_->read_info_, index_info,
                                                                 *(prefetcher.access_ctx_->allocator_),
                                                                 prefetcher.iter_param_->vectorized_enabled_))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
-      } else if (index_info.is_filter_always_false()) {
+      } else if (index_info.can_skip_fetch()) {
         prefetcher.update_table_store_stat(prefetcher.access_ctx_->table_store_stat_, index_info);
       } else if (nullptr != prefetcher.agg_store_ && OB_FAIL(prefetcher.agg_store_->can_use_index_info(index_info, can_agg))) {
         LOG_WARN("Fail to judge can aggregate index info", K(ret), KPC(prefetcher.agg_store_));
@@ -1924,7 +1929,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
         if (OB_FAIL(prefetcher.agg_store_->fill_index_info(index_info, false))) {
           LOG_WARN("Fail to agg index info", K(ret), K(index_info), KPC_(prefetcher.agg_store), KPC(this));
         } else {
-          prefetcher.update_table_store_stat(prefetcher.access_ctx_->table_store_stat_, index_info);
+          prefetcher.update_table_store_stat(prefetcher.access_ctx_->table_store_stat_, index_info, true/* is_agg */);
           LOG_DEBUG("Success to agg index info", K(ret), K(index_info), KPC_(prefetcher.agg_store), KPC(this));
         }
       } else if (OB_FAIL(prefetcher.check_row_lock(index_info, is_row_lock_checked_))) {
@@ -2027,13 +2032,19 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
 
 template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
 void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::update_table_store_stat(
-    ObTableScanStoreStat &table_store_stat, const ObMicroIndexInfo &index_info)
+    ObTableScanStoreStat &table_store_stat, const ObMicroIndexInfo &index_info, bool is_agg/* filter or aggregate */)
 {
   table_store_stat.skip_index_skip_block_cnt_ += index_info.get_micro_block_count();
   table_store_stat.pushdown_micro_access_cnt_ += index_info.get_micro_block_count();
-  table_store_stat.major_sstable_read_row_cnt_ += index_info.get_row_count();
   table_store_stat.blockscan_row_cnt_ += index_info.get_row_count();
-  table_store_stat.storage_filtered_row_cnt_ += index_info.get_row_count();
+  if (sstable_->is_minor_sstable()) {
+    table_store_stat.minor_sstable_read_row_cnt_ += index_info.get_row_count();
+  } else if (sstable_->is_major_sstable()) {
+    table_store_stat.major_sstable_read_row_cnt_ += index_info.get_row_count();
+  }
+  if (!is_agg) {
+    table_store_stat.storage_filtered_row_cnt_ += index_info.get_row_count();
+  }
 }
 
 // Explicit instantiations.

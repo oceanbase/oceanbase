@@ -132,7 +132,7 @@ int ObIndexBlockDataTransformer::transform(
   } else if (OB_UNLIKELY(!block_data.is_valid() || !micro_block_header->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(block_data), KPC(micro_block_header));
-  } else if (OB_FAIL(get_reader(block_data.get_store_type(), micro_reader))) {
+  } else if (OB_FAIL(get_reader(*block_data.get_micro_header(), micro_reader))) {
     LOG_WARN("Fail to set micro block reader", K(ret));
   } else if (OB_FAIL(micro_reader->init(block_data, nullptr))) {
     LOG_WARN("Fail to init micro block reader", K(ret), K(block_data));
@@ -238,7 +238,7 @@ int ObIndexBlockDataTransformer::fix_micro_header_and_transform(
   if (OB_UNLIKELY(!raw_data.is_valid() || !micro_block_header->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(raw_data), KPC(micro_block_header));
-  } else if (OB_FAIL(get_reader(raw_data.get_store_type(), micro_reader))) {
+  } else if (OB_FAIL(get_reader(*raw_data.get_micro_header(), micro_reader))) {
     LOG_WARN("Fail to set micro block reader", K(ret));
   } else if (OB_FAIL(micro_reader->init(raw_data, nullptr))) {
     LOG_WARN("Fail to init micro block reader", K(ret), K(raw_data));
@@ -319,14 +319,14 @@ int ObIndexBlockDataTransformer::get_transformed_upper_mem_size(
 }
 
 int ObIndexBlockDataTransformer::get_reader(
-    const ObRowStoreType store_type,
+    const ObMicroBlockHeader &header,
     ObIMicroBlockReader *&micro_reader)
 {
   int ret = OB_SUCCESS;
   if (!micro_reader_helper_.is_inited() && OB_FAIL(micro_reader_helper_.init(allocator_))) {
     LOG_WARN("Fail to init micro reader helper", K(ret));
-  } else if (OB_FAIL(micro_reader_helper_.get_reader(store_type, micro_reader))) {
-    LOG_WARN("Fail to get micro reader", K(ret), K(store_type));
+  } else if (OB_FAIL(micro_reader_helper_.get_reader(header, micro_reader))) {
+    LOG_WARN("Fail to get micro reader", K(ret), "header", header);
   }
   return ret;
 }
@@ -467,8 +467,8 @@ int ObRAWIndexBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
     LOG_WARN("invalid arguement", K(ret), KP(allocator), KPC(datum_utils));
   } else if (!micro_reader_helper_.is_inited() && OB_FAIL(micro_reader_helper_.init(*allocator))) {
     LOG_WARN("Fail to init micro reader helper", K(ret), KP(allocator));
-  } else if (OB_FAIL(micro_reader_helper_.get_reader(idx_block_data.get_store_type(), micro_reader_))) {
-    LOG_WARN("Fail to get micro block reader", K(ret), K(idx_block_data), K(idx_block_data.get_store_type()));
+  } else if (OB_FAIL(micro_reader_helper_.get_reader(*idx_block_data.get_micro_header(), micro_reader_))) {
+    LOG_WARN("Fail to get micro block reader", K(ret), K(idx_block_data), "header", *idx_block_data.get_micro_header());
   } else if (OB_FAIL(micro_reader_->init(idx_block_data, datum_utils))) {
     LOG_WARN("Fail to init micro reader", K(ret), K(idx_block_data));
   } else if (OB_FAIL(init_datum_row(*datum_utils, allocator))) {
