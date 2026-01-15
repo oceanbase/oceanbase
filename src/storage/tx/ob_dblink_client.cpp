@@ -18,7 +18,9 @@ namespace oceanbase
 using namespace common;
 using namespace common::sqlclient;
 using namespace share;
+#ifdef OB_BUILD_ORACLE_PL
 using namespace pl;
+#endif
 
 namespace transaction
 {
