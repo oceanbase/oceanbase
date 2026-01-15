@@ -133,7 +133,41 @@ int qdisc_create(int type, int parent_id, const char* name)
 }
 
 void qdisc_destroy(int qid)
-{}
+{
+  QWGuard("qdisc_destroy");
+  QDesc *tpl = static_cast<QDesc*>(qdtable[qid]);
+  if (NULL == tpl) return;
+  const int type = tpl->get_type();
+  for (int chan_id = 0; chan_id < MAX_N_CHAN; ++chan_id) {
+    int64_t target_id = (chan_id + 1) * QID_CAPACITY + qid;
+    IQDisc *qdisc = static_cast<IQDisc*>(qdtable[target_id]);
+    if (NULL != qdisc) {
+      switch(type) {
+        case QDISC_ROOT:
+          delete static_cast<QDiscRoot*>(qdisc);
+          break;
+        case QDISC_BUFFER_QUEUE:
+          delete static_cast<BufferQueue*>(qdisc);
+          break;
+        case QDISC_WEIGHTED_QUEUE:
+          delete static_cast<WeightedQueue*>(qdisc);
+          break;
+        default:
+          abort();
+      }
+      qdtable[target_id] = NULL;
+    }
+  }
+  switch(type) {
+    case QDISC_ROOT:
+      delete static_cast<QDescRoot*>(tpl);
+      break;
+    default:
+      delete static_cast<QDesc*>(tpl);
+      break;
+  }
+  qdtable[qid] = NULL;
+}
 
 int qdisc_set_weight(int qid, int64_t weight)
 {
