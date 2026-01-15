@@ -2241,6 +2241,12 @@ public:
       ALTER_SCHEMA &alter_schema);
 
   int drop_lob(const obrpc::ObDropLobArg &arg);
+  int check_need_drop_lob_for_hybrid_vec_index(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &index_schema,
+      const share::schema::ObTableSchema &data_table_schema,
+      bool &need_drop_lob,
+      uint64_t &aux_lob_meta_tid);
   int force_drop_lonely_lob_aux_table(const obrpc::ObForceDropLonelyLobAuxTableArg &arg);
   int build_unbind_lob_args(const uint64_t tenant_id,
       const common::ObArray<ObTabletID> &tablet_ids,

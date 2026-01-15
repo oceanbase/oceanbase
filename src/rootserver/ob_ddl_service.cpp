@@ -28279,6 +28279,13 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     }
 
     ObMockFKParentTableSchema mock_fk_parent_table_schema;
+    // for check drop index with lob aux table
+    bool need_drop_lob_for_vec_index = false;
+    uint64_t vec_index_aux_lob_meta_tid = OB_INVALID_ID;
+    uint64_t vec_index_data_table_id = OB_INVALID_ID;
+    int64_t vec_index_task_id = 0;
+    uint64_t vec_index_session_id = 0;
+
     SMART_VAR(ObTableSchema, tmp_table_schema) {
       for (int64_t i = 0; OB_SUCC(ret) && i < drop_table_arg.tables_.count(); ++i) {
         ObMockFKParentTableSchema *mock_fk_parent_table_ptr = NULL; // will use it when drop a fk_parent_table
@@ -28476,6 +28483,20 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
                   LOG_WARN("failed to unlock for add drop index", K(ret));
                 }
               }
+              if (OB_SUCC(ret) && USER_INDEX == drop_table_arg.table_type_ && OB_NOT_NULL(data_table_schema)) {
+                bool need_drop = false;
+                uint64_t aux_lob_tid = OB_INVALID_ID;
+                if (OB_FAIL(check_need_drop_lob_for_hybrid_vec_index(schema_guard, tmp_table_schema,
+                                                                     *data_table_schema, need_drop, aux_lob_tid))) {
+                  LOG_WARN("failed to check need drop lob for hybrid vec index", K(ret));
+                } else if (need_drop) {
+                  // save info for drop lob outside transaction
+                  need_drop_lob_for_vec_index = true;
+                  vec_index_aux_lob_meta_tid = aux_lob_tid;
+                  vec_index_data_table_id = data_table_schema->get_table_id();
+                  vec_index_task_id = drop_table_arg.task_id_;
+                }
+              }
             }
           }
         }
@@ -28584,6 +28605,30 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     if (OB_SUCCESS != (tmp_ret = publish_schema(tenant_id))) {
       ret = tmp_ret;
       LOG_WARN("publish schema failed", K(ret));
+    }
+
+    if (OB_SUCC(ret) && need_drop_lob_for_vec_index) {
+      obrpc::ObDropLobArg drop_lob_arg;
+      ObSqlString drop_lob_sql;
+      drop_lob_arg.tenant_id_ = tenant_id;
+      drop_lob_arg.exec_tenant_id_ = tenant_id;
+      drop_lob_arg.data_table_id_ = vec_index_data_table_id;
+      drop_lob_arg.aux_lob_meta_table_id_ = vec_index_aux_lob_meta_tid;
+      drop_lob_arg.task_id_ = vec_index_task_id;
+      drop_lob_arg.session_id_ = drop_table_arg.session_id_;
+      if (OB_FAIL(drop_lob_sql.assign("DROP LOB AUX TABLE FOR SEMANTIC VEC INDEX"))) {
+        LOG_WARN("fail to assign ddl_stmt_str", K(ret));
+      } else {
+        drop_lob_arg.ddl_stmt_str_ = drop_lob_sql.string();
+      }
+      if (OB_FAIL(ret)) {
+        // already logged
+      } else if (OB_FAIL(drop_lob(drop_lob_arg))) {
+        LOG_WARN("fail to drop lob aux table for hybrid vec index", K(ret), K(drop_lob_arg));
+      } else {
+        LOG_INFO("success to drop lob aux table for hybrid vec index",
+                 K(vec_index_data_table_id), K(vec_index_aux_lob_meta_tid));
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -39328,6 +39373,81 @@ int ObDDLService::drop_lob(const ObDropLobArg &arg)
   return ret;
 }
 
+int ObDDLService::check_need_drop_lob_for_hybrid_vec_index(
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema &index_schema,
+    const ObTableSchema &data_table_schema,
+    bool &need_drop_lob,
+    uint64_t &aux_lob_meta_tid)
+{
+  int ret = OB_SUCCESS;
+  need_drop_lob = false;
+  aux_lob_meta_tid = OB_INVALID_ID;
+
+  if (!index_schema.is_hybrid_vec_index_embedded_type()) {
+    // not hybrid vec index embedded type, skip
+  } else {
+    bool has_lob_column = false;
+    bool has_other_hybrid_vec_index = false;
+    const uint64_t tenant_id = data_table_schema.get_tenant_id();
+    aux_lob_meta_tid = data_table_schema.get_aux_lob_meta_tid();
+    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+
+    // check if data table has lob column (excluding index columns)
+    if (OB_FAIL(ret)) {
+    } else {
+      for (ObTableSchema::const_column_iterator iter = data_table_schema.column_begin();
+           OB_SUCC(ret) && !has_lob_column && iter != data_table_schema.column_end();
+           ++iter) {
+        const ObColumnSchemaV2 *column_schema = *iter;
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Column schema is NULL", K(ret));
+        } else if (column_schema->is_unused()) {
+          continue;
+        } else if (!column_schema->is_virtual_generated_column() && column_schema->get_meta_type().is_lob_storage()) {
+          has_lob_column = true;
+          LOG_TRACE("found lob column not related to index", K(column_schema->get_column_name()));
+        }
+      }
+    }
+
+    // check if data table has other hybrid vec index
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("fail to get simple index infos", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && !has_other_hybrid_vec_index && i < simple_index_infos.count(); ++i) {
+        const ObTableSchema *other_index_schema = nullptr;
+        const uint64_t other_index_table_id = simple_index_infos.at(i).table_id_;
+        if (other_index_table_id == index_schema.get_table_id()) {
+          continue;
+        }
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, other_index_table_id, other_index_schema))) {
+          LOG_WARN("fail to get other index table schema", K(ret), K(tenant_id), K(other_index_table_id));
+        } else if (OB_ISNULL(other_index_schema)) {
+          continue;
+        } else if (other_index_schema->is_hybrid_vec_index_embedded_type()) {
+          has_other_hybrid_vec_index = true;
+          LOG_INFO("found other hybrid vector index", K(other_index_table_id));
+        }
+      }
+    }
+
+    // determine if need to drop lob aux table
+    if (OB_FAIL(ret)) {
+    } else if (OB_INVALID_ID == aux_lob_meta_tid) {
+      LOG_INFO("no lob aux table to drop", K(data_table_schema.get_table_id()));
+    } else if (has_lob_column || has_other_hybrid_vec_index) {
+      LOG_INFO("the lob table is also depended by other column or index", K(has_lob_column), K(has_other_hybrid_vec_index));
+    } else {
+      need_drop_lob = true;
+      LOG_INFO("need to drop lob aux table for hybrid vec index", K(data_table_schema.get_table_id()), K(aux_lob_meta_tid));
+    }
+  }
+  return ret;
+}
+
 bool ObDDLService::is_dec_table_lob_inrow_threshold(
     const obrpc::ObAlterTableArg &alter_table_arg,
     const AlterTableSchema &alter_table_schema,
@@ -39651,7 +39771,8 @@ int ObDDLService::unbind_lob_tablets(
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate", K(ret));
-      LOG_WARN("failed to serialize arg", KR(ret));
+    } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
+      LOG_WARN("failed to serialize arg", K(ret));
     } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_LOB_TABLET, buf, pos))) {
       LOG_WARN("failed to register tx data", KR(ret));
     }
