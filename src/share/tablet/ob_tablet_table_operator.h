@@ -129,15 +129,21 @@ public:
   //
   // @param [in] sql_client, client for executing query
   // @param [in] tenant_id, tenant for query
+  // @param [in] ls_id, ls id for query
   // @param [in] server, target ObAddr
   // @param [in] limit, limit number for delete sql
   // @param [out] residual_count, count of residual tablets in table
   int remove_residual_tablet(
       ObISQLClient &sql_client,
       const uint64_t tenant_id,
+      const ObLSID &ls_id,
       const ObAddr &server,
       const int64_t limit,
+      const char *const table_name,
       int64_t &affected_rows);
+
+  common::ObISQLClient *get_sql_client() const { return sql_proxy_; }
+
   template <typename T>
   static int construct_tablet_infos(
       common::sqlclient::ObMySQLResult &res,

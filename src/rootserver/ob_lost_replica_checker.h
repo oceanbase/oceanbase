@@ -38,6 +38,9 @@ namespace rootserver
 class ObLostReplicaChecker :  public ObRsReentrantThread 
 {
 public:
+  static int check_lost_server(const common::ObAddr &server, bool &is_lost_server);
+
+public:
   ObLostReplicaChecker();
   virtual ~ObLostReplicaChecker();
 
@@ -56,8 +59,6 @@ private:
   int check_lost_replica_(const share::ObLSInfo &ls_info,
                          const share::ObLSReplica &replica,
                          bool &is_lost_replica) const;
-  int check_lost_server_(const common::ObAddr &server,
-                        bool &is_lost_server) const;
   int check_cancel_();
 
  private:

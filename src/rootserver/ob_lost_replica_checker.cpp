@@ -211,7 +211,7 @@ int ObLostReplicaChecker::check_lost_replica_(const ObLSInfo &ls_info,
   } else if (!ls_info.is_valid() || !replica.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls_info or invalid replica", KR(ret), K(ls_info), K(replica));
-  } else if (OB_FAIL(check_lost_server_(replica.get_server(), is_lost_server))) {
+  } else if (OB_FAIL(ObLostReplicaChecker::check_lost_server(replica.get_server(), is_lost_server))) {
     LOG_WARN("check lost server failed", "server", replica.get_server(), K(ret));
   } else if (is_lost_server) {
     /*
@@ -252,15 +252,12 @@ int ObLostReplicaChecker::check_lost_replica_(const ObLSInfo &ls_info,
 }
 
 
-int ObLostReplicaChecker::check_lost_server_(const ObAddr &server, bool &is_lost_server) const
+int ObLostReplicaChecker::check_lost_server(const ObAddr &server, bool &is_lost_server)
 {
   int ret = OB_SUCCESS;
   share::ObUnitTableOperator ut_operator;
   is_lost_server = false;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {

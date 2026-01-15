@@ -156,6 +156,7 @@
 #include "observer/table/ob_htable_rowkey_mgr.h"
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "sql/monitor/ob_sql_stat_manager.h"
+#include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -645,6 +646,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(ObSQLCCLRuleManager::mtl_new, ObSQLCCLRuleManager::mtl_init, nullptr, nullptr, nullptr, ObSQLCCLRuleManager::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObHMSClientPoolMgr::mtl_init, nullptr, ObHMSClientPoolMgr::mtl_stop, ObHMSClientPoolMgr::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::schema::ObAddIntervalPartitionController::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(ObTenantTabletCleanupService::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, ObTenantTabletCleanupService::mtl_destroy);
   }
 
   if (OB_SUCC(ret)) {

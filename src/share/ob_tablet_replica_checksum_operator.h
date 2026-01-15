@@ -154,12 +154,6 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_array,
       const int64_t compaction_scn,
       common::ObISQLClient &sql_client);
-  static int remove_residual_checksum(
-      common::ObISQLClient &sql_client,
-      const uint64_t tenant_id,
-      const ObAddr &server,
-      const int64_t limit,
-      int64_t &affected_rows);
   static int get_tablets_replica_checksum(
       const uint64_t tenant_id,
       const ObIArray<compaction::ObTabletCheckInfo> &pairs,

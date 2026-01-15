@@ -240,6 +240,7 @@ namespace observer
   class ObTableQueryASyncMgr;
   class ObTableSessIDService;
   class ObSessionTmpTableCleaner;
+  class ObTenantTabletCleanupService;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -532,7 +533,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       sql::ObSQLCCLRuleManager*,                     \
       share::ObBackupDestIOPermissionMgr*,           \
       share::ObHMSClientPoolMgr*,                     \
-      share::schema::ObAddIntervalPartitionController* \
+      share::schema::ObAddIntervalPartitionController*, \
+      observer::ObTenantTabletCleanupService*        \
   )
 
 
