@@ -1298,4 +1298,5 @@
 #define N_AI_PROMPT                         "ai_prompt"
 #define N_MD5_CONCAT_WS                     "md5_concat_ws"
 #define N_COLLECT_FILE_LIST                 "collect_file_list"
+#define N_TO_TYPE_NAME                      "to_type_name"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_
