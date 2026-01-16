@@ -2875,3 +2875,8 @@ DEF_CAP(external_table_csv_max_buffer_size, OB_TENANT_PARAMETER, "1G", "[0B,)",
         "Maximum buffer size for parsing CSV external table files. "
         "Range: [0B, +∞), default: 1G",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+
+DEF_BOOL(_ob_mysql_run_definer_pl_as_invoker, OB_TENANT_PARAMETER, "False",
+        "in mysql mode, run definer pl as invoker right",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
