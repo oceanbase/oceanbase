@@ -898,14 +898,9 @@ int ObLobManager::check_need_out_row(
         } else {
           // init lob data and alloc lob id(when not init)
           ObLobData *new_lob_data = new(new_lob_common->buffer_)ObLobData();
-          if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
-            LOG_WARN("get lob id failed.", K(ret), K(param));
-          } else if (! param.lob_meta_tablet_id_.is_valid()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("lob_meta_tablet_id is invalid", K(ret), K(param));
+          if (OB_FAIL(alloc_lob_id(param, new_lob_data->id_))) {
+            LOG_WARN("alloc_lob_id fail", K(ret), K(param));
           } else {
-            new_lob_data->id_.tablet_id_ = param.lob_meta_tablet_id_.id();
-            transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
             new_lob_common->is_init_ = true;
           }
         }
@@ -1445,14 +1440,9 @@ int ObLobManager::prepare_for_write(
         } else {
           // init lob data and alloc lob id(when not init)
           ObLobData *new_lob_data = new(new_lob_common->buffer_)ObLobData();
-          if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
-            LOG_WARN("get lob id failed.", K(ret), K(param));
-          } else if (! param.lob_meta_tablet_id_.is_valid()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("lob_meta_tablet_id is invalid", K(ret), K(param));
+          if (OB_FAIL(alloc_lob_id(param, new_lob_data->id_))) {
+            LOG_WARN("alloc_lob_id fail", K(ret), K(param));
           } else {
-            new_lob_data->id_.tablet_id_ = param.lob_meta_tablet_id_.id();
-            transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
             new_lob_common->is_init_ = true;
           }
         }
@@ -2420,9 +2410,15 @@ int ObLobManager::alloc_lob_id(ObLobAccessParam& param, ObLobId &lob_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob_meta_tablet_id is invalid", K(ret), K(param));
   } else {
-    lob_id.tablet_id_ = param.lob_meta_tablet_id_.id();
     // used for lob order
     transform_lob_id(lob_id.lob_id_, lob_id.lob_id_);
+    if (param.specified_tablet_id_.is_valid()) {
+      lob_id.tablet_id_ = param.specified_tablet_id_.id();
+      // NOTICE: Don't remove this. This is may be used for data check and clean
+      FLOG_INFO("use specified_tablet_id as tablet_id in lob id", K(lob_id), "lob_meta_tablet_id", param.lob_meta_tablet_id_);
+    } else {
+      lob_id.tablet_id_ = param.lob_meta_tablet_id_.id();
+    }
   }
   return ret;
 }
@@ -2452,6 +2448,21 @@ int ObLobManager::prepare_seq_no(ObLobAccessParam& param, ObLobDiskLocatorBuilde
     LOG_WARN("set seq_no fail", K(ret), K(param));
   }
   return ret;
+}
+
+int ObLobManager::scan_lob_meta(ObLobAccessParam& param, ObLobMetaIterator *&iter)
+{
+  return meta_manager_.scan(param, iter);;
+}
+
+int ObLobManager::delete_lob_meta(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter)
+{
+  return meta_manager_.batch_delete(param, iter);
+}
+
+int ObLobManager::revert_scan_iter(ObLobMetaIterator *iter)
+{
+  return meta_manager_.revert_scan_iter(iter);
 }
 
 } // storage

@@ -41,7 +41,7 @@ public:
       tx_desc_(nullptr), snapshot_(), tx_id_(),
       sql_mode_(SMO_DEFAULT), dml_base_param_(nullptr),
       tenant_id_(MTL_ID()), src_tenant_id_(MTL_ID()),
-      ls_id_(), tablet_id_(), lob_meta_tablet_id_(), lob_piece_tablet_id_(),
+      ls_id_(), tablet_id_(), lob_meta_tablet_id_(), lob_piece_tablet_id_(), specified_tablet_id_(),
       coll_type_(), lob_locator_(nullptr), lob_common_(nullptr),
       lob_data_(nullptr), byte_size_(0), handle_size_(0), timeout_(0),
       fb_snapshot_(), offset_(0), len_(0),
@@ -49,7 +49,7 @@ public:
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_total_quantity_log_(true),
       read_latest_(false), scan_backward_(false), is_fill_zero_(false), from_rpc_(false),
       inrow_read_nocopy_(false), is_store_char_len_(true), need_read_latest_(false), no_need_retry_(false), is_mlog_(false), try_flush_redo_(false),
-      main_table_rowkey_col_(false), is_index_table_(false), enable_remote_retry_(false),
+      main_table_rowkey_col_(false), is_index_table_(false), enable_remote_retry_(false), is_full_table_scan_(false),
       inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),
       access_ctx_(nullptr), addr_(), lob_id_geneator_(nullptr), data_row_(nullptr)
   {}
@@ -116,12 +116,13 @@ public:
 
   bool skip_flush_redo() const { return !try_flush_redo_; }
 
-  TO_STRING_KV(KP(this), K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), K_(lob_piece_tablet_id),
+  TO_STRING_KV(KP(this), K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), K_(lob_piece_tablet_id), K_(specified_tablet_id),
     KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size), K_(timeout), KP_(allocator), KP_(tmp_allocator),
     K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
     K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(fb_snapshot), K_(tx_id), K_(read_latest), K_(is_total_quantity_log),
     K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), K_(need_read_latest), K(no_need_retry_), K_(is_mlog), K_(try_flush_redo),
-    K_(main_table_rowkey_col), K_(is_index_table), K_(enable_remote_retry), KP_(access_ctx), K_(addr), KPC_(lob_id_geneator), KPC_(data_row));
+    K_(main_table_rowkey_col), K_(is_index_table), K_(enable_remote_retry), KP_(access_ctx), K_(addr), KPC_(lob_id_geneator), KPC_(data_row),
+    K_(is_full_table_scan));
 
 private:
   ObIAllocator *tmp_allocator_;
@@ -143,6 +144,8 @@ public:
   common::ObTabletID tablet_id_;
   common::ObTabletID lob_meta_tablet_id_;
   common::ObTabletID lob_piece_tablet_id_;
+  // specify tablet_id in ObLobId
+  common::ObTabletID specified_tablet_id_;
   common::ObCollationType coll_type_;
   // lob locator
   common::ObLobLocatorV2 *lob_locator_; // should set by set_lob_locator
@@ -205,6 +208,7 @@ public:
   bool main_table_rowkey_col_; // true: main table rowkey column
   bool is_index_table_;
   bool enable_remote_retry_;
+  bool is_full_table_scan_;
   int64_t inrow_threshold_;
   int64_t schema_chunk_size_;
   ObObj ext_info_log_;

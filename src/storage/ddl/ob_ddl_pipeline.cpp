@@ -174,6 +174,7 @@ int ObVectorIndexTabletContext::init_hnsw_index(const ObDDLTableSchema &ddl_tabl
   } else if (OB_FAIL(data_tablet_handle.get_obj()->get_ddl_data(ddl_data))) {
     LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet_handle));
   } else {
+    ctx_.snap_tablet_id_ = tablet_id_;
     ctx_.lob_meta_tablet_id_ = ddl_data.lob_meta_tablet_id_;
     ctx_.lob_piece_tablet_id_ = ddl_data.lob_piece_tablet_id_;
   }
@@ -1170,7 +1171,7 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
       } else {
         type = adp->get_snap_index_type();
         ctx.index_type_ = type;
-        LOG_INFO("HgraphIndex finish vsag serialize for tablet", K(tablet_id_), K(ctx.ctx_.get_vals().count()), K(type));
+        LOG_INFO("HgraphIndex finish vsag serialize for tablet", K(tablet_id_), K(ctx.ctx_.get_vals().count()), K(type), K(tx_desc->get_tx_id()));
       }
       if (OB_SUCC(ret)) {
         omt::ObTenantConfigGuard tenant_config(TENANT_CONF(adp->get_tenant_id()));
@@ -1224,6 +1225,8 @@ int ObHNSWIndexBuildOperator::execute(
       } else if (OB_SUCCESS != (end_trans_ret = storage::ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, INT64_MAX))) {
         LOG_WARN("fail to end read trans", K(ret), K(end_trans_ret));
         ret = end_trans_ret;
+      } else if (OB_FAIL(OB_E(EventTable::EN_TRANS_AFTER_COMMIT) OB_SUCCESS)) {
+        LOG_WARN("mock hnsw build fail after end trans", K(is_vec_tablet_rebuild), K_(tablet_id));
       }
     }
     if (OB_SUCC(ret)) {

@@ -93,6 +93,15 @@ int ObLobMetaManager::scan(ObLobAccessParam& param, ObLobMetaScanIter &iter)
   return ret;
 }
 
+int ObLobMetaManager::scan(ObLobAccessParam& param, ObLobMetaIterator *&iter)
+{
+  return persistent_lob_adapter_.scan_lob_meta(param, iter);
+}
+
+int ObLobMetaManager::revert_scan_iter(ObLobMetaIterator *iter)
+{
+  return persistent_lob_adapter_.revert_scan_iter(iter);
+}
 
 int ObLobMetaManager::local_scan(ObLobAccessParam& param, ObLobMetaScanIter &iter)
 {

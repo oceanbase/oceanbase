@@ -415,6 +415,7 @@ int ObHNSWSerializeCallback::operator()(const char *data, const int64_t data_siz
   lob_param.sql_mode_ = SMO_DEFAULT;
   lob_param.timeout_ = param.timeout_;
   lob_param.lob_common_ = nullptr;
+  lob_param.specified_tablet_id_ = vctx->get_snap_tablet_id();
   ret = lob_param.snapshot_.assign(*reinterpret_cast<transaction::ObTxReadSnapshot*>(param.snapshot_));
   if (OB_FAIL(ret)) {
     LOG_WARN("assign snapshot fail", K(ret));

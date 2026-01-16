@@ -1734,6 +1734,8 @@ int ObIndexBuildTask::clean_on_failed()
     } else if (ObIndexStatus::INDEX_STATUS_UNAVAILABLE == index_schema->get_index_status()
                && OB_FAIL(update_index_status_in_schema(*index_schema, ObIndexStatus::INDEX_STATUS_INDEX_ERROR, schema_guard))) {
       LOG_WARN("update index schema failed", K(ret));
+    } else if (index_schema->is_vec_index_snapshot_data_type()) {
+      LOG_INFO("vector index snapshot table will be dropped in other stage, so skip this", K_(index_table_id));
     } else if (drop_index_on_failed) {
       DEBUG_SYNC(CREATE_INDEX_FAILED);
       bool is_trans_end = false;

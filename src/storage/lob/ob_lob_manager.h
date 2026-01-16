@@ -125,6 +125,9 @@ public:
   int write(ObLobAccessParam& param,
             ObLobLocatorV2& lob,
             uint64_t offset);
+  int scan_lob_meta(ObLobAccessParam& param, ObLobMetaIterator *&iter);
+  int delete_lob_meta(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter);
+  int revert_scan_iter(ObLobMetaIterator *iter);
 
   // compare lob byte wise, collation type is binary
   // @param [in] lob_left lob param of left operand for comparison
