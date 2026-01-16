@@ -2663,6 +2663,72 @@ int ObOptimizerUtil::find_table_item(const TableItem *table_item, uint64_t table
   return ret;
 }
 
+int ObOptimizerUtil::is_table_item_on_null_side(const ObDMLStmt *stmt,
+                                                TableItem *target_table,
+                                                bool &is_on_null_side)
+{
+  int ret = OB_SUCCESS;
+  is_on_null_side = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(target_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+
+  } else if (!target_table->is_joined_table()) {
+    if (OB_FAIL(is_table_on_null_side(stmt, target_table->table_id_, is_on_null_side))) {
+      LOG_WARN("failed to check null side", K(ret));
+    }
+  } else {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < stmt->get_joined_tables().count(); ++i) {
+      JoinedTable *joined_table = stmt->get_joined_tables().at(i);
+      bool found_on_null_side = false;
+      if (OB_ISNULL(joined_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(is_table_item_on_null_side_recursively(joined_table, target_table, false, found, found_on_null_side))) {
+        LOG_WARN("failed to check null side", K(ret));
+      } else if (found) {
+        is_on_null_side = found_on_null_side;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::is_table_item_on_null_side_recursively(const TableItem *current_table,
+                                                            const TableItem *target_table,
+                                                            bool is_on_null_side,
+                                                            bool &found,
+                                                            bool &found_on_null_side)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(target_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Get unexpected null", K(ret), K(target_table));
+  } else if (current_table == target_table) {
+    found = true;
+    found_on_null_side = is_on_null_side;
+  } else if (current_table->is_joined_table()) {
+    TableItem *left_table = NULL;
+    TableItem *right_table = NULL;
+    bool left_is_null_side = false;
+    bool right_is_null_side = false;
+    const JoinedTable *joined_table = static_cast<const JoinedTable *>(current_table);
+    ObJoinType join_type = joined_table->joined_type_;
+    if (OB_ISNULL(left_table = joined_table->left_table_) || OB_ISNULL(right_table = joined_table->right_table_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Get unexpected null", K(ret), K(current_table), K(left_table), K(right_table));
+    } else if (OB_FALSE_IT(left_is_null_side = (is_on_null_side || FULL_OUTER_JOIN == join_type || RIGHT_OUTER_JOIN == join_type))) {
+    } else if (OB_FALSE_IT(right_is_null_side = (is_on_null_side || FULL_OUTER_JOIN == join_type || LEFT_OUTER_JOIN == join_type))) {
+    } else if (OB_FAIL(SMART_CALL(is_table_item_on_null_side_recursively(left_table, target_table, left_is_null_side, found, found_on_null_side)))) {
+      LOG_WARN("Checking for table on null side recursively fails", K(ret));
+    } else if (!found && OB_FAIL(SMART_CALL(is_table_item_on_null_side_recursively(right_table, target_table, right_is_null_side, found, found_on_null_side)))) {
+      LOG_WARN("Checking for table on null side recursively fails", K(ret));
+    }
+  }
+
+  return ret;
+}
 int ObOptimizerUtil::get_referenced_columns(const ObDMLStmt *stmt,
                                             const uint64_t table_id,
                                             const common::ObIArray<ObRawExpr*> &keys,

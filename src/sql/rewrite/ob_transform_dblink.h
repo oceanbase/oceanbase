@@ -144,6 +144,22 @@ private:
 
   int collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers);
 
+  int collect_pushdown_join_conditions(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers);
+
+  int find_helper_for_table(TableItem *table,
+                            ObIArray<LinkTableHelper> &helpers,
+                            LinkTableHelper *&target_helper);
+
+  int inner_collect_pushdown_join_conditions(ObDMLStmt *stmt,
+                                             TableItem *target_table,
+                                             ObIArray<std::pair<JoinedTable*, ObRawExpr*>> &preds_to_pushdown,
+                                             ObIArray<LinkTableHelper> &helpers);
+
+  int recursive_collect_join_conditions(ObDMLStmt *stmt,
+                                        JoinedTable *current_table,
+                                        ObIArray<std::pair<JoinedTable*, ObRawExpr*>> &parent_conditions,
+                                        ObIArray<LinkTableHelper> &helpers);
+
   int has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,
                              uint64_t dblink_id,
                              bool &has);

@@ -507,6 +507,8 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
     }
   } else if (OB_FAIL(collect_pushdown_conditions(stmt, helpers))) {
     LOG_WARN("failed to collect pushdown conditions", K(ret));
+  } else if (OB_FAIL(collect_pushdown_join_conditions(stmt, helpers))) {
+    LOG_WARN("failed to collect pushdown join conditions", K(ret));
   } else if (OB_FAIL(split_link_table_info(stmt, helpers))) {
     LOG_WARN("failed to split link table info", K(ret));
   } else if (!helpers.empty()) {
@@ -1337,7 +1339,7 @@ int ObTransformDBlink::check_can_pushdown(ObDMLStmt *stmt, const LinkTableHelper
         OB_UNLIKELY(table != joined_table->left_table_ && table != joined_table->right_table_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected push down tables", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table->table_id_, is_on_null_side))) {
+    } else if (OB_FAIL(ObOptimizerUtil::is_table_item_on_null_side(stmt, table, is_on_null_side))) {
       LOG_WARN("failed to check table on null side", K(ret));
     }
   }
@@ -1383,6 +1385,139 @@ int ObTransformDBlink::collect_pushdown_conditions(ObDMLStmt *stmt, ObIArray<Lin
           LOG_WARN("failed to push back expr", K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformDBlink::collect_pushdown_join_conditions(ObDMLStmt *stmt, ObIArray<LinkTableHelper> &helpers)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else {
+    ObSEArray<std::pair<JoinedTable*, ObRawExpr*>, 4> parent_conditions;
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_from_item_size(); ++i) {
+      FromItem &item = stmt->get_from_item(i);
+      JoinedTable *table = NULL;
+      if (!item.is_joined_) {
+      } else if (OB_ISNULL(table = stmt->get_joined_table(item.table_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get table", K(ret), K(item));
+      } else if (OB_FAIL(SMART_CALL(recursive_collect_join_conditions(stmt,
+                                                                      table,
+                                                                      parent_conditions,
+                                                                      helpers)))) {
+        LOG_WARN("failed to collect conditions recursively", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformDBlink::find_helper_for_table(TableItem *table,
+                                             ObIArray<LinkTableHelper> &helpers,
+                                             LinkTableHelper *&target_helper)
+{
+  int ret = OB_SUCCESS;
+  target_helper = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == target_helper && i < helpers.count(); ++i) {
+    for (int64_t j = 0; OB_SUCC(ret) && NULL == target_helper && j < helpers.at(i).table_items_.count(); ++j) {
+      if (helpers.at(i).table_items_.at(j) != table) {
+      } else if (OB_ISNULL(target_helper = &helpers.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null target helper", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformDBlink::inner_collect_pushdown_join_conditions(ObDMLStmt *stmt,
+                                                              TableItem *target_table,
+                                                              ObIArray<std::pair<JoinedTable*, ObRawExpr*>> &preds_to_pushdown,
+                                                              ObIArray<LinkTableHelper> &helpers)
+{
+  int ret = OB_SUCCESS;
+  ObRelIds target_table_ids;
+  LinkTableHelper *target_helper = NULL;
+  JoinedTable *from_table = NULL;
+  ObRawExpr *pushdown_pred = NULL;
+  bool has_special_expr = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(target_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (OB_FAIL(find_helper_for_table(target_table, helpers, target_helper))) {
+    LOG_WARN("failed to find helper for table", K(ret));
+  } else if (NULL == target_helper) {
+    //do nothing
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*target_table, target_table_ids))) {
+    LOG_WARN("failed to get rel ids", K(ret));
+  } else {
+    for (int64_t i = preds_to_pushdown.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      if (OB_ISNULL(from_table = preds_to_pushdown.at(i).first) || OB_ISNULL(pushdown_pred = preds_to_pushdown.at(i).second)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null condition", K(ret), KPC(preds_to_pushdown.at(i).first), KPC(preds_to_pushdown.at(i).second));
+      } else if (!pushdown_pred->get_relation_ids().is_subset(target_table_ids)) {
+        //do nothing
+      } else if (OB_FAIL(has_none_pushdown_expr(pushdown_pred, target_helper->dblink_id_, has_special_expr))) {
+        LOG_WARN("failed to check has none push down expr", K(ret));
+      } else if (has_special_expr) {
+        //do nothing
+      } else if (OB_FAIL(target_helper->conditions_.push_back(pushdown_pred))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::remove_item(from_table->join_conditions_, pushdown_pred)) || OB_FAIL(preds_to_pushdown.remove(i))) {
+        LOG_WARN("failed to remove item", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTransformDBlink::recursive_collect_join_conditions(ObDMLStmt *stmt,
+                                                         JoinedTable *current_table,
+                                                         ObIArray<std::pair<JoinedTable*, ObRawExpr*>> &parent_conditions,
+                                                         ObIArray<LinkTableHelper> &helpers)
+{
+  int ret = OB_SUCCESS;
+  bool where_can_push_left = false;
+  bool where_can_push_right = false;
+  bool on_can_push_left = false;
+  bool on_can_push_right = false;
+  ObSEArray<std::pair<JoinedTable*, ObRawExpr*>, 4> preds_on_left;
+  ObSEArray<std::pair<JoinedTable*, ObRawExpr*>, 4> preds_on_right;
+  if (OB_ISNULL(stmt) || OB_ISNULL(current_table) || OB_ISNULL(current_table->left_table_) || OB_ISNULL(current_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  } else {
+    where_can_push_left = current_table->is_left_join() || current_table->is_inner_join();
+    where_can_push_right = current_table->is_right_join() || current_table->is_inner_join();
+    on_can_push_left = current_table->is_right_join() || current_table->is_inner_join();
+    on_can_push_right = current_table->is_left_join() || current_table->is_inner_join();
+    if (where_can_push_left && OB_FAIL(append(preds_on_left, parent_conditions))) {
+      LOG_WARN("failed to append parent conditions to preds on left", K(ret));
+    } else if (where_can_push_right && OB_FAIL(append(preds_on_right, parent_conditions))) {
+      LOG_WARN("failed to append parent conditions to preds on right", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < current_table->join_conditions_.count(); ++i) {
+      if (on_can_push_left && OB_FAIL(preds_on_left.push_back(std::make_pair(current_table, current_table->join_conditions_.at(i))))) {
+        LOG_WARN("failed to push back preds on left", K(ret));
+      } else if (on_can_push_right && OB_FAIL(preds_on_right.push_back(std::make_pair(current_table, current_table->join_conditions_.at(i))))) {
+        LOG_WARN("failed to push back preds on right", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(inner_collect_pushdown_join_conditions(stmt, current_table->left_table_, preds_on_left, helpers)) ||
+               OB_FAIL(inner_collect_pushdown_join_conditions(stmt, current_table->right_table_, preds_on_right, helpers))) {
+      LOG_WARN("failed to collect pushdown join conditions", K(ret));
+    } else if (current_table->left_table_->is_joined_table() &&
+               OB_FAIL(SMART_CALL(recursive_collect_join_conditions(stmt, static_cast<JoinedTable*>(current_table->left_table_), preds_on_left, helpers)))) {
+      LOG_WARN("failed to collect conditions for left table", K(ret));
+    } else if (current_table->right_table_->is_joined_table() &&
+               OB_FAIL(SMART_CALL(recursive_collect_join_conditions(stmt, static_cast<JoinedTable*>(current_table->right_table_), preds_on_right, helpers)))) {
+      LOG_WARN("failed to collect conditions for right table", K(ret));
     }
   }
   return ret;
