@@ -779,7 +779,12 @@ int ObTenantConfigMgr::got_versions(const common::ObIArray<std::pair<uint64_t, i
     int64_t version = versions.at(i).second;
     const bool remove_repeat = true;
     if (OB_FAIL(config_map_.get_refactored(ObTenantID(tenant_id), config))) {
+      bool set_config_wait_sync = OB_SUCCESS != (OB_E(EventTable::EN_SET_CONFIG_WAIT_SYNC_TIMEOUT) OB_SUCCESS);
       LOG_WARN("No tenant config found", K(tenant_id), K(ret));
+      if (set_config_wait_sync && OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("tenant may be dropped, ignore it when set config in sync mode", K(tenant_id));
+      }
     } else {
       ret = config->got_version(version, remove_repeat, need_update);
       if (need_update) {
