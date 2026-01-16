@@ -1995,7 +1995,7 @@ public:
         current_default_catalog_(0),
         security_version_(0),
         ob_enable_ps_parameter_anonymous_block_(false),
-        plsql_can_transform_sql_to_assign_(true),
+        plsql_can_transform_sql_to_assign_(false),
         ob_enable_pl_async_commit_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
@@ -2067,7 +2067,7 @@ public:
       security_version_ = 0;
       ob_enable_ps_parameter_anonymous_block_ = false;
       current_default_catalog_ = 0;
-      plsql_can_transform_sql_to_assign_ = true;
+      plsql_can_transform_sql_to_assign_ = false;
       character_set_client_ = ObCharsetType::CHARSET_INVALID;
       collation_database_ = CS_TYPE_INVALID;
       plsql_optimize_level_ = 0;
