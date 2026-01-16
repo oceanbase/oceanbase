@@ -742,6 +742,7 @@ int ObMultipleScanMerge::pause(bool& do_pause)
                 access_param_->iter_param_.get_schema_rowkey_count()))) {
           LOG_WARN(
               "Failed to assign curr rowkey", K(ret), K_(unprojected_row));
+        } else if (FALSE_IT(curr_scan_index_ = unprojected_row_.scan_index_)) {
         } else if (OB_FAIL(get_current_range(range))) {
           LOG_WARN("failed to get current range");
         } else {
