@@ -1493,7 +1493,7 @@ int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_UNLIKELY(OB_INVALID_INDEX == output_projector_.at(j) || j >= output_projector_.count())) {
+          if (OB_UNLIKELY(j >= output_projector_.count() || OB_INVALID_INDEX == output_projector_.at(j))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected index", K(ret), K(output_column_ids), K(aggregate_column_ids), K(i), K(j));
           } else if (OB_FAIL(aggregate_projector_.push_back(output_projector_.at(j)))) {
