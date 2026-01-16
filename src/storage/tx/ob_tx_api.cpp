@@ -920,19 +920,36 @@ int ObTransService::release_snapshot(ObTxDesc &tx)
   return ret;
 }
 
-int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
+int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot, ObTxDesc *tx_desc)
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = snapshot.core_.tx_id_;
   if (tx_id.is_valid()) {
     ObTxDesc *tx = NULL;
-    if (OB_SUCC(tx_desc_mgr_.get(tx_id, tx))) {
+    if (OB_FAIL(tx_desc_mgr_.get(tx_id, tx))) {
+      TRANS_LOG(WARN, "get tx fail", K(tx_id), K(snapshot));
+    } else if (tx_desc && tx_desc != tx) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "tx_desc mismatch", K(ret), K(tx_id), KPC(tx_desc), KPC(tx));
+    } else {
       ObTxSavePoint sp;
       sp.init(&snapshot);
       ObSpinLockGuard guard(tx->lock_);
-      if (OB_FAIL(tx_sanity_check_(*tx))) {
-      } else if (OB_FAIL(tx->savepoints_.push_back(sp))) {
-        TRANS_LOG(WARN, "push back snapshot fail", K(ret), K(snapshot), KPC(tx));
+      if (tx_desc && OB_FAIL(tx_desc_mgr_.acquire_tx_ref(tx_id))) {
+        TRANS_LOG(WARN, "acquire tx ref fail", K(tx_id), K(snapshot));
+      } else {
+        if (tx_desc) {
+          tx->inc_external_ref();
+        }
+        if (OB_FAIL(tx_sanity_check_(*tx))) {
+          TRANS_LOG(WARN, "tx sanity check fail", K(ret), K(tx_id), K(snapshot));
+        } else if (OB_FAIL(tx->savepoints_.push_back(sp))) {
+          TRANS_LOG(WARN, "push back snapshot fail", K(ret), K(snapshot), KPC(tx));
+        }
+        if (OB_FAIL(ret) && tx_desc) {
+          tx_desc_mgr_.release_tx_ref(tx);
+          tx->dec_external_ref();
+        }
       }
       ObTransTraceLog &tlog = tx->get_tlog();
       REC_TRANS_TRACE_EXT(&tlog, register_snapshot, OB_Y(ret),
@@ -941,10 +958,6 @@ int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
                           OB_ID(snapshot_scn), snapshot.core_.scn_.cast_to_int(),
                           OB_ID(ref), tx->get_ref(),
                           OB_ID(thread_id), GETTID());
-    } else if (ret != OB_ENTRY_NOT_EXIST) {
-      TRANS_LOG(WARN, "get tx fail", K(tx_id), K(snapshot));
-    } else {
-      ret = OB_SUCCESS;
     }
     if (OB_NOT_NULL(tx)) {
       tx_desc_mgr_.revert(*tx);
@@ -954,9 +967,10 @@ int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
   return ret;
 }
 
-void ObTransService::unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
+void ObTransService::unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot, ObTxDesc *tx_desc)
 {
   int ret = OB_SUCCESS;
+  bool matched = false;
   const ObTransID &tx_id = snapshot.core_.tx_id_;
   if (tx_id.is_valid()) {
     ObTxDesc *tx = NULL;
@@ -966,6 +980,7 @@ void ObTransService::unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
       ARRAY_FOREACH_N(tx->savepoints_, i, cnt) {
         ObTxSavePoint &it = tx->savepoints_[cnt - 1 - i];
         if (it.is_snapshot() && it.snapshot_ == &snapshot) {
+          matched = true;
           it.release();
           if (i == 0) {
             // this is the last one in savepoints_ array, try to clean
@@ -987,6 +1002,7 @@ void ObTransService::unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
       ObTransTraceLog &tlog = tx->get_tlog();
       REC_TRANS_TRACE_EXT(&tlog, unregister_snapshot, OB_Y(ret),
                           OB_ID(arg), (void*)&snapshot,
+                          OB_ID(tag1), matched,
                           OB_ID(snapshot_version), snapshot.core_.version_,
                           OB_ID(snapshot_scn), snapshot.core_.scn_.cast_to_int(),
                           OB_ID(ref), tx->get_ref(),
@@ -994,6 +1010,10 @@ void ObTransService::unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
     }
     if (OB_NOT_NULL(tx)) {
       tx_desc_mgr_.revert(*tx);
+    }
+    if (tx_desc) {
+      tx_desc->dec_external_ref();
+      tx_desc_mgr_.release_tx_ref(tx_desc);
     }
   }
   TRANS_LOG(TRACE, "unreigster snapshot", K(ret), K(snapshot));

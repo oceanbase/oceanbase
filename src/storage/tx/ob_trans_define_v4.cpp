@@ -472,7 +472,8 @@ ObTxDesc::ObTxDesc()
     rpc_cond_(),
     commit_task_(),
     xa_ctx_(NULL),
-    continuous_lock_conflict_cnt_(0)
+    continuous_lock_conflict_cnt_(0),
+    external_ref_(0)
 #ifdef ENABLE_DEBUG_LOG
   , alloc_link_()
 #endif
@@ -632,6 +633,7 @@ void ObTxDesc::reset()
   xa_ctx_ = NULL;
   continuous_lock_conflict_cnt_ = 0;
   modified_tables_.reset();
+  external_ref_ = 0;
 }
 
 void ObTxDesc::set_tx_id(const ObTransID &tx_id)
@@ -853,7 +855,13 @@ int ObTxDesc::add_clean_part_if_absent(const share::ObLSID &id,
   if (is_dup) {
     p.flag_.set_dup_ls();
   }
-  return update_part_(p, true, true);
+  ObSpinLockGuard guard(lock_);
+  if (is_tx_end()) {
+    LOG_TRACE("tx end, skip clean part", K(ret), KPC(this), K(p));
+  } else {
+    ret = update_part_(p, true, true);
+  }
+  return ret;
 }
 
 /*

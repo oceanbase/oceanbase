@@ -2288,13 +2288,17 @@ bool ObObjAccessIdx::is_contain_object_type(const common::ObIArray<ObObjAccessId
   return b_ret;
 }
 
-int ObPLCursorInfo::set_and_register_snapshot(const transaction::ObTxReadSnapshot &snapshot)
+int ObPLCursorInfo::set_and_register_snapshot(const transaction::ObTxReadSnapshot &snapshot,
+                                              transaction::ObTxDesc *tx,
+                                              bool is_read_uncommitted)
 {
   int ret = OB_SUCCESS;
   OZ (set_snapshot(snapshot));
   if (OB_SUCC(ret) && snapshot.is_valid()) {
     set_need_check_snapshot(true);
-    OZ (MTL(transaction::ObTransService*)->register_tx_snapshot_verify(get_snapshot()));
+    set_read_uncommitted(is_read_uncommitted);
+    OZ (MTL(transaction::ObTransService*)->register_tx_snapshot_verify(get_snapshot(), tx));
+    OX (tx_desc_ = tx);
   }
   return ret;
 }
@@ -2351,6 +2355,7 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
       cursor_flag_ = src.cursor_flag_;
       OZ (snapshot_.assign(src.snapshot_));
       is_need_check_snapshot_ = src.is_need_check_snapshot_;
+      is_read_uncommitted_ = src.is_read_uncommitted_;
       last_execute_time_ = src.last_execute_time_;
       sql_trace_id_ = src.sql_trace_id_;
       OZ (ob_write_string(*copy_allocator, src.sql_text_, sql_text_));
@@ -2476,7 +2481,7 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse, bool cl
 #ifdef OB_BUILD_ORACLE_PL
     if (lib::is_oracle_mode()) {
       /* unregiter snapshot whether ret is succ or not*/
-      MTL(transaction::ObTransService*)->unregister_tx_snapshot_verify(get_snapshot());
+      MTL(transaction::ObTransService*)->unregister_tx_snapshot_verify(get_snapshot(), tx_desc_);
       get_snapshot().reset();
     }
 #endif

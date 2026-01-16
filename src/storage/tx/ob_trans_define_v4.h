@@ -724,6 +724,9 @@ private:
   // when end_stmt() with other err-code(including OB_SUCCESS): continuous_lock_conflict_cnt_ resetted to 0
   // when end_stmt() with -6005 and continuous_lock_conflict_cnt_ greater than a threshold value: start detect deadlock.
   int64_t continuous_lock_conflict_cnt_;
+
+  // referenced by cursor, the txdesc can alived even transaction has terminated
+  int external_ref_;
   ObTransTraceLog tlog_;
 #ifdef ENABLE_DEBUG_LOG
   struct DLink {
@@ -824,7 +827,8 @@ public:
                K(commit_task_.is_registered()),
                K_(modified_tables),
                K_(last_rc_snapshot_version),
-               K_(ref));
+               K_(ref),
+               K_(external_ref));
   bool support_branch() const { return seq_base_ > 0; }
   // used by SQL alloc branch_id refer the min branch_id allowed
   // because branch_id bellow this is reserved for internal use
@@ -957,6 +961,9 @@ public:
       return share::SCN::invalid_scn();
     }
   }
+  bool has_external_ref() const { return ATOMIC_LOAD(&external_ref_) > 0; }
+  void inc_external_ref() { ATOMIC_INC(&external_ref_); }
+  void dec_external_ref() { ATOMIC_DEC(&external_ref_); }
   ObITxCallback *cancel_commit_cb();
   int get_parts_copy(ObTxPartList &copy_parts);
   int get_savepoints_copy(ObTxSavePointList &copy_savepoints);
