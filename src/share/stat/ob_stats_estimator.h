@@ -51,7 +51,8 @@ protected:
                                 ObCharsetType& old_client_charset_type,
                                 ObCharsetType& old_connection_charset_type,
                                 ObCharsetType& old_result_charset_type,
-                                ObCollationType& old_collation_type);
+                                ObCollationType& old_collation_type,
+                                bool &need_restore);
   int restore_session(ObSQLSessionInfo *session,
                       sql::ObSQLSessionInfo::StmtSavedValue *session_value,
                       ObCharsetType old_client_charset_type,
