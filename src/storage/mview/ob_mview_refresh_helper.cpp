@@ -577,14 +577,13 @@ int ObMViewRefreshHelper::collect_deps_and_check_satisfy(
   return ret;
 }
 
-int ObMViewRefreshHelper::replace_all_snapshot_zero(
-                          const std::string &input,
-                          const uint64_t snapshot_version,
-                          std::string &output,
-                          const bool oracle_mode)
+int ObMViewRefreshHelper::replace_all_snapshot_zero(const ObString &input,
+                                                    const uint64_t snapshot_version,
+                                                    std::string &output,
+                                                    const bool oracle_mode)
 {
   int ret = OB_SUCCESS;
-  output = input;
+  output = input.ptr();
   std::string search = oracle_mode ? "as of scn " : "as of snapshot ";
   std::string new_value_str = std::to_string(snapshot_version);
 
@@ -606,7 +605,7 @@ int ObMViewRefreshHelper::replace_all_snapshot_zero(
     }
   }
   // for debug
-  LOG_DEBUG("print generate sql", K(input.c_str()), K(output.c_str()), K(oracle_mode));
+  LOG_DEBUG("print generate sql", K(input), K(output.c_str()), K(oracle_mode));
   return ret;
 }
 } // namespace storage

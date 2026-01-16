@@ -81,8 +81,7 @@ public:
                                             common::ObISQLClient &sql_proxy,
                                             ObSchemaGetterGuard &schema_guard,
                                             bool oracle_mode = false);
-  
-  static int replace_all_snapshot_zero(const std::string &input,
+  static int replace_all_snapshot_zero(const ObString &input,
                                        const uint64_t snapshot_version,
                                        std::string &output,
                                        const bool oracle_mode);
