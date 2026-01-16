@@ -4317,6 +4317,68 @@ int ObDMLResolver::set_basic_column_properties(ObColumnSchemaV2 &column_schema,
   return ret;
 }
 
+int ObDMLResolver::build_collection_column_schema_for_orc(const orc::Type* type, ObStringBuffer &buf)
+{
+  int ret = OB_SUCCESS;
+  if (type == nullptr) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    switch (type->getKind()) {
+      case orc::TypeKind::BOOLEAN:
+      case orc::TypeKind::BYTE:
+        OZ (buf.append("TINYINT"));
+        break;
+      case orc::TypeKind::LONG:
+        OZ (buf.append("BIGINT"));
+        break;
+      case orc::TypeKind::INT:
+        OZ (buf.append("INT"));
+        break;
+      case orc::TypeKind::SHORT:
+        OZ (buf.append("SMALLINT"));
+        break;
+      case orc::TypeKind::FLOAT:
+        OZ (buf.append("FLOAT"));
+        break;
+      case orc::TypeKind::DOUBLE:
+        OZ (buf.append("DOUBLE"));
+        break;
+      case orc::TypeKind::STRING:
+      case orc::TypeKind::VARCHAR:
+      case orc::TypeKind::BINARY: {
+        uint64_t max_len =
+          type->getMaximumLength() <= 0 ? OB_MAX_MYSQL_VARCHAR_LENGTH : type->getMaximumLength();
+        OZ (buf.append("VARCHAR("));
+        OZ (buf.append(std::to_string(max_len).c_str()));
+        OZ (buf.append(")"));
+        break;
+      }
+      case orc::TypeKind::LIST: {
+        OZ (buf.append("ARRAY("));
+        OZ (build_collection_column_schema_for_orc(type->getSubtype(0), buf));
+        OZ (buf.append(")"));
+        break;
+      }
+      case orc::TypeKind::MAP: {
+        OZ (buf.append("MAP("));
+        OZ (build_collection_column_schema_for_orc(type->getSubtype(0), buf));
+        OZ (buf.append(","));
+        OZ (build_collection_column_schema_for_orc(type->getSubtype(1), buf));
+        OZ (buf.append(")"));
+        break;
+      }
+      default:
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("orc_type", K(type->getKind()), K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this ORC type");
+        break;
+    }
+    OZ (buf.append(")"));
+  }
+  return ret;
+}
+
 // 构建column schema
 int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
                                                 const ColumnIndexType column_index_type,
@@ -4336,11 +4398,8 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
     const std::string& cpp_field_name = type->getFieldName(i);
     ObString field_name;
 
-    // 检查复杂类型
-    if (type->getSubtype(i)->getSubtypeCount() > 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex types in ORC file");
-    } else if (OB_FAIL(ob_write_string(*allocator_, ObString(cpp_field_name.c_str()), field_name))) {
+
+    if (OB_FAIL(ob_write_string(*allocator_, ObString(cpp_field_name.c_str()), field_name))) {
       LOG_WARN("failed to write field name", K(ret));
     } else {
       // 设置基本属性
@@ -4443,6 +4502,24 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
               LOG_WARN("failed to setup decimal");
             }
             break;
+          case orc::TypeKind::LIST: {
+            ObStringBuffer buf(allocator_);
+            ObArray<ObString> type_info_array;
+            OZ (build_collection_column_schema_for_orc(type->getSubtype(i), buf));
+            OZ (type_info_array.push_back(buf.string()));
+            column_schema.set_data_type(ObCollectionSQLType);
+            OZ (column_schema.set_extended_type_info(type_info_array));
+            break;
+          }
+          case orc::TypeKind::MAP: {
+            ObStringBuffer buf(allocator_);
+            ObArray<ObString> type_info_array;
+            OZ (build_collection_column_schema_for_orc(type->getSubtype(i), buf));
+            OZ (type_info_array.push_back(buf.string()));
+            column_schema.set_data_type(ObCollectionSQLType);
+            OZ (column_schema.set_extended_type_info(type_info_array));
+            break;
+          }
           default:
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("orc_type", K(type->getSubtype(i)->getKind()));
@@ -4472,81 +4549,48 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
   return ret;
 }
 
-int ObDMLResolver::check_array_column_schema_for_parquet(const parquet::schema::Node* node, bool &is_arry, ObStringBuffer &buf)
+int ObDMLResolver::build_collection_column_schema_for_parquet(const parquet::schema::Node *node,
+                                                              bool &is_legal_collection,
+                                                              ObStringBuffer &buf)
 {
   int ret = OB_SUCCESS;
-  // 1st level.
-  // <list-repetition> group <name> (LIST)
-  if (!OB_ISNULL(node) && node->is_group() && node->logical_type()->is_list()) {
-    buf.append("ARRAY(");
+  is_legal_collection = false;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node is null", K(ret));
+  } else if (node->is_group()) {
     const ::parquet::schema::GroupNode *group_node =
-                                  reinterpret_cast<const ::parquet::schema::GroupNode *>(node);
+                          reinterpret_cast<const ::parquet::schema::GroupNode *>(node);
     if (group_node->field_count() == 1) {
-      // 2nd level.
-      // repeated group list {
-      const ::parquet::schema::NodePtr list_node = group_node->field(0);
-      std::shared_ptr<parquet::schema::GroupNode> list_group_node =
-                                  std::static_pointer_cast<::parquet::schema::GroupNode>(list_node);
-      if (list_group_node->field_count() == 1) {
-        // 3rd level.
-        // <list-repetition> group <name> (LIST)
-        const ::parquet::schema::NodePtr child_node = list_group_node->field(0);
-        if (child_node->is_primitive()) {
-          is_arry = true;
-          const parquet::schema::PrimitiveNode *primitive_node =
-                         reinterpret_cast<const parquet::schema::PrimitiveNode *>(child_node.get());
-          parquet::Type::type phy_type = primitive_node->physical_type();
-          const parquet::LogicalType* logical_type = primitive_node->logical_type().get();
-          // 处理logical type
-          if (OB_ISNULL(logical_type)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("logical type is null", K(ret));
-          }
-          bool no_log_type = logical_type->is_none();
-          bool is_utc = ObParquetTableRowIterator::is_parquet_store_utc(logical_type);
-          bool is_unsigned = logical_type->is_int()
-                          && !static_cast<const parquet::IntLogicalType*>(logical_type)->is_signed();
-
-          if (OB_FAIL(ret)) {
-          } else {
-            // 根据Parquet类型设置对应的OB类型
-            switch(phy_type) {
-              case parquet::Type::INT32:
-                is_unsigned ? buf.append("INT UNSIGNED") : buf.append("INT");
-                break;
-              case parquet::Type::INT64:
-                is_unsigned ? buf.append("BIGINT UNSIGNED") : buf.append("BIGINT");
-                break;
-              case parquet::Type::FLOAT:
-                buf.append("FLOAT");
-                break;
-              case parquet::Type::DOUBLE:
-                buf.append("DOUBLE");
-                break;
-              case parquet::Type::BYTE_ARRAY:
-              case parquet::Type::FIXED_LEN_BYTE_ARRAY:
-              {
-                int type_len = primitive_node->type_length() <= 0 ? OB_MAX_MYSQL_VARCHAR_LENGTH : primitive_node->type_length();
-                buf.append("VARCHAR(");
-                buf.append(std::to_string(type_len).c_str());
-                buf.append(")");
-                break;
-              }
-              default:
-                ret = OB_NOT_SUPPORTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "this Parquet type");
-                break;
-            }
-            buf.append(")");
-          }
-        } else {
-          check_array_column_schema_for_parquet(child_node.get(), is_arry, buf);
-          buf.append(")");
-          if (!is_arry) {
-            LOG_WARN("check array column schema failed", K(is_arry));
-          }
+      std::shared_ptr<parquet::schema::GroupNode> child_node =
+        std::static_pointer_cast<::parquet::schema::GroupNode>(group_node->field(0));
+      if (node->logical_type()->is_list()) {
+        if (child_node->field_count() == 1) {
+          const ::parquet::schema::NodePtr elem_node = child_node->field(0);
+          OZ (buf.append("ARRAY("));
+          OZ (build_collection_column_schema_for_parquet(elem_node.get(), is_legal_collection, buf));
+          OZ (buf.append(")"));
+        }
+      } else if (node->logical_type()->is_map()) {
+        if (child_node->field_count() == 2) {
+          const ::parquet::schema::NodePtr key_node = child_node->field(0);
+          const ::parquet::schema::NodePtr value_node = child_node->field(1);
+          OZ (buf.append("MAP("));
+          OZ (build_collection_column_schema_for_parquet(key_node.get(), is_legal_collection, buf));
+          OZ (buf.append(","));
+          OZ (build_collection_column_schema_for_parquet(value_node.get(), is_legal_collection, buf));
+          OZ (buf.append(")"));
         }
       }
+    }
+  } else if (node->is_primitive()) {
+    const parquet::schema::PrimitiveNode *primitive_node =
+      reinterpret_cast<const parquet::schema::PrimitiveNode *>(node);
+    const parquet::LogicalType *logical_type = primitive_node->logical_type().get();
+    is_legal_collection = true;
+    // 调用辅助函数获取类型名称，考虑逻辑类型
+    if (OB_FAIL(get_type_name_from_primitive_node(primitive_node, buf))) {
+      LOG_WARN("failed to get type name from primitive node", K(ret));
     }
   }
   return ret;
@@ -4564,14 +4608,26 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
 
   if (OB_SUCC(ret)) {
     int num_columns = schema->num_columns();
+    ObHashSet<ObString> processed_nodes;
+    OZ (processed_nodes.create(schema->num_columns()));
     for (int i = 0; OB_SUCC(ret) && i < num_columns; ++i) {
       ObColumnSchemaV2 column_schema;
       const parquet::ColumnDescriptor* column = schema->Column(i);
       const parquet::schema::Node* node = schema->GetColumnRoot(i);
-      bool is_arry = false;
+      bool is_legal_collection = false;
       ObStringBuffer buf(allocator_);
+      ObString node_name = ObString(node->name().c_str());
       if (node->is_group()) {
-        OZ(check_array_column_schema_for_parquet(node, is_arry, buf));
+        if (OB_HASH_EXIST == processed_nodes.exist_refactored(node_name)) {
+          continue;
+        }
+        OZ (processed_nodes.set_refactored(node_name));
+        OZ (build_collection_column_schema_for_parquet(node, is_legal_collection, buf));
+        if (!is_legal_collection) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "this Parquet type");
+          break;
+        }
       }
 
       if (OB_ISNULL(column)) {
@@ -4581,9 +4637,7 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
 
       ObString field_name;
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(ob_write_string(*allocator_,
-                                        ObString(node->name().c_str()),
-                                        field_name))) {
+        if (OB_FAIL(ob_write_string(*allocator_, node_name, field_name))) {
           LOG_WARN("failed to write field name", K(ret));
         } else {
           // 设置基本属性
@@ -4600,128 +4654,21 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("logical type is null", K(ret));
           }
-          bool no_log_type = logical_type->is_none();
-          bool is_utc = ObParquetTableRowIterator::is_parquet_store_utc(logical_type);
-          bool is_unsigned = logical_type->is_int()
-                          && !static_cast<const parquet::IntLogicalType*>(logical_type)->is_signed();
 
           if (OB_FAIL(ret)) {
-          } else if (is_arry) {
+          } else if (is_legal_collection) {
             ObArray<ObString> type_info_array;
-            type_info_array.push_back(buf.string());
+            OZ (type_info_array.push_back(buf.string()));
             column_schema.set_data_type(ObCollectionSQLType);
-            OZ(column_schema.set_extended_type_info(type_info_array));
+            OZ (column_schema.set_extended_type_info(type_info_array));
           } else {
-            // 根据Parquet类型设置对应的OB类型
-            switch(phy_type) {
-              case parquet::Type::BOOLEAN:
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bool(lib::is_oracle_mode(), column_schema))) {
-                  LOG_WARN("failed to setup bool");
-                }
-                break;
-              case parquet::Type::INT32:
-                if (is_unsigned) {
-                  if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_uint(lib::is_oracle_mode(), column_schema))) {
-                    LOG_WARN("failed to setup uint");
-                  }
-                } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_int(lib::is_oracle_mode(), column_schema))) {
-                  LOG_WARN("failed to setup int");
-                }
-                break;
-              case parquet::Type::INT64:
-                if (is_unsigned) {
-                  if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_ubigint(lib::is_oracle_mode(), column_schema))) {
-                    LOG_WARN("failed to setup ubigint");
-                  }
-                } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bigint(lib::is_oracle_mode(), column_schema))) {
-                  LOG_WARN("failed to setup bigint");
-                }
-                break;
-              case parquet::Type::FLOAT:
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_float(lib::is_oracle_mode(), column_schema))) {
-                  LOG_WARN("failed to setup float");
-                }
-                break;
-              case parquet::Type::DOUBLE:
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_double(lib::is_oracle_mode(), column_schema))) {
-                  LOG_WARN("failed to setup double");
-                }
-                break;
-              case parquet::Type::BYTE_ARRAY:
-              case parquet::Type::FIXED_LEN_BYTE_ARRAY:
-              {
-                int64_t type_len = column->type_length();
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
-                                                                             type_len,
-                                                                             CHARSET_UTF8MB4,
-                                                                             ObCharset::get_system_collation(),
-                                                                             column_schema))) {
-                  LOG_WARN("failed to setup varchar");
-                }
-                break;
-              }
-              case parquet::Type::INT96: // 通常用于timestamp
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
-                  LOG_WARN("failed to setup timestamp");
-                }
-                break;
-              default:
-                ret = OB_NOT_SUPPORTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "this Parquet type");
-                break;
-            }
-          }
-
-          if (OB_FAIL(ret) || is_arry) {
-          } else {
-            switch(logical_type->type()) {
-              case parquet::LogicalType::Type::DATE:
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_date(lib::is_oracle_mode(), column_schema))) {
-                  LOG_WARN("failed to setup date");
-                }
-                break;
-              case parquet::LogicalType::Type::DECIMAL:
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_decimal(lib::is_oracle_mode(),
-                                                                             column->type_precision(),
-                                                                             column->type_scale(),
-                                                                             column_schema))) {
-                  LOG_WARN("failed to setup decimal");
-                }
-                break;
-              case parquet::LogicalType::Type::STRING:
-              {
-                int64_t type_len = column->type_length();
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
-                                                                             type_len,
-                                                                             CHARSET_UTF8MB4,
-                                                                             ObCharset::get_system_collation(),
-                                                                             column_schema))) {
-                  LOG_WARN("failed to setup varchar");
-                }
-                break;
-              }
-              case parquet::LogicalType::Type::TIME:
-                if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_time(lib::is_oracle_mode(), column_schema))) {
-                  LOG_WARN("failed to setup time");
-                }
-                break;
-              case parquet::LogicalType::Type::ENUM:
-                column_schema.set_data_type(ObEnumType);
-                break;
-              case parquet::LogicalType::Type::TIMESTAMP:
-                if (is_utc) {
-                  if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
-                    LOG_WARN("failed to setup timestamp");
-                  }
-                } else {
-                  if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_datetime(lib::is_oracle_mode(), column_schema))) {
-                    LOG_WARN("failed to setup datetime");
-                  }
-                }
-                break;
-              default:
-                // 使用physical type的映射
-                break;
+            // 调用辅助函数设置column_schema，考虑逻辑类型
+            int64_t type_len = column->type_length();
+            int32_t precision = column->type_precision();
+            int32_t scale = column->type_scale();
+            if (OB_FAIL(setup_column_schema_from_parquet_type(phy_type, logical_type, type_len,
+                                                              precision, scale, column_schema))) {
+              LOG_WARN("failed to setup column schema from parquet type", K(ret));
             }
           }
 
@@ -4741,6 +4688,183 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
               LOG_WARN("failed to add column", K(ret), K(column_schema));
             }
           }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::setup_column_schema_from_parquet_type(parquet::Type::type phy_type,
+                                                  const parquet::LogicalType *logical_type,
+                                                  int64_t type_len,
+                                                  int32_t precision,
+                                                  int32_t scale,
+                                                  ObColumnSchemaV2 &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(logical_type)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("logical type is null", K(ret));
+  } else {
+    bool no_log_type = logical_type->is_none();
+    bool is_utc = ObParquetTableRowIterator::is_parquet_store_utc(logical_type);
+    bool is_unsigned = logical_type->is_int()
+                 && !static_cast<const parquet::IntLogicalType *>(logical_type)->is_signed();
+
+    switch(phy_type) {
+      case parquet::Type::BOOLEAN:
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bool(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup bool");
+        }
+        break;
+      case parquet::Type::INT32:
+        if (is_unsigned) {
+          if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_uint(lib::is_oracle_mode(), column_schema))) {
+            LOG_WARN("failed to setup uint");
+          }
+        } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_int(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup int");
+        }
+        break;
+      case parquet::Type::INT64:
+        if (is_unsigned) {
+          if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_ubigint(lib::is_oracle_mode(), column_schema))) {
+            LOG_WARN("failed to setup ubigint");
+          }
+        } else if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_bigint(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup bigint");
+        }
+        break;
+      case parquet::Type::FLOAT:
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_float(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup float");
+        }
+        break;
+      case parquet::Type::DOUBLE:
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_double(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup double");
+        }
+        break;
+      case parquet::Type::BYTE_ARRAY:
+      case parquet::Type::FIXED_LEN_BYTE_ARRAY:
+      {
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
+                                                                     type_len,
+                                                                     CHARSET_UTF8MB4,
+                                                                     ObCharset::get_system_collation(),
+                                                                     column_schema))) {
+          LOG_WARN("failed to setup varchar");
+        }
+        break;
+      }
+      case parquet::Type::INT96: // 通常用于timestamp
+        if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
+          LOG_WARN("failed to setup timestamp");
+        }
+        break;
+      default:
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this Parquet type");
+        break;
+    }
+
+    if (OB_SUCC(ret)) {
+      switch(logical_type->type()) {
+        case parquet::LogicalType::Type::DATE:
+          if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_date(lib::is_oracle_mode(), column_schema))) {
+            LOG_WARN("failed to setup date");
+          }
+          break;
+        case parquet::LogicalType::Type::DECIMAL:
+          if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_decimal(lib::is_oracle_mode(),
+                                                                       precision,
+                                                                       scale,
+                                                                       column_schema))) {
+            LOG_WARN("failed to setup decimal");
+          }
+          break;
+        case parquet::LogicalType::Type::STRING:
+        {
+          if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
+                                                                       type_len,
+                                                                       CHARSET_UTF8MB4,
+                                                                       ObCharset::get_system_collation(),
+                                                                       column_schema))) {
+            LOG_WARN("failed to setup varchar");
+          }
+          break;
+        }
+        case parquet::LogicalType::Type::TIME:
+          if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_time(lib::is_oracle_mode(), column_schema))) {
+            LOG_WARN("failed to setup time");
+          }
+          break;
+        case parquet::LogicalType::Type::ENUM:
+          column_schema.set_data_type(ObEnumType);
+          break;
+        case parquet::LogicalType::Type::TIMESTAMP:
+          if (is_utc) {
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_timestamp(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup timestamp");
+            }
+          } else {
+            if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_datetime(lib::is_oracle_mode(), column_schema))) {
+              LOG_WARN("failed to setup datetime");
+            }
+          }
+          break;
+        default:
+          // 使用physical type的映射
+          break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::get_type_name_from_primitive_node(const parquet::schema::PrimitiveNode *primitive_node,
+                                              ObStringBuffer &buf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(primitive_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("primitive_node is null", K(ret));
+  } else {
+    ObColumnSchemaV2 column_schema;
+    parquet::Type::type phy_type = primitive_node->physical_type();
+    const parquet::LogicalType *logical_type = primitive_node->logical_type().get();
+
+    int64_t type_len = primitive_node->type_length() <= 0 ? OB_MAX_MYSQL_VARCHAR_LENGTH :
+                                                              primitive_node->type_length();
+    int32_t precision = 0;
+    int32_t scale = 0;
+    if (logical_type->is_decimal()) {
+      const parquet::DecimalLogicalType *decimal_type =
+        static_cast<const parquet::DecimalLogicalType *>(logical_type);
+      precision = decimal_type->precision();
+      scale = decimal_type->scale();
+    }
+
+    // 调用辅助函数设置column_schema
+    if (OB_FAIL(setup_column_schema_from_parquet_type(phy_type, logical_type, type_len,
+                                                      precision, scale, column_schema))) {
+      LOG_WARN("failed to setup column schema from parquet type", K(ret));
+    } else {
+      // 从column_schema获取类型名称字符串
+      const ObObjMeta &obj_meta = column_schema.get_meta_type();
+      const ObAccuracy &accuracy = column_schema.get_accuracy();
+      const ObIArray<ObString> &type_info = column_schema.get_extended_type_info();
+      char type_str_buf[OB_MAX_SYS_PARAM_NAME_LENGTH];
+      int64_t pos = 0;
+      if (OB_FAIL(ob_sql_type_str(obj_meta, accuracy, type_info, LS_DEFAULT,
+                                  type_str_buf, OB_MAX_SYS_PARAM_NAME_LENGTH, pos))) {
+        LOG_WARN("failed to get type string", K(ret));
+      } else {
+        ObCharset::caseup(ObCollationType::CS_TYPE_UTF8MB4_BIN, type_str_buf, pos, type_str_buf, pos);
+        ObString type_str(pos, type_str_buf);
+        if (OB_FAIL(buf.append(type_str.ptr(), type_str.length()))) {
+          LOG_WARN("failed to append type string", K(ret));
         }
       }
     }

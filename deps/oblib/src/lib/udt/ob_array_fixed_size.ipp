@@ -361,7 +361,8 @@ int ObArrayFixedSize<T>::init(ObDatum *attrs, uint32_t attr_count, bool with_len
     if ((with_length && (this->length_ != attrs[1].get_int_bytes() / sizeof(uint8_t) || this->length_ != attrs[2].get_int_bytes() / sizeof(T)))
         || (!with_length && (this->length_ != attrs[1].get_int_bytes() / sizeof(T)))) {
       ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "unexpected attrs", K(ret), K(with_length), K(this->length_));
+      OB_LOG(WARN, "unexpected attrs", K(ret), K(with_length), K(this->length_),
+             K(attrs[1].get_int_bytes()), K(attrs[2].get_int_bytes()), K(sizeof(T)));
     }
   }
   if (OB_SUCC(ret) && this->length_ != 0 && (OB_ISNULL(data_) || OB_ISNULL(this->null_bitmaps_))) {

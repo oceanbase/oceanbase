@@ -5398,6 +5398,9 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
             file_column_expr->set_data_type(ObCharType);
             file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
           }
+          if (ob_is_json(column_expr->get_data_type()) && is_mysql_mode()) {
+            file_column_expr->set_data_type(ObVarcharType);
+          }
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

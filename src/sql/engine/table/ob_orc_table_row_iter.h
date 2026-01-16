@@ -176,6 +176,69 @@ namespace sql {
     static const PushdownLevel STRIPE_LEVEL = PushdownLevel::ROW_GROUP;
     static const PushdownLevel ROW_INDEX_LEVEL = PushdownLevel::PAGE;
 
+  public:
+    // to facilitate writing UT, see unittest/sql/external_table/test_orc_bloom_filter.cpp
+    class OrcReaderAdapter {
+    public:
+      virtual orc::Reader *getReaderPtr() = 0;
+      virtual int getType(const int64_t, const orc::Type*& /* out */) = 0;
+      int get_bloom_filter(
+          const uint64_t strip_index, const uint64_t row_index,
+          const uint32_t col_id, ObLakeTableORCReaderMetrics *metrics,
+          std::shared_ptr<orc::BloomFilter> & /* out */ bloom_filter);
+      void reset() {
+        strip_index_ = UINT64_MAX;
+      };
+
+    private:
+      uint64_t strip_index_{UINT64_MAX};
+      std::set<uint32_t> col_ids_;
+      std::map<uint32_t, orc::BloomFilterIndex> bloom_filters_;
+    };
+
+    class ObOrcTableRowIteratorAdapter: public OrcReaderAdapter {
+    public:
+      ObOrcTableRowIteratorAdapter(ObOrcTableRowIterator* iter): iter_(iter){}
+      orc::Reader *getReaderPtr() {
+        return iter_->reader_.get();
+      }
+      int getType(const int64_t ext_tbl_col_id, const orc::Type*& /* out */) override;
+
+    private:
+      ObOrcTableRowIterator *iter_;
+    };
+
+    class OrcBloomFilterParamBuilder
+        : public ObExternalTablePushdownFilter::BloomFilterParamBuilder {
+    public:
+      explicit OrcBloomFilterParamBuilder(OrcReaderAdapter *reader_adapter,
+                                          uint64_t strip_index,
+                                          uint64_t row_index,
+                                          ObLakeTableORCReaderMetrics *metrics,
+                                        uint64_t bloom_filter_percent_threshold=20)
+          : reader_adapter_(reader_adapter), strip_index_(strip_index), row_index_(row_index),
+            metrics_(metrics), bloom_filter_percent_threshold_(bloom_filter_percent_threshold),
+            bloom_filter_(nullptr), ext_tbl_col_id_(-1) {}
+
+      int may_contain(const PushdownLevel filter_level,
+                      const BloomFilterItem &item,
+                      bool & /* out */ is_contain) override;
+
+    private:
+      int stream_index_for_bloom_filter(const int64_t ext_tbl_col_id, int64_t& stream_index);
+      bool type_supported(const orc::Type* orc_type, const BloomFilterItem &item);
+      int may_contain(const orc::Type *type, const BloomFilterItem &item,
+                      bool & /* out */ is_contain);
+
+      OrcReaderAdapter *reader_adapter_;
+      uint64_t strip_index_;
+      uint64_t row_index_;
+      ObLakeTableORCReaderMetrics* metrics_;
+      const uint64_t bloom_filter_percent_threshold_;
+      std::shared_ptr<orc::BloomFilter> bloom_filter_;
+      int64_t ext_tbl_col_id_;
+    };
+
   private:
     class OrcMinMaxFilterParamBuilder : public MinMaxFilterParamBuilder
     {
@@ -246,7 +309,7 @@ namespace sql {
     ObOrcTableRowIterator() :
       query_flag_(0), inner_sector_reader_(nullptr), sector_reader_(nullptr), bit_vector_cache_(NULL),
       options_(), file_prebuffer_(data_access_driver_), reader_metrics_(),
-      column_index_type_(sql::ColumnIndexType::NAME), is_col_name_case_sensitive_(false)
+      column_index_type_(sql::ColumnIndexType::NAME), is_col_name_case_sensitive_(false), reader_adapter_(this)
     {}
     virtual ~ObOrcTableRowIterator()
     {
@@ -274,11 +337,13 @@ private:
   struct DataLoader {
     DataLoader() { reset(); }
     ~DataLoader() { reset(); }
-    int init(ObExpr *file_col_expr, const orc::ColumnVectorBatch *batch, const orc::Type *col_type);
-    int init(ObExpr *file_col_expr, const ObColumnDefaultValue *col_def);
+    int init(ObExpr *file_col_expr, const orc::ColumnVectorBatch *batch, const orc::Type *col_type,
+             ObEvalCtx &eval_ctx);
+    int init(ObExpr *file_col_expr, const ObColumnDefaultValue *col_def, ObEvalCtx &eval_ctx);
     void reset()
     {
       file_col_expr_ = nullptr;
+      collection_type_ = nullptr;
       batch_ = nullptr;
       col_type_ = nullptr;
       load_func_ = nullptr;
@@ -305,6 +370,27 @@ private:
     int load_date_to_time_or_stamp(ObEvalCtx &eval_ctx);
     int load_float(ObEvalCtx &eval_ctx);
     int load_double(ObEvalCtx &eval_ctx);
+    template <typename ORC_COL_TYPE>
+    int load_nulls_and_offsets(const ORC_COL_TYPE *orcCol, uint8_t *nulls, uint32_t *offsets,
+                               ObArrayWrap<int64_t> &parent_offsets);
+    template<typename ORC_COL_TYPE, typename DST_TYPE>
+    int load_nulls_and_values(const ORC_COL_TYPE *orcCol, uint8_t* nulls, DST_TYPE *values);
+    template <typename ORC_COL_TYPE, typename DST_TYPE>
+    int set_array_values(int attr_idx, ObEvalCtx &eval_ctx, const orc::ColumnVectorBatch *batch,
+                         ObArrayWrap<int64_t> &parent_offsets);
+    int set_values_for_varchar_array(int attr_idx, ObEvalCtx &eval_ctx,
+                                     const orc::ColumnVectorBatch *batch,
+                                     ObArrayWrap<int64_t> &parent_offsets,
+                                     const ObLength max_accuracy_len);
+    int recursively_load_orc_col_to_attr(ObEvalCtx &eval_ctx, int& attr_idx,
+                                       const orc::ColumnVectorBatch *batch,
+                                       ObArrayWrap<int64_t> &parent_offsets,
+                                       const orc::Type *col_type, uint32_t depth,
+                                       ObDatumMeta &basic_meta,
+                                       ObIAllocator &allocator,
+                                       const ObLength max_accuracy_len);
+    int load_list_to_array(ObEvalCtx &eval_ctx);
+    int load_map(ObEvalCtx &eval_ctx);
     int load_dec128_vec(ObEvalCtx &eval_ctx);
     int load_dec64_vec(ObEvalCtx &eval_ctx);
     int load_dec64_to_dec128_vec(ObEvalCtx &eval_ctx);
@@ -314,6 +400,7 @@ private:
     static bool is_ob_type_store_utc(const ObObjType &type);
     int64_t calc_tz_adjust_us(ObEvalCtx &eval_ctx);
     ObExpr *file_col_expr_;
+    ObCollectionTypeBase *collection_type_;
     const orc::ColumnVectorBatch *batch_;
     const orc::Type *col_type_;
     const ObColumnDefaultValue *col_def_;
@@ -430,9 +517,10 @@ private:
     int next_row_range();
     int build_type_name_id_map(const orc::Type* type, ObIArray<ObString> &col_names);
     int build_iceberg_id_to_type_map(const orc::Type* type);
-    int prepare_read_orc_file();
+    int prepare_read_orc_file(ObEvalCtx &eval_ctx);
     int init_data_loader(int64_t i, int64_t orc_col_id, const orc::Type *type,
-                        OrcRowReader &reader, ObColumnDefaultValue *default_value);
+                        OrcRowReader &reader, ObColumnDefaultValue *default_value,
+                        ObEvalCtx &eval_ctx);
     int compute_column_id_by_index_type(int64_t index, int64_t &orc_col_id);
     int to_dot_column_path(ObIArray<ObString> &col_names, ObString &path);
     int find_column_type_id_by_name(const orc::Type* type,
@@ -454,6 +542,7 @@ private:
     int init_column_range_slices();
     int filter_by_statistic(const PushdownLevel filter_level,
                             const orc::Statistics *orc_stat,
+                            OrcBloomFilterParamBuilder* builder,
                             bool &skipped);
     int pre_buffer(const bool row_index);
     int convert_orc_statistics(const orc::ColumnStatistics* orc_stat,
@@ -522,6 +611,7 @@ private:
     ObLakeTableORCReaderMetrics reader_metrics_;
     sql::ColumnIndexType column_index_type_;
     bool is_col_name_case_sensitive_;
+    ObOrcTableRowIteratorAdapter reader_adapter_;
 };
 
 }

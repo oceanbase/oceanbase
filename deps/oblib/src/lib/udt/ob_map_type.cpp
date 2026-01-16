@@ -14,6 +14,7 @@
 #include "ob_array_type.h"
 #include "lib/ob_errno.h"
 #include "ob_map_type.h"
+#include "ob_array_binary.h"
 #include <map>
 
 namespace oceanbase {
@@ -289,9 +290,6 @@ int ObMapType::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
   ObIArrayType *dst_map = NULL;
   if (OB_FAIL(clone_empty(alloc, dst_map, false))) {
     OB_LOG(WARN, "clone empty failed", K(ret));
-  } else if (keys_->get_format() != ArrayFormat::Fixed_Size) {
-    ret = OB_NOT_SUPPORTED;
-    OB_LOG(WARN, "only support fixed size array for distinct operation", K(ret), K(keys_->get_format()));
   } else if (this->length_ == 0) {
     output = dst_map;
   } else {
@@ -309,59 +307,88 @@ int ObMapType::distinct(ObIAllocator &alloc, ObIArrayType *&output) const
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for tmpbuf", K(ret), K(length_ * sizeof(uint32_t)));
     } else {
-      switch (key_elem_type->basic_meta_.get_obj_type()) {
-        case ObNullType: {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("expect null value", K(ret));
-          break;
+      if (keys_->get_format() == ArrayFormat::Fixed_Size) {
+        switch (key_elem_type->basic_meta_.get_obj_type()) {
+          case ObNullType: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expect null value", K(ret));
+            break;
+          }
+          case ObTinyIntType: {
+            CALC_KEY_IDX(int8_t, get_tinyint);
+            break;
+          }
+          case ObSmallIntType: {
+            CALC_KEY_IDX(int16_t, get_smallint);
+            break;
+          }
+          case ObInt32Type: {
+            CALC_KEY_IDX(int32_t, get_int32);
+            break;
+          }
+          case ObIntType: {
+            CALC_KEY_IDX(int64_t, get_int);
+            break;
+          }
+          case ObUTinyIntType: {
+            CALC_KEY_IDX(uint8_t, get_utinyint);
+            break;
+          }
+          case ObUSmallIntType: {
+            CALC_KEY_IDX(uint16_t, get_usmallint);
+            break;
+          }
+          case ObUInt32Type: {
+            CALC_KEY_IDX(uint32_t, get_uint32);
+            break;
+          }
+          case ObUInt64Type: {
+            CALC_KEY_IDX(uint64_t, get_uint64);
+            break;
+          }
+          case ObUFloatType:
+          case ObFloatType: {
+            CALC_KEY_IDX(float, get_float);
+            break;
+          }
+          case ObUDoubleType:
+          case ObDoubleType: {
+            CALC_KEY_IDX(double, get_double);
+            break;
+          }
+          default: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("unsupported element type", K(ret), K(key_elem_type->basic_meta_.get_obj_type()));
+          }
+        } // end switch
+      } else if (keys_->get_format() == ArrayFormat::Binary_Varlen) {
+        struct ObStringLess
+        {
+          bool operator()(const ObString &l, const ObString &r) const { return l.compare(r) < 0; }
+        };
+        std::map<ObString, uint32_t, ObStringLess> idx_map;
+        const ObArrayBinary *key_bin = dynamic_cast<const ObArrayBinary *>(keys_);
+        if (OB_ISNULL(key_bin)) {
+          ret = OB_ERR_ARRAY_TYPE_MISMATCH;
+          LOG_WARN("invalid key array type for binary varlen", K(ret), K(keys_->get_format()));
+        } else {
+          for (uint32_t i = 0; i < keys_->size() && OB_SUCC(ret); i++) {
+            if (keys_->is_null(i)) {
+              idx_arr[0] = i;
+              idx_count = 1;
+            } else {
+              idx_map[(*key_bin)[i]] = i;
+            }
+          }
+          for (std::map<ObString, uint32_t, ObStringLess>::iterator it = idx_map.begin();
+               it != idx_map.end() && OB_SUCC(ret); ++it) {
+            idx_arr[idx_count++] = it->second;
+          }
         }
-        case ObTinyIntType: {
-          CALC_KEY_IDX(int8_t, get_tinyint);
-          break;
-        }
-        case ObSmallIntType: {
-          CALC_KEY_IDX(int16_t, get_smallint);
-          break;
-        }
-        case ObInt32Type: {
-          CALC_KEY_IDX(int32_t, get_int32);
-          break;
-        }
-        case ObIntType: {
-          CALC_KEY_IDX(int64_t, get_int);
-          break;
-        }
-        case ObUTinyIntType: {
-          CALC_KEY_IDX(uint8_t, get_utinyint);
-          break;
-        }
-        case ObUSmallIntType: {
-          CALC_KEY_IDX(uint16_t, get_usmallint);
-          break;
-        }
-        case ObUInt32Type: {
-          CALC_KEY_IDX(uint32_t, get_uint32);
-          break;
-        }
-        case ObUInt64Type: {
-          CALC_KEY_IDX(uint64_t, get_uint64);
-          break;
-        }
-        case ObUFloatType:
-        case ObFloatType: {
-          CALC_KEY_IDX(float, get_float);
-          break;
-        }
-        case ObUDoubleType:
-        case ObDoubleType: {
-          CALC_KEY_IDX(double, get_double);
-          break;
-        }
-        default: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("unsupported element type", K(ret), K(key_elem_type->basic_meta_.get_obj_type()));
-        }
-      } // end switch
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported key array format for map distinct", K(ret), K(keys_->get_format()));
+      }
     }
 
     for (int i = 0; i < idx_count && OB_SUCC(ret); i++) {

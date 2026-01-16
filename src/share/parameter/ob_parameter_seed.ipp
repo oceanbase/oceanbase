@@ -3223,6 +3223,9 @@ DEF_DBL(px_target_workers_per_cpu, OB_TENANT_PARAMETER, "8", "[0,)",
         "Target number of parallel threads per CPU quota for tenant."
         "The default value is 8. Range: [0,)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_external_table_bloom_filter, OB_TENANT_PARAMETER, "True",
+         "Enable reading bloom filter from external tables.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(default_delta_format, OB_TENANT_PARAMETER, "flat",
                      common::ObConfigDefaultDeltaFormatChecker,
                      "Controls default delta format when creating table",

@@ -250,7 +250,8 @@ int ObArrayNested::init(ObDatum *attrs, uint32_t attr_count, bool with_length)
     if ((with_length && (length_ != attrs[1].get_int_bytes() / sizeof(uint8_t) || length_ != attrs[2].get_int_bytes() / sizeof(uint32_t)))
         || (!with_length && (length_ != attrs[1].get_int_bytes() / sizeof(uint32_t)))) {
       ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "unexpected attrs", K(ret), K(with_length), K(length_));
+      OB_LOG(WARN, "unexpected attrs", K(ret), K(with_length), K(length_),
+             K(attrs[1].get_int_bytes()), K(attrs[2].get_int_bytes()));
     }
   }
   if (OB_FAIL(ret)) {

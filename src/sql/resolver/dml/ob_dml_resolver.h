@@ -1088,6 +1088,14 @@ public:
                                          const common::ObIArray<ObString> &part_col_names);
 
   static int set_basic_column_properties(ObColumnSchemaV2 &column_schema, const common::ObString &mock_gen_column_str);
+  static int build_collection_column_schema_for_parquet(const parquet::schema::Node* node, bool &is_arry, ObStringBuffer &buf);
+  static int get_type_name_from_primitive_node(const parquet::schema::PrimitiveNode *primitive_node,
+                                               ObStringBuffer &buf);
+  static int setup_column_schema_from_parquet_type(parquet::Type::type phy_type,
+                                                   const parquet::LogicalType *logical_type,
+                                                   int64_t type_len, int32_t precision,
+                                                   int32_t scale, ObColumnSchemaV2 &column_schema);
+
 private:
   int resolve_table_check_constraint_items(const TableItem *table_item,
                                            const ObTableSchema *table_schema);
@@ -1139,10 +1147,11 @@ private:
   bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
   int resolve_px_node_addrs(const ParseNode &hint_node, ObIArray<ObAddr> &addrs);
   int resolve_disable_rich_format_op_list(const ParseNode &hint_node, ObIArray<common::ObString> &op_list);
+  int build_collection_column_schema_for_orc(const orc::Type* type, ObStringBuffer &buf);
+
   int build_column_schemas_for_orc(const orc::Type* type,
                                   const ColumnIndexType column_index_type,
                                   ObTableSchema& table_schema);
-  int check_array_column_schema_for_parquet(const parquet::schema::Node* node, bool &is_arry, ObStringBuffer &buf);
   int build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema,
                                       const ColumnIndexType column_index_type,
                                       ObTableSchema& table_schema);

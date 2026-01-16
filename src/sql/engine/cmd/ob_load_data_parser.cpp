@@ -1286,43 +1286,13 @@ int ObExternalFileFormat::mock_gen_column_def(
       break;
     }
     case PARQUET_FORMAT: {
-      // Expect to concat the collection type info suffix.
-      // TODO(bitao): temp implementation, we will remove it.
-      uint8_t depth = 0;
-
-      if (column.is_collection()) {
-        if (1 != column.get_extended_type_info().count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid extended type info", K(ret));
-        } else {
-          ObString type_info = column.get_extended_type_info().at(0);
-          if (!type_info.prefix_match("ARRAY")) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid type info prefix", K(ret), K(type_info));
-          } else {
-            const char *type_ptr = type_info.ptr();
-            int32_t type_len = type_info.length();
-            char letter = '\0';
-            // Reverse to find out depth for array. ARRAY(ARRAY(INT)) -> 1.
-            for (int32_t i = type_len - 1; OB_SUCC(ret) && i > 0; i --) {
-              letter = type_ptr[i];
-              if (letter == ')') {
-                depth ++;
-              } else {
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      // Parquet format won't use position.
       if (parquet_format_.column_index_type_ == sql::ColumnIndexType::NAME) {
         ObSqlString expect_column_name;
         OZ (expect_column_name.append(column.get_column_name_str()));
 
         LOG_TRACE("get expect column name", K(ret), K(expect_column_name.string()));
-        if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
                                         N_EXTERNAL_FILE_ROW,
                                         expect_column_name.string().length(),
                                         expect_column_name.string().ptr()))) {

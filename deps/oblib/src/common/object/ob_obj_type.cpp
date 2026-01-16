@@ -832,7 +832,6 @@ int ob_sql_type_str(char *buff,
       LOG_WARN("fail to get udt sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
     }
   } else if (ob_is_collection_sql_type(type)) {
-    int64_t pos = 0;
     if (OB_FAIL(ob_collection_str(type, type_info, buff, buff_length, pos))) {
       LOG_WARN("fail to get enum_or_set str", K(ret), K(type), K(type_info), K(buff_length), K(pos));
     }
