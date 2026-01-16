@@ -403,13 +403,7 @@ public:
   ~ObIOTimeLog();
   void reset();
   // Note: -1 represents invalid value
-  TO_STRING_KV(K_(begin_ts), "enqueue_used", (enqueue_ts_ > 0 ? enqueue_ts_ - begin_ts_ : -1), "dequeue_used",
-      (dequeue_ts_ > 0 ? dequeue_ts_ - enqueue_ts_ : -1), "submit_used",
-      (submit_ts_ > 0 ? submit_ts_ - dequeue_ts_ : -1), "return_used", (return_ts_ > 0 ? return_ts_ - submit_ts_ : -1),
-      "callback_enqueue_used", (callback_enqueue_ts_ > 0 ? callback_enqueue_ts_ - return_ts_ : -1),
-      "callback_dequeue_used", (callback_dequeue_ts_ > 0 ? callback_dequeue_ts_ - callback_enqueue_ts_ : -1),
-      "callback_finish_used", (callback_finish_ts_ > 0 ? callback_finish_ts_ - callback_dequeue_ts_ : -1), "end_used",
-      (end_ts_ > 0 ? end_ts_ - callback_finish_ts_ : -1));
+  DECLARE_TO_STRING;
 
 public:
   int64_t begin_ts_;

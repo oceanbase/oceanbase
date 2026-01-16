@@ -690,6 +690,28 @@ void ObIOTimeLog::reset()
   end_ts_ = 0;
 }
 
+DEF_TO_STRING(ObIOTimeLog)
+{
+  int64_t pos = 0;
+  int64_t cost_time = 0;
+  J_OBJ_START();
+  J_KV("begin_ts", begin_ts_);
+  const int64_t times[] = {enqueue_ts_, dequeue_ts_, submit_ts_, return_ts_, callback_enqueue_ts_, callback_dequeue_ts_, callback_finish_ts_, end_ts_};
+  const char *keys[] = {"enqueue_used", "dequeue_used", "submit_used", "return_used", "callback_enqueue_used", "callback_dequeue_used", "callback_finish_used", "end_used"};
+
+  for (int i = 0; i < ARRAYSIZEOF(times); ++i) {
+    int64_t used = -1;
+    if (times[i] > 0) {
+      used = times[i] - begin_ts_ - cost_time;
+      cost_time += used;
+    }
+    J_COMMA();
+    J_KV(keys[i], used);
+  }
+  J_OBJ_END();
+  return pos;
+}
+
 int64_t oceanbase::common::get_io_interval(const int64_t &end_time, const int64_t &begin_time)
 {
   int64_t ret_time = end_time - begin_time;
@@ -1121,10 +1143,11 @@ int ObIOResult::transform_group_config_index_to_usage_index(const ObIOGroupKey &
 int ObIOResult::cal_delay_us(int64_t &prepare_delay, int64_t &schedule_delay, int64_t &submit_delay, int64_t &device_delay, int64_t &total_delay)
 {
   int ret = OB_SUCCESS;
-  prepare_delay = get_io_interval(this->time_log_.enqueue_ts_, this->time_log_.begin_ts_);
-  schedule_delay = get_io_interval(this->time_log_.dequeue_ts_, this->time_log_.enqueue_ts_);
-  submit_delay = get_io_interval(this->time_log_.submit_ts_, this->time_log_.dequeue_ts_);
-  device_delay = get_io_interval(this->time_log_.return_ts_, this->time_log_.submit_ts_);
+  int64_t prev_delay = 0;
+  prev_delay += (prepare_delay = get_io_interval(this->time_log_.enqueue_ts_, this->time_log_.begin_ts_));
+  prev_delay += (schedule_delay = get_io_interval(this->time_log_.dequeue_ts_, this->time_log_.begin_ts_ + prev_delay));
+  prev_delay += (submit_delay = get_io_interval(this->time_log_.submit_ts_, this->time_log_.begin_ts_ + prev_delay));
+  prev_delay += (device_delay = get_io_interval(this->time_log_.return_ts_, this->time_log_.begin_ts_ + prev_delay));
   total_delay = get_io_interval(this->time_log_.return_ts_, this->time_log_.begin_ts_);
   return ret;
 }
