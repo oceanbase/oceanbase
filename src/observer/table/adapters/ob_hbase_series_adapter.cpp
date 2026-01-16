@@ -143,7 +143,7 @@ int ObHSeriesAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<const ObITab
   int ret = OB_SUCCESS;
   uint64_t cells_count = cells.count();
   uint64_t tenant_id = MTL_ID();
-
+  allocator_.reuse();
   if (OB_FAIL(ret)) {
   } else if (cells_count <= 0) {
     ret = OB_ERR_UNDEFINED;
@@ -160,7 +160,7 @@ int ObHSeriesAdapter::multi_put(ObTableExecCtx &ctx, const ObIArray<const ObITab
       if (OB_ISNULL(cells.at(0))) {
         ret = OB_ERR_UNDEFINED;
         LOG_WARN("first cell is null", K(ret), K(cells));
-      } else if (OB_FAIL(init_table_ctx(ctx, *series_cells.at(0), ObTableOperationType::INSERT_OR_UPDATE, tb_ctx))) {
+      } else if (OB_FAIL(init_table_ctx(ctx, *cells.at(0), ObTableOperationType::INSERT_OR_UPDATE, tb_ctx))) {
         LOG_WARN("fail to init table ctx", K(ret));
       } else if (FALSE_IT(lob_inrow_threshold_ = tb_ctx.get_lob_inrow_threshold())) {
       } else if (OB_FAIL(convert_normal_to_series(cells, series_cells, real_tablet_ids, is_inrow_series))) {
@@ -733,7 +733,6 @@ int ObHSeriesAdapter::release_map()
     if (OB_FAIL(kt_agg_map_.reuse())) {
       LOG_WARN("failed to reuse json obj map", K(ret));
     }
-    allocator_.reuse();
   }
   return ret;
 }

@@ -101,8 +101,8 @@ int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
                                         common::ObTableID table_id)
 {
   int ret = OB_SUCCESS;
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
+  int64_t index_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
   if (OB_ISNULL(schema_guard) || !schema_guard->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is NULL or not inited", K(ret));

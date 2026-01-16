@@ -2142,8 +2142,8 @@ int ObTableCtx::init_trans(transaction::ObTxDesc *trans_desc,
 int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_table_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
 
   if (OB_FAIL(schema_guard_->get_can_read_index_array(tenant_id_,
                                                       ref_table_id_,

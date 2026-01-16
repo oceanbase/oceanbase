@@ -33,7 +33,7 @@ int ::oceanbase::table::ObTableModeCtrl::check_mode(ObKvModeType tenant_mode, Ob
       break;
     }
     case ObKvModeType::HBASE: {
-      if (entity_type != ObTableEntityType::ET_HKV && entity_type != ObTableEntityType::ET_DYNAMIC) {
+      if (!is_hbase_entity_type(entity_type)) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "As the ob_kv_mode variable has been set to 'HBASE', your current interfaces");
         LOG_WARN("mode not matched", K(ret), K(entity_type), K(tenant_mode));
@@ -63,4 +63,12 @@ int ::oceanbase::table::ObTableModeCtrl::check_mode(ObKvModeType tenant_mode, Ob
   }
 
   return ret;
+}
+
+
+bool ::oceanbase::table::ObTableModeCtrl::is_hbase_entity_type(ObTableEntityType entity_type)
+{
+  return entity_type == ObTableEntityType::ET_HKV ||
+         entity_type == ObTableEntityType::ET_HKV_V2 ||
+         entity_type == ObTableEntityType::ET_DYNAMIC;
 }

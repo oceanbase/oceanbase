@@ -2124,8 +2124,8 @@ int ObTTLUtil::check_index_exists(share::schema::ObSchemaGetterGuard &schema_gua
                                   const share::schema::ObTableSchema *&index_schema)
 {
   int ret = OB_SUCCESS;
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
+  int64_t index_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
   ObNameCaseMode name_case_mode = OB_NAME_CASE_INVALID;
   if (OB_FAIL(schema_guard.get_can_read_index_array(tenant_id, table_id, tids,
                                 index_cnt, false/*with_mv*/))) {
