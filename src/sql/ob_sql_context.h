@@ -535,6 +535,7 @@ public:
   int recover_schema_from_external_objects(const ObIArray<share::ObExternalObject> &external_objects);
   common::ObIArray<const share::schema::ObDatabaseSchema *> &get_mocked_database_schemas();
   common::ObIArray<const share::schema::ObTableSchema *> &get_mocked_table_schemas();
+  bool check_is_under_oracle12c(uint64_t dblink_id);
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
@@ -548,6 +549,7 @@ private:
   // key is dblink_id, value is current scn.
   common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;
   int64_t mocked_schema_id_counter_;
+  common::ObSEArray<uint64_t, 1> dblink_ids_under_oracle12c_;
 };
 
 #ifndef OB_BUILD_SPM
