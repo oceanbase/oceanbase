@@ -1747,7 +1747,7 @@ int ObTenantTabletScheduler::get_min_dependent_schema_version(int64_t &min_schem
 }
 
 #ifdef ERRSIM
-void ObTenantTabletScheduler::errsim_after_mini_schedule_adaptive(
+void ObTenantTabletScheduler::errsim_schedule_adaptive(
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
     const ObAdaptiveMergePolicy::AdaptiveCompactionEvent &event,
@@ -1762,7 +1762,7 @@ void ObTenantTabletScheduler::errsim_after_mini_schedule_adaptive(
         ret = OB_E((EventTable::tracepoint)) OB_SUCCESS;                     \
         if (OB_FAIL(ret)) {                                                  \
           ret = OB_SUCCESS;                                                  \
-          STORAGE_LOG(INFO, "ERRSIM " #tracepoint);                          \
+          STORAGE_LOG(INFO, "ERRSIM " #tracepoint, K(ls_id), K(tablet_id));  \
           reason = ObAdaptiveMergePolicy::TOMBSTONE_SCENE;                   \
           medium_is_cooling_down = cooling_down;                             \
         }                                                                    \
@@ -1779,7 +1779,7 @@ void ObTenantTabletScheduler::errsim_after_mini_schedule_adaptive(
   }
 
   bool is_tombstone_scene = ObAdaptiveMergePolicy::NONE != reason;
-  STORAGE_LOG(INFO, "try_schedule_adaptive_merge hit errsim", K(ret), K(is_tombstone_scene), K(medium_is_cooling_down));
+  STORAGE_LOG(INFO, "try_schedule_adaptive_merge hit errsim", K(ret), K(ls_id), K(tablet_id), K(event), K(is_tombstone_scene), K(medium_is_cooling_down));
 }
 #endif
 
@@ -1814,8 +1814,7 @@ int ObTenantTabletScheduler::try_schedule_adaptive_merge(
         reason))) {
       LOG_WARN("failed to check adaptive merge reason", K(ret), K(ls_handle), K(tablet_handle));
 #ifdef ERRSIM
-    } else if (ObAdaptiveMergePolicy::AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI ==event
-            && FALSE_IT(errsim_after_mini_schedule_adaptive(ls_id, tablet_id, event, medium_is_cooling_down, reason))) {
+    } else if (FALSE_IT(errsim_schedule_adaptive(ls_id, tablet_id, event, medium_is_cooling_down, reason))) {
 #endif
     } else if (ObAdaptiveMergePolicy::NONE == reason) {
     } else if (ObAdaptiveMergePolicy::is_schedule_medium(mode) && ObAdaptiveMergePolicy::need_schedule_medium(event) && !medium_is_cooling_down) {

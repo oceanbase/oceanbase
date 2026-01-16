@@ -95,10 +95,10 @@ int ObMdsInfoDistinctMgr::read_split_truncate_info_array(
       } else if (OB_FAIL(tablet->read_truncate_info_array(tmp_allocator, read_version_range, for_access, tmp_array))) {
         LOG_WARN("failed to read truncate info array", KR(ret), K(tablet->get_tablet_id()), K(read_version_range));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_array.count(); i++) {
-          const ObTruncateInfo &info = *tmp_array.at(i);
+        for (int64_t j = 0; OB_SUCC(ret) && j < tmp_array.count(); j++) {
+          const ObTruncateInfo &info = *tmp_array.at(j);
           if (OB_FAIL(array_.append_with_deep_copy(info))) {
-            LOG_WARN("failed to append", K(ret), K(info));
+            LOG_WARN("failed to append", K(ret), K(j),K(info));
           }
         }
       }
