@@ -121,7 +121,7 @@ int ObFlatRowReaderV1::read_text_store(
         }
       } else if (lob_scale.is_out_row()) {
         if (backup_version_ == ObTableLoadBackupVersion::V_1_4) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_NOT_SUPPORTED;
           LOG_WARN("unexpected lob_scale", KR(ret), K(lob_scale));
         } else {
           int64_t tmp_pos = pos_;
