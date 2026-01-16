@@ -58,6 +58,13 @@ public:
                                const bool is_index_stat = false,
                                const bool is_online_stat = false);
 
+  static int split_batch_write_with_trx_lock_timeout(sql::ObExecContext &ctx,
+                                                      sqlclient::ObISQLConnection *conn,
+                                                      ObIArray<ObOptTableStat*> &table_stats,
+                                                      ObIArray<ObOptColumnStat*> &column_stats,
+                                                      const bool is_index_stat = false,
+                                                      const bool is_online_stat = false);
+
   static int split_batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                                sql::ObSQLSessionInfo *session_info,
                                common::ObMySQLProxy *sql_proxy,
@@ -248,6 +255,11 @@ public:
                                                    const ObIArray<ObOptColumnStat*> &column_stats,
                                                    const ObIArray<PrefixColumnPair> &pairs,
                                                    ObIArray<ObOptColumnStat*> &copy_stats);
+
+  static int set_trx_lock_timeout(sqlclient::ObISQLConnection *conn,
+                                  int64_t trx_lock_timeout,
+                                  int64_t &old_trx_lock_timeout,
+                                  bool &need_restore);
   static int copy_global_index_prefix_stats_to_text(share::schema::ObSchemaGetterGuard *schema_guard,
                                                     ObIAllocator &allocator,
                                                     const ObIArray<ObOptColumnStat*> &column_stats,
