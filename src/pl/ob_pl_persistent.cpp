@@ -728,20 +728,32 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
   return ret;
 }
 
+void ObRoutinePersistentInfo::construst_special_compile_mode(uint64_t &mode, ObSQLSessionInfo &session_info)
+{
+  mode = static_cast<uint64_t>(ObPLObjectKey::ObjectMode::NORMAL);
+  if (nullptr != session_info.get_pl_profiler()) {
+    mode |= static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
+  }
+  if (session_info.is_pl_debug_on()) {
+    mode |= static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
+  }
+  if (nullptr != session_info.get_pl_code_coverage()) {
+    mode |= static_cast<uint64_t>(ObPLObjectKey::ObjectMode::CODE_COVERAGE);
+  }
+  if (session_info.get_local_plsql_can_transform_sql_to_assign()) {
+    mode |= static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PLSQL_TRANSFORM_TO_ASSIGN);
+  }
+}
+
 int ObRoutinePersistentInfo::mask_special_compile_mode(ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   char buffer[64];
   int64_t pos = 0;
-  if (nullptr != session_info.get_pl_profiler()) {
-    special_compile_mode_ |= static_cast<uint64_t>(ObPLObjectKey::ObjectMode::PROFILE);
-  }
-  if (session_info.is_pl_debug_on()) {
-    special_compile_mode_ |= static_cast<uint64_t>(ObPLObjectKey::ObjectMode::DEBUG);
-  }
+  OX (construst_special_compile_mode(special_compile_mode_, session_info));
   OZ (databuff_printf(buffer, sizeof(buffer), pos, "%.*s",
                               arch_type_.length(), arch_type_.ptr()));
-  OZ (databuff_printf(buffer, sizeof(buffer), pos, "_%lu",
+  OZ (databuff_printf(buffer, sizeof(buffer), pos, "_%ld",
                                     special_compile_mode_));
   ObString new_arch_type;
   OZ (ob_write_string(allocator_, ObString(pos, buffer), new_arch_type));
