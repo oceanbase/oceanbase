@@ -17057,7 +17057,8 @@ int ObLogPlan::check_normal_aggr_can_storage_pushdown(const uint64_t table_id,
         LOG_WARN("fail to check aggr param match pushdown rule", K(table_id), K(can_push), KPC(first_param));
       }
     } else if (!first_param->is_column_ref_expr() ||
-               table_id != static_cast<ObColumnRefRawExpr*>(first_param)->get_table_id()) {
+               table_id != static_cast<ObColumnRefRawExpr*>(first_param)->get_table_id() ||
+               static_cast<ObColumnRefRawExpr*>(first_param)->is_pseudo_column_ref()) {
       can_push = false;
     }
   }
