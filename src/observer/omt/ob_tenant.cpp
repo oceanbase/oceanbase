@@ -1193,7 +1193,7 @@ void ObTenant::destroy()
 
   if (!cgroup_ctrl_.is_valid()) {
     // do nothing
-  } else if (OB_TMP_FAIL(cgroup_ctrl_.remove_cgroup(id_))) {
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.remove_cgroup(is_meta_tenant(id_) ? gen_user_tenant_id(id_) : id_))) {
     LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
 
