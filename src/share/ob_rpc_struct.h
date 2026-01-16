@@ -4571,7 +4571,8 @@ public:
   int init(const uint64_t tenant_data_version,
            const bool need_create_empty_major,
            const bool micro_index_clustered,
-           const ObTabletID &split_src_tablet_id);
+           const ObTabletID &split_src_tablet_id,
+           const bool split_can_reuse_macro_block);
   void reset();
   int assign(const ObCreateTabletExtraInfo &other);
 public:

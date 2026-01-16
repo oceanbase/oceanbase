@@ -18,6 +18,8 @@
 #include "ob_ls_restore.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "logservice/ob_log_service.h"
+#include "ob_sstable_copy_start_task.h"
 
 namespace oceanbase
 {
@@ -159,7 +161,6 @@ ObTabletRestoreCtx::ObTabletRestoreCtx()
     ha_table_info_mgr_(nullptr),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
-    macro_block_reuse_mgr_(),
     extra_info_(),
     backup_size_(0),
     lock_(common::ObLatchIds::RESTORE_LOCK),
@@ -2070,7 +2071,6 @@ int ObTabletRestoreDag::inner_reset_status_for_retry()
     if (OB_SUCC(ret)) {
       tablet_restore_ctx_.tablet_handle_.reset();
       tablet_restore_ctx_.extra_info_.reset();
-      tablet_restore_ctx_.macro_block_reuse_mgr_.reset();
       if (OB_ISNULL(ls = ls_handle_.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls should not be NULL", K(ret), K(tablet_restore_ctx_));
@@ -2280,8 +2280,6 @@ int ObTabletRestoreTask::process()
     if (OB_FAIL(update_ha_status_(status))) {
       LOG_WARN("failed to update ha status", K(ret), KPC(tablet_restore_ctx_));
     }
-  } else if (OB_FAIL(ObStorageHAUtils::build_major_sstable_reuse_info(tablet_restore_ctx_->tablet_handle_, tablet_restore_ctx_->macro_block_reuse_mgr_, true /* is_restore */))) {
-    LOG_WARN("failed to build major sstable reuse info", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_restore_tasks_())) {
     LOG_WARN("failed to generate restore tasks", K(ret), KPC(tablet_restore_ctx_));
   }
@@ -2468,6 +2466,7 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
 {
   int ret = OB_SUCCESS;
   ObPhysicalCopyTask *copy_task = NULL;
+  ObSSTableCopyStartTask *start_task = NULL;
   ObSSTableCopyFinishTask *finish_task = NULL;
   const int64_t task_idx = 0;
   ObPhysicalCopyTaskInitParam init_param;
@@ -2494,7 +2493,6 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
   } else if (FALSE_IT(init_param.need_sort_macro_meta_ = !copy_table_key.is_normal_cg_sstable())) {
   } else if (FALSE_IT(init_param.need_check_seq_ = tablet_restore_ctx_->need_check_seq_)) {
   } else if (FALSE_IT(init_param.ls_rebuild_seq_ = tablet_restore_ctx_->ls_rebuild_seq_)) {
-  } else if (FALSE_IT(init_param.macro_block_reuse_mgr_ = ObITable::is_major_sstable(copy_table_key.table_type_) ? &tablet_restore_ctx_->macro_block_reuse_mgr_ : nullptr)) {
   } else if (FALSE_IT(init_param.extra_info_ = &tablet_restore_ctx_->extra_info_)) {
   } else if (OB_FAIL(tablet_restore_ctx_->ha_table_info_mgr_->get_table_info(tablet_restore_ctx_->tablet_id_,
       copy_table_key, init_param.sstable_param_))) {
@@ -2514,17 +2512,25 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
                                                    need_copy))) {
     LOG_WARN("failed to check need copy macro blocks", K(ret), K(init_param), KPC(tablet_restore_ctx_));
   } else if (need_copy) {
-    // parent->copy->finish->child
+    // parent->start->copy->finish->child
     if (OB_FAIL(dag_->alloc_task(copy_task))) {
       LOG_WARN("failed to alloc copy task", K(ret));
     } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task))) {
       LOG_WARN("failed to init copy task", K(ret));
-    } else if (OB_FAIL(parent_task->add_child(*copy_task))) {
+    } else if (OB_FAIL(dag_->alloc_task(start_task))) {
+      LOG_WARN("failed to alloc start task", K(ret));
+    } else if (OB_FAIL(start_task->init(finish_task->get_copy_ctx(), finish_task))) {
+      LOG_WARN("failed to init start task", K(ret));
+    } else if (OB_FAIL(parent_task->add_child(*start_task))) {
+      LOG_WARN("failed to add child start task", K(ret));
+    } else if (OB_FAIL(start_task->add_child(*copy_task))) {
       LOG_WARN("failed to add child copy task", K(ret));
     } else if (OB_FAIL(copy_task->add_child(*finish_task))) {
       LOG_WARN("failed to add child finish task", K(ret));
     } else if (OB_FAIL(dag_->add_task(*copy_task))) {
       LOG_WARN("failed to add copy task to dag", K(ret));
+    } else if (OB_FAIL(dag_->add_task(*start_task))) {
+      LOG_WARN("failed to add start task to dag", K(ret));
     }
   } else {
     if (OB_FAIL(parent_task->add_child(*finish_task))) {

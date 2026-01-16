@@ -40,7 +40,8 @@ public:
      is_create_bind_hidden_tablets_(false),
      tenant_data_version_(0),
      need_create_empty_majors_(),
-     has_cs_replica_(false) {}
+     has_cs_replica_(false),
+     data_table_schema_() {}
   virtual ~ObTabletCreatorArg() {}
   bool is_valid() const;
   void reset();
@@ -54,7 +55,8 @@ public:
            const uint64_t tenant_data_version,
            const ObIArray<bool> &need_create_empty_majors,
            const ObIArray<int64_t> &create_commit_versions,
-           const bool has_cs_replica);
+           const bool has_cs_replica,
+           const share::schema::ObTableSchema &data_table_schema);
 
   DECLARE_TO_STRING;
   common::ObArray<common::ObTabletID> tablet_ids_;
@@ -67,6 +69,7 @@ public:
   common::ObArray<bool> need_create_empty_majors_;
   common::ObArray<int64_t> create_commit_versions_;
   bool has_cs_replica_;
+  const share::schema::ObTableSchema *data_table_schema_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletCreatorArg);
 };
@@ -86,6 +89,7 @@ public:
            const share::SCN &major_frozen_scn,
            const bool need_check_tablet_cnt);
   int try_add_table_schema(const share::schema::ObTableSchema *table_schema,
+      const share::schema::ObTableSchema &data_table_schema,
       const uint64_t tenant_data_version,
       const bool need_create_empty_major_sstable,
       int64_t &index,
@@ -109,6 +113,7 @@ public:
   ObBatchCreateTabletHelper *next_;
 private:
   int add_table_schema_(const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTableSchema &data_table_schema,
       const lib::Worker::CompatMode compat_mode,
       const uint64_t tenant_data_version,
       const bool need_create_empty_major,

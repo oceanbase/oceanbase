@@ -290,6 +290,7 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ls_migration.cpp
   high_availability/ob_physical_copy_ctx.cpp
   high_availability/ob_physical_copy_task.cpp
+  high_availability/ob_sstable_copy_start_task.cpp
   high_availability/ob_sstable_copy_finish_task.cpp
   high_availability/ob_tablet_copy_finish_task.cpp
   high_availability/ob_storage_ha_macro_block_writer.cpp
@@ -306,6 +307,7 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ls_prepare_migration.cpp
   high_availability/ob_ls_complete_migration.cpp
   high_availability/ob_tablet_backfill_tx.cpp
+  high_availability/ob_tablet_copy_dependency_mgr.cpp
   high_availability/ob_storage_ha_dag.cpp
   high_availability/ob_ls_remove_member_handler.cpp
   high_availability/ob_ls_remove_member_dag.cpp

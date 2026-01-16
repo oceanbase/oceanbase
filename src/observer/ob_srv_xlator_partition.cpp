@@ -144,7 +144,8 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObFetchLSMemberListP);
   RPC_PROCESSOR(ObFetchSSTableMacroInfoP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObStorageFetchLSViewP, gctx_.bandwidth_throttle_);
-  RPC_PROCESSOR(ObFetchSSTableMacroIdInfoP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObFetchSSTableMacroLogicIdInfoP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObAdvanceSrcLSCheckpointP);
 
   // restore
   RPC_PROCESSOR(ObNotifyRestoreTabletsP, gctx_.bandwidth_throttle_);

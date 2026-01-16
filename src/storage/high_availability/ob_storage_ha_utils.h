@@ -28,6 +28,7 @@ namespace storage
 {
 class ObBackfillTXCtx;
 class ObTransferHandler;
+class ObMigrationSourceValidationResult;
 class ObStorageHAUtils
 {
 public:
@@ -73,7 +74,9 @@ public:
       const bool is_normal_cg_sstable,
       const storage::ObITableReadInfo *&index_read_info);
 
-  static int check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info);
+  static int check_replica_validity(
+      const obrpc::ObFetchLSMetaInfoResp &ls_info,
+      ObMigrationSourceValidationResult &result);
   static int check_log_status(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
@@ -81,10 +84,6 @@ public:
   static int append_tablet_list(
       const common::ObIArray<ObLogicTabletID> &logic_tablet_id_array,
       common::ObIArray<ObTabletID> &tablet_id_array);
-  static int build_major_sstable_reuse_info(
-      const ObTabletHandle &tablet_handle,
-      ObMacroBlockReuseMgr &macro_block_reuse_mgr,
-      const bool &is_restore);
   static void sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array);
   static int get_tablet_backup_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &backup_size);
   static int get_tablet_occupy_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &occupy_size);
@@ -106,16 +105,6 @@ private:
   static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
       const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
   static int get_readable_scn_(share::SCN &readable_scn);
-  static int get_latest_major_sstable_array_(
-      ObTableHandleV2 &latest_major,
-      common::ObArray<ObSSTableWrapper> &major_sstables);
-  static int build_reuse_info_(
-      const common::ObArray<ObSSTableWrapper> &major_sstabls,
-      const ObTabletHandle &tablet_handle,
-      ObMacroBlockReuseMgr &macro_block_reuse_mgr);
-  static int get_latest_available_major_(
-      storage::ObTableStoreIterator &major_sstables_iter,
-      ObTableHandleV2 &latest_major);
   static int create_ls_inner_tablet_for_compat_(
       const common::ObIArray<ObTabletID> &tablet_id_array,
       ObLS *ls);

@@ -60,8 +60,7 @@ class ObTabletCopyFinishTask final : public share::ObITask
 public:
   ObTabletCopyFinishTask();
   virtual ~ObTabletCopyFinishTask();
-  int init(
-      const ObTabletCopyFinishTaskParam &param);
+  int init(const ObTabletCopyFinishTaskParam &param);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletCopyFinishTask"), KP(this));
   int add_sstable(ObTableHandleV2 &table_handle);
@@ -73,6 +72,9 @@ public:
   int set_tablet_status(const ObCopyTabletStatus::STATUS &status);
   int get_tablet_status(ObCopyTabletStatus::STATUS &status);
   int get_restore_action(ObTabletRestoreAction::ACTION &restore_action);
+  int get_latest_major_sstable(
+      const ObITable::TableKey &table_key,
+      ObTableHandleV2 &table_handle);
 
   const ObMigrationTabletParam *get_src_tablet_meta() const { return param_.src_tablet_meta_; }
 private:
@@ -90,7 +92,6 @@ private:
       const ObTablesHandleArray &major_tables_handle);
   int get_mds_sstable_max_end_scn_(share::SCN &max_escn);
   int check_log_replay_to_mds_sstable_end_scn_();
-
 private:
   bool is_inited_;
   common::SpinRWLock lock_;

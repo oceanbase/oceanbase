@@ -10854,7 +10854,8 @@ OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_sche
 int ObCreateTabletExtraInfo::init(const uint64_t tenant_data_version,
                                   const bool need_create_empty_major,
                                   const bool micro_index_clustered,
-                                  const ObTabletID &split_src_tablet_id)
+                                  const ObTabletID &split_src_tablet_id,
+                                  const bool split_can_reuse_macro_block)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_data_version <= 0)) {
@@ -10867,6 +10868,7 @@ int ObCreateTabletExtraInfo::init(const uint64_t tenant_data_version,
     need_create_empty_major_ = need_create_empty_major;
     micro_index_clustered_ = micro_index_clustered;
     split_src_tablet_id_ = split_src_tablet_id;
+    split_can_reuse_macro_block_ = split_can_reuse_macro_block;
   }
   return ret;
 }

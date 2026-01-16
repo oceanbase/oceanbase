@@ -48,8 +48,7 @@ public:
   OB_INLINE void add_reuse_macro_count(const int64_t &reuse_macro_count) { ATOMIC_FAA(&reuse_macro_count_, reuse_macro_count); }
   OB_INLINE void set_restore_action(const ObTabletRestoreAction::ACTION &action) { ATOMIC_SET(&restore_action_, action); }
   OB_INLINE int get_major_count() const { return ATOMIC_LOAD(&major_count_); }
-  // not atomic, but only called when major sstable copy finish, which is sequential
-  int update_max_reuse_mgr_size(ObMacroBlockReuseMgr *reuse_mgr);
+  int update_max_reuse_mgr_size(const ObMacroBlockReuseMgr *reuse_mgr);
 
   TO_STRING_KV(K_(cost_time_ms), K_(total_data_size), K_(write_data_size), K_(major_count),
       K_(macro_count), K_(major_macro_count), K_(reuse_macro_count), K_(max_reuse_mgr_size),

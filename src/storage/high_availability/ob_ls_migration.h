@@ -26,6 +26,7 @@
 #include "ob_physical_copy_task.h"
 #include "ob_storage_ha_dag.h"
 #include "ob_storage_ha_tablet_builder.h"
+#include "ob_tablet_copy_dependency_mgr.h"
 
 namespace oceanbase
 {
@@ -62,7 +63,7 @@ public:
   ObStorageHATableInfoMgr ha_table_info_mgr_;
   ObHATabletGroupMgr tablet_group_mgr_;
   int64_t check_tablet_info_cost_time_;
-  CopyTabletSimpleInfoMap tablet_simple_info_map_;
+  ObTabletCopyDependencyMgr tablet_dep_mgr_;
   // tablet ids of the tablets whose meta can be read initially but later deleted at migration source
   // used to detect split source tablet GC and prevent split log replay blocking
   // (see ObMigrationFinishTask::check_split_tablets_ready_)
@@ -99,7 +100,6 @@ public:
 public:
   common::ObTabletID tablet_id_;
   ObTabletHandle tablet_handle_;
-  ObMacroBlockReuseMgr macro_block_reuse_mgr_;
   ObCopyTabletRecordExtraInfo extra_info_; // extra info of server event
 private:
   common::SpinRWLock lock_;
@@ -478,11 +478,7 @@ public:
 private:
   int ls_online_();
   int generate_tablet_group_migration_dag_();
-  int generate_tablet_group_dag_(
-      const common::ObIArray<common::ObTabletID> &tablet_id_array,
-      common::ObIArray<ObTabletGroupMigrationDag *> &tablet_group_dag_array);
-  int build_tablet_group_info_();
-  int generate_tablet_group_dag_();
+  int generate_tablet_group_generate_dag_();
   int generate_check_co_convert_dag_if_needed();
   int inner_generate_check_co_convert_dag(ObLS *ls);
   int try_remove_unneeded_tablets_();
@@ -513,7 +509,6 @@ public:
   virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
-  virtual int generate_next_dag(share::ObIDag *&dag);
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   int init(
       const common::ObIArray<ObLogicTabletID> &tablet_id_array,
@@ -559,6 +554,49 @@ private:
   ObStorageHATabletsBuilder ha_tablets_builder_;
   ObHATabletGroupCtx *tablet_group_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletGroupMigrationTask);
+};
+
+class ObTabletGroupGenerateDag : public ObMigrationDag
+{
+public:
+  ObTabletGroupGenerateDag();
+  virtual ~ObTabletGroupGenerateDag();
+  virtual bool operator == (const share::ObIDag &other) const override;
+  virtual uint64_t hash() const override;
+  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
+  virtual int create_first_task() override;
+  int init(const int64_t dag_idx, ObIDagNet *dag_net, ObIDag *finish_dag, const int64_t last_schedule_time);
+  ObArray<ObLogicTabletID> &get_tablet_id_array() { return tablet_id_array_; }
+  int64_t get_last_schedule_time() const { return last_schedule_time_; }
+  INHERIT_TO_STRING_KV("ObMigrationDag", ObMigrationDag, KP(this));
+protected:
+  bool is_inited_;
+  int64_t dag_idx_;
+  ObArray<ObLogicTabletID> tablet_id_array_; // hold tablet id array from dependency manager for retry
+  int64_t last_schedule_time_;
+  share::ObIDag *finish_dag_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletGroupGenerateDag);
+};
+
+class ObTabletGroupGenerateTask : public share::ObITask
+{
+public:
+  ObTabletGroupGenerateTask();
+  virtual ~ObTabletGroupGenerateTask();
+  int init(const int64_t task_idx, ObIDag *finish_dag);
+  virtual int process() override;
+  VIRTUAL_TO_STRING_KV(K("ObTabletGroupGenerateTask"), KP(this), KPC(ctx_));
+private:
+  int generate_tablet_group_migration_dag_(ObHATabletGroupCtx *tablet_group_ctx);
+  int generate_self_(int64_t last_schedule_time);
+  int record_server_event_(const ObIArray<ObLogicTabletID> &tablet_id_array);
+private:
+  bool is_inited_;
+  int64_t task_idx_;
+  ObLSHandle ls_handle_;
+  ObMigrationCtx *ctx_;
+  share::ObIDag *finish_dag_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletGroupGenerateTask);
 };
 
 class ObMigrationFinishDag : public ObMigrationDag

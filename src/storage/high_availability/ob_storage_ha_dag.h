@@ -123,49 +123,6 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObStorageHADag);
 };
 
-class ObStorageHADagUtils
-{
-public:
-  static int deal_with_fo(
-      const int err,
-      share::ObIDag *dag,
-      const bool allow_retry = true);
-  static int get_ls(
-      const share::ObLSID &ls_id,
-      ObLSHandle &ls_handle);
-  static int check_self_is_valid_member(
-      const share::ObLSID &ls_id,
-      bool &is_valid_member);
-  static int check_self_is_valid_member_after_inc_config_version(
-      const share::ObLSID &ls_id,
-      const bool with_leader,
-      bool &is_valid_member);
-  static int inc_member_list_config_version(
-      const share::ObLSID &ls_id,
-      const bool with_leader);
-  static int get_migration_src_info(
-      const ObMigrationOpArg &arg,
-      const uint64_t tenant_id,
-      const share::SCN &local_clog_checkpoint_scn,
-      storage::ObStorageRpc *storage_rpc,
-      ObStorageHASrcInfo &src_info);
-
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int check_self_is_valid_member_with_log_service(
-      const share::ObLSID &ls_id,
-      bool &is_valid_member);
-  static int inc_config_version_with_log_service(
-      const share::ObLSID &ls_id);
-#endif
-
-private:
-  static int inner_check_self_is_valid_member_(
-      const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list,
-      const common::GlobalLearnerList &learner_list,
-      bool &is_valid_member);
-};
-
 class ObHATabletGroupCtx
 {
 public:
@@ -195,6 +152,59 @@ protected:
   TabletGroupCtxType type_;
   DISALLOW_COPY_AND_ASSIGN(ObHATabletGroupCtx);
 };
+
+struct ObMigrationCtx;
+class ObStorageHADagUtils
+{
+public:
+  static int deal_with_fo(
+      const int err,
+      share::ObIDag *dag,
+      const bool allow_retry = true);
+  static int get_ls(
+      const share::ObLSID &ls_id,
+      ObLSHandle &ls_handle);
+  static int check_self_is_valid_member(
+      const share::ObLSID &ls_id,
+      bool &is_valid_member);
+  static int check_self_is_valid_member_after_inc_config_version(
+      const share::ObLSID &ls_id,
+      const bool with_leader,
+      bool &is_valid_member);
+  static int inc_member_list_config_version(
+      const share::ObLSID &ls_id,
+      const bool with_leader);
+  static int get_migration_src_info(
+      const ObMigrationOpArg &arg,
+      const uint64_t tenant_id,
+      const share::SCN &local_clog_checkpoint_scn,
+      storage::ObStorageRpc *storage_rpc,
+      ObStorageHASrcInfo &src_info);
+  static int deal_with_non_migrated_tablet(
+      const ObLSHandle &ls_handle,
+      const ObLogicTabletID &logic_tablet_id,
+      ObHATabletGroupCtx *tablet_group_ctx,
+      ObMigrationCtx *ctx,
+      ObTabletHandle &tablet_handle,
+      bool &need_migrate);
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  static int check_self_is_valid_member_with_log_service(
+      const share::ObLSID &ls_id,
+      bool &is_valid_member);
+  static int inc_config_version_with_log_service(
+      const share::ObLSID &ls_id);
+#endif
+
+private:
+  static int inner_check_self_is_valid_member_(
+      const share::ObLSID &ls_id,
+      const common::ObMemberList &member_list,
+      const common::GlobalLearnerList &learner_list,
+      bool &is_valid_member);
+};
+
+
 
 class ObHATabletGroupMgr
 {

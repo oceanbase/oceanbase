@@ -1888,12 +1888,14 @@ public:
   }
 
   void set_data_incomplete(const bool is_data_incomplete) { is_data_incomplete_ = is_data_incomplete; }
+  void set_reuse_macro_block(const bool can_reuse_macro_block) { can_reuse_macro_block_ = can_reuse_macro_block; }
   void set_can_not_execute_ss_minor(const bool can_not_execute_ss_minor) { cant_execute_ss_minor_ = can_not_execute_ss_minor; }
   void set_can_not_gc_data_blks(const bool can_not_gc_data_blks) { cant_gc_macro_blks_ = can_not_gc_data_blks; }
   void set_split_src_tablet_id(const ObTabletID &split_src_tablet_id) { split_src_tablet_id_ = split_src_tablet_id; }
   void set_split_start_scn(const share::SCN &split_scn) { split_start_scn_ = split_scn; }
 
   bool is_data_incomplete() const { return is_data_incomplete_; }
+  bool can_reuse_macro_block() const { return can_reuse_macro_block_; }
   bool can_not_execute_ss_minor() const { return cant_execute_ss_minor_; }
   bool can_not_gc_macro_blks() const { return cant_gc_macro_blks_; }
   const ObTabletID &get_split_src_tablet_id() const { return split_src_tablet_id_; }

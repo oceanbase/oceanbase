@@ -196,25 +196,6 @@ private:
 };
 #endif
 
-
-// Create shared SSTable which is not empty. Shared SSTable is the SSTable whose macro blocks, including data and
-// index blocks, are all in shared or backup storage. Macro blocks need not copy and index does not need to be
-// rebuilt, just put the ObMigrationSSTableParam from source into local table store. This is happen during migration
-// or follower restore, when source SSTable is shared.
-class ObCopiedSharedSSTableCreator final : public ObCopiedSSTableCreatorImpl
-{
-public:
-  ObCopiedSharedSSTableCreator() : ObCopiedSSTableCreatorImpl() {}
-
-  virtual int create_sstable() override;
-
-private:
-  virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *src_sstable_param) const override;
-
-  DISALLOW_COPY_AND_ASSIGN(ObCopiedSharedSSTableCreator);
-};
-
-
 class ObSSTableCopyFinishTask : public share::ObITask
 {
 public:
@@ -226,18 +207,19 @@ public:
   const ObMigrationSSTableParam *get_sstable_param() { return sstable_param_; }
   int get_next_macro_block_copy_info(
       ObITable::TableKey &copy_table_key,
-      const ObCopyMacroRangeInfo *&copy_macro_range_info);
+      const ObCopyMacroRangeIdInfo *&copy_macro_range_info);
   int check_is_iter_end(bool &is_end);
   int get_tablet_finish_task(ObTabletCopyFinishTask *&finish_task);
 
   int add_sstable(ObTableHandleV2 &table_handle);
   int add_sstable(ObTableHandleV2 &table_handle, const int64_t last_meta_macro_seq);
-  int get_copy_macro_range_array(const common::ObArray<ObCopyMacroRangeInfo> *&macro_range_array) const;
+  int get_copy_macro_range_array(const common::ObArray<ObCopyMacroRangeIdInfo> *&macro_range_array) const;
   int64_t get_next_copy_task_id();
   int64_t get_max_next_copy_task_id();
+  int add_logic_macro_info_for_range(const ObIArray<ObLogicMacroBlockId> &macro_block_ids);
+  int build_sstable_reuse_info();
+  const ObMacroBlockReuseMgr &get_macro_block_reuse_mgr() const { return macro_block_reuse_mgr_; }
   virtual int process() override;
-  int add_macro_block_id_info(const ObCopySSTableMacroIdInfo &macro_id_info);
-  ObCopySSTableMacroIdInfo &get_macro_block_id_info() { return macro_id_info_; }
   VIRTUAL_TO_STRING_KV(K("ObSSTableCopyFinishTask"), KP(this), K(copy_ctx_));
 
 private:
@@ -275,7 +257,6 @@ private:
   int check_sstable_meta_(
       const ObMigrationSSTableParam &src_meta,
       const ObSSTableMeta &write_meta);
-  int update_major_sstable_reuse_info_();
   int update_copy_tablet_record_extra_info_();
   int create_pure_remote_sstable_();
   int build_create_pure_remote_sstable_param_(
@@ -285,7 +266,33 @@ private:
   int get_space_optimization_mode_(
       const ObMigrationSSTableParam *sstable_param,
       ObSSTableIndexBuilder::ObSpaceOptimizationMode &mode);
-
+  int build_latest_major_sstable_reuse_info_();
+  int build_split_src_sstable_reuse_info_();
+  // get lastest major sstable from target tablet's (self) table_store
+  // iterate major sstable array to get the latest major sstable
+  // if table_key is cg, get the corresponding latest cg sstable
+  int get_lastest_major_sstable_for_reuse_(
+    const ObITable::TableKey &table_key,
+    const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    ObSSTableWrapper &latest_major_sstable);
+  // get target major sstable from target tablet's (split src tablet) table_store
+  // use ObSSTableArray::get_table to get target sstable
+  // if table_key is cg, get the corresponding latest cg sstable
+  int get_target_major_sstable_for_reuse_(
+    const ObITable::TableKey &table_key,
+    const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
+    ObSSTableWrapper &target_sstable_wrapper);
+  int get_latest_available_major_(const ObIArray<ObSSTableWrapper> &major_sstables, ObSSTableWrapper &latest_major);
+  // get correct major sstable
+  // if co or row store major, latest_sstable_wrapper = sstable_wrapper
+  // if cg, unpack co sstable and get the target cg
+  int get_latest_major_sstable_(
+    const ObITable::TableKey &target_table_key,
+    const ObSSTableWrapper &sstable_wrapper,
+    ObSSTableWrapper &latest_sstable_wrapper);
+  int build_major_sstable_reuse_info_(
+    const storage::ObTableHandleV2 &table_handle,
+    const storage::ObTabletHandle &tablet_handle);
 private:
   bool is_inited_;
   int64_t next_copy_task_id_;
@@ -299,7 +306,9 @@ private:
   ObLSTabletService *tablet_service_;
   ObSSTableIndexBuilder sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
-  ObCopySSTableMacroIdInfo macro_id_info_;
+  ObMacroBlockReuseMgr macro_block_reuse_mgr_;
+  common::ObArenaAllocator allocator_;
+  ObTableHandleV2 split_src_sstable_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableCopyFinishTask);
 };
 

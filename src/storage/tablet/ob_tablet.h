@@ -46,6 +46,7 @@ namespace share
 class ObLSID;
 struct ObTabletAutoincInterval;
 struct ObTabletReplicaChecksumItem;
+class ObSplitTabletInfo;
 }
 
 namespace logservice
@@ -224,8 +225,7 @@ public:
       const bool need_create_empty_major_sstable,
       const share::SCN &clog_checkpoint_scn,
       const share::SCN &mds_checkpoint_scn,
-      const bool is_split_dest_tablet,
-      const ObTabletID &split_src_tablet_id,
+      const share::ObSplitTabletInfo &split_info,
       const bool micro_index_clustered,
       const bool need_generate_cs_replica_cg_array,
       const bool has_cs_replica,

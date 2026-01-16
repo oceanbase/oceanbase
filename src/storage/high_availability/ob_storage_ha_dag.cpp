@@ -514,7 +514,7 @@ int ObStorageHADagUtils::get_migration_src_info(
 {
   int ret = OB_SUCCESS;
   ObStorageHAChooseSrcHelper choose_src_helper;
-  ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
+  ObMigrationChooseSourcePolicy policy(ObMigrationChooseSourcePolicy::IDC);
   ObStorageHAGetMemberHelper member_helper;
   bool enable_choose_source_policy = true;
   SMART_VAR(ObMigrationChooseSrcHelperInitParam, param) {
@@ -676,6 +676,62 @@ int ObStorageHADagUtils::inc_config_version_with_log_service(
   return ret;
 }
 #endif
+
+int ObStorageHADagUtils::deal_with_non_migrated_tablet(
+  const ObLSHandle &ls_handle,
+  const ObLogicTabletID &logic_tablet_id,
+  ObHATabletGroupCtx *tablet_group_ctx,
+  ObMigrationCtx *ctx,
+  ObTabletHandle &tablet_handle,
+  bool &need_migrate)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_svr = nullptr;
+  ObLS *ls = nullptr;
+  tablet_handle.reset();
+  ObTablet *tablet = nullptr;
+  need_migrate = true;
+
+  if (!ls_handle.is_valid() || !logic_tablet_id.is_valid()
+        || OB_ISNULL(tablet_group_ctx) || OB_ISNULL(ctx) || !ctx->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("deal with non migrated tablet get invalid argument", K(ret), K(ls_handle), K(logic_tablet_id), KP(tablet_group_ctx), KPC(ctx));
+  } else if (OB_ISNULL(ls_svr = (MTL(ObLSService *)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_svr));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", KR(ret), K(ls_handle));
+  } else if (OB_FAIL(ls->ha_get_tablet(logic_tablet_id.tablet_id_, tablet_handle))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      need_migrate = false;
+    } else {
+      LOG_WARN("failed to get tablet", K(ret), K(logic_tablet_id));
+    }
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle), K(logic_tablet_id));
+  } else if (logic_tablet_id.transfer_seq_ > tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("local tablet transfer seq is smaller than remote tablet transfer seq, unexpected",
+        K(ret), K(logic_tablet_id), KPC(tablet));
+  } else if (logic_tablet_id.transfer_seq_ < tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
+    need_migrate = false;
+    LOG_INFO("local tablet transfer seq is bigger than remote tablet, no need copy", K(logic_tablet_id), KPC(tablet));
+  }
+
+  if (OB_SUCC(ret) && !need_migrate) {
+    if (ls->is_cs_replica()
+          && OB_FAIL(ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(tablet_group_ctx, logic_tablet_id.tablet_id_))) {
+      LOG_WARN("failed to update deleted tablet status", K(ret));
+    } else if (OB_FAIL(ctx->tablet_dep_mgr_.remove_tablet_dependency(logic_tablet_id.tablet_id_))) {
+      LOG_WARN("failed to remove tablet dependency", K(ret), K(logic_tablet_id));
+    }
+  }
+
+  return ret;
+}
 
 /******************ObHATabletGroupCtx*********************/
 ObHATabletGroupCtx::ObHATabletGroupCtx(const TabletGroupCtxType type)

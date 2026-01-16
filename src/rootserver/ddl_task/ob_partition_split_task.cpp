@@ -17,6 +17,7 @@
 #include "share/ob_ddl_checksum.h"
 #include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ob_root_service.h"
+#include "rootserver/ob_split_partition_helper.h"
 #include "src/storage/tx_storage/ob_ls_map.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 #include "src/storage/tablet/ob_tablet_split_info_mds_helper.h"
@@ -2611,56 +2612,30 @@ int ObPartitionSplitTask::check_can_reuse_macro_block(
       const ObTableSchema *table_schema = nullptr;
       const uint64_t table_id = table_ids.at(i);
       const ObTableSchema *fetch_part_key_schema = nullptr; // used to fetch partition key info.
+      bool can_reuse = false;
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
         LOG_WARN("get schema failed", K(ret), K(tenant_id), K(table_id));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table not exist", K(ret), K(tenant_id), K(table_id));
-      } else if (is_aux_lob_table(table_schema->get_table_type())) {
-        if (OB_FAIL(can_reuse_macro_blocks.push_back(false))) {
-          LOG_WARN("push back failed", K(ret));
-        }
-      } else if (!table_schema->is_index_local_storage() &&
-          FALSE_IT(fetch_part_key_schema = table_schema)) {
-        // fetch partition key info from itself for data table and global index table.
+      } else if (is_aux_lob_table(table_schema->get_table_type()) || table_schema->is_index_local_storage()) {
         // fetch partition key info from data table for local index table.
-      } else if (table_schema->is_index_local_storage()
-          && OB_FAIL(schema_guard.get_table_schema(tenant_id, table_schema->get_data_table_id(), fetch_part_key_schema))) {
-        LOG_WARN("get data table schema failed", K(ret), K(tenant_id), "data_table_id", table_schema->get_data_table_id());
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_schema->get_data_table_id(), fetch_part_key_schema))) {
+          LOG_WARN("get data table schema failed", K(ret), K(tenant_id), "data_table_id", table_schema->get_data_table_id());
+        }
+      } else {
+        // fetch partition key info from itself for data table and global index table.
+        fetch_part_key_schema = table_schema;
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(fetch_part_key_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table does not exist", K(ret), KPC(table_schema));
-      } else {
-        ObArray<uint64_t> rowkey_cols;
-        ObArray<uint64_t> part_key_cols;
-        const common::ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
-        const common::ObPartitionKeyInfo &part_key_info = fetch_part_key_schema->get_partition_key_info();
-        if (OB_FAIL(rowkey_info.get_column_ids(rowkey_cols))) {
-          LOG_WARN("get rowkey columns failed", K(ret), K(rowkey_info));
-        } else if (OB_FAIL(part_key_info.get_column_ids(part_key_cols))) {
-          LOG_WARN("get part key columns failed", K(ret), K(part_key_info));
-        } else if (OB_UNLIKELY(rowkey_cols.count() < part_key_cols.count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected err", K(ret), K(rowkey_cols), K(part_key_cols), KPC(fetch_part_key_schema));
-        } else {
-          bool can_reuse = true;
-          for (int64_t col_idx = 0; OB_SUCC(ret) && can_reuse && col_idx < rowkey_cols.count() && col_idx < part_key_cols.count(); col_idx++) {
-            const ObColumnSchemaV2 *part_col_chema = fetch_part_key_schema->get_column_schema(part_key_cols.at(col_idx));
-            const ObColumnSchemaV2 *rowkey_col_schema = table_schema->get_column_schema(rowkey_cols.at(col_idx));
-            if (OB_UNLIKELY(nullptr == part_col_chema || nullptr == rowkey_col_schema)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected err", K(ret), K(col_idx), KPC(fetch_part_key_schema));
-            } else if (rowkey_col_schema->is_shadow_column()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected error", K(ret), K(col_idx), K(rowkey_cols), K(part_key_cols), KPC(fetch_part_key_schema));
-            } else {
-              can_reuse &= rowkey_cols.at(col_idx) == part_key_cols.at(col_idx);
-            }
-          }
-          if (FAILEDx(can_reuse_macro_blocks.push_back(can_reuse))) {
-            LOG_WARN("push back failed", K(ret));
-          }
-        }
+      } else if (OB_FAIL(ObSplitPartitionHelper::check_can_reuse_macro_block(*table_schema, fetch_part_key_schema, can_reuse))) {
+        LOG_WARN("failed to check can reuse macro block", K(ret), K(table_id), K(table_schema->get_data_table_id()), KP(fetch_part_key_schema));
+      } else if (OB_FAIL(can_reuse_macro_blocks.push_back(can_reuse))) {
+        LOG_WARN("failed to push back", K(ret));
       }
     }
   }

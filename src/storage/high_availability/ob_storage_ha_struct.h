@@ -18,6 +18,7 @@
 #include "common/ob_member.h"
 #include "common/ob_tablet_id.h"
 #include "lib/container/ob_array.h"
+#include "lib/queue/ob_link_queue.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
@@ -367,7 +368,7 @@ public:
   void reset();
   void reuse();
   int assign(const ObCopyMacroRangeInfo &copy_macro_range_info);
-  int deep_copy_start_end_key(const blocksstable::ObDatumRowkey & start_macro_block_end_key);
+  int deep_copy_start_end_key(const blocksstable::ObDatumRowkey &start_macro_block_end_key);
 
   TO_STRING_KV(K_(start_macro_block_id), K_(end_macro_block_id),
       K_(macro_block_count), K_(start_macro_block_end_key), K_(is_leader_restore));
@@ -383,6 +384,22 @@ public:
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroRangeInfo);
 };
 
+struct ObCopyMacroRangeIdInfo final
+{
+public:
+  ObCopyMacroRangeIdInfo();
+  ~ObCopyMacroRangeIdInfo();
+  bool is_valid() const;
+  void reset();
+  void reuse();
+  int assign(const ObCopyMacroRangeIdInfo &copy_macro_range_id_info);
+  TO_STRING_KV(K_(range_info), K_(macro_block_ids));
+public:
+  ObCopyMacroRangeInfo range_info_;
+  common::ObArray<blocksstable::ObLogicMacroBlockId> macro_block_ids_;
+  DISALLOW_COPY_AND_ASSIGN(ObCopyMacroRangeIdInfo);
+};
+
 struct ObCopySSTableMacroRangeInfo final
 {
 public:
@@ -395,7 +412,7 @@ public:
   TO_STRING_KV(K_(copy_table_key), K_(copy_macro_range_array));
 
   ObITable::TableKey copy_table_key_;
-  common::ObArray<ObCopyMacroRangeInfo> copy_macro_range_array_;
+  common::ObArray<ObCopyMacroRangeIdInfo> copy_macro_range_array_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeInfo);
 };
 
@@ -634,109 +651,35 @@ public:
   ObMacroBlockReuseMgr();
   ~ObMacroBlockReuseMgr();
   int init();
-  void reset();
-  int destroy();
-  int count(int64_t &count);
-  bool is_inited() const { return is_inited_; }
-  // get the macro block physical ID and data checksum by the macro block logical ID
-  int get_macro_block_reuse_info(
-    const ObITable::TableKey &table_key,
-    const blocksstable::ObLogicMacroBlockId &logic_id,
-    blocksstable::MacroBlockId &macro_id,
-    int64_t &data_checksum);
-  // add the macro block logical ID -> [physical ID, data checksum] and data checksum mapping
   int add_macro_block_reuse_info(
-    const ObITable::TableKey &table_key,
     const blocksstable::ObLogicMacroBlockId &logic_id,
     const blocksstable::MacroBlockId &macro_id,
     const int64_t &data_checksum);
-  // update single reuse map of the chosen major sstable
-  // if the snapshot version of the input table key is larger than the one in the reuse map, update the reuse map
-  int update_single_reuse_map(const ObITable::TableKey &table_key, const storage::ObTabletHandle &tablet_handle, const blocksstable::ObSSTable &sstable);
-  // get target major sstable's snapshot_version and co_base_snapshot_version in the reuse map
-  int get_major_snapshot_version(const ObITable::TableKey &table_key, int64_t &snapshot_version, int64_t &co_base_snapshot_version);
-public:
-  static int64_t get_item_size() {
-      // size of key + size of value + size pointer of next node (linear hash map)
-      // see ObLinearHashMap::Node
-      return sizeof(blocksstable::ObLogicMacroBlockId)
-        + sizeof(MacroBlockReuseInfo)
-        + sizeof(void *);
-  }
+  int get_macro_block_reuse_info(
+    const blocksstable::ObLogicMacroBlockId &logic_id,
+    blocksstable::MacroBlockId &macro_id,
+    int64_t &data_checksum) const;
+  bool is_inited() const { return is_inited_; }
+  void reset();
+  int64_t get_size() const;
 private:
-  // physical ID and data checksum of a macro block, value of a single reuse map
   struct MacroBlockReuseInfo final
   {
   public:
-    MacroBlockReuseInfo();
+    MacroBlockReuseInfo(): id_(), data_checksum_(-1) {}
+    MacroBlockReuseInfo(const blocksstable::MacroBlockId &id, const int64_t &data_checksum)
+        : id_(id), data_checksum_(data_checksum) {}
     ~MacroBlockReuseInfo() = default;
     void reset();
   public:
     blocksstable::MacroBlockId id_;
     int64_t data_checksum_;
 
-    TO_STRING_KV(
-      K_(id),
-      K_(data_checksum));
+    TO_STRING_KV(K_(id), K_(data_checksum));
   };
-  // logical ID -> [physical ID, data checksum] mapping of a major sstable.
   typedef ObLinearHashMap<blocksstable::ObLogicMacroBlockId, MacroBlockReuseInfo> ReuseMap;
-  // Key of the reuse_maps, use the tablet_id, column_group_idx and table_type to identify the lastest local snapshot version
-  // and the reuse info (logical ID -> [physical ID, data checksum] mapping) of a major sstable.
-  struct ReuseMajorTableKey final
-  {
-  public:
-    ReuseMajorTableKey();
-    ReuseMajorTableKey(const common::ObTabletID &tablet_id, const uint16_t column_group_idx, const ObITable::TableType table_type);
-    ~ReuseMajorTableKey() = default;
-    void reset();
-    uint64_t hash() const;
-    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
-    bool operator == (const ReuseMajorTableKey &other) const;
-    TO_STRING_KV(
-      K_(tablet_id),
-      K_(column_group_idx),
-      "table_type", ObITable::get_table_type_name(table_type_));
-
-  public:
-    common::ObTabletID tablet_id_;
-    uint16_t column_group_idx_;
-    ObITable::TableType table_type_;
-  };
-  // Value of the reuse_maps, indicate the reuse info (logical ID -> [physical ID, data checksum] mapping) of a
-  // specific version major sstable (the latest local snapshot version).
-  struct ReuseMajorTableValue final
-  {
-  public:
-    ReuseMajorTableValue();
-    ~ReuseMajorTableValue();
-    int init(const int64_t &snapshot_version, const int64_t &co_base_snapshot_version);
-    int count(int64_t &count);
-    TO_STRING_KV(
-      K_(is_inited),
-      K_(snapshot_version),
-      K_(co_base_snapshot_version));
-  public:
-    bool is_inited_;
-    int64_t snapshot_version_;
-    int64_t co_base_snapshot_version_;
-    ReuseMap reuse_map_;
-  };
-  typedef ObLinearHashMap<ReuseMajorTableKey, ReuseMajorTableValue *> ReuseMaps;
-private:
-  int get_reuse_key_(const ObITable::TableKey &table_key, ReuseMajorTableKey &reuse_key);
-  int get_reuse_value_(const ObITable::TableKey &table_key, ReuseMap *&reuse_map, int64_t &snapshot_version, int64_t &co_base_snapshot_version);
-  // remove single reuse map of the chosen major sstable (chosen by table_key)
-  int remove_single_reuse_map_(const ReuseMajorTableKey &reuse_key);
-  // build single reuse map of the chosen major sstable
-  int build_single_reuse_map_(const ObITable::TableKey &table_key, const storage::ObTabletHandle &tablet_handle, const blocksstable::ObSSTable &sstable);
-  // alloc reuse value then init it
-  int prepare_reuse_value_(const int64_t &snapshot_version, const int64_t &co_base_snapshot_version, ReuseMajorTableValue *&reuse_value);
-  // free reuse value
-  void free_reuse_value_(ReuseMajorTableValue *&reuse_value);
-private:
   bool is_inited_;
-  ReuseMaps reuse_maps_; // mapping from major sstable to reuse info (if not column store, this map will only contain one element)
+  ReuseMap reuse_map_;
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockReuseMgr);
 };
 
@@ -772,22 +715,6 @@ public:
   common::ObArray<common::ObMember> member_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSMemberListInfo);
-};
-
-struct ObCopySSTableMacroIdInfo final
-{
-public:
-  ObCopySSTableMacroIdInfo();
-  ~ObCopySSTableMacroIdInfo();
-  void reset();
-  int assign(const ObCopySSTableMacroIdInfo &other);
-  TO_STRING_KV(K_(data_block_ids), K_(other_block_ids));
-private:
-  static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64L;
-public:
-  common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> data_block_ids_;
-  common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> other_block_ids_;
-  DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroIdInfo);
 };
 
 }

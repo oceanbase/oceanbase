@@ -31,6 +31,7 @@ class ObTableSchema;
 
 class ObLSID;
 class SCN;
+class ObSplitTabletInfo;
 }
 
 namespace common
@@ -179,10 +180,12 @@ private:
       const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos,
       const obrpc::ObCreateTabletInfo &info,
       const int64_t index,
+      const ObTabletMdsUserDataType create_type,
       const ObCreateTabletSchema *&create_tablet_schema,
+      const share::SCN &clog_checkpoint_scn,
       bool &need_create_empty_major_sstable,
       bool &micro_index_clustered,
-      ObTabletID &split_src_tablet_id);
+      share::ObSplitTabletInfo &split_info);
 };
 } // namespace storage
 } // namespace oceanbase

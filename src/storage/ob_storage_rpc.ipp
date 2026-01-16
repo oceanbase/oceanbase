@@ -130,6 +130,37 @@ int ObStorageStreamRpcReader<RPC_CODE>::fetch_and_decode(ObIAllocator& allocator
 
 template <ObRpcPacketCode RPC_CODE>
 template <typename Data>
+int ObStorageStreamRpcReader<RPC_CODE>::fetch_and_decode_list(ObIArray<Data> &data_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited", K(ret));
+  } else {
+    Data tmp_data;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(fetch_next_buffer_if_need())) {
+        if (OB_ITER_END != ret) {
+          STORAGE_LOG(WARN, "failed to fetch buffer", K(ret));
+        }
+      } else if (OB_FAIL(tmp_data.deserialize(rpc_buffer_.get_data(),
+                                              rpc_buffer_.get_position(),
+                                              rpc_buffer_parse_pos_))) {
+        STORAGE_LOG(WARN, "failed to decode", K(rpc_buffer_), K(ret));
+      } else if (OB_FAIL(data_list.push_back(tmp_data))) {
+        STORAGE_LOG(WARN, "failed to push back", K(ret));
+      }
+    }
+  }
+
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+template <ObRpcPacketCode RPC_CODE>
+template <typename Data>
 int ObStorageStreamRpcReader<RPC_CODE>::fetch_and_decode_list(ObIAllocator& allocator,
                                                        ObIArray<Data> &data_list)
 {

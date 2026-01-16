@@ -46,7 +46,7 @@ ObSplitPartitionHelper::~ObSplitPartitionHelper()
 int ObSplitPartitionHelper::execute(ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(upd_table_schemas_.empty())) {
+  if (OB_UNLIKELY(upd_table_schemas_.empty() || new_table_schemas_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty upd table schemas", K(ret));
   } else if (OB_FAIL(check_allow_split(schema_guard_, *upd_table_schemas_.at(0)))) {
@@ -72,7 +72,7 @@ int ObSplitPartitionHelper::execute(ObDDLTaskRecord &task_record)
                                                  src_tablet_ids_,
                                                  dst_tablet_ids_,
                                                  inc_table_schemas_,
-                                                 *upd_table_schemas_.at(0),
+                                                 *new_table_schemas_.at(0),
                                                  split_type_,
                                                  allocator_,
                                                  tablet_creator_,
@@ -254,35 +254,96 @@ int ObSplitPartitionHelper::freeze_split_src_tablet(const ObFreezeSplitSrcTablet
 }
 
 // only used for create split dst tablet
-int ObSplitPartitionHelper::get_split_src_tablet_id_if_any(
+int ObSplitPartitionHelper::get_split_tablet_info_if_any(
     const share::schema::ObTableSchema &table_schema,
-    ObTabletID &split_src_tablet_id)
+    const share::schema::ObTableSchema &data_table_schema,
+    const uint64_t tenant_data_version,
+    ObTabletID &split_src_tablet_id,
+    bool &split_can_reuse_macro_block)
 {
   int ret = OB_SUCCESS;
-  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
-  bool finish = false;
-  ObPartitionSchemaIter iter(table_schema, mode);
-  ObPartitionSchemaIter::Info info;
-  split_src_tablet_id.reset();
-  while (OB_SUCC(ret) && !finish) {
-    if (OB_FAIL(iter.next_partition_info(info))) {
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-        finish = true;
-      } else {
-        LOG_WARN("iter partition failed", KR(ret));
-      }
-    } else if (nullptr != info.partition_) {
-      const ObTabletID &tablet_id = info.partition_->get_split_source_tablet_id();
-      if (tablet_id.is_valid()) {
-        if (split_src_tablet_id.is_valid() && OB_UNLIKELY(tablet_id != split_src_tablet_id)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("all split src tablet id must be same in schema", K(ret), K(split_src_tablet_id), KPC(info.partition_));
+  if (OB_SUCC(ret) && tenant_data_version >= DATA_VERSION_4_3_5_0) {
+    const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+    bool finish = false;
+    ObPartitionSchemaIter iter(table_schema, mode);
+    ObPartitionSchemaIter::Info info;
+    split_src_tablet_id.reset();
+    split_can_reuse_macro_block = false;
+    while (OB_SUCC(ret) && !finish) {
+      if (OB_FAIL(iter.next_partition_info(info))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          finish = true;
         } else {
-          split_src_tablet_id = tablet_id;
+          LOG_WARN("iter partition failed", KR(ret));
+        }
+      } else if (nullptr != info.partition_) {
+        const ObTabletID &tablet_id = info.partition_->get_split_source_tablet_id();
+        if (tablet_id.is_valid()) {
+          if (split_src_tablet_id.is_valid() && OB_UNLIKELY(tablet_id != split_src_tablet_id)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("all split src tablet id must be same in schema", K(ret), K(split_src_tablet_id), KPC(info.partition_));
+          } else {
+            split_src_tablet_id = tablet_id;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && tenant_data_version >= DATA_VERSION_4_3_5_1) { // TODO(jyx441808): change to 4.4.1.0
+    if (split_src_tablet_id.is_valid()) { // is split dst tablet
+      if (OB_FAIL(check_can_reuse_macro_block(table_schema, &data_table_schema, split_can_reuse_macro_block))) {
+        LOG_WARN("failed to check can reuse macro block", K(ret), K(table_schema.get_table_id()), K(data_table_schema.get_table_id()));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSplitPartitionHelper::check_can_reuse_macro_block(
+    const share::schema::ObTableSchema &table_schema,
+    const share::schema::ObTableSchema *data_table_schema,
+    bool &split_can_reuse_macro_block)
+{
+  int ret = OB_SUCCESS;
+  split_can_reuse_macro_block = false;
+  if (is_aux_lob_table(table_schema.get_table_type())) {
+    split_can_reuse_macro_block = false;
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid data table schema", K(ret), K(table_schema.get_table_id()));
+  } else {
+    ObArray<uint64_t> rowkey_cols;
+    ObArray<uint64_t> part_key_cols;
+    const common::ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+    const common::ObPartitionKeyInfo &part_key_info = data_table_schema->get_partition_key_info();
+    if (OB_FAIL(rowkey_info.get_column_ids(rowkey_cols))) {
+      LOG_WARN("get rowkey columns failed", K(ret), K(rowkey_info));
+    } else if (OB_FAIL(part_key_info.get_column_ids(part_key_cols))) {
+      LOG_WARN("get part key columns failed", K(ret), K(part_key_info));
+    } else if (OB_UNLIKELY(rowkey_cols.count() < part_key_cols.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(rowkey_cols), K(part_key_cols), KPC(data_table_schema));
+    } else {
+      bool can_reuse = true;
+      for (int64_t col_idx = 0; OB_SUCC(ret) && can_reuse && col_idx < rowkey_cols.count() && col_idx < part_key_cols.count(); col_idx++) {
+        const ObColumnSchemaV2 *part_col_chema = data_table_schema->get_column_schema(part_key_cols.at(col_idx));
+        const ObColumnSchemaV2 *rowkey_col_schema = table_schema.get_column_schema(rowkey_cols.at(col_idx));
+        if (OB_UNLIKELY(nullptr == part_col_chema || nullptr == rowkey_col_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected err", K(ret), K(col_idx), KPC(data_table_schema));
+        } else if (rowkey_col_schema->is_shadow_column()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret), K(col_idx), K(rowkey_cols), K(part_key_cols), KPC(data_table_schema));
+        } else {
+          can_reuse &= rowkey_cols.at(col_idx) == part_key_cols.at(col_idx);
         }
       }
-      break;
+      if (OB_SUCC(ret)) {
+        split_can_reuse_macro_block = can_reuse;
+      }
     }
   }
   return ret;
@@ -546,7 +607,7 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
   }
 
   if (OB_SUCC(ret)) {
-    const ObTableSchema &data_table_schema = *inc_table_schemas.at(0);
+    const ObTableSchema &data_table_schema = main_src_table_schema;
     const int64_t split_cnt = dst_tablet_ids.at(0).count();
     const int64_t table_cnt = inc_table_schemas.count();
     bool is_oracle_mode = false;
@@ -586,7 +647,8 @@ int ObSplitPartitionHelper::prepare_dst_tablet_creator_(
                                     tenant_data_version,
                                     need_create_empty_majors,
                                     create_commit_versions,
-                                    false/*has_cs_replica*/))) {
+                                    false/*has_cs_replica*/,
+                                    data_table_schema))) {
           LOG_WARN("failed to init", K(ret));
         } else if (OB_FAIL(tablet_creator->add_create_tablet_arg(arg))) {
           LOG_WARN("failed to add create tablet arg", K(ret));

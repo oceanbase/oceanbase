@@ -24,6 +24,7 @@
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/ddl/ob_direct_load_mgr_utils.h"
 #include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
+#include "storage/high_availability/ob_storage_ha_src_provider.h"
 
 using namespace oceanbase::share;
 
@@ -563,16 +564,19 @@ int ObStorageHAUtils::extract_macro_id_from_datum(
   return ret;
 }
 
-int ObStorageHAUtils::check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info)
+int ObStorageHAUtils::check_replica_validity(
+    const obrpc::ObFetchLSMetaInfoResp &ls_info,
+    ObMigrationSourceValidationResult &result)
 {
   int ret = OB_SUCCESS;
-  ObMigrationStatus migration_status;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   share::ObLSRestoreStatus restore_status;
   if (!ls_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ls_info));
   } else if (OB_FAIL(check_server_version(ls_info.version_))) {
     if (OB_MIGRATE_NOT_COMPATIBLE == ret) {
+      result = ObMigrationSourceValidationResult::VERSION_INCOMPATIBLE;
       LOG_WARN("this src is not compatible", K(ret), K(ls_info));
     } else {
       LOG_WARN("failed to check version", K(ret), K(ls_info));
@@ -581,11 +585,13 @@ int ObStorageHAUtils::check_replica_validity(const obrpc::ObFetchLSMetaInfoResp 
     LOG_WARN("failed to get migration status", K(ret), K(ls_info));
   } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
     ret = OB_DATA_SOURCE_NOT_VALID;
+    result = ObMigrationSourceValidationResult::SOURCE_IN_MIGRATION;
     LOG_WARN("this src is not suitable, migration status check failed", K(ret), K(ls_info));
   } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), K(ls_info));
   } else if (restore_status.is_failed()) {
     ret = OB_DATA_SOURCE_NOT_EXIST;
+    result = ObMigrationSourceValidationResult::SOURCE_RESTORE_FAILED;
     LOG_WARN("some ls replica restore failed, can not migrate", K(ret), K(ls_info));
   }
   return ret;
@@ -1552,189 +1558,6 @@ void ObTransferUtils::transfer_tablet_restore_stat(
       LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(src_ls_key));
     }
   }
-}
-
-int ObStorageHAUtils::build_major_sstable_reuse_info(
-      const ObTabletHandle &tablet_handle,
-      ObMacroBlockReuseMgr &macro_block_reuse_mgr,
-      const bool &is_restore)
-{
-  // 1. get local max major sstable snapshot version (and related sstable)
-  // 2. iterate these major sstables' macro blocks (if not co, there is only one major sstable), update reuse map
-  int ret = OB_SUCCESS;
-  ObTablet *tablet = nullptr;
-  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
-  ObTableHandleV2 latest_major;
-
-  if (!tablet_handle.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tablet_handle));
-  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else {
-    if (macro_block_reuse_mgr.is_inited()) {
-      LOG_INFO("reuse info mgr has been inited before (maybe retry), won't init again", K(macro_block_reuse_mgr.is_inited()));
-    } else if (OB_FAIL(macro_block_reuse_mgr.init())) {
-      LOG_WARN("failed to init reuse info mgr", K(ret));
-    }
-
-    // 1. for shared storage mode, we won't build reuse info
-    // 2. when restore, we won't build reuse info for lastest major sstable, because restore always read all sstable from backup media
-    // (i.e. will scan all sstables' macro block again when tablet restore dag retry)
-    // when migrate, we will keep the major sstable already been copied to dest server, so we need to build reuse info for lastest major sstable
-    // that already been copied to dest server
-    if (OB_SUCC(ret) && !GCTX.is_shared_storage_mode() && !is_restore) {
-      common::ObArray<ObSSTableWrapper> major_sstables;
-      int64_t reuse_info_count = 0;
-      ObTableStoreIterator major_sstable_iter;
-
-      if (OB_FAIL(tablet->fetch_table_store(wrapper))) {
-        LOG_WARN("failed to fetch table store", K(ret), KPC(tablet));
-      } else if (!wrapper.is_valid()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("table store wrapper is invalid", K(ret), K(wrapper), KPC(tablet));
-      } else if (OB_FAIL(wrapper.get_member()->get_major_sstables(major_sstable_iter, false /*unpack_co_table*/))) {
-        LOG_WARN("failed to get major sstables", K(ret), K(wrapper), KPC(tablet));
-      } else if (0 == major_sstable_iter.count()) {
-        LOG_INFO("no major sstable, skip build reuse info", K(ret), KPC(tablet));
-      } else if (OB_FAIL(get_latest_available_major_(major_sstable_iter, latest_major))) {
-        // get_major_sstables return major sstables ordered by snapshot version in ascending order
-        LOG_WARN("failed to get latest available major sstable", K(ret), K(wrapper), KPC(tablet));
-      } else if (!latest_major.is_valid()) {
-        // skip, first major sstable has backup data, no need to build reuse info
-        LOG_INFO("first major sstable has backup data, no need to build reuse info", K(ret), K(wrapper), KPC(tablet));
-      } else if (OB_FAIL(get_latest_major_sstable_array_(latest_major, major_sstables))){
-        LOG_WARN("failed to get latest major sstable array", K(ret), K(latest_major));
-      } else {
-        if (OB_FAIL(build_reuse_info_(major_sstables, tablet_handle, macro_block_reuse_mgr))) {
-          LOG_WARN("failed to build reuse info", K(ret), K(major_sstables), KPC(tablet), K(latest_major));
-        } else if (OB_FAIL(macro_block_reuse_mgr.count(reuse_info_count))) {
-          LOG_WARN("failed to count reuse info", K(ret), K(major_sstables), KPC(tablet), K(latest_major));
-        } else {
-          LOG_INFO("succeed to build reuse info", K(ret), K(major_sstables), KPC(tablet), K(latest_major), K(reuse_info_count));
-        }
-
-        // if build reuse info failed, reset reuse mgr
-        if (OB_FAIL(ret)) {
-          macro_block_reuse_mgr.reset();
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObStorageHAUtils::get_latest_available_major_(
-  storage::ObTableStoreIterator &major_sstables_iter,
-  ObTableHandleV2 &latest_major)
-{
-  int ret = OB_SUCCESS;
-  latest_major.reset();
-  ObTableHandleV2 cur_major_handle;
-  ObSSTableMetaHandle sst_meta_hdl;
-
-  // major sstables must be sorted by snapshot version in ascending order
-  // get the latest major sstable that has no backup data and all previous major sstables have backup data
-  while (OB_SUCC(ret)) {
-    cur_major_handle.reset();
-    sst_meta_hdl.reset();
-    const ObSSTable *sstable = nullptr;
-    if (OB_FAIL(major_sstables_iter.get_next(cur_major_handle))) {
-      if (OB_ITER_END == ret) {
-        // no more major sstables
-        ret = OB_SUCCESS;
-        break;
-      } else {
-        LOG_WARN("failed to get next major sstable handle", K(ret), K(cur_major_handle));
-      }
-    } else if (OB_FAIL(cur_major_handle.get_sstable(sstable))) {
-      LOG_WARN("failed to get sstable from handle", K(ret), K(cur_major_handle));
-    } else if (OB_ISNULL(sstable) || !ObITable::is_major_sstable(sstable->get_key().table_type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid major sstable", K(ret), KPC(sstable));
-    } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
-      LOG_WARN("failed to get sstable meta", K(ret), KPC(sstable));
-    } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
-      // stop at the first major sstable that has backup data
-      break;
-    } else {
-      latest_major = cur_major_handle;
-    }
-  }
-
-  return ret;
-}
-
-int ObStorageHAUtils::get_latest_major_sstable_array_(
-    ObTableHandleV2 &latest_major,
-    common::ObArray<ObSSTableWrapper> &major_sstables)
-{
-  int ret = OB_SUCCESS;
-  major_sstables.reset();
-  ObITable *latest_major_table = nullptr;
-  ObITable::TableKey table_key;
-  ObITable::TableType table_type = ObITable::MAX_TABLE_TYPE;
-
-  if (OB_ISNULL(latest_major_table = latest_major.get_table())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("latest major sstable should not be null", K(ret), K(latest_major));
-  } else if (FALSE_IT(table_key = latest_major_table->get_key())) {
-  } else if (FALSE_IT(table_type = table_key.table_type_)) {
-  }
-  // table type of the local major sstable which has max snapshot version
-  // could be normal major sstable (row store) or co sstable (column store)
-  else if (table_type != ObITable::COLUMN_ORIENTED_SSTABLE && table_type != ObITable::MAJOR_SSTABLE) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table type", K(ret), K(table_key));
-  } else if (table_type == ObITable::MAJOR_SSTABLE) {
-    ObSSTable *sstable = static_cast<ObSSTable *> (latest_major_table);
-    ObSSTableWrapper major_sstable_wrapper;
-
-    if (OB_ISNULL(sstable) || !sstable->is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sstable should not be null or invalid", K(ret), K(latest_major), KPC(sstable));
-    } else if (!ObITable::is_major_sstable(sstable->get_key().table_type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid sstable type, not major sstable", K(ret), KPC(sstable));
-    }
-    // won't set meta hdl here, because meta hdl is already hold by outer table handle (latest_major)
-    else if (OB_FAIL(major_sstable_wrapper.set_sstable(sstable))) {
-      LOG_WARN("failed to set sstable for major sstable wrapper", K(ret), KPC(sstable));
-    } else if (OB_FAIL(major_sstables.push_back(major_sstable_wrapper))) {
-      LOG_WARN("failed to push back major sstable wrapper", K(ret), K(major_sstable_wrapper));
-    }
-  } else if (table_type == ObITable::COLUMN_ORIENTED_SSTABLE) {
-    const ObCOSSTableV2 *co_sstable = static_cast<const ObCOSSTableV2 *> (latest_major_table);
-
-    if (OB_ISNULL(co_sstable) || !co_sstable->is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("co sstable should not be null or invalid", K(ret), K(latest_major), KPC(co_sstable));
-    } else if (OB_FAIL(co_sstable->get_all_tables(major_sstables))) {
-      LOG_WARN("failed to get all co & cg tables", K(ret), K(table_key), KPC(co_sstable));
-    }
-  }
-
-  return ret;
-}
-
-int ObStorageHAUtils::build_reuse_info_(
-    const common::ObArray<ObSSTableWrapper> &major_sstables,
-    const ObTabletHandle &tablet_handle,
-    ObMacroBlockReuseMgr &macro_block_reuse_mgr)
-{
-  int ret = OB_SUCCESS;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < major_sstables.count(); ++i) {
-    const ObSSTable *sstable = major_sstables.at(i).get_sstable();
-    if (OB_ISNULL(sstable) || !ObITable::is_major_sstable(sstable->get_key().table_type_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("sstable should not be NULL and should be major" , K(ret), KPC(sstable));
-    } else if (OB_FAIL(macro_block_reuse_mgr.update_single_reuse_map(sstable->get_key(), tablet_handle, *sstable))) {
-      LOG_WARN("failed to update reuse map", K(ret), K(tablet_handle), KPC(sstable));
-    }
-  }
-
-  return ret;
 }
 
 void ObStorageHAUtils::sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array)
