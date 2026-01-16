@@ -33,7 +33,7 @@ public:
       session_id_(0)
   {}
   explicit ObGTTTabletInfo(const uint64_t table_id, const int64_t gtt_session_scope_unique_id,
-      const int64_t gtt_trans_scope_unique_id, const uint32_t session_id)
+      const int64_t gtt_trans_scope_unique_id, const uint64_t session_id)
     : table_id_(table_id),
       gtt_session_scope_unique_id_(gtt_session_scope_unique_id),
       gtt_trans_scope_unique_id_(gtt_trans_scope_unique_id),
@@ -49,7 +49,7 @@ public:
   uint64_t table_id_;
   int64_t gtt_session_scope_unique_id_;
   int64_t gtt_trans_scope_unique_id_;
-  uint32_t session_id_;
+  uint64_t session_id_;
 };
 
 // for session level temporary table, sequence is gtt_session_scope_unique_id_
@@ -63,7 +63,7 @@ public:
       session_id_(0)
   {}
   explicit ObSessionTabletInfoKey(const uint64_t table_id, const int64_t sequence,
-    const uint32_t session_id)
+    const uint64_t session_id)
     : table_id_(table_id),
       sequence_(sequence),
       session_id_(session_id)
@@ -77,7 +77,7 @@ public:
 public:
   uint64_t table_id_;
   int64_t sequence_;
-  uint32_t session_id_;
+  uint64_t session_id_;
 };
 
 struct ObSessionTabletInfo final
@@ -89,7 +89,7 @@ public:
   ObSessionTabletInfo()
     : table_id_(OB_INVALID_ID),
       sequence_(INT64_MAX),
-      session_id_(UINT32_MAX),
+      session_id_(OB_INVALID_ID),
       ls_id_(),
       tablet_id_(),
       transfer_seq_(0),
@@ -97,7 +97,7 @@ public:
   {}
   explicit ObSessionTabletInfo(const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id, const uint64_t table_id, const int64_t sequence,
-    const uint32_t session_id, const int64_t transfer_seq)
+    const uint64_t session_id, const int64_t transfer_seq)
     : table_id_(table_id),
       sequence_(sequence),
       session_id_(session_id),
@@ -111,7 +111,7 @@ public:
   {
      return table_id_ != OB_INVALID_ID
             && sequence_ != INT64_MAX
-            && session_id_ != UINT32_MAX
+            && session_id_ != OB_INVALID_ID
             && ls_id_.is_valid()
             && tablet_id_.is_valid();
   }
@@ -119,17 +119,17 @@ public:
   inline const share::ObLSID &get_ls_id() const { return ls_id_; }
   inline uint64_t get_table_id() const { return table_id_; }
   inline int64_t get_sequence() const { return sequence_; }
-  inline uint32_t get_session_id() const { return session_id_; }
+  inline uint64_t get_session_id() const { return session_id_; }
   inline int64_t get_transfer_seq() const { return transfer_seq_; }
   int init(const common::ObTabletID &tablet_id,
         const share::ObLSID &ls_id, const uint64_t table_id,
-        const int64_t sequence, const uint32_t session_id,
+        const int64_t sequence, const uint64_t session_id,
         const int64_t transfer_seq);
   void reset()
   {
     table_id_ = OB_INVALID_ID;
     sequence_ = INT64_MAX;
-    session_id_ = UINT32_MAX;
+    session_id_ = OB_INVALID_ID;
     ls_id_.reset();
     tablet_id_.reset();
     transfer_seq_ = 0;
@@ -145,7 +145,7 @@ public:
 public:
   uint64_t table_id_;
   int64_t sequence_;
-  uint32_t session_id_;
+  uint64_t session_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   int64_t transfer_seq_;
@@ -162,7 +162,7 @@ public:
   int add_session_tablet(
       const common::ObIArray<uint64_t> &table_ids,
       const int64_t sequence,
-      const uint32_t session_id);
+      const uint64_t session_id);
   int get_session_tablet(
       const ObSessionTabletInfoKey &session_tablet_info_key,
       ObSessionTabletInfo &session_tablet_info);
@@ -173,7 +173,7 @@ public:
   void reset() { tablet_infos_.reset(); }
   bool is_empty() const { return tablet_infos_.count() == 0; }
   int get_table_ids_by_session_id_and_sequence(
-      const uint32_t session_id,
+      const uint64_t session_id,
       const int64_t sequence,
       common::ObIArray<uint64_t> &table_ids);
   TO_STRING_KV(K_(tablet_infos));
@@ -182,7 +182,7 @@ private:
   int inner_get_session_tablet(
       const uint64_t table_id,
       const int64_t sequence,
-      const int32_t session_id,
+      const uint64_t session_id,
       ObSessionTabletInfo &session_tablet_info);
 private:
   common::ObSEArray<ObSessionTabletInfo, MAX_SESSION_TABLET_COUNT> tablet_infos_;

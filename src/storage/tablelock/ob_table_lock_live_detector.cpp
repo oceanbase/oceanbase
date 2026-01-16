@@ -74,7 +74,7 @@ int ObTableLockDetectFuncList::detect_session_alive_for_rpc(const uint32_t sessi
   return ret;
 }
 
-int ObTableLockDetectFuncList::batch_detect_session_alive_at_least_one(const uint64_t tenant_id, const common::ObIArray<uint32_t> &session_id_array,
+int ObTableLockDetectFuncList::batch_detect_session_alive_at_least_one(const uint64_t tenant_id, const common::ObIArray<uint64_t> &session_id_array,
       const ObIArray<ObAddr> *dest_server, common::ObIArray<bool> &session_alive_array)
 {
   int ret = OB_SUCCESS;
@@ -1776,7 +1776,7 @@ bool ObBatchSessionAliveCheckerAtLeastOne::operator()(sql::ObSQLSessionMgr::Key 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid pointer", KR(ret), KP(session_id_array_), KP(session_alive_array_));
   } else {
-    uint32_t session_id = sess_info->get_sessid_for_table();
+    uint64_t session_id = sess_info->get_sessid_for_table();
     for (int64_t i = 0; i < session_id_array_->count(); i++) {
       if (session_id_array_->at(i) == session_id) {
         session_alive_array_->at(i) = true;

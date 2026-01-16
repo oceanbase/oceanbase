@@ -76,7 +76,7 @@ public:
     const uint64_t tenant_id,
     const uint64_t table_id,
     const int64_t sequence,
-    const uint32_t session_id,
+    const uint64_t session_id,
     storage::ObSessionTabletInfo &info);
   // Update ls_id and transfer_seq for a tablet in global temporary table
   //

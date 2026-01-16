@@ -927,7 +927,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
     const int64_t unique_id = table_type == share::schema::TMP_TABLE_ORA_TRX ?
           get_gtt_trans_scope_unique_id() : get_gtt_session_scope_unique_id();
     if (!gtt_tablet_info_map_.is_empty()) {
-      const uint32_t session_id = get_sessid_for_table();
+      const uint64_t session_id = get_sessid_for_table();
       common::ObArray<uint64_t> tmp_table_ids;
       if (OB_FAIL(gtt_tablet_info_map_.get_table_ids_by_session_id_and_sequence(session_id, unique_id, tmp_table_ids))) {
         LOG_WARN("failed to get table ids by session id and sequence", K(ret), K(session_id), K(unique_id));
@@ -1030,7 +1030,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_table_v2(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const share::schema::ObTableSchema &table_schema,
     const int64_t sequence,
-    const uint32_t session_id,
+    const uint64_t session_id,
     const bool is_index_table)
 {
   int ret = OB_SUCCESS;

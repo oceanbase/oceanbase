@@ -14759,11 +14759,11 @@ public:
   ObBatchDetectSessionAliveArg() : session_id_array_() {}
   ~ObBatchDetectSessionAliveArg() = default;
   int assign(const ObBatchDetectSessionAliveArg &other);
-  int init(const common::ObIArray<uint32_t> &session_id_array) { return session_id_array_.assign(session_id_array); }
+  int init(const common::ObIArray<uint64_t> &session_id_array) { return session_id_array_.assign(session_id_array); }
   bool is_valid() const { return session_id_array_.count() > 0; }
   TO_STRING_KV(K_(session_id_array));
 public:
-  common::ObSArray<uint32_t> session_id_array_;
+  common::ObSArray<uint64_t> session_id_array_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchDetectSessionAliveArg);
 };

@@ -2550,7 +2550,7 @@ int ObTruncateTableExecutor::truncate_oracle_temp_table_v2(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const share::schema::ObTableSchema &table_schema,
     const int64_t sequence,
-    const uint32_t session_id)
+    const uint64_t session_id)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();

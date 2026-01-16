@@ -225,7 +225,7 @@ int ObTabletToGlobalTmpTableOperator::point_get(
     const uint64_t tenant_id,
     const uint64_t table_id,
     const int64_t sequence,
-    const uint32_t session_id,
+    const uint64_t session_id,
     storage::ObSessionTabletInfo &info)
 {
   int ret = OB_SUCCESS;
@@ -282,14 +282,14 @@ int ObTabletToGlobalTmpTableOperator::construct_infos(
     int64_t ls_id = ObLSID::INVALID_LS_ID;
     uint64_t table_id = OB_INVALID_ID;
     int64_t sequence = INT64_MAX;
-    uint32_t session_id = UINT32_MAX;
+    uint64_t session_id = OB_INVALID_ID;
     int64_t transfer_seq = 0;
 
     EXTRACT_INT_FIELD_MYSQL(result, "tablet_id", tablet_id, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "ls_id", ls_id, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "table_id", table_id, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "sequence", sequence, int64_t);
-    EXTRACT_INT_FIELD_MYSQL(result, "session_id", session_id, uint32_t);
+    EXTRACT_INT_FIELD_MYSQL(result, "session_id", session_id, uint64_t);
     EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "transfer_seq", transfer_seq, int64_t,
       true/*skip_null_error*/, true/*skip_column_error*/, 0/*default value*/);
 

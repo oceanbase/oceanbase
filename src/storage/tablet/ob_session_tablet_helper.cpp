@@ -545,7 +545,7 @@ int ObSessionTabletGCHelper::do_work()
     ret = OB_SUCCESS;
     LOG_INFO("session tablet infos is empty", KR(ret));
   } else {
-    common::ObSArray<uint32_t> session_id_array;
+    common::ObSArray<uint64_t> session_id_array;
     common::ObSArray<bool> session_alive_array;
     if (OB_FAIL(session_id_array.reserve(session_tablet_infos.count()))) {
       LOG_WARN("failed to reserve session id array", KR(ret));
@@ -649,7 +649,7 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
     ret = OB_SUCCESS;
     LOG_INFO("gtt has no active session", KR(ret), K(table_id));
   } else {
-    common::ObSArray<uint32_t> session_id_array;
+    common::ObSArray<uint64_t> session_id_array;
     common::ObSArray<bool> session_alive_array;
     if (OB_FAIL(session_id_array.reserve(session_tablet_infos.count()))) {
       LOG_WARN("failed to reserve session id array", KR(ret));

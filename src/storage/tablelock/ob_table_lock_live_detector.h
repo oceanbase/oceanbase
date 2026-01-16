@@ -57,7 +57,7 @@ class ObTableLockDetectFuncList
 public:
   static int detect_session_alive(const uint32_t session_id, bool &is_alive);
   static int detect_session_alive_for_rpc(const uint32_t session_id, obrpc::Bool &is_alive);
-  static int batch_detect_session_alive_at_least_one(const uint64_t tenant_id, const common::ObIArray<uint32_t> &session_id_array,
+  static int batch_detect_session_alive_at_least_one(const uint64_t tenant_id, const common::ObIArray<uint64_t> &session_id_array,
         const ObIArray<ObAddr> *dest_server_array, common::ObIArray<bool> &session_alive_array);
   static int batch_detect_session_alive_for_rpc(const obrpc::ObBatchDetectSessionAliveArg &arg, obrpc::ObBatchDetectSessionAliveResult &result);
   static int do_session_alive_detect();
@@ -244,7 +244,7 @@ class ObBatchSessionAliveCheckerAtLeastOne
 public:
 ObBatchSessionAliveCheckerAtLeastOne() = delete;
   ~ObBatchSessionAliveCheckerAtLeastOne() = default;
-  explicit ObBatchSessionAliveCheckerAtLeastOne(const common::ObIArray<uint32_t> *session_id_array,
+  explicit ObBatchSessionAliveCheckerAtLeastOne(const common::ObIArray<uint64_t> *session_id_array,
                                       common::ObIArray<bool> *session_alive_array) :
                                       session_id_array_(session_id_array),
                                       session_alive_array_(session_alive_array) {}
@@ -253,7 +253,7 @@ ObBatchSessionAliveCheckerAtLeastOne() = delete;
       && session_id_array_->count() == session_alive_array_->count(); }
   TO_STRING_KV(KP_(session_id_array), KP_(session_alive_array));
 private:
-  const common::ObIArray<uint32_t> *session_id_array_;
+  const common::ObIArray<uint64_t> *session_id_array_;
   common::ObIArray<bool> *session_alive_array_;
   DISALLOW_COPY_AND_ASSIGN(ObBatchSessionAliveCheckerAtLeastOne);
 };

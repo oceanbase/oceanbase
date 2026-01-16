@@ -32,7 +32,7 @@ public:
     const uint64_t tenant_id,
     const uint64_t table_id,
     const int64_t sequence,
-    const uint32_t session_id,
+    const uint64_t session_id,
     ObSessionTabletInfoMap &session_tablet_map)
     : tenant_id_(tenant_id),
       table_ids_(),
@@ -49,7 +49,7 @@ public:
   ObSessionTabletCreateHelper(
     const uint64_t tenant_id,
     const int64_t sequence,
-    const uint32_t session_id,
+    const uint64_t session_id,
     ObSessionTabletInfoMap &session_tablet_map)
     : tenant_id_(tenant_id),
       table_ids_(),
@@ -93,7 +93,7 @@ private:
   uint64_t tenant_id_;
   common::ObSEArray<uint64_t, DEFAULT_TABLE_CREATE_COUNT> table_ids_;
   int64_t sequence_;
-  uint32_t session_id_;
+  uint64_t session_id_;
   share::ObLSID ls_id_;
   common::ObSEArray<common::ObTabletID, DEFAULT_TABLE_CREATE_COUNT> tablet_ids_;
   common::ObMySQLTransaction trans_;

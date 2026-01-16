@@ -22,7 +22,7 @@ namespace storage
 {
 
 int ObSessionTabletInfo::init(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id, const uint64_t table_id,
-  const int64_t sequence, const uint32_t session_id, const int64_t transfer_seq)
+  const int64_t sequence, const uint64_t session_id, const int64_t transfer_seq)
 {
   int ret = OB_SUCCESS;
   tablet_id_ = tablet_id;
@@ -97,7 +97,7 @@ int ObSessionTabletInfoMap::get_session_tablet_if_not_exist_add(
 int ObSessionTabletInfoMap::add_session_tablet(
     const common::ObIArray<uint64_t> &table_ids,
     const int64_t sequence,
-    const uint32_t session_id)
+    const uint64_t session_id)
 {
   int ret = OB_SUCCESS;
   ObSessionTabletInfo tablet_info;
@@ -172,7 +172,7 @@ int ObSessionTabletInfoMap::get_session_tablet(
 int ObSessionTabletInfoMap::inner_get_session_tablet(
     const uint64_t table_id,
     const int64_t sequence,
-    const int32_t session_id,
+    const uint64_t session_id,
     ObSessionTabletInfo &session_tablet_info)
 {
   int ret = OB_SUCCESS;
@@ -229,7 +229,7 @@ int ObSessionTabletInfoMap::remove_session_tablet(const uint64_t table_id)
 }
 
 int ObSessionTabletInfoMap::get_table_ids_by_session_id_and_sequence(
-    const uint32_t session_id,
+    const uint64_t session_id,
     const int64_t sequence,
     common::ObIArray<uint64_t> &table_ids)
 {
