@@ -11251,6 +11251,25 @@ int ObLogPlan::partial_limit_pushdown_for_children(ObLogicalOperator* &top,
   return ret;
 }
 
+int ObLogPlan::contains_linked_scan(ObLogicalOperator* root, bool & contains)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (LOG_LINK_SCAN == root->get_type()) {
+    contains = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !contains && i < root->get_num_of_child(); ++i) {
+      ObLogicalOperator *child = root->get_child(i);
+      if (OB_FAIL(SMART_CALL(contains_linked_scan(child, contains)))) {
+        LOG_WARN("failed to check linked table", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
                                       const int64_t limit_count,
                                       ObConstRawExpr *&limit_expr,
@@ -11317,8 +11336,21 @@ int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
         }
         break;
       }
-      case LOG_SUBPLAN_SCAN:
       case LOG_MATERIAL: {
+        // check whether there are linked scan below
+        bool contains_linked_table = false;
+        if (OB_FAIL(contains_linked_scan(top, contains_linked_table))) {
+          LOG_WARN("failed to check linked table", K(ret));
+        } else if (contains_linked_table) {
+        } else {
+          pushed_down = true;
+          if (OB_FAIL(partial_limit_pushdown_for_children(top, limit_count, limit_expr))) {
+            LOG_WARN("failed to push down partial limit", K(ret));
+          }
+        }
+        break;
+      }
+      case LOG_SUBPLAN_SCAN: {
         pushed_down = true;
         if (OB_FAIL(partial_limit_pushdown_for_children(top, limit_count, limit_expr))) {
           LOG_WARN("failed to push down partial limit", K(ret));

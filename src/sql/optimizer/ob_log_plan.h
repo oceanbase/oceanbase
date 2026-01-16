@@ -1469,6 +1469,8 @@ public:
 
   int partial_limit_pushdown(ObLogicalOperator *&top);
 
+  int contains_linked_scan(ObLogicalOperator* root, bool & contains);
+
   int check_and_add_partial_distinct(ObLogicalOperator* &top,
                                   DistinctPushdownContext *&context,
                                   bool & is_materialized);
