@@ -45,6 +45,10 @@ public:
   {
     base_version_ = base_version;
   }
+  inline void set_inc_major_trans_version(const share::SCN &inc_major_trans_version)
+  {
+    inc_major_trans_version_ = inc_major_trans_version;
+  }
   void inc_empty_read(ObSSTableReadHandle &read_handle);
 protected:
   virtual int inner_get_next_row(
@@ -65,6 +69,7 @@ protected:
   ObStoreRowLockState *lock_state_;
   ObStoreRowLockState tmp_lock_state_;
   int64_t base_version_;
+  share::SCN inc_major_trans_version_;
 };
 
 class ObMicroBlockRowLockMultiChecker : public ObMicroBlockRowLockChecker {

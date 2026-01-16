@@ -27,7 +27,8 @@ ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker(common::ObIAllocator &all
     check_exist_(false),
     snapshot_version_(),
     lock_state_(nullptr),
-    base_version_(0)
+    base_version_(0),
+    inc_major_trans_version_()
 {
 }
 
@@ -178,7 +179,9 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
       } else if (is_filtered) {
       } else {
-        lock_state->trans_version_ = sstable_->get_end_scn();
+        lock_state->trans_version_ = sstable_->is_inc_major_related_sstable()
+                                       ? inc_major_trans_version_
+                                       : sstable_->get_end_scn();
         lock_state->lock_dml_flag_ = blocksstable::ObDmlFlag::DF_INSERT;
       }
       if (OB_SUCC(ret) && !is_filtered) {

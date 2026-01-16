@@ -415,7 +415,7 @@ int ObSSTable::scan(
       || !key_range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(key_range));
-  } else if (need_check_inc_major_can_access()
+  } else if (is_inc_major_related_sstable()
              && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
     LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
   } else {
@@ -479,7 +479,7 @@ int ObSSTable::get(
       || !rowkey.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(rowkey));
-  } else if (need_check_inc_major_can_access()
+  } else if (is_inc_major_related_sstable()
              && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
     LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
   } else {
@@ -541,7 +541,7 @@ int ObSSTable::multi_scan(
       || 0 >= ranges.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(ranges));
-  } else if (need_check_inc_major_can_access()
+  } else if (is_inc_major_related_sstable()
              && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
     LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
   } else {
@@ -602,7 +602,7 @@ int ObSSTable::multi_get(
       || 0 >= rowkeys.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(rowkeys));
-  } else if (need_check_inc_major_can_access()
+  } else if (is_inc_major_related_sstable()
              && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
     LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
   } else {
@@ -850,19 +850,20 @@ int ObSSTable::check_rows_locked(
   ObSSTableRowLockMultiChecker *multi_checker = nullptr;
   bool can_access = true;
   bool may_exist = true;
-  const bool is_inc_major_or_major = is_inc_major_related_sstable() || is_major_sstable();
   const share::SCN snapshot_version = context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
   const int64_t base_version = context.store_ctx_->mvcc_acc_ctx_.major_snapshot_;
+  SCN inc_major_trans_version = SCN::min_scn();
   if (OB_UNLIKELY(rows_info.all_rows_found())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state", K(ret), K(rows_info));
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(valid_for_reading), KP_(meta));
-  } else if (need_check_inc_major_can_access()
-             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
-    LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
-  } else if (no_data_to_read() || !can_access || (is_inc_major_or_major && !check_exist)) {
+  } else if (no_data_to_read() || (!check_exist && !is_multi_version_minor_sstable())) {
+  } else if (is_inc_major_related_sstable()
+             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access_for_update(context, *this, can_access, inc_major_trans_version))) {
+    LOG_WARN("fail to check can access for update", K(ret), K(context), K(*this));
+  } else if (!can_access) {
   } else if (!check_exist && get_upper_trans_version() <= snapshot_version.get_val_for_tx()) {
     if (max_trans_version.get_val_for_tx() < get_upper_trans_version()) {
       if (OB_FAIL(max_trans_version.convert_for_tx(get_upper_trans_version()))) {
@@ -880,7 +881,7 @@ int ObSSTable::check_rows_locked(
     LOG_WARN("Failed to check min rowkey boundary", K(ret), KPC(sstable_endkey), K(rows_info));
   } else if (may_exist) {
     // TODO(hanling): Do we need to optimize for the mini/minor sstable which does not have uncommitted row?
-    if (is_inc_major_or_major) {
+    if (!is_multi_version_minor_sstable()) {
       rows_info.set_all_rows_lock_checked(check_exist);
     }
     if (OB_FAIL(rows_info.refine_rowkeys())) {
@@ -889,7 +890,7 @@ int ObSSTable::check_rows_locked(
     } else if (OB_FAIL(build_multi_row_lock_checker(rows_info, multi_checker))) {
       LOG_WARN("Failed to build multi row lock checker", K(ret), K(rows_info));
     } else {
-      if (OB_FAIL(multi_checker->check_row_locked(check_exist, snapshot_version, base_version))) {
+      if (OB_FAIL(multi_checker->check_row_locked(check_exist, snapshot_version, base_version, inc_major_trans_version))) {
         LOG_WARN("Failed to check row lock", K(ret), K(rows_info));
       }
     }
@@ -912,16 +913,17 @@ int ObSSTable::check_row_locked(
   bool can_access = true;
   const blocksstable::ObStorageDatumUtils &datum_utils = param.get_read_info()->get_datum_utils();
   int cmp_ret = 0;
+  SCN inc_major_trans_version = SCN::min_scn();
   lock_state.trans_version_ = SCN::min_scn();
   lock_state.is_locked_ = false;
   lock_state.lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(key), K_(valid_for_reading), KPC_(meta));
-  } else if (no_data_to_read()) {
-  } else if (need_check_inc_major_can_access()
-             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(context, *this, can_access))) {
-    LOG_WARN("fail to check can access", K(ret), K(context), K(*this));
+  } else if (no_data_to_read() || (!check_exist && !is_multi_version_minor_sstable())) {
+  } else if (is_inc_major_related_sstable()
+             && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access_for_update(context, *this, can_access, inc_major_trans_version))) {
+    LOG_WARN("fail to check can access for update", K(ret), K(context), K(*this));
   } else if (!can_access) {
   } else if (OB_FAIL(get_last_rowkey(sstable_endkey))) {
     LOG_WARN("Fail to get SSTable endkey", K(ret), KP_(meta));
@@ -931,8 +933,6 @@ int ObSSTable::check_row_locked(
   } else if (OB_FAIL(rowkey.compare(*sstable_endkey, datum_utils, cmp_ret))) {
     LOG_WARN("Failed to compare rowkey with max rowkey", K(ret), KPC(sstable_endkey), K(rowkey));
   } else if (cmp_ret > 0) {
-  } else if (!check_exist && !is_multi_version_minor_sstable()) {
-    // return false if not multi version minor sstable
   } else if (!check_exist && get_upper_trans_version() <= context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()) {
     // there is no lock at this sstable
     if (OB_FAIL(lock_state.trans_version_.convert_for_tx(get_upper_trans_version()))) {
@@ -945,7 +945,7 @@ int ObSSTable::check_row_locked(
     const int64_t base_version = context.store_ctx_->mvcc_acc_ctx_.major_snapshot_;
     if (OB_FAIL(row_checker.init(param, context, this, &rowkey))) {
       LOG_WARN("failed to open row locker", K(ret), K(param), K(context), K(rowkey));
-    } else if (OB_FAIL(row_checker.check_row_locked(check_exist, snapshot_version, base_version, lock_state))) {
+    } else if (OB_FAIL(row_checker.check_row_locked(check_exist, snapshot_version, base_version, inc_major_trans_version, lock_state))) {
       LOG_WARN("failed to check row lock checker", KR(ret), K(lock_state), K(snapshot_version));
     }
   }

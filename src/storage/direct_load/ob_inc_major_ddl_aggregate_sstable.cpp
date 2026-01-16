@@ -14,6 +14,7 @@
 #include "storage/direct_load/ob_inc_major_ddl_aggregate_sstable.h"
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/blocksstable/ob_sstable.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
@@ -427,8 +428,8 @@ int ObIncMajorDDLAggregateCOSSTable::init(
     LOG_WARN("fail to init sstable", KR(ret), K(sstable_param));
   } else if (OB_FAIL(cg_sstables_.create(CG_SSTABLE_COUNT, attr, attr))) {
     LOG_WARN("fail to create cg sstable map", KR(ret), K(attr));
-  } else if (OB_FAIL(init_tx_info(base_sstable))) {
-    LOG_WARN("fail to init tx info", KR(ret), K(base_sstable), K(tx_info_));
+  } else if (OB_FAIL(ObIncMajorTxHelper::get_trans_id_and_seq_no(base_sstable, tx_info_.trans_id_, tx_info_.seq_no_))) {
+    LOG_WARN("fail to get trans id and seq no", KR(ret), K(base_sstable));
   } else {
     tablet_id_ = table_key.tablet_id_;
     base_sstable_ = &base_sstable;
@@ -455,46 +456,38 @@ int ObIncMajorDDLAggregateCOSSTable::init(
   return ret;
 }
 
-int ObIncMajorDDLAggregateCOSSTable::init_tx_info(const ObSSTable &sstable)
+int ObIncMajorDDLAggregateCOSSTable::get_trans_id_and_seq_no(
+    ObTransID &trans_id,
+    ObTxSEQ &seq_no) const
 {
   int ret = OB_SUCCESS;
-  ObSSTableMetaHandle meta_handle;
-  if (OB_FAIL(sstable.get_meta(meta_handle))) {
-    LOG_WARN("fail to get meta", KR(ret));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
   } else {
-    const ObMetaUncommitTxInfo &uncommit_info
-          = meta_handle.get_sstable_meta().get_uncommit_tx_info();
-    if (OB_UNLIKELY(!uncommit_info.is_valid() || OB_ISNULL(uncommit_info.tx_infos_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected invalid uncommit info", KR(ret), K(uncommit_info));
-    } else {
-      ObTransID trans_id(uncommit_info.tx_infos_[0].tx_id_);
-      ObTxSEQ sql_seq;
-      sql_seq.cast_from_int(uncommit_info.tx_infos_[0].sql_seq_);
-      tx_info_.trans_id_ = trans_id;
-      tx_info_.seq_no_ = sql_seq;
-    }
+    trans_id = tx_info_.trans_id_;
+    seq_no = tx_info_.seq_no_;
   }
   return ret;
 }
+
 int ObIncMajorDDLAggregateCOSSTable::check_can_access(
-    const ObTableAccessContext &context,
+    ObTableAccessContext &context,
     bool &can_access) const
 {
   int ret = OB_SUCCESS;
-  can_access = true;
-  SCN max_scn = SCN::max_scn();
-  SCN trans_version;
-  memtable::ObMvccAccessCtx &mvcc_acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
-  storage::ObTxTableGuards &tx_table_guards = mvcc_acc_ctx.get_tx_table_guards();
-  transaction::ObLockForReadArg lock_for_read_arg(mvcc_acc_ctx,
-                                                  tx_info_.trans_id_,
-                                                  tx_info_.seq_no_,
-                                                  context.query_flag_.read_latest_,
-                                                  context.query_flag_.iter_uncommitted_row_,
-                                                  max_scn);
-  if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_access, trans_version))) {
-    LOG_WARN("fail to lock for read", KR(ret), K(lock_for_read_arg));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    SCN commit_scn;
+    if (OB_FAIL(ObIncMajorTxHelper::check_can_access(context,
+                                                     tx_info_.trans_id_,
+                                                     tx_info_.seq_no_,
+                                                     can_access,
+                                                     commit_scn))) {
+      LOG_WARN("fail to check can access", KR(ret));
+    }
   }
   return ret;
 }

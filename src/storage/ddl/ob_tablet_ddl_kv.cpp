@@ -18,6 +18,7 @@
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/ddl/ob_tablet_ddl_kv_multi_version_row_iterator.h"
 #include "storage/access/ob_sstable_multi_version_row_iterator.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "storage/tx/ob_trans_define.h"
@@ -29,6 +30,7 @@ using namespace oceanbase::clog;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::transaction;
+using namespace oceanbase::compaction;
 
 
 /******************             ObBlockMetaTree              **********************/
@@ -2001,27 +2003,16 @@ int ObDDLKV::check_can_access(ObTableAccessContext &context, bool &can_access)
   int ret = OB_SUCCESS;
   transaction::ObTransID trans_id;
   transaction::ObTxSEQ seq_no;
-  SCN max_scn;
-  SCN trans_version;
   {
     TCRLockGuard guard(lock_);
     trans_id = trans_id_;
     seq_no = seq_no_;
-    max_scn = max_scn_;
   }
   can_access = true;
-  if (seq_no.is_valid()) {
-    memtable::ObMvccAccessCtx &mvcc_acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
-    storage::ObTxTableGuards &tx_table_guards = mvcc_acc_ctx.get_tx_table_guards();
-    transaction::ObLockForReadArg lock_for_read_arg(mvcc_acc_ctx,
-                                                    trans_id,
-                                                    seq_no,
-                                                    context.query_flag_.read_latest_,
-                                                    context.query_flag_.iter_uncommitted_row_,
-                                                    max_scn);
-    if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_access, trans_version))) {
-      LOG_WARN("fail to lock for read", KR(ret), K(lock_for_read_arg));
-    }
+  SCN commit_scn;
+  if (seq_no.is_valid() &&
+      OB_FAIL(ObIncMajorTxHelper::check_can_access(context, trans_id, seq_no, can_access, commit_scn))) {
+    LOG_WARN("fail to check can access", KR(ret), K(context), K(trans_id), K(seq_no));
   }
   return ret;
 }

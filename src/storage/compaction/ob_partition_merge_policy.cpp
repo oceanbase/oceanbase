@@ -2610,10 +2610,10 @@ int ObIncMajorTxHelper::get_inc_major_commit_version(
     int64_t &commit_version)
 {
   int ret = OB_SUCCESS;
+  ObTransID trans_id;
+  ObTxSEQ seq_no;
   SCN trans_version;
   bool can_read = true;
-  ObSSTableMetaHandle meta_hdl;
-  const compaction::ObMetaUncommitTxInfo *tx_info = nullptr;
 
   if (!inc_major_table.is_inc_major_type_sstable() && !inc_major_table.is_inc_major_ddl_sstable()) {
     ret = OB_INVALID_ARGUMENT;
@@ -2630,16 +2630,10 @@ int ObIncMajorTxHelper::get_inc_major_commit_version(
     } else {
       trans_state = ObTxData::COMMIT;
     }
-  } else if (OB_FAIL(inc_major_table.get_meta(meta_hdl))) {
-    LOG_WARN("failed to get sstable meta handle", K(ret));
-  } else if (FALSE_IT(tx_info = &meta_hdl.get_sstable_meta().get_uncommit_tx_info() )) {
-  } else if (OB_UNLIKELY(1 != tx_info->uncommit_tx_desc_count_
-                      || 0 == tx_info->tx_infos_[0].sql_seq_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inc major should only has one tx info!", K(ret), KPC(tx_info));
-  } else if (OB_FAIL(check_inc_major_trans_can_read(&ls, ObTransID(tx_info->tx_infos_[0].tx_id_),
-      ObTxSEQ::cast_from_int(tx_info->tx_infos_[0].sql_seq_), read_scn, trans_state, can_read, trans_version))) {
-    LOG_WARN("failed to check inc major trans can read", KR(ret), K(ls), KPC(tx_info));
+  } else if (OB_FAIL(get_trans_id_and_seq_no(inc_major_table, trans_id, seq_no))) {
+    LOG_WARN("fail to get trans id and seq no", KR(ret), K(inc_major_table));
+  } else if (OB_FAIL(check_inc_major_trans_can_read(&ls, trans_id, seq_no, read_scn, trans_state, can_read, trans_version))) {
+    LOG_WARN("failed to check inc major trans can read", KR(ret), K(ls), K(trans_id), K(seq_no), K(inc_major_table));
   } else if (can_read) {
     commit_version = trans_version.get_val_for_tx();
   }
@@ -2692,23 +2686,44 @@ int ObIncMajorTxHelper::get_trans_id_and_seq_no_from_sstable(
     ObTxSEQ &seq_no)
 {
   int ret = OB_SUCCESS;
-  ObSSTableMetaHandle table_meta_handle;
   if (OB_ISNULL(sstable)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null sstable", KR(ret), KP(sstable));
-  } else if (OB_FAIL(sstable->get_meta(table_meta_handle))) {
-    LOG_WARN("failed to get sstable meta handle", KR(ret), KPC(sstable));
-  } else if (OB_UNLIKELY(!table_meta_handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid tablet meta handle", KR(ret), K(table_meta_handle));
   } else {
-    const ObMetaUncommitTxInfo &uncommit_info = table_meta_handle.get_sstable_meta().get_uncommit_tx_info();
-    if (uncommit_info.is_valid() && (uncommit_info.get_info_count() > 0)) {
-      trans_id = uncommit_info.tx_infos_[0].tx_id_;
-      seq_no = ObTxSEQ::cast_from_int(uncommit_info.tx_infos_[0].sql_seq_);
+    return get_trans_id_and_seq_no(*sstable, trans_id, seq_no);
+  }
+  return ret;
+}
+
+int ObIncMajorTxHelper::get_trans_id_and_seq_no(
+  const ObSSTable &sstable,
+  ObTransID &trans_id,
+  ObTxSEQ &seq_no)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!sstable.is_inc_major_related_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(sstable));
+  } else if (sstable.is_inc_major_ddl_aggregate_co_sstable()) {
+    const ObIncMajorDDLAggregateCOSSTable &co_sstable = static_cast<const ObIncMajorDDLAggregateCOSSTable &>(sstable);
+    if (OB_FAIL(co_sstable.get_trans_id_and_seq_no(trans_id, seq_no))) {
+      LOG_WARN("fail to get trans id and seq no", KR(ret), K(co_sstable));
+    }
+  } else {
+    ObSSTableMetaHandle meta_handle;
+    if (OB_FAIL(sstable.get_meta(meta_handle))) {
+      LOG_WARN("failed to get sstable meta handle", KR(ret), K(sstable));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected invalid uncommit tx info of sstable", KR(ret), KPC(sstable));
+      const ObMetaUncommitTxInfo &uncommit_info =
+        meta_handle.get_sstable_meta().get_uncommit_tx_info();
+      if (OB_UNLIKELY(!uncommit_info.is_valid() || 1 != uncommit_info.get_info_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid uncommit tx info", KR(ret), K(uncommit_info), K(sstable));
+      } else {
+        const ObUncommitTxDesc &tx_desc = uncommit_info.tx_infos_[0];
+        trans_id = tx_desc.tx_id_;
+        seq_no = ObTxSEQ::cast_from_int(tx_desc.sql_seq_);
+      }
     }
   }
   return ret;
@@ -2718,8 +2733,8 @@ int ObIncMajorTxHelper::check_can_access(
   ObTableAccessContext &context,
   const ObTransID &trans_id,
   const ObTxSEQ &seq_no,
-  const SCN &max_scn,
-  bool &can_access)
+  bool &can_access,
+  SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   can_access = false;
@@ -2727,35 +2742,17 @@ int ObIncMajorTxHelper::check_can_access(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(trans_id), K(seq_no));
   } else {
-    memtable::ObMvccAccessCtx &mvcc_acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
-    storage::ObTxTableGuards &tx_table_guards = mvcc_acc_ctx.get_tx_table_guards();
-    transaction::ObLockForReadArg lock_for_read_arg(mvcc_acc_ctx,
-                                                    trans_id,
-                                                    seq_no,
-                                                    context.query_flag_.read_latest_,
-                                                    context.query_flag_.iter_uncommitted_row_,
-                                                    max_scn);
-    SCN trans_version;
-    if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_access, trans_version))) {
+    ObMvccAccessCtx &mvcc_acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+    ObTxTableGuards &tx_table_guards = mvcc_acc_ctx.get_tx_table_guards();
+    ObLockForReadArg lock_for_read_arg(mvcc_acc_ctx,
+                                       trans_id,
+                                       seq_no,
+                                       context.query_flag_.read_latest_,
+                                       context.query_flag_.iter_uncommitted_row_,
+                                       SCN::max_scn());
+    if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_access, commit_version))) {
       LOG_WARN("fail to lock for read", KR(ret), K(lock_for_read_arg));
     }
-  }
-  return ret;
-}
-
-int ObIncMajorTxHelper::check_can_access(
-  ObTableAccessContext &context,
-  const ObUncommitTxDesc &tx_desc,
-  const SCN &max_scn,
-  bool &can_access)
-{
-  int ret = OB_SUCCESS;
-  can_access = false;
-  if (OB_UNLIKELY(!tx_desc.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tx_desc));
-  } else {
-    ret = check_can_access(context, tx_desc.tx_id_, ObTxSEQ::cast_from_int(tx_desc.sql_seq_), max_scn, can_access);
   }
   return ret;
 }
@@ -2767,41 +2764,58 @@ int ObIncMajorTxHelper::check_can_access(
 {
   int ret = OB_SUCCESS;
   can_access = true;
-  if (sstable.is_inc_major_type_sstable() || sstable.is_inc_major_ddl_sstable()) {
-    ObSSTableMetaHandle meta_handle;
-    if (OB_FAIL(sstable.get_meta(meta_handle))) {
-      LOG_WARN("fail to get sstable meta", K(ret), K(sstable));
-    } else if (OB_UNLIKELY(!meta_handle.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid meta handle", K(ret), K(meta_handle));
-    } else {
-      const ObMetaUncommitTxInfo &uncommit_info = meta_handle.get_sstable_meta().get_uncommit_tx_info();
-      // TODO: zhanghuidong.zhd, collect commit version map from sstable meta for multi-trans inc major
-      if (OB_UNLIKELY(!uncommit_info.is_valid() || 1 != uncommit_info.get_info_count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid uncommit info", K(ret), K(uncommit_info));
-      } else if (INT64_MAX != sstable.get_upper_trans_version()) {
-        can_access = context.trans_version_range_.snapshot_version_ >= sstable.get_upper_trans_version();
+  if (OB_UNLIKELY(!sstable.is_inc_major_related_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(sstable));
+  } else {
+    if (INT64_MAX != sstable.get_upper_trans_version()) {
+      ObMvccAccessCtx &mvcc_acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+      SCN commit_version;
+      if (OB_FAIL(commit_version.convert_for_tx(sstable.get_upper_trans_version()))) {
+        LOG_WARN("fail to convert for tx", KR(ret), K(sstable));
       } else {
-        ObUncommitTxDesc uncommit_tx_desc;
-        if (OB_FAIL(uncommit_info.get_uncommit_tx_desc(uncommit_tx_desc, 0))) {
-          LOG_WARN("fail to get uncommit tx desc", KR(ret));
-        } else if (OB_FAIL(check_can_access(context, uncommit_tx_desc, sstable.get_end_scn(), can_access))) {
-          LOG_WARN("fail to check can access", KR(ret));
-        }
+        can_access = mvcc_acc_ctx.get_snapshot_version() >= commit_version;
+      }
+    } else {
+      ObTransID trans_id;
+      ObTxSEQ seq_no;
+      SCN commit_version;
+      if (OB_FAIL(get_trans_id_and_seq_no(sstable, trans_id, seq_no))) {
+        LOG_WARN("fail to get trans id and seq no", KR(ret), K(sstable));
+      } else if (OB_FAIL(check_can_access(context, trans_id, seq_no, can_access, commit_version))) {
+        LOG_WARN("fail to check can access", KR(ret));
       }
     }
-  } else if (sstable.is_inc_major_ddl_aggregate_co_sstable()) {
-    const ObIncMajorDDLAggregateCOSSTable *co_sstable = static_cast<const ObIncMajorDDLAggregateCOSSTable *>(&sstable);
-    if (OB_ISNULL(co_sstable)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null co sstable", KR(ret), K(sstable));
-    } else if (OB_FAIL(co_sstable->check_can_access(context, can_access))) {
-      LOG_WARN("fail to check can access", KR(ret));
-    }
+  }
+  return ret;
+}
+
+int ObIncMajorTxHelper::check_can_access_for_update(
+  ObTableAccessContext &context,
+  const ObSSTable &sstable,
+  bool &can_access,
+  SCN &commit_version)
+{
+  int ret = OB_SUCCESS;
+  can_access = true;
+  return ret;
+  if (OB_UNLIKELY(!sstable.is_inc_major_related_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(sstable));
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected sstable", KR(ret), K(sstable));
+    if (INT64_MAX != sstable.get_upper_trans_version()) {
+      can_access = true;
+    } else {
+      ObTransID trans_id;
+      ObTxSEQ seq_no;
+      if (OB_FAIL(get_trans_id_and_seq_no(sstable, trans_id, seq_no))) {
+        LOG_WARN("fail to get trans id and seq no", KR(ret), K(sstable));
+      } else if (OB_FAIL(check_can_access(context, trans_id, seq_no, can_access, commit_version))) {
+        LOG_WARN("fail to check can access for update", KR(ret));
+      } else if (!can_access && commit_version.is_valid_and_not_min()) {
+        can_access = true;
+      }
+    }
   }
   return ret;
 }

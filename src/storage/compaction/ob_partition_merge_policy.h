@@ -500,19 +500,23 @@ public:
       const blocksstable::ObSSTable *sstable,
       transaction::ObTransID &trans_id,
       transaction::ObTxSEQ &seq_no);
+  static int get_trans_id_and_seq_no(
+      const blocksstable::ObSSTable &sstable,
+      transaction::ObTransID &trans_id,
+      transaction::ObTxSEQ &seq_no);
 
   static int check_can_access(ObTableAccessContext &context,
                               const transaction::ObTransID &trans_id,
                               const transaction::ObTxSEQ &seq_no,
-                              const share::SCN &max_scn,
-                              bool &can_access);
-  static int check_can_access(ObTableAccessContext &context,
-                              const ObUncommitTxDesc &tx_desc,
-                              const share::SCN &max_scn,
-                              bool &can_access);
+                              bool &can_access,
+                              share::SCN &commit_version);
   static int check_can_access(ObTableAccessContext &context,
                               const blocksstable::ObSSTable &sstable,
                               bool &can_access);
+  static int check_can_access_for_update(ObTableAccessContext &context,
+                                         const blocksstable::ObSSTable &sstable,
+                                         bool &can_access,
+                                         share::SCN &commit_version);
 
   static int check_inc_major_table_status(
       const compaction::ObMediumCompactionInfo &medium_info,

@@ -245,10 +245,6 @@ public:
   {
     return is_empty() && is_ddl_merge_sstable();
   }
-  OB_INLINE bool need_check_inc_major_can_access() const
-  {
-    return is_inc_major_type_sstable() || is_inc_major_ddl_sstable() || is_inc_major_ddl_aggregate_co_sstable();
-  }
   int set_addr(const ObMetaDiskAddr &addr);
   OB_INLINE const ObMetaDiskAddr &get_addr() const { return addr_; }
   OB_INLINE int64_t get_data_macro_block_count() const { return meta_cache_.data_macro_block_count_; }

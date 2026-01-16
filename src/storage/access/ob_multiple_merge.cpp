@@ -2166,7 +2166,7 @@ int ObMultipleMerge::check_table_need_read(const ObITable *table, bool &need_tab
   int ret = OB_SUCCESS;
   need_table = true;
   // check inc major sstable need read
-  if (table->is_inc_major_type_sstable() || table->is_inc_major_ddl_sstable() || table->is_inc_major_ddl_aggregate_co_sstable()) {
+  if (table->is_inc_major_related_sstable()) {
     const ObSSTable *sstable = dynamic_cast<const ObSSTable *>(table);
     if (OB_ISNULL(sstable)) {
       ret = OB_ERR_UNEXPECTED;
