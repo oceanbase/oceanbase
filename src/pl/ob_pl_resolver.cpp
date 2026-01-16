@@ -6295,7 +6295,11 @@ int ObPLResolver::check_value_expr_can_transform(ObRawExpr *expr,
       if (udf_expr->get_pkg_id() != OB_INVALID_ID) {
         if (OB_SUCC(resolve_ctx_.schema_guard_.get_routine_info_in_package(tenant_id, udf_expr->get_pkg_id(), udf_expr->get_udf_id(), routine_info))) {
           if (NULL != routine_info) {
-            if (routine_info->is_modifies_sql_data() || routine_info->has_accessible_by_clause()) {
+            if (routine_info->is_modifies_sql_data()
+                || routine_info->has_accessible_by_clause()
+                || routine_info->is_deterministic()) {
+              // for is_deterministic :
+              // consider select f1() + f1() from dual, if we transform into assign stmt, the result will be different.
               can_transform = false;
             }
           }
@@ -6303,7 +6307,9 @@ int ObPLResolver::check_value_expr_can_transform(ObRawExpr *expr,
       } else {
         if (OB_SUCC(resolve_ctx_.schema_guard_.get_routine_info(tenant_id, udf_expr->get_udf_id(), routine_info))) {
           if (NULL != routine_info) {
-            if (routine_info->is_modifies_sql_data() || routine_info->has_accessible_by_clause()) {
+            if (routine_info->is_modifies_sql_data()
+                || routine_info->has_accessible_by_clause()
+                || routine_info->is_deterministic()) {
               can_transform = false;
             }
           }
