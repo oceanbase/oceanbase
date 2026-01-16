@@ -191,9 +191,8 @@ int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &
         timeout = std::min(MAX_OPT_STATS_PROCESS_RPC_TIMEOUT, THIS_WORKER.get_timeout_remain());
         if (!all_server_arr.at(i).is_active()
             || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
-            || 0 == all_server_arr.at(i).get_start_service_time()
             || 0 != all_server_arr.at(i).get_server_stop_time()) {
-        //server may not serving
+          LOG_INFO("server may not serving", K(all_server_arr.at(i)));
         } else if (0 >= timeout) {
           ret = OB_TIMEOUT;
           LOG_WARN("query timeout is reached", K(ret), K(timeout));

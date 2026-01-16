@@ -3446,9 +3446,8 @@ int ObDbmsStats::update_stat_cache(const uint64_t tenant_id,
       timeout = std::min(MAX_OPT_STATS_PROCESS_RPC_TIMEOUT, THIS_WORKER.get_timeout_remain());
       if (!all_server_arr.at(i).is_active()
           || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
-          || 0 == all_server_arr.at(i).get_start_service_time()
           || 0 != all_server_arr.at(i).get_server_stop_time()) {
-      //server may not serving
+        LOG_INFO("server may not serving", K(all_server_arr.at(i)));
       } else if (0 >=(timeout)) {
         ret = OB_TIMEOUT;
         LOG_WARN("query timeout is reached", K(ret), K(timeout));
@@ -7132,9 +7131,8 @@ int ObDbmsStats::update_system_stats_cache(const uint64_t rpc_tenant_id,
   for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
     if (!all_server_arr.at(i).is_active()
         || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
-        || 0 == all_server_arr.at(i).get_start_service_time()
         || 0 != all_server_arr.at(i).get_server_stop_time()) {
-    //server may not serving
+      LOG_INFO("server may not serving", K(all_server_arr.at(i)));
     } else if (0 >= (timeout = THIS_WORKER.get_timeout_remain())) {
       ret = OB_TIMEOUT;
       LOG_WARN("query timeout is reached", K(ret), K(timeout));
