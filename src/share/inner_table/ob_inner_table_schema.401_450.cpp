@@ -2507,7 +2507,7 @@ int ObInnerTableSchema::all_kv_ttl_task_schema(ObTableSchema &table_schema)
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_BINARY, //column_collation_type
-      2048, //column_length
+      OB_MAX_ROW_KEY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -2852,7 +2852,7 @@ int ObInnerTableSchema::all_kv_ttl_task_history_schema(ObTableSchema &table_sche
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_BINARY, //column_collation_type
-      2048, //column_length
+      OB_MAX_ROW_KEY_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
