@@ -642,10 +642,8 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("^");
     case T_OP_BIT_AND:
       SET_SYMBOL_IF_EMPTY("&");
-    case T_OP_REGEXP:
+    case T_OP_REGEXP: {
       SET_SYMBOL_IF_EMPTY("regexp");
-    case T_OP_CNN: {
-      SET_SYMBOL_IF_EMPTY("||");
       //case T_OP_DATE_ADD: {
       if (OB_UNLIKELY(2 != expr->get_param_count())) {
         ret = OB_ERR_UNEXPECTED;
@@ -670,6 +668,25 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
             }
           }
           PRINT_EXPR(expr->get_param_expr(1));
+          DATA_PRINTF(")");
+        }
+      }
+      break;
+    }
+    // T_OP_CNN(a, b, c) -> (a || b || c)
+    case T_OP_CNN: {
+      SET_SYMBOL_IF_EMPTY("||");
+      if (OB_UNLIKELY(2 > expr->get_param_count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr param count should be equal 2", "count", expr->get_param_count(), K(ret));
+      } else {
+        DATA_PRINTF("(");
+        for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+          PRINT_EXPR(expr->get_param_expr(i));
+          DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
+        }
+        if (OB_SUCC(ret)) {
+          *pos_ -= 2 + symbol.length();
           DATA_PRINTF(")");
         }
       }

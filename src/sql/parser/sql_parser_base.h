@@ -1230,20 +1230,21 @@ do {\
     } \
   } while(0); \
 
-#define flatten_and_or(malloc_pool, result, ret_node, left_node, right_node, type) \
+#define flatten_bin_op(malloc_pool, result, ret_node, left_node, right_node, type) \
   do { \
     ret_node = NULL; \
-    if (NULL == left_node || NULL == right_node || (T_OP_OR != type && T_OP_AND != type)) { \
+    if (NULL == left_node || NULL == right_node || (T_OP_OR != type && T_OP_AND != type && T_OP_CNN != type)) { \
       result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
       yyerror(NULL, result, "unexpected param\n"); \
       YYABORT; \
-    } else if (left_node->type_ == type && right_node->type_ == type) { \
+    } else if (left_node->type_ == type && (T_OP_CNN != type || 1 != left_node->is_assigned_from_child_) && \
+               right_node->type_ == type && (T_OP_CNN != type || 1 != right_node->is_assigned_from_child_)) { \
       /* (A OR B) OR (C OR D) */ \
       append_list(malloc_pool, result, ret_node, left_node, right_node); \
-    } else if (left_node->type_ == type && right_node->type_ != type) { \
+    } else if (left_node->type_ == type && right_node->type_ != type && (T_OP_CNN != type || 1 != left_node->is_assigned_from_child_)) { \
       /* (A OR B) OR C */ \
       push_back_list(malloc_pool, result, ret_node, left_node, right_node); \
-    } else if (left_node->type_ != type && right_node->type_ == type) { \
+    } else if (left_node->type_ != type && right_node->type_ == type && (T_OP_CNN != type || 1 != right_node->is_assigned_from_child_)) { \
       /* A OR (B OR C) */ \
       push_front_list(malloc_pool, result, ret_node, right_node, left_node); \
     } else { \
