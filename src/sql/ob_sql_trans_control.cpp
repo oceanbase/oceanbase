@@ -325,22 +325,18 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
                                                          is_rollback,
                                                          is_explicit,
                                                          need_disconnect);
-    if (is_rollback || OB_FAIL(ret) || !callback) {
+    if (is_rollback || OB_FAIL(ret) || !callback || pl_async_commit_need_wait) {
       bool reuse_tx = OB_SUCCESS == ret
         || OB_TRANS_COMMITED == ret
         || OB_TRANS_ROLLBACKED == ret;
-      reset_session_tx_state(session, reuse_tx, reset_trans_variable);
-    }
-    if (pl_async_commit_need_wait) {
-      if (OB_FAIL(ret)) {
-        ObSpinLockGuard lock_guard(session->get_pl_end_trans_cb().get_lock());
-        session->get_pl_end_trans_cb().reset();
-        LOG_WARN("fail to submit pl async commit task", K(ret));
-      } else if (OB_NOT_NULL(callback)) {
+      if (OB_FAIL(ret) && pl_async_commit_need_wait) {
+        // if commit failed, transfer tx_desc back to session
         ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
-        session->get_tx_desc() = NULL;
-        reset_session_tx_state(session, false, reset_trans_variable);
+        session->get_tx_desc() = session->get_pl_end_trans_cb().get_tx_desc();
+        session->get_pl_end_trans_cb().reset();
+        LOG_WARN("[PL_ASYNC_COMMIT] failed to submit pl async commit task, transfer tx_desc back to session", K(ret));
       }
+      reset_session_tx_state(session, reuse_tx, reset_trans_variable);
     }
   }
   if (callback && !is_rollback) {
@@ -566,6 +562,12 @@ int ObSqlTransControl::process_pl_async_commit(ObSQLSessionInfo *session,
   if (OB_NOT_NULL(callback)) {
     int64_t tx_id = session->get_tx_desc() ? session->get_tx_desc()->get_tx_id().get_id() : 0;
     OX (pl_end_trans_cb.set_tx_desc(session->get_tx_desc()));
+    // Transfer tx_desc from session to callback, and immediately clear session's tx_desc pointer
+    // to avoid race condition with GC thread accessing a released tx_desc
+    if (OB_SUCC(ret)) {
+      ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
+      session->get_tx_desc() = NULL;
+    }
     LOG_TRACE("[PL_ASYNC_COMMIT] Use async commit callback and set tx_desc", "tx_id", tx_id, K(ret));
   }
   return ret;
