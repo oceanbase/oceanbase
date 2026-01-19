@@ -100,6 +100,8 @@ public:
     return node;
   }
 
+  int64_t get_alloc_count() const { return alloc_count_; }
+
 private:
   int64_t alloc_count_;
   int64_t alloc_limit_;
@@ -155,11 +157,14 @@ public:
   int64_t get_memory_limit() const;
   void set_memory_limit(int64_t memory_limit_percentage, int64_t memory_evict_high_percentage, int64_t memory_evict_low_percentage);
   ObSqlStatInfoHashMap *get_sql_stat_infos() { return &sql_stat_infos_; }
+  bool is_stopped() const { return is_stopped_; }
+  void set_stopped(bool stopped) { is_stopped_ = stopped; }
 
   ~ObSqlStatManager();
 
 private:
   bool is_inited_;
+  bool is_stopped_;
   int64_t tenant_id_;
   int64_t memory_limit_percentage_;
   int64_t memory_evict_high_percentage_;
