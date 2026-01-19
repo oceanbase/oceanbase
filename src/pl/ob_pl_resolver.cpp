@@ -6297,9 +6297,12 @@ int ObPLResolver::check_value_expr_can_transform(ObRawExpr *expr,
           if (NULL != routine_info) {
             if (routine_info->is_modifies_sql_data()
                 || routine_info->has_accessible_by_clause()
-                || routine_info->is_deterministic()) {
+                || routine_info->is_deterministic()
+                || routine_info->is_wps()) {
               // for is_deterministic :
               // consider select f1() + f1() from dual, if we transform into assign stmt, the result will be different.
+              // UDF accesses package state (RPS: reads, WPS: writes)
+              // if write package state, do not optimize( select udf() + pkg.var into v from dual)
               can_transform = false;
             }
           }
@@ -6309,7 +6312,8 @@ int ObPLResolver::check_value_expr_can_transform(ObRawExpr *expr,
           if (NULL != routine_info) {
             if (routine_info->is_modifies_sql_data()
                 || routine_info->has_accessible_by_clause()
-                || routine_info->is_deterministic()) {
+                || routine_info->is_deterministic()
+                || routine_info->is_wps()) {
               can_transform = false;
             }
           }
