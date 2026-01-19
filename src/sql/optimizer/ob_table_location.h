@@ -1069,7 +1069,8 @@ private:
                              ObExecContext *exec_ctx,
                              ObQueryCtx *query_ctx,
                              const bool is_in_range_optimization_enabled,
-                             const bool use_new_query_range);
+                             const bool use_new_query_range,
+                             const ObTableSchema *table_schema);
 
   int analyze_filter(const common::ObIArray<ColumnItem> &partition_columns,
                      const ObRawExpr *partition_expr,
@@ -1096,7 +1097,8 @@ private:
                                const ObIArray<ObRawExpr*> &filter_exprs,
                                bool &always_true,
                                ObPartLocCalcNode *&calc_node,
-                               ObExecContext *exec_ctx);
+                               ObExecContext *exec_ctx,
+                               const ObTableSchema* table_schema);
 
   int extract_eq_op(ObExecContext *exec_ctx,
                     const ObRawExpr *l_expr,
@@ -1186,7 +1188,8 @@ private:
                              bool &get_all,
                              bool &is_range_get,
                              const bool is_in_range_optimization_enabled,
-                             const bool use_new_query_range);
+                             const bool use_new_query_range,
+                             const ObTableSchema *table_schema);
 
   int calc_partition_ids_by_in_expr(
                    ObExecContext &exec_ctx,
