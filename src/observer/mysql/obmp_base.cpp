@@ -817,19 +817,28 @@ int ObMPBase::handle_auth_switch_if_needed(
     ObSQLSessionInfo &session,
     const ObString &required_plugin,
     const OMPKHandshakeResponse &hsr,
-    obmysql::ObICSMemPool &mem_pool)
+    obmysql::ObICSMemPool &mem_pool,
+    bool support_auth_switch)
 {
   int ret = OB_SUCCESS;
   bool is_empty_passwd = false;
   if (OB_FAIL(schema_guard.is_user_empty_passwd(login_info, is_empty_passwd))) {
     LOG_WARN("failed to check if user account has empty password", K(ret), K(login_info.passwd_));
+  } else if (conn->is_proxy_ && ObEncryptedHelper::is_caching_sha2_password_plugin(required_plugin)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("caching_sha2_password is not supported in current proxy version", K(ret));
   } else if (!is_empty_passwd &&
              GCONF._enable_auth_switch &&
              !hsr.get_auth_plugin_name().empty() && // keep compatibility with old clients, empty plugin name means mysql_native_password
              (!conn->is_proxy_ || conn->proxy_version_ >= PROXY_VERSION_4_3_3_0)) {
     ObString client_plugin = ObEncryptedHelper::convert_plugin_name_from_client(hsr.get_auth_plugin_name());
     // If client plugin does not match user's required plugin, send AuthSwitchRequest
-    if (!ObEncryptedHelper::is_same_auth_plugin(client_plugin, required_plugin)) {
+    if (ObEncryptedHelper::is_same_auth_plugin(client_plugin, required_plugin)) {
+      // do nothing
+    } else if (!support_auth_switch) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("auth switch is not supported for objdbc or oci in change_user protocol", K(ret));
+    } else {
       conn->set_auth_switch_phase();
       if (OB_FAIL(send_auth_switch_request(conn,
                                            session,
@@ -860,16 +869,12 @@ int ObMPBase::send_auth_switch_request(
     ret = OB_ERR_UNEXPECTED;
     RPC_LOG(WARN, "failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
     LOG_WARN("failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
-    packet_sender_.disable_response();
-    disconnect();
   } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
     ret = OB_ERR_UNEXPECTED;
     RPC_LOG(WARN, "failed to flush socket buffer while sending auth switch request packet, disconnect",
             K(auth_switch), K(ret));
     LOG_WARN("failed to flush socket buffer while sending auth switch request packet, disconnect",
             K(auth_switch), K(ret));
-    packet_sender_.disable_response();
-    disconnect();
   } else {
     LOG_TRACE("succeeded to send auth switch request", K(ret));
   }
@@ -898,14 +903,10 @@ int ObMPBase::receive_auth_switch_response(
       ret = OB_WAIT_NEXT_TIMEOUT;
       RPC_LOG(WARN, "read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
       LOG_WARN("read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_FAIL(read_packet(mem_pool, asr_pkt))) {
       ret = OB_ERR_UNEXPECTED;
       RPC_LOG(WARN, "failed to read auth switch response pkt, disconnect", K(ret), K(receive_asr_times));
       LOG_WARN("failed to read auth switch response pkt, disconnect", K(ret), K(receive_asr_times));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_NOT_NULL(asr_pkt)) {
       LOG_TRACE("succeeded to read auth switch response pkt", K(ret), K(receive_asr_times), KP(asr_pkt));
     }
@@ -915,8 +916,6 @@ int ObMPBase::receive_auth_switch_response(
   } else if (OB_ISNULL(asr_pkt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr, disconnect", K(ret));
-    packet_sender_.disable_response();
-    disconnect();
   } else {
     const obmysql::ObMySQLRawPacket *asr_raw_pkt = reinterpret_cast<const ObMySQLRawPacket*>(asr_pkt);
     const char *auth_data = asr_raw_pkt->get_cdata();
@@ -931,8 +930,6 @@ int ObMPBase::receive_auth_switch_response(
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected plugin", K(ret), K(required_plugin));
-      packet_sender_.disable_response();
-      disconnect();
     }
 
     if (OB_FAIL(ret)) {
@@ -1015,8 +1012,6 @@ int ObMPBase::try_caching_sha2_fast_auth(
   if (OB_ISNULL(matched_user_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("user not found in pre-check", K(ret));
-    packet_sender_.disable_response();
-    disconnect();
   } else {
     ObCachingSha2Handle cache_handle;
     ObString user_name = login_info.user_name_;
@@ -1055,13 +1050,9 @@ int ObMPBase::try_caching_sha2_fast_auth(
         if (OB_FAIL(packet_sender_.response_packet(fast_auth_response, &session))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to send fast_auth_success flag", K(ret));
-          packet_sender_.disable_response();
-          disconnect();
         } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to flush fast_auth_success flag", K(ret));
-          packet_sender_.disable_response();
-          disconnect();
         } else {
           LOG_INFO("sent fast_auth_success flag (0x03), fast auth completed");
         }
@@ -1095,13 +1086,9 @@ OMPKCachingSha2Response full_auth_response(PERFORM_FULL_AUTHENTICATION);
 if (OB_FAIL(packet_sender_.response_packet(full_auth_response, &session))) {
   ret = OB_ERR_UNEXPECTED;
   LOG_WARN("failed to send perform_full_authentication flag", K(ret));
-  packet_sender_.disable_response();
-  disconnect();
 } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
   ret = OB_ERR_UNEXPECTED;
   LOG_WARN("failed to flush perform_full_authentication flag", K(ret));
-  packet_sender_.disable_response();
-  disconnect();
 } else {
   // Set connection to auth_switch phase before reading client response
   conn->set_auth_switch_phase();
@@ -1142,13 +1129,9 @@ int ObMPBase::perform_ssl_full_auth(
     if (ObTimeUtil::current_time() - start_wait_time > timeout_us) {
       ret = OB_WAIT_NEXT_TIMEOUT;
       LOG_WARN("wait for plaintext password timeout", K(ret), K(receive_times));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_FAIL(read_packet(mem_pool, pwd_pkt))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to read plaintext password packet", K(ret), K(receive_times));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_NOT_NULL(pwd_pkt)) {
       LOG_TRACE("received plaintext password packet", K(ret), K(receive_times), KP(pwd_pkt));
     }
@@ -1158,8 +1141,6 @@ int ObMPBase::perform_ssl_full_auth(
   } else if (OB_ISNULL(pwd_pkt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("plaintext password packet is null", K(ret));
-    packet_sender_.disable_response();
-    disconnect();
   } else {
     // Extract plaintext password
     const obmysql::ObMySQLRawPacket *pwd_raw_pkt =
@@ -1204,8 +1185,6 @@ int ObMPBase::perform_rsa_full_auth(
     LOG_WARN("RSA keys not loaded, cannot perform RSA authentication", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
         "caching_sha2_password authentication over insecure channel without RSA keys");
-    packet_sender_.disable_response();
-    disconnect();
   }
 
   // Step 2: Receive client RSA request
@@ -1249,13 +1228,9 @@ int ObMPBase::receive_client_rsa_packet(
     if (ObTimeUtil::current_time() - start_wait_time > timeout_us) {
       ret = OB_WAIT_NEXT_TIMEOUT;
       LOG_WARN("wait for client RSA request timeout", K(ret), K(receive_times));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_FAIL(read_packet(mem_pool, client_pkt))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to read client RSA packet", K(ret), K(receive_times));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_NOT_NULL(client_pkt)) {
       LOG_TRACE("received client RSA packet", K(ret), K(receive_times), KP(client_pkt));
     }
@@ -1264,8 +1239,6 @@ int ObMPBase::receive_client_rsa_packet(
   if (OB_SUCC(ret) && OB_ISNULL(client_pkt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("client RSA packet is null", K(ret));
-    packet_sender_.disable_response();
-    disconnect();
   }
   return ret;
 }
@@ -1286,8 +1259,6 @@ int ObMPBase::handle_rsa_public_key_request(
   if (client_data_len != 1 || static_cast<uint8_t>(client_data[0]) != REQUEST_PUBLIC_KEY) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("caching_sha2_password: client not requesting RSA public key", K(ret));
-    packet_sender_.disable_response();
-    disconnect();
   } else {
     // Send RSA public key
     if (OB_FAIL(send_rsa_public_key(session))) {
@@ -1317,8 +1288,6 @@ int ObMPBase::send_rsa_public_key(
   if (OB_FAIL(ObRsaGetter::instance().get_public_key(public_key, allocator))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get RSA public key", K(ret));
-    packet_sender_.disable_response();
-    disconnect();
   } else {
     LOG_TRACE("caching_sha2_password: sending RSA public key", K(public_key.length()));
     OMPKRsaPublicKey rsa_key_pkt(public_key.ptr(), public_key.length());
@@ -1326,13 +1295,9 @@ int ObMPBase::send_rsa_public_key(
     if (OB_FAIL(packet_sender_.response_packet(rsa_key_pkt, &session))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to send RSA public key", K(ret));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_FAIL(packet_sender_.flush_buffer(false))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to flush RSA public key", K(ret));
-      packet_sender_.disable_response();
-      disconnect();
     }
   }
 
@@ -1358,13 +1323,9 @@ int ObMPBase::receive_encrypted_password(
     if (ObTimeUtil::current_time() - start_wait_time > timeout_us) {
       ret = OB_WAIT_NEXT_TIMEOUT;
       LOG_WARN("wait for encrypted password timeout", K(ret), K(receive_times));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_FAIL(read_packet(mem_pool, client_pkt))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to read encrypted password packet", K(ret), K(receive_times));
-      packet_sender_.disable_response();
-      disconnect();
     } else if (OB_NOT_NULL(client_pkt)) {
       LOG_TRACE("received encrypted password packet", K(ret), K(receive_times));
     }

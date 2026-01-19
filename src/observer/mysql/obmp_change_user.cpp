@@ -200,6 +200,8 @@ int ObMPChangeUser::process()
   bool need_response_error = true;
   const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   int64_t query_timeout = 0;
+  // jinmao TODO: Allow client to send auth switch packet during change user process based on client version.
+  bool support_auth_switch = (get_conn()->client_type_ == common::OB_CLIENT_NON_STANDARD);
   if (OB_FAIL(get_session(session))) {
     LOG_ERROR("get session  fail", K(ret));
   } else if (OB_ISNULL(session)) {
@@ -266,7 +268,7 @@ int ObMPChangeUser::process()
           // ========== Step 2: Handle authentication switch if needed ==========
           if (OB_FAIL(handle_auth_switch_if_needed(schema_guard, login_info, get_conn(),
                                                    *session, required_plugin, hsr_wrapper,
-                                                   asr_mem_pool_))) {
+                                                   asr_mem_pool_, support_auth_switch))) {
             LOG_WARN("failed to handle auth switch", K(ret));
           }
 

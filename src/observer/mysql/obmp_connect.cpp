@@ -712,7 +712,14 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
             login_info.passwd_ = hsr_.get_auth_response();
 
             // ========== Step 2: Handle authentication switch if needed ==========
-            if (OB_FAIL(handle_auth_switch_if_needed(schema_guard, login_info, conn, session, required_plugin, hsr_, asr_mem_pool_))) {
+            if (OB_FAIL(handle_auth_switch_if_needed(schema_guard,
+                                                     login_info,
+                                                     conn,
+                                                     session,
+                                                     required_plugin,
+                                                     hsr_,
+                                                     asr_mem_pool_,
+                                                     true))) {
               LOG_WARN("failed to handle auth switch", K(ret));
             }
 

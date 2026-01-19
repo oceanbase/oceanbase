@@ -98,7 +98,8 @@ public:
   // If client use mysql_native_password plugin, we need to convert it to ob_native_password in oracle mode
   static ObString convert_plugin_name_from_client(const ObString &plugin)
   {
-    if (plugin.empty() || plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) == 0) {
+    if (plugin.empty() || plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) == 0 ||
+        plugin.case_compare("sql_native_password") == 0) { // native password plugin name from OBJDBC is sql_native_password
       return ObString::make_string(get_native_password_plugin());
     } else {
       return plugin;

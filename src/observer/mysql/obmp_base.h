@@ -183,7 +183,8 @@ protected:
       sql::ObSQLSessionInfo &session,
       const common::ObString &required_plugin,
       const obmysql::OMPKHandshakeResponse &hsr,
-      obmysql::ObICSMemPool &mem_pool);
+      obmysql::ObICSMemPool &mem_pool,
+      bool support_auth_switch);
 
   int send_auth_switch_request(
       ObSMConnection *conn,
