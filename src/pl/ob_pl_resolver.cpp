@@ -18933,12 +18933,6 @@ int ObPLResolver::resolve_routine_block(const ObStmtNodeTree *parse_tree,
         OX (const_cast<ObPLBlockNS &>(routine_ast.get_body()->get_namespace()).set_external_ns(NULL));
       }
     }
-    if (OB_SUCC(ret) &&
-        (resolve_ctx_.session_info_.is_pl_debug_on() || (resolve_ctx_.session_info_.get_pl_code_coverage() != nullptr))) {
-      if (OB_FAIL(routine_ast.generate_symbol_debuginfo())) {
-        LOG_WARN("failed to generate symbol debuginfo", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -19002,6 +18996,12 @@ int ObPLResolver::resolve_routine_def(const ObStmtNodeTree *parse_tree,
     OZ (resolve_routine_block(parse_tree->children_[1], *routine_info, *routine_ast));
     OX (routine_ast->get_body()->set_location(
       parse_tree->stmt_loc_.first_line_, parse_tree->stmt_loc_.first_column_));
+    if (OB_SUCC(ret) &&
+      (resolve_ctx_.session_info_.is_pl_debug_on() || (resolve_ctx_.session_info_.get_pl_code_coverage() != nullptr))) {
+      if (OB_FAIL(routine_ast->generate_symbol_debuginfo())) {
+        LOG_WARN("failed to generate symbol debuginfo", K(ret));
+      }
+    }
     OZ (ObPLRouter::analyze_stmt(routine_ast->get_body(), route_sql));
     if (OB_FAIL(ret)) {
     } else if ((ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY
@@ -19111,6 +19111,12 @@ int ObPLResolver::resolve_init_routine(const ObStmtNodeTree *parse_tree, ObPLPac
   } else {
     routine_ast->get_body()->set_location(
       parse_tree->stmt_loc_.first_line_, parse_tree->stmt_loc_.first_column_);
+    if (OB_SUCC(ret) &&
+      (resolve_ctx_.session_info_.is_pl_debug_on() || (resolve_ctx_.session_info_.get_pl_code_coverage() != nullptr))) {
+      if (OB_FAIL(routine_ast->generate_symbol_debuginfo())) {
+        LOG_WARN("failed to generate symbol debuginfo", K(ret));
+      }
+    }
     routine_table.set_init_routine_info(routine_info);
     routine_table.set_init_routine_ast(routine_ast);
   }
