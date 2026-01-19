@@ -20082,6 +20082,10 @@ int ObPLResolver::try_sql_transpiler(ObObjAccessIdx &access_idx,
       } else {
         expr = tmp_expr;
       }
+      if (OB_FAIL(ret) && NULL != udf_expr) {
+        expr = udf_expr;
+        ret = OB_SUCCESS;
+      }
     }
   }
 
