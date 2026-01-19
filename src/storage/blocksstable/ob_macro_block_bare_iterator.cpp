@@ -233,7 +233,6 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
   ObMicroBlockData micro_block;
   ObIndexBlockRowParser row_parser;
   ObMicroBlockHeader *header = nullptr;
-  int64_t pos = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -264,11 +263,8 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     LOG_WARN("fail to get endkey of index row", K(ret));
   } else if (OB_FAIL(rowkey.deep_copy(micro_block_desc.last_rowkey_, rowkey_allocator))) {
     LOG_WARN("fail to deep end key", K(ret), K(rowkey));
-  } else if (OB_ISNULL(header = static_cast<ObMicroBlockHeader *>(rowkey_allocator.alloc(sizeof(ObMicroBlockHeader))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc micro header", K(ret));
-  } else if (OB_FAIL(header->deserialize(micro_block.get_buf(), micro_block.get_buf_size(), pos))) {
-    LOG_WARN("fail to deserialize micro header", K(ret));
+  } else if (OB_FAIL(get_micro_block_header(micro_block.get_buf(), micro_block.get_buf_size(), header))) {
+    LOG_WARN("fail to get micro header", K(ret), K(micro_block));
   } else {
     micro_index_info.copy_lob_out_row_flag();
     micro_block_desc.header_ = header;
@@ -409,6 +405,27 @@ int ObMicroBlockBareIterator::get_macro_block_header(ObSSTableMacroBlockHeader &
     LOG_WARN("Not inited", K(ret));
   } else {
     macro_header = macro_block_header_;
+  }
+  return ret;
+}
+
+int ObMicroBlockBareIterator::get_micro_block_header(const char *buf,
+                                                     int64_t buf_len,
+                                                     ObMicroBlockHeader *&header) const
+{
+  int ret = OB_SUCCESS;
+  char *micro_block_buf = nullptr;
+  if (OB_ISNULL(buf) || buf_len < ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid micro block buf", K(ret), KP(buf), K(buf_len));
+  } else if (FALSE_IT(micro_block_buf = const_cast<char *>(buf))) {
+  } else {
+    header = reinterpret_cast<ObMicroBlockHeader *>(micro_block_buf);
+    if (header->has_column_checksum_) {
+      header->column_checksums_ = reinterpret_cast<int64_t *>(micro_block_buf + ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET);
+    } else if (!header->has_min_merged_trans_version_) {
+      header->column_checksums_ = nullptr;
+    }
   }
   return ret;
 }
