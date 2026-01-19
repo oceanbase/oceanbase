@@ -158,12 +158,7 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
   FLTSpanGuard(sql_compile);
   ObMemPerfGuard mem_perf_guard("sql_compile");
-  common::ObOpProfile<ObMetric> sql_compile_profile(ObProfileId::SQL_COMPILE,
-                                                    &result.get_exec_context().get_allocator());
-  bool enable_monitor_profile = result.get_session().enable_monitor_profile();
-  ObProfileSwitcher switcher(enable_monitor_profile ? &sql_compile_profile : nullptr);
   {
-    ScopedTimer timer(ObMetricId::ELAPSED_TIME);
     ObTruncatedString trunc_stmt(stmt);
 #ifndef NDEBUG
     LOG_INFO("Begin to handle text statement",
@@ -207,22 +202,6 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
     }
   }
 
-  if (OB_SUCC(ret) && enable_monitor_profile && OB_NOT_NULL(result.get_physical_plan())
-      && (result.get_physical_plan()->get_phy_plan_hint().monitor_
-          || (result.get_session().is_user_session()
-              && (result.get_physical_plan()->get_px_dop() > 1)))) {
-    ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList *);
-    if (OB_NOT_NULL(list)) {
-      ObMonitorNode monitor_node;
-      monitor_node.tenant_id_ = result.get_session().get_effective_tenant_id();
-      monitor_node.profile_ = &sql_compile_profile;
-      monitor_node.op_id_ = -1;
-      monitor_node.set_sql_id(result.get_physical_plan()->get_sql_id_string());
-      monitor_node.set_plan_hash_value(result.get_physical_plan()->get_plan_hash_value());
-      SET_METRIC_VAL(ObMetricId::IS_HIT_PLAN, result.get_is_from_plan_cache());
-      IGNORE_RETURN list->submit_node(monitor_node);
-    }
-  }
   return ret;
 }
 
@@ -3124,8 +3103,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
   int ret = OB_SUCCESS;
   FLTSpanGuard(resolve);
   ObMemPerfGuard mem_perf_guard("resolve");
-  ObProfileSwitcher switcher(ObProfileId::SQL_RESOLVE);
-  ScopedTimer timer(ObMetricId::ELAPSED_TIME);
   uint64_t session_id = 0;
   ObResolverParams resolver_ctx;
   ObPhysicalPlanCtx *plan_ctx = NULL;
@@ -3975,8 +3952,6 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
   int ret = OB_SUCCESS;
   FLTSpanGuard(rewrite);
   ObMemPerfGuard mem_perf_guard("rewrite");
-  ObProfileSwitcher switcher(ObProfileId::SQL_REWRITE);
-  ScopedTimer timer(ObMetricId::ELAPSED_TIME);
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rewrite);
   ObDMLStmt *transform_stmt = stmt;
   int64_t last_mem_usage = exec_ctx.get_allocator().total();
@@ -4074,8 +4049,6 @@ int ObSql::optimize_stmt(
   int ret = OB_SUCCESS;
   FLTSpanGuard(optimize);
   ObMemPerfGuard mem_perf_guard("optimize");
-  ObProfileSwitcher switcher(ObProfileId::SQL_OPTIMIZE);
-  ScopedTimer timer(ObMetricId::ELAPSED_TIME);
   logical_plan = NULL;
   LOG_TRACE("stmt to generate plan", K(stmt));
   OPT_TRACE_TITLE("START GENERATE PLAN");
@@ -5661,8 +5634,6 @@ int ObSql::handle_parser(const ObString &sql,
   int ret = OB_SUCCESS;
   FLTSpanGuard(parse);
   ObMemPerfGuard mem_perf_guard("parse");
-  ObProfileSwitcher switcher(ObProfileId::SQL_PARSE);
-  ScopedTimer timer(ObMetricId::ELAPSED_TIME);
   int64_t last_mem_usage = pc_ctx.allocator_.total();
   int64_t parser_mem_usage = 0;
   ObPhysicalPlanCtx *pctx = exec_ctx.get_physical_plan_ctx();
