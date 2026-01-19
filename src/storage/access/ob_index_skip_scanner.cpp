@@ -762,12 +762,14 @@ int ObIndexSkipScanner::update_complete_range(
       } else if (cmp_ret < 0) {
         for (int64_t i = prefix_cnt_; i < scan_start_key.get_datum_cnt(); ++i) {
           complete_start_key.datums_[i] = scan_start_key.datums_[i];
-          if (scan_range_->is_left_open()) {
-            complete_range_.set_left_open();
-          } else {
-            complete_range_.set_left_closed();
-          }
         }
+        if (scan_range_->is_left_open()) {
+          complete_range_.set_left_open();
+        } else {
+          complete_range_.set_left_closed();
+        }
+      } else if (0 == cmp_ret && scan_range_->is_left_open()) {
+        complete_range_.set_left_open();
       }
     }
     if (OB_SUCC(ret) && is_end_equal) {
@@ -778,12 +780,14 @@ int ObIndexSkipScanner::update_complete_range(
       } else if (cmp_ret > 0) {
         for (int64_t i = prefix_cnt_; i < scan_end_key.get_datum_cnt(); ++i) {
           complete_end_key.datums_[i] = scan_end_key.datums_[i];
-          if (scan_range_->is_right_open()) {
-            complete_range_.set_right_open();
-          } else {
-            complete_range_.set_right_closed();
-          }
         }
+        if (scan_range_->is_right_open()) {
+          complete_range_.set_right_open();
+        } else {
+          complete_range_.set_right_closed();
+        }
+      } else if (0 == cmp_ret && scan_range_->is_right_open()) {
+        complete_range_.set_right_open();
       }
     }
   }
