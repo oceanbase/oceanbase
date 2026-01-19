@@ -227,6 +227,78 @@ TEST_F(TestLSBalanceHelper, unit_ls)
 
 }
 
+TEST_F(TestLSBalanceHelper, sort_ls_by_primary_zone_round_robin)
+{
+  using namespace share;
+  int ret = OB_SUCCESS;
+
+  // build helper instance (pointers can be null since function doesn't use members)
+  ObTenantLSBalanceInfo *tenant_info = nullptr;
+  ObMySQLProxy *sql_proxy = nullptr;
+  ObBalanceJobID job_id;
+  ObBalanceJob *job = nullptr;
+  ObArray<ObBalanceTask> *task_array = nullptr;
+  ObArray<ObLSGroupUnitListOp> *lsg_op_array = nullptr;
+  ObArray<ObUnitUGOp> *unit_ug_op_array = nullptr;
+  ObLSCountBalance sorter(tenant_info, sql_proxy, job_id, job, task_array, lsg_op_array, unit_ug_op_array);
+
+  // common params
+  const uint64_t tenant_id = 1234;
+  ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
+  ObUnitIDList unit_id_list;
+
+  // equal counts: z1:2, z2:2, z3:2
+  ObLSStatusInfo a1; ASSERT_EQ(OB_SUCCESS, a1.init(tenant_id, ObLSID(1), 1, share::OB_LS_NORMAL, 0, ObZone("z1"), flag, unit_id_list));
+  ObLSStatusInfo a2; ASSERT_EQ(OB_SUCCESS, a2.init(tenant_id, ObLSID(2), 2, share::OB_LS_NORMAL, 0, ObZone("z1"), flag, unit_id_list));
+  ObLSStatusInfo b1; ASSERT_EQ(OB_SUCCESS, b1.init(tenant_id, ObLSID(3), 3, share::OB_LS_NORMAL, 0, ObZone("z2"), flag, unit_id_list));
+  ObLSStatusInfo b2; ASSERT_EQ(OB_SUCCESS, b2.init(tenant_id, ObLSID(4), 4, share::OB_LS_NORMAL, 0, ObZone("z2"), flag, unit_id_list));
+  ObLSStatusInfo c1; ASSERT_EQ(OB_SUCCESS, c1.init(tenant_id, ObLSID(5), 5, share::OB_LS_NORMAL, 0, ObZone("z3"), flag, unit_id_list));
+  ObLSStatusInfo c2; ASSERT_EQ(OB_SUCCESS, c2.init(tenant_id, ObLSID(6), 6, share::OB_LS_NORMAL, 0, ObZone("z3"), flag, unit_id_list));
+
+  ObArray<ObLSStatusInfo*> ls_ptrs_equal;
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_equal.push_back(&a1));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_equal.push_back(&a2));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_equal.push_back(&b1));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_equal.push_back(&b2));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_equal.push_back(&c1));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_equal.push_back(&c2));
+
+  ObArray<ObLSStatusInfo*> sorted_equal;
+  ret = sorter.sort_ls_array_by_primary_zone_round_robin(ls_ptrs_equal, sorted_equal);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(6, sorted_equal.count());
+  // expected order: z1,z2,z3,z1,z2,z3 -> a1,b1,c1,a2,b2,c2
+  ASSERT_EQ(&a1, sorted_equal.at(0));
+  ASSERT_EQ(&b1, sorted_equal.at(1));
+  ASSERT_EQ(&c1, sorted_equal.at(2));
+  ASSERT_EQ(&a2, sorted_equal.at(3));
+  ASSERT_EQ(&b2, sorted_equal.at(4));
+  ASSERT_EQ(&c2, sorted_equal.at(5));
+
+  // unequal counts: z1:3, z2:1, z3:2
+  ObLSStatusInfo a3; ASSERT_EQ(OB_SUCCESS, a3.init(tenant_id, ObLSID(7), 7, share::OB_LS_NORMAL, 0, ObZone("z1"), flag, unit_id_list));
+  ObArray<ObLSStatusInfo*> ls_ptrs_unequal;
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_unequal.push_back(&a1));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_unequal.push_back(&a2));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_unequal.push_back(&a3));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_unequal.push_back(&b1));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_unequal.push_back(&c1));
+  ASSERT_EQ(OB_SUCCESS, ls_ptrs_unequal.push_back(&c2));
+
+  ObArray<ObLSStatusInfo*> sorted_unequal;
+  ret = sorter.sort_ls_array_by_primary_zone_round_robin(ls_ptrs_unequal, sorted_unequal);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(6, sorted_unequal.count());
+  // expected order by first-seen zones A,B,CRR: A1,B1,C1,A2,C2,A3
+  ASSERT_EQ(&a1, sorted_unequal.at(0));
+  ASSERT_EQ(&b1, sorted_unequal.at(1));
+  ASSERT_EQ(&c1, sorted_unequal.at(2));
+  ASSERT_EQ(&a2, sorted_unequal.at(3));
+  ASSERT_EQ(&c2, sorted_unequal.at(4));
+  ASSERT_EQ(&a3, sorted_unequal.at(5));
+}
+
+
 TEST_F(TestLSBalanceHelper, ls_balance1)
 {
   //同构unit 3：3：3
