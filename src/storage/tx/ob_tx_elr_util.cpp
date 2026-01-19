@@ -36,6 +36,7 @@ void ObTxELRUtil::refresh_elr_tenant_config_()
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (OB_LIKELY(tenant_config.is_valid())) {
       can_tenant_elr_ = tenant_config->enable_early_lock_release;
+      trx_max_log_cb_limit_ =  tenant_config->_trx_max_log_cb_limit;
       last_refresh_ts_ = ObClockGenerator::getClock();
     }
     if (REACH_TIME_INTERVAL(10000000 /* 10s */)) {
