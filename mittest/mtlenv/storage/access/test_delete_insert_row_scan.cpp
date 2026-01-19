@@ -828,11 +828,11 @@ int TestDeleteInsertRowScan::create_pushdown_filter(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to alloc memory for expr", KR(ret));
     } else {
-      expr = static_cast<sql::ObExpr *>(expr_buf);
+      expr = new (expr_buf) ObExpr();
       expr->arg_cnt_ = 2;
       expr->args_ = args;
-      expr->args_[0] = expr + 1;
-      expr->args_[1] = expr + 2;
+      expr->args_[0] = new (expr + 1) ObExpr();
+      expr->args_[1] = new (expr + 2) ObExpr();
       expr->args_[0]->type_ = T_REF_COLUMN;
       expr->args_[1]->type_ = T_INT;
       expr->args_[1]->obj_meta_.set_int();
