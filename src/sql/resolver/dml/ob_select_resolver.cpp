@@ -1269,9 +1269,52 @@ int ObSelectResolver::mark_aggr_in_order_by_scope(ObSelectStmt *select_stmt) {
   }
   return ret;
 }
+namespace
+{
+  // 递归打印parse_tree的辅助函数
+  void print_parse_tree_recursive(const ParseNode *node, int level)
+  {
+    if (OB_ISNULL(node)) {
+      return;
+    }
 
+    // 打印节点信息
+    const char *type_name = get_type_name(node->type_);
+    if (OB_NOT_NULL(node->str_value_) && node->str_len_ > 0) {
+      LOG_INFO("parse_tree node",
+               "level", level,
+               "type", type_name,
+               "type_value", node->type_,
+               "num_child", node->num_child_,
+               "str_value", common::ObString(node->str_len_, node->str_value_),
+               "int_value", node->value_);
+    } else {
+      LOG_INFO("parse_tree node",
+               "level", level,
+               "type", type_name,
+               "type_value", node->type_,
+               "num_child", node->num_child_,
+               "int_value", node->value_);
+    }
+
+    // 递归打印子节点
+    if (node->num_child_ > 0 && OB_NOT_NULL(node->children_)) {
+      for (int32_t i = 0; i < node->num_child_; ++i) {
+        if (OB_NOT_NULL(node->children_[i])) {
+          print_parse_tree_recursive(node->children_[i], level + 1);
+        } else {
+          LOG_INFO("parse_tree node", "level", level + 1, "child_index", i, "status", "NULL");
+        }
+      }
+    }
+  }
+}
 int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
 {
+  // 遍历打印整个parse_tree
+  LOG_INFO("========== Start printing parse_tree ==========");
+  print_parse_tree_recursive(&parse_tree, 0);
+  LOG_INFO("========== End printing parse_tree ==========");
   int ret = OB_SUCCESS;
   // ObStmt *st = NULL;
   // ObSelectStmt *s_t = static_cast<ObSelectStmt *>(st);

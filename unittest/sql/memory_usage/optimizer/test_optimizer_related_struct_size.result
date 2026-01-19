@@ -44,7 +44,7 @@
 | ObRollupAdaptiveInfo | 104 |
 | ObHashRollupInfo | 168 |
 | ObGroupingSetInfo | 288 |
-| IndexDMLInfo | 448 |
+| IndexDMLInfo | 488 |
 
 # location
 | class | sizeof(class) |

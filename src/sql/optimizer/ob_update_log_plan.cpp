@@ -383,8 +383,6 @@ int ObUpdateLogPlan::allocate_update_as_top(ObLogicalOperator *&top,
     }
     if (update_stmt->is_error_logging() && OB_FAIL(update_op->extract_err_log_info())) {
       LOG_WARN("failed to extract error log info", K(ret));
-    } else if (OB_FAIL(update_stmt->get_view_check_exprs(update_op->get_view_check_exprs()))) {
-      LOG_WARN("failed to get view check exprs", K(ret));
     } else if (OB_FAIL(update_op->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {

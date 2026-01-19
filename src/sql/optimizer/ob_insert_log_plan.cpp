@@ -927,8 +927,6 @@ int ObInsertLogPlan::allocate_insert_as_top(ObLogicalOperator *&top,
     }
     if (insert_stmt->is_error_logging() && OB_FAIL(insert_op->extract_err_log_info())) {
       LOG_WARN("failed to extract error log info", K(ret));
-    } else if (OB_FAIL(insert_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
-      LOG_WARN("failed to get view check exprs", K(ret));
     } else if (OB_FAIL(insert_op->compute_property())) {
       LOG_WARN("failed to compute equal set", K(ret));
     } else {
@@ -1290,6 +1288,12 @@ int ObInsertLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
         LOG_WARN("failed to copy on replace expr", K(ret));
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_dml_info->view_ck_exprs_.count(); ++i) {
+      if (OB_FAIL(copier.copy_on_replace(table_dml_info->view_ck_exprs_.at(i),
+                                         table_dml_info->view_ck_exprs_.at(i)))) {
+        LOG_WARN("failed to copy on replace view check expr", K(ret));
+      }
+    }
     
     if (OB_SUCC(ret) && !index_dml_infos.empty()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_infos.count(); ++i) {
@@ -1362,6 +1366,7 @@ int ObInsertLogPlan::copy_index_dml_infos_for_insert_up(const ObInsertTableInfo&
   int ret = OB_SUCCESS;
   const ObInsertStmt* insert_stmt = get_stmt();
   ObSEArray<ObRawExpr*, 8> update_cst_exprs;
+  ObSEArray<ObRawExpr*, 8> update_view_ck_exprs;
   ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   const ObTableSchema* index_schema = NULL;
@@ -1372,6 +1377,8 @@ int ObInsertLogPlan::copy_index_dml_infos_for_insert_up(const ObInsertTableInfo&
     LOG_WARN("get null stmt", K(ret));
   } else if (OB_FAIL(update_cst_exprs.assign(table_info.check_constraint_exprs_))) {
     LOG_WARN("failed to get check constraint exprs", K(ret));
+  } else if (OB_FAIL(update_view_ck_exprs.assign(table_info.view_check_exprs_))) {
+    LOG_WARN("failed to get view check exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < update_cst_exprs.count(); ++i) {
       if (OB_FAIL(ObDMLResolver::copy_schema_expr(optimizer_context_.get_expr_factory(),
@@ -1382,6 +1389,57 @@ int ObInsertLogPlan::copy_index_dml_infos_for_insert_up(const ObInsertTableInfo&
                                                         table_info.assignments_,
                                                         update_cst_exprs.at(i)))) {
         LOG_WARN("failed to create expanded expr", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < update_view_ck_exprs.count(); ++i) {
+      if (OB_FAIL(ObDMLResolver::copy_schema_expr(optimizer_context_.get_expr_factory(),
+                                                  update_view_ck_exprs.at(i),
+                                                  update_view_ck_exprs.at(i)))) {
+        LOG_WARN("failed to copy schema expr", K(ret));
+      } else {
+        // For UPDATE, replace __values table column references with base table column references
+        ObRawExprReplacer replacer;
+        ObSEArray<const ObRawExpr*, 8> column_exprs;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(update_view_ck_exprs.at(i), column_exprs))) {
+          LOG_WARN("failed to extract column exprs", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < column_exprs.count(); ++j) {
+            const ObColumnRefRawExpr *col_expr =
+                static_cast<const ObColumnRefRawExpr*>(column_exprs.at(j));
+            if (OB_NOT_NULL(col_expr)) {
+              if (0 == col_expr->get_table_name().compare(OB_VALUES)) {
+                // Find corresponding base table column by column_id
+                bool found = false;
+                for (int64_t k = 0; OB_SUCC(ret) && !found && k < table_info.column_exprs_.count(); ++k) {
+                  if (OB_NOT_NULL(table_info.column_exprs_.at(k)) &&
+                      col_expr->get_column_id() == table_info.column_exprs_.at(k)->get_column_id()) {
+                    if (OB_FAIL(replacer.add_replace_expr(const_cast<ObColumnRefRawExpr*>(col_expr),
+                                                          table_info.column_exprs_.at(k)))) {
+                      LOG_WARN("failed to add replace expr", K(ret));
+                    } else {
+                      found = true;
+                    }
+                  }
+                }
+                if (OB_SUCC(ret) && !found) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("failed to find base table column for __values table column",
+                           K(ret), KPC(col_expr), K(table_info.column_exprs_));
+                }
+              }
+            }
+          }
+          if (OB_SUCC(ret) && !replacer.empty()) {
+            if (OB_FAIL(replacer.replace(update_view_ck_exprs.at(i)))) {
+              LOG_WARN("failed to replace __values table column with base table column", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(ObTableAssignment::expand_expr(optimizer_context_.get_expr_factory(),
+                                                                    table_info.assignments_,
+                                                                    update_view_ck_exprs.at(i)))) {
+          LOG_WARN("failed to create expanded expr", K(ret));
+        }
       }
     }
     int64_t dml_info_count = index_dml_infos.count() + 1;
@@ -1415,6 +1473,8 @@ int ObInsertLogPlan::copy_index_dml_infos_for_insert_up(const ObInsertTableInfo&
         } else if (0 == i) {
           if (OB_FAIL(index_dml_info->ck_cst_exprs_.assign(update_cst_exprs))) {
             LOG_WARN("failed to assign update check exprs", K(ret));
+          } else if (OB_FAIL(index_dml_info->view_ck_exprs_.assign(update_view_ck_exprs))) {
+            LOG_WARN("failed to assign update view check exprs", K(ret));
           } else if (OB_FAIL(prune_virtual_column(*index_dml_info))) {
             LOG_WARN("prune virtual column failed", K(ret));
           } else if (!optimizer_context_.get_session_info()->get_ddl_info().is_ddl() &&

@@ -73,13 +73,17 @@ int ObLogUpdate::get_plan_item_info(PlanText &plan_text,
     if (OB_SUCC(ret) && get_das_dop() > 0) {
       ret = BUF_PRINTF(", das_dop=%ld", this->get_das_dop());
     }
-    if (OB_SUCC(ret) && !view_check_exprs_.empty()) {
-      if(OB_FAIL(BUF_PRINTF(", "))) {
-        LOG_WARN("BUG_PRINTF fails", K(ret));
-      } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
-        LOG_WARN("BUG_PRINTF fails", K(ret));
-      } else {
-        EXPLAIN_PRINT_EXPRS(view_check_exprs_, type);
+    // print view check exprs
+    if (OB_SUCC(ret) && !get_index_dml_infos().empty() && NULL != get_index_dml_infos().at(0)) {
+      const ObIArray<ObRawExpr *> &view_check_exprs = get_index_dml_infos().at(0)->view_ck_exprs_;
+      if (!view_check_exprs.empty()) {
+        if(OB_FAIL(BUF_PRINTF(", "))) {
+          LOG_WARN("BUG_PRINTF fails", K(ret));
+        } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+          LOG_WARN("BUG_PRINTF fails", K(ret));
+        } else {
+          EXPLAIN_PRINT_EXPRS(view_check_exprs, type);
+        }
       }
     }
     END_BUF_PRINT(plan_item.special_predicates_,

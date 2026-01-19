@@ -3738,7 +3738,7 @@ int ObDmlCgService::convert_check_constraint(ObLogDelUpd &log_op,
           log_op.get_type() == log_op_def::LOG_MERGE) {
         // insert all/merge into views not allowed, do nothing
       } else {
-        OZ(cg_.generate_rt_exprs(log_op.get_view_check_exprs(), dml_base_ctdef.view_check_exprs_));
+        OZ(cg_.generate_rt_exprs(index_dml_info.view_ck_exprs_, dml_base_ctdef.view_check_exprs_));
       }
     }
   }

@@ -36,6 +36,7 @@ public:
     need_filter_null_(false),
     is_primary_index_(false),
     ck_cst_exprs_(allocator),
+    view_ck_exprs_(allocator),
     part_ids_(allocator),
     is_update_unique_key_(false),
     is_update_part_key_(false),
@@ -68,6 +69,7 @@ public:
     need_filter_null_ = false;
     is_primary_index_ = false;
     ck_cst_exprs_.reset();
+    view_ck_exprs_.reset();
     part_ids_.reset();
     is_update_unique_key_ = false;
     is_update_part_key_ = false;
@@ -160,6 +162,7 @@ public:
   bool need_filter_null_;
   bool is_primary_index_;
   ObSqlArray<ObRawExpr*> ck_cst_exprs_;
+  ObSqlArray<ObRawExpr*> view_ck_exprs_;
   //partition used for base table
   ObSqlArray<ObObjectID> part_ids_;
   bool is_update_unique_key_;
@@ -197,6 +200,7 @@ public:
                K_(need_filter_null),
                K_(is_primary_index),
                K_(ck_cst_exprs),
+               K_(view_ck_exprs),
                K_(is_update_unique_key),
                K_(is_update_part_key),
                K_(is_update_primary_key),
@@ -242,14 +246,6 @@ public:
 
   void set_lock_row_flag_expr(ObRawExpr *expr) { lock_row_flag_expr_ = expr; }
   ObRawExpr *get_lock_row_flag_expr() const { return lock_row_flag_expr_; }
-  inline const common::ObIArray<ObRawExpr*> &get_view_check_exprs() const
-  {
-    return view_check_exprs_;
-  }
-  inline common::ObIArray<ObRawExpr*> &get_view_check_exprs()
-  {
-    return view_check_exprs_;
-  }
 
   inline const common::ObIArray<ObRawExpr*> &get_produced_trans_exprs() const
   {
@@ -432,8 +428,6 @@ protected:
   ObSqlArray<IndexDMLInfo *> index_dml_infos_;
   ObSqlArray<uint64_t> loc_table_list_;
 
-  ObSqlArray<ObRawExpr *> view_check_exprs_;
-  // 用于保存当前 DML 算子的 partition 信息
   ObTablePartitionInfo *table_partition_info_;
   const ObRawExpr *stmt_id_expr_;
   ObRawExpr *lock_row_flag_expr_;

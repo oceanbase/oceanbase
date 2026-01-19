@@ -1631,17 +1631,10 @@ int ObDelUpdLogPlan::allocate_pdml_insert_as_top(ObLogicalOperator *&top,
       if (insert_stmt->is_insert_up() && OB_FAIL(insert_op->get_insert_up_index_dml_infos().assign(
             static_cast<ObInsertLogPlan *>(this)->get_insert_up_index_upd_infos()))) {
         LOG_WARN("assign insert up index upd infos failed", K(ret));
-      } else if (OB_FAIL(insert_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
-        LOG_WARN("failed to get view check exprs", K(ret));
       }
     } else if (get_stmt()->is_update_stmt()) {
       const ObUpdateStmt *update_stmt = static_cast<const ObUpdateStmt*>(get_stmt());
       insert_op->set_table_location_uncertain(true);
-      if (!is_index_maintenance) {
-        if (OB_FAIL(update_stmt->get_view_check_exprs(insert_op->get_view_check_exprs()))) {
-          LOG_WARN("failed to get view check exprs", K(ret));
-        }
-      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -1779,11 +1772,6 @@ int ObDelUpdLogPlan::allocate_pdml_update_as_top(ObLogicalOperator *&top,
     update_op->set_ignore(update_stmt->is_ignore());
     update_op->set_table_partition_info(table_partition_info);
     update_op->set_need_allocate_partition_id_expr(need_partition_id);
-    if (!is_index_maintenance) {
-      if (OB_FAIL(update_stmt->get_view_check_exprs(update_op->get_view_check_exprs()))) {
-        LOG_WARN("failed to get view check exprs", K(ret));
-      }
-    }
     if (FAILEDx(update_op->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
