@@ -109,8 +109,7 @@ int ObFtsIndexBuilderUtil::check_has_valid_fts_or_multivalue_index(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected nullptr to rowkey doc schema", K(ret));
         } else if (OB_UNLIKELY(!rowkey_doc_schema->can_read_index() || !rowkey_doc_schema->is_index_visible())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected rowkey doc table unreadable", K(ret), KPC(rowkey_doc_schema));
+          // skip unreadable rowkey doc schema
         } else {
           has_valid_index = true;
         }
