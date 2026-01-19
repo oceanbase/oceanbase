@@ -82,7 +82,8 @@ struct ObOptStatTaskInfo
     ret_code_(0),
     failed_count_(0),
     completed_table_count_(0),
-    session_(NULL)
+    session_(NULL),
+    success_part_count_(0)
   {}
   int64_t size() const { return trace_id_.length() + task_id_.length(); }
   int init(common::ObIAllocator &allocator,
@@ -115,6 +116,7 @@ struct ObOptStatTaskInfo
   int64_t failed_count_;
   int64_t completed_table_count_;
   sql::ObSQLSessionInfo *session_;//no deep copy
+  int64_t success_part_count_;
 };
 
 class ObOptStatGatherStat : public common::ObDLinkBase<ObOptStatGatherStat>
@@ -217,7 +219,8 @@ struct ObOptStatRunningMonitor
     last_memory_used_(current_memory_used),
     opt_stat_gather_stat_(opt_stat_gather_stat),
     audit_(audit),
-    failed_part_ids_()
+    failed_part_ids_(),
+    success_part_ids_cnt_(0)
   {
     opt_stat_gather_stat_.set_start_time(current_time);
   }
@@ -236,6 +239,7 @@ struct ObOptStatRunningMonitor
                           int64_t current_memory_used);
 
   int flush_gather_audit();
+  void add_success_part_ids_cnt(int64_t cnt) { success_part_ids_cnt_ += cnt; }
 
   TO_STRING_KV(K(last_start_time_),
                K(last_memory_used_),
@@ -246,7 +250,8 @@ struct ObOptStatRunningMonitor
   ObOptStatGatherStat &opt_stat_gather_stat_;
   ObOptStatGatherAudit &audit_;
 
-   ObSEArray<int64_t, 4> failed_part_ids_;
+  ObSEArray<int64_t, 4> failed_part_ids_;
+  int64_t success_part_ids_cnt_;
 };
 
 class ObOptStatGatherStatList
