@@ -273,7 +273,7 @@ int fast_compare_normal(const unsigned char *s, const unsigned char *t,
 
 CompareByteFunc get_fast_compare_func()
 {
-  return blocksstable::is_avx512_valid()
+  return common::is_arch_supported(ObTargetArch::AVX512)
       ? fast_compare_simd
       : fast_compare_normal;
 }
