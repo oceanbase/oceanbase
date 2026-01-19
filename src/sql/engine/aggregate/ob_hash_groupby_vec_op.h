@@ -70,7 +70,8 @@ public:
       grouping_id_(nullptr),
       group_distinct_exprs_(alloc),
       group_sort_collations_(alloc),
-      limit_expr_(nullptr)
+      limit_expr_(nullptr),
+      hash_val_expr_(nullptr)
     {
     }
 
@@ -97,6 +98,7 @@ public:
   ObFixedArray<ExprFixedArray, common::ObIAllocator> group_distinct_exprs_;
   ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
   ObExpr *limit_expr_;
+  ObExpr *hash_val_expr_;
 };
 
 // 输入数据已经按照groupby列排序
