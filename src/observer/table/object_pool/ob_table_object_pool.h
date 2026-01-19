@@ -93,6 +93,24 @@ public:
     bool is_inited_;
     ObTableObjectPoolMgr *obj_pool_mgr_;
   };
+
+  class ObTableUserLockStatusRefreshTask : public common::ObTimerTask
+  {
+  public:
+    ObTableUserLockStatusRefreshTask()
+        : is_inited_(false),
+          obj_pool_mgr_(nullptr)
+    {
+    }
+    TO_STRING_KV(K_(is_inited), KPC_(obj_pool_mgr));
+    void runTimerTask(void);
+  private:
+    int run_refresh_user_lock_status_task();
+  public:
+    bool is_inited_;
+    ObTableObjectPoolMgr *obj_pool_mgr_;
+  };
+
 public:
   static int mtl_init(ObTableObjectPoolMgr *&mgr);
   int start();
@@ -146,6 +164,7 @@ private:
   static const int64_t ELIMINATE_SESSION_DELAY = 5 * 1000 * 1000; // 5s
   static const int64_t SYS_VAR_REFRESH_DELAY = 5 * 1000 * 1000; // 5s
   static const int64_t ELIMINATE_RES_RESULT_DELAY = 5 * 1000 * 1000; // 5s
+  static const int64_t USER_LOCK_STATUS_REFRESH_DELAY = 5 * 1000 * 1000; // 30s
   static const int64_t REQUESE_RESULT_RETIRE_TIME = 60 * 1000 * 1000 ; // 60s
   bool is_inited_;
   common::ObArenaAllocator allocator_;
@@ -154,6 +173,7 @@ private:
   ObTableSessEliminationTask sess_elimination_task_;
   ObTableSessSysVarUpdateTask sys_var_update_task_;
   ObTableReqResEliminationTask req_res_elimination_task_;
+  ObTableUserLockStatusRefreshTask user_lock_status_refresh_task_;
   ObTableRelatedSysVars sys_vars_;
   ObTableObjectPool<ObTableLSOp> ls_op_pool_;
   ObTableObjectPool<ObTableLSOpResult> ls_res_pool_;

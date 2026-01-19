@@ -59,6 +59,11 @@ int ObTableObjectPoolMgr::start()
                                  true/* repeat */))) {
     LOG_WARN("failed to schedule tableapi update sys var task", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
+                                 user_lock_status_refresh_task_,
+                                 USER_LOCK_STATUS_REFRESH_DELAY/* 5s */,
+                                 true/* repeat */))) {
+    LOG_WARN("failed to schedule tableapi user lock status refresh task", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
                                  req_res_elimination_task_,
                                  ELIMINATE_RES_RESULT_DELAY/* 5s */,
                                  true/* repeat */))) {
@@ -66,6 +71,7 @@ int ObTableObjectPoolMgr::start()
   } else {
     sess_elimination_task_.is_inited_ = true;
     sys_var_update_task_.is_inited_ = true;
+    user_lock_status_refresh_task_.is_inited_ = true;
     req_res_elimination_task_.is_inited_ = true;
   }
 
@@ -80,6 +86,9 @@ void ObTableObjectPoolMgr::stop()
   }
   if (OB_LIKELY(sys_var_update_task_.is_inited_)) {
     TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), sys_var_update_task_);
+  }
+  if (OB_LIKELY(user_lock_status_refresh_task_.is_inited_)) {  // 添加这个新的任务清理
+    TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_);
   }
   if (OB_LIKELY(req_res_elimination_task_.is_inited_)) {
     TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), req_res_elimination_task_);
@@ -130,6 +139,16 @@ void ObTableObjectPoolMgr::destroy()
         }
       }
     }
+    if (user_lock_status_refresh_task_.is_inited_) {  // 添加这个新的任务清理
+      bool is_exist = true;
+      if (OB_SUCC(TG_TASK_EXIST(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_, is_exist))) {
+        if (is_exist) {
+          TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_);
+          TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), user_lock_status_refresh_task_);
+          user_lock_status_refresh_task_.is_inited_ = false;
+        }
+      }
+    }
     if (req_res_elimination_task_.is_inited_) {
       bool is_exist = true;
       if (OB_SUCC(TG_TASK_EXIST(MTL(omt::ObSharedTimer*)->get_tg_id(), req_res_elimination_task_, is_exist))) {
@@ -163,6 +182,7 @@ int ObTableObjectPoolMgr::init()
     sess_elimination_task_.obj_pool_mgr_ = this;
     sys_var_update_task_.obj_pool_mgr_ = this;
     req_res_elimination_task_.obj_pool_mgr_ = this;
+    user_lock_status_refresh_task_.obj_pool_mgr_ = this;
     is_inited_ = true;
   }
 
@@ -360,6 +380,38 @@ int ObTableObjectPoolMgr::ObTableSessSysVarUpdateTask::run_update_sys_var_task()
     LOG_WARN("obj_pool_mgr_ is null", K(ret));
   } else if (OB_FAIL(obj_pool_mgr_->update_sys_vars(true/*only_update_dynamic_vars*/))) {
     LOG_WARN("fail to update sys var", K(ret));
+  }
+
+  return ret;
+}
+
+}  // namespace table
+}  // namespace oceanbase
+
+// Add implementations for ObTableUserLockStatusRefreshTask
+namespace oceanbase
+{
+namespace table
+{
+
+void ObTableObjectPoolMgr::ObTableUserLockStatusRefreshTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(run_refresh_user_lock_status_task())) {
+    LOG_WARN("fail to run refresh user lock status task", K(ret));
+  }
+}
+
+int ObTableObjectPoolMgr::ObTableUserLockStatusRefreshTask::run_refresh_user_lock_status_task()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(obj_pool_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("obj_pool_mgr_ is null", K(ret));
+  } else if (OB_NOT_NULL(obj_pool_mgr_->sess_pool_) && OB_FAIL(obj_pool_mgr_->sess_pool_->refresh_all_user_locked_status())) {
+    LOG_WARN("fail to refresh user lock status", K(ret));
   }
 
   return ret;
