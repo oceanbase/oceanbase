@@ -1593,6 +1593,15 @@ int ObMultipleMerge::refresh_filter_params_on_demand(const bool is_open)
         LOG_WARN("fail to fill split params.", K(ret));
       }
     }
+#ifdef ENABLE_DEBUG_LOG
+    if (OB_SUCC(ret) && has_split_filter && GCONF.enable_defensive_check()) {
+      ObTablet *tablet = get_table_param_->tablet_iter_.get_tablet();
+      if (OB_FAIL(ObPartitionSplitQuery::check_split_filter_params(*tablet,
+              iter_param.op_, iter_param.auto_split_filter_type_, iter_param.auto_split_params_))) {
+        LOG_WARN("failed to check split filter", K(ret), K(tablet->get_tablet_meta()));
+      }
+    }
+#endif
   }
   return ret;
 }
@@ -1673,6 +1682,13 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
         LOG_WARN("failed to prepare tables from iter", K(ret), K(get_table_param_->tablet_iter_.table_iter()));
       }
     }
+#ifdef ENABLE_DEBUG_LOG
+    if (OB_SUCC(ret) && need_split_src_table && GCONF.enable_defensive_check()) {
+      if (OB_FAIL(ObPartitionSplitQuery::check_split_prepare_read_tables(access_param_->iter_param_, *get_table_param_->tablet_iter_.get_tablet()))) {
+        LOG_WARN("failed to check split prepare read tables", K(ret));
+      }
+    }
+#endif
   }
   LOG_DEBUG("prepare read tables", K(ret), K(refresh), K_(get_table_param), K_(tables), K_(major_table_version));
   return ret;

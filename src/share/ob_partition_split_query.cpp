@@ -14,6 +14,7 @@
 
 #include "ob_partition_split_query.h"
 #include "src/storage/ls/ob_ls.h"
+#include "src/storage/tablet/ob_tablet_split_mds_helper.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -407,7 +408,7 @@ int ObPartitionSplitQuery::fill_auto_split_params(
     if (OB_FAIL(ret)) {
     } else if (split_info.is_split_dst_with_partkey()) {
       if (filter_type == static_cast<uint64_t>(ObTabletSplitType::RANGE)) {
-        if (OB_FAIL(fill_range_filter_param(split_info, eval_ctx, filter_params))) {
+        if (OB_FAIL(fill_range_filter_param(split_info.start_partkey_, split_info.end_partkey_, false/*check_only*/, eval_ctx, filter_params))) {
           LOG_WARN("fail to fill range filter param", K(ret));
         }
       } else if (filter_type == static_cast<uint64_t>(ObTabletSplitType::MAX_TYPE)) {
@@ -440,14 +441,13 @@ int ObPartitionSplitQuery::fill_auto_split_params(
  * if tablet is not in spliting, only need to fill bypass expr with true.
 */
 int ObPartitionSplitQuery::fill_range_filter_param(
-    const ObTabletSplitTscInfo &split_info,
+    const blocksstable::ObDatumRowkey &lower_bound,
+    const blocksstable::ObDatumRowkey &upper_bound,
+    const bool check_only,
     sql::ObEvalCtx &eval_ctx,
     sql::ExprFixedArray *filter_params)
 {
   int ret = OB_SUCCESS;
-  const blocksstable::ObDatumRowkey &lower_bound = split_info.start_partkey_;
-  const blocksstable::ObDatumRowkey &upper_bound = split_info.end_partkey_;
-
   if (OB_ISNULL(filter_params)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(filter_params));
@@ -480,55 +480,127 @@ int ObPartitionSplitQuery::fill_range_filter_param(
         const int col_idx = (i - 1) % part_column_cnt;
         ObDatum &expr_datum = expr->locate_datum_for_write(eval_ctx);
         if (i == 0) { // 1. bypass param expr.
-          expr_datum.set_int(0);
-        } else if (i <= part_column_cnt) { // 2. lower bound param expr.
-          if (lower_bound.is_min_rowkey()) {
-            expr_datum.set_outrow(); // min
-            if (expr_datum.is_outrow()) {
-              LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
+          if (check_only) {
+            if (OB_UNLIKELY(0 != expr_datum.get_int())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected bypass param", K(ret), K(i), K(expr_datum));
             }
           } else {
-            const ObDatum &lower_datum = lower_bound.get_datum(col_idx);
-            if (lower_datum.is_min()) {
-              expr_datum.set_outrow(); // min
-              if (expr_datum.is_outrow()) {
-                LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
-              }
-            } else if (lower_datum.is_max()) {
-              expr_datum.set_ext(); // max
-              if (expr_datum.is_ext()) {
-                LOG_DEBUG("set is ext", K(ret), K(expr_datum));
-              }
-            } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx, lower_datum))) {
-              LOG_WARN("fail to from storage datum", K(ret), K(lower_datum));
-            }
+            expr_datum.set_int(0);
+          }
+        } else if (i <= part_column_cnt) { // 2. lower bound param expr.
+          if (OB_FAIL(fill_range_filter_param(lower_bound, col_idx, check_only, eval_ctx, *expr, expr_datum))) {
+            LOG_WARN("failed to fill param", K(ret), K(lower_bound), K(check_only), K(expr_datum));
           }
         } else if (i <= part_column_cnt * 2) { // 3. upper bound param expr.
-          if (upper_bound.is_max_rowkey()) {
-            expr_datum.set_ext(); // max
-            if (expr_datum.is_ext()) {
-              LOG_DEBUG("set is ext", K(ret), K(expr_datum));
-            }
-          } else {
-            const ObDatum &upper_datum = upper_bound.get_datum(col_idx);
-            if ( upper_datum.is_max()) {
-              expr_datum.set_ext();  // max
-              if (expr_datum.is_ext()) {
-                LOG_DEBUG("set is ext", K(ret), K(expr_datum));
-              }
-            } else if (upper_datum.is_min()) {
-              expr_datum.set_outrow();  // min
-              if (expr_datum.is_outrow()) {
-                LOG_DEBUG("set is outrow", K(ret), K(expr_datum));
-              }
-            } else if (OB_FAIL(expr->deep_copy_datum(eval_ctx, upper_datum))) {
-              LOG_WARN("fail to from deep_copy_datum", K(ret), K(upper_datum));
-            }
+          if (OB_FAIL(fill_range_filter_param(upper_bound, col_idx, check_only, eval_ctx, *expr, expr_datum))) {
+            LOG_WARN("failed to fill param", K(ret), K(upper_bound), K(check_only), K(expr_datum));
           }
         }
       }
     }
+    if (OB_FAIL(ret) && check_only) {
+      (void)print_filter_params(eval_ctx, *filter_params);
+    }
   }
-  LOG_DEBUG("fill range filter param", K(ret), K(lower_bound), K(upper_bound));
+  LOG_DEBUG("fill range filter param", K(ret), K(check_only), K(lower_bound), K(upper_bound));
   return ret;
+}
+
+int ObPartitionSplitQuery::fill_range_filter_param(
+    const blocksstable::ObDatumRowkey &bound,
+    const int64_t col_idx,
+    const bool check_only,
+    sql::ObEvalCtx &eval_ctx,
+    sql::ObExpr &expr,
+    ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  const int64_t valid_col_idx = (bound.is_min_rowkey() || bound.is_max_rowkey()) ? 0 : col_idx;
+  if (OB_UNLIKELY(valid_col_idx >= bound.get_datum_cnt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index out of range", K(ret), K(col_idx), K(valid_col_idx), K(bound));
+  } else {
+    const ObDatum &datum = bound.get_datum(valid_col_idx);
+    if (datum.is_min()) {
+      if (check_only) {
+        if (OB_UNLIKELY(!expr_datum.is_outrow())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected param", K(ret), K(col_idx), K(valid_col_idx), K(expr_datum));
+        }
+      } else {
+        expr_datum.set_outrow(); // min
+      }
+    } else if (datum.is_max()) {
+      if (check_only) {
+        if (OB_UNLIKELY(!expr_datum.is_ext())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected param", K(ret), K(col_idx), K(valid_col_idx), K(expr_datum));
+        }
+      } else {
+        expr_datum.set_ext(); // max
+      }
+    } else {
+      if (check_only) {
+        if (OB_UNLIKELY(!ObDatum::binary_equal(expr_datum, datum))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected param", K(ret), K(col_idx), K(valid_col_idx), K(expr_datum), K(datum));
+        }
+      } else if (OB_FAIL(expr.deep_copy_datum(eval_ctx, datum))) {
+        LOG_WARN("fail to from storage datum", K(ret), K(col_idx), K(valid_col_idx), K(datum));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionSplitQuery::print_filter_params(sql::ObEvalCtx &eval_ctx, sql::ExprFixedArray &filter_params)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_params.count(); ++i) {
+    sql::ObExpr *expr = nullptr;
+    if (OB_ISNULL(expr = filter_params.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret), K(expr));
+    } else {
+      ObDatum &expr_datum = expr->locate_datum_for_write(eval_ctx);
+      FLOG_INFO("print filter param", K(i), K(expr_datum));
+    }
+  }
+  return ret;
+}
+
+int ObPartitionSplitQuery::check_split_prepare_read_tables(const ObTableIterParam &iter_param, ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletID &split_src_tablet_id = tablet.get_tablet_meta().split_info_.get_split_src_tablet_id();
+  const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
+  if (split_src_tablet_id.is_valid()
+      && tablet_meta.split_info_.is_data_incomplete()
+      && !tablet_meta.table_store_flag_.with_major_sstable()) {
+    ObArenaAllocator allocator;
+    ObTabletSplitTscInfo split_info;
+    if (OB_FAIL(ObTabletSplitMdsHelper::get_split_info_with_cache(tablet, allocator, split_info))) {
+      LOG_WARN("failed to get split info with cache", K(ret), K(tablet_meta));
+    } else if (split_info.is_split_dst_with_partkey() && !split_info.partkey_is_rowkey_prefix_) {
+      const bool has_split_filter = OB_NOT_NULL(iter_param.auto_split_filter_)
+          && iter_param.auto_split_filter_type_ < static_cast<uint64_t>(ObTabletSplitType::MAX_TYPE);
+      if (OB_UNLIKELY(!has_split_filter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("split dst tablet with non-prefix partkey should have split filter", K(ret), K(tablet.get_tablet_meta()));
+      }
+    } else {
+      // maybe split finish during query and the split info cache is flushed, this case is not checked
+    }
+  }
+  return ret;
+}
+
+int ObPartitionSplitQuery::check_split_filter_params(
+    const ObTablet &tablet,
+    sql::ObPushdownOperator *op,
+    const uint64_t filter_type,
+    sql::ExprFixedArray *filter_params)
+{
+  return ObTabletSplitMdsHelper::check_split_filter_params(tablet, op, filter_type, filter_params);
 }
