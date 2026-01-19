@@ -383,7 +383,7 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObBasicTablet
       STORAGE_LOG(WARN, "Failed to push back whole range", K(ret));
     } else if (OB_FAIL(spliter.get_multi_range_size(ranges, rowkey_read_info, tables, total_size))) {
       STORAGE_LOG(WARN, "Failed to init range spliter", K(ret));
-    } else if (OB_UNLIKELY(tablet_size <= 0 || total_size < 0 || (tables.count() <= 1 && !merge_ctx.static_param_.is_backfill_))) {
+    } else if (OB_UNLIKELY(tablet_size <= 0 || total_size < 0)) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "Invalid argument to calc mini minor parallel degree", K(ret), K(tablet_size),
                 K(total_size), K(tables.count()), K(merge_ctx));

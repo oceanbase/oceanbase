@@ -1142,13 +1142,13 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
     SCN cur_recycle_end_scn = SCN::max_scn();
     bool contain_uncommitted_row = false;
     const storage::ObSSTableArray &minor_sstables = table_store_wrapper.get_member()->get_minor_sstables();
+    // NOTICE : each sstable should be iterated because filled_tx_scn is not monotonically increasing
     for (int64_t i = 0; i < minor_sstables.count(); i++) {
       if (minor_sstables.at(i)->contain_uncommitted_row()) {
         // find the first minor sstable which contain uncomitted row.
         // get cur_recycle_end_scn and quit loop
         contain_uncommitted_row = true;
-        cur_recycle_end_scn = MIN(cur_recycle_end_scn, minor_sstables.at(i)->get_end_scn());
-        break;
+        cur_recycle_end_scn = MIN(cur_recycle_end_scn, minor_sstables.at(i)->get_filled_tx_scn());
       }
     }
     if (OB_FAIL(storage::ObIncDDLMergeTaskUtils::calculate_tx_data_recycle_scn(

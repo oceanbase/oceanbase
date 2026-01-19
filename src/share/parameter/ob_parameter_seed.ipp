@@ -997,6 +997,9 @@ DEF_INT(_tx_result_retention, OB_TENANT_PARAMETER, "300", "[0, 36000]",
         "The tx data can be recycled after at least _tx_result_retention seconds. "
         "Range: [0, 36000]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_fast_recycle_tx_data, OB_CLUSTER_PARAMETER, "True",
+         "Use this config to enable addtional minor merge for recycling tx data",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_parallel_redo_logging, OB_CLUSTER_PARAMETER, "True",
          "enable parallel write redo log.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

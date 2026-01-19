@@ -137,10 +137,10 @@ public:
   bool is_full_merge_; // global full merge or increment merge
   bool need_parallel_minor_merge_;
   bool is_tenant_major_merge_;
-  bool is_backfill_;
   bool is_delete_insert_merge_;
   bool is_ha_compeleted_; // only used for delete insert minor merge to control multi version row recycle logic, inited from tablet meta
   bool for_unittest_;
+  ObFillTxType fill_tx_type_;
   ObMergeLevel merge_level_; // TODO: keep it for minor/mini merge now
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   int16_t sstable_logic_seq_;

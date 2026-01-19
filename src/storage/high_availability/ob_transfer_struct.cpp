@@ -566,8 +566,6 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
       if (OB_UNLIKELY(memtables.at(i).get_tablet_memtable(mt))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table in tables_handle is not memtable", K(ret), K(memtables.at(i)));
-      } else if (!mt->is_active_memtable()) {
-        // skip
       } else if (OB_UNLIKELY(!mt->is_data_memtable())) {
         // incremental direct load hold table lock will block transfer scheduling, so there will be no active direct load memtable
         ret = OB_TRANSFER_SYS_ERROR;

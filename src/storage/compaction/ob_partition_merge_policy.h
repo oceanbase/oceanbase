@@ -129,6 +129,11 @@ public:
       ObVersionRange &result_version_range,
       ObStorageSnapshotInfo &snapshot_info);
 
+  static int check_need_gc_tx_data(
+      const storage::ObTablet &tablet,
+      ObLS &ls,
+      storage::ObGetMergeTablesResult &result);
+
   static int add_table_with_check(storage::ObGetMergeTablesResult &result, storage::ObTableHandleV2 &table_handle);
   static int get_result_by_snapshot(
       storage::ObLS &ls,
@@ -166,12 +171,14 @@ private:
       const ObGetMergeTablesParam &param,
       const ObTablet &tablet,
       const int64_t minor_compact_trigger,
+      ObLS &ls,
       ObTablesHandleArray &tables,
       ObGetMergeTablesResult &result);
   static int refine_minor_merge_result(
+      const ObTablet &tablet,
       const compaction::ObMergeType merge_type,
       const int64_t minor_compact_trigger,
-      const bool is_tablet_referenced_by_collect_mv,
+      ObLS &ls,
       storage::ObGetMergeTablesResult &result);
   static int deal_with_minor_result(
       const compaction::ObMergeType &merge_type,

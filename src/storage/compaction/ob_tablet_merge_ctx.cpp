@@ -181,6 +181,15 @@ int ObTabletMiniMergeCtx::update_tablet(
   return ret;
 }
 
+void ObTabletMiniMergeCtx::record_uncommitted_sstable_cnt()
+{
+  ObSSTable *sstable = nullptr;
+  (void)merged_table_handle_.get_sstable(sstable);
+  if (OB_NOT_NULL(sstable) && sstable->contain_uncommitted_row()) {
+    EVENT_INC(ObStatEventIds::MEMSTORE_DUMP_UNCOMMITTED_SSTABLE_CNT);
+  }
+}
+
 #ifdef OB_BUILD_SHARED_STORAGE
 #define PRINT_TS_WRAPPER(x) (ObPrintTableStore(*(x.get_member())))
 void ObTabletMiniMergeCtx::register_upload_task_(ObTabletHandle &new_tablet_handle)
@@ -256,6 +265,7 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
     }
   }
   time_guard_click(ObStorageCompactionTimeGuard::SCHEDULE_OTHER_COMPACTION);
+  (void) record_uncommitted_sstable_cnt();
 }
 
 int ObTabletMiniMergeCtx::try_report_tablet_stat_after_mini()
@@ -337,18 +347,8 @@ int ObTabletMiniMergeCtx::update_tablet_directly(ObGetMergeTablesResult &get_mer
       &static_param_.snapshot_info_);
 
     (void) try_schedule_compaction_after_mini(new_tablet_handle);
-    (void) record_uncommitted_sstable_cnt();
   }
   return ret;
-}
-
-void ObTabletMiniMergeCtx::record_uncommitted_sstable_cnt()
-{
-  ObSSTable *sstable = nullptr;
-  (void)merged_table_handle_.get_sstable(sstable);
-  if (OB_NOT_NULL(sstable) && sstable->contain_uncommitted_row()) {
-    EVENT_INC(ObStatEventIds::MEMSTORE_DUMP_UNCOMMITTED_SSTABLE_CNT);
-  }
 }
 
 /*

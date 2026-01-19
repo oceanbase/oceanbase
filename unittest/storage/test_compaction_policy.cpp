@@ -196,6 +196,7 @@ void TestCompactionPolicy::SetUp()
   medium_info_.data_version_ = 100;
 
   medium_info_.storage_schema_.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL);
+  GCONF._enable_fast_recycle_tx_data = false;
 }
 
 void TestCompactionPolicy::TearDown()

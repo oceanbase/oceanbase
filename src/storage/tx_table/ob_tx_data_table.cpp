@@ -1328,6 +1328,7 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
   return ret;
 }
 
+// alter system set_tp tp_name = "EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND", error_code = 3600, frequency = 1;
 ERRSIM_POINT_DEF(EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND)
 bool ObTxDataTable::FreezeFrequencyController::need_re_freeze(const share::ObLSID ls_id)
 {

@@ -977,18 +977,19 @@ int ObTenantTabletScheduler::clear_tablets_prohibit_medium_flag(const ObIArray<O
   return ret;
 }
 
-bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const SCN &check_scn)
+bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const SCN &merge_scn)
 {
   int ret = OB_SUCCESS;
   bool tx_table_ready = false;
   SCN max_decided_scn;
   if (OB_FAIL(ls.get_max_decided_scn(max_decided_scn))) {
     LOG_WARN("failed to get max decided log_ts", K(ret), "ls_id", ls.get_ls_id());
-  } else if (check_scn <= max_decided_scn) {
+  } else if (merge_scn <= max_decided_scn) {
     tx_table_ready = true;
-    LOG_INFO("tx table ready", "sstable_end_scn", check_scn, K(max_decided_scn));
+    LOG_DEBUG("tx table ready", K(merge_scn), K(max_decided_scn));
+  } else if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL/* 10 seconds */)) {
+    LOG_INFO("waiting for max_decided_log_ts ...", KR(ret), K(merge_scn), K(max_decided_scn));
   }
-
   return tx_table_ready;
 }
 
@@ -1345,8 +1346,11 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
 
     ObMinorExecuteRangeMgr minor_range_mgr;
     MinorParallelResultArray parallel_results;
-    if (result.handle_.get_count() < minor_compact_trigger) {
+    if (result.handle_.get_count() < minor_compact_trigger && !result.is_gc_tx_data()) {
       ret = OB_NO_NEED_MERGE;
+    } else if (!ObTenantTabletScheduler::check_tx_table_ready(*ls_handle.get_ls(), result.get_merge_scn())) {
+      ret = OB_EAGAIN;
+      LOG_TRACE("tx table not ready", K(ret), K(result.fill_tx_info_), K(param));
     } else if (OB_FAIL(minor_range_mgr.get_merge_ranges(ls_id, tablet_id))) {
       LOG_WARN("failed to get merge range", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(ObPartitionMergePolicy::generate_parallel_minor_interval(param.merge_type_, minor_compact_trigger, result, minor_range_mgr, parallel_results))) {
@@ -1367,8 +1371,8 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
 
       ObTabletMergeDagParam dag_param(merge_type, ls_id, tablet_id, private_transfer_epoch);
       for (int64_t k = 0; OB_SUCC(ret) && k < parallel_results.count(); ++k) {
-        if (OB_UNLIKELY(parallel_results.at(k).handle_.get_count() <= 1)) {
-          LOG_WARN("invalid parallel result", K(ret), K(k), K(parallel_results));
+        if (OB_UNLIKELY(parallel_results.at(k).handle_.get_count() <= 1) && (!result.is_gc_tx_data())) {
+          LOG_WARN("invalid parallel result", K(ret), K(k), K(parallel_results), K(result));
         } else if (OB_FAIL(fill_minor_compaction_param(tablet_handle, parallel_results.at(k), total_sstable_cnt, parallel_dag_cnt, create_time, dag_param))) {
           LOG_WARN("failed to fill compaction param for ranking dags later", K(ret), K(k), K(parallel_results.at(k)));
         } else if (OB_FAIL(schedule_merge_execute_dag<T>(dag_param, ls_handle, tablet_handle, parallel_results.at(k)))) {
@@ -1401,11 +1405,10 @@ int ObTenantTabletScheduler::schedule_merge_execute_dag(
   const bool emergency = tablet_handle.get_obj()->get_tablet_meta().tablet_id_.is_ls_inner_tablet();
   T *merge_exe_dag = nullptr;
 
-  if (result.handle_.get_count() > 1 &&
-      !ObTenantTabletScheduler::check_tx_table_ready(*ls_handle.get_ls(), result.scn_range_.end_scn_)) {
+  if (result.handle_.get_count() >= 1 &&
+      !ObTenantTabletScheduler::check_tx_table_ready(*ls_handle.get_ls(), result.get_merge_scn())) {
     ret = OB_EAGAIN;
-    LOG_INFO("tx table is not ready. waiting for max_decided_log_ts ...", KR(ret),
-             "merge_scn", result.scn_range_.end_scn_);
+    LOG_TRACE("tx table not ready", K(ret), K(result), K(param));
   } else if (OB_FAIL(MTL(share::ObTenantDagScheduler *)->alloc_dag(merge_exe_dag))) {
     LOG_WARN("failed to alloc dag", K(ret), K(param));
   } else if (OB_FAIL(merge_exe_dag->prepare_init(param,

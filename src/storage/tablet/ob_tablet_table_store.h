@@ -469,7 +469,6 @@ private:
       const ObTablesHandleArray &new_tables_handle,
       const bool check_continue,
       common::ObIArray<ObITable *> &out_sstables);
-  int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
   int only_replace_major_(
       common::ObArenaAllocator &allocator,
       const ObTabletTableStore &old_store,

@@ -228,11 +228,9 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
       // 1.normal minor merge merge scn equal to end scn
       // 2.backfill may merge scn is bigger than end scn
       access_context_.merge_scn_ = static_param.merge_scn_;
-      if (!static_param.is_backfill_) {
-        if (OB_UNLIKELY(access_context_.merge_scn_ != static_param.scn_range_.end_scn_)) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(ERROR, "Unexpected merge scn", K(ret), K(merge_param), K(static_param));
-        }
+
+      if (access_context_.merge_scn_ != static_param.scn_range_.end_scn_) {
+        STORAGE_LOG(TRACE, "end scn is not same with merge scn", K(access_context_.merge_scn_), K(static_param.scn_range_));
       }
     }
   }

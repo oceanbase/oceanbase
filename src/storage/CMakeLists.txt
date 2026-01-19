@@ -591,6 +591,7 @@ ob_set_subtarget(ob_storage tx_table
   tx_table/ob_tx_data_memtable.cpp
   tx_table/ob_tx_data_memtable_mgr.cpp
   tx_table/ob_tx_data_table.cpp
+  tx_table/ob_tx_data_util.cpp
   tx_table/ob_tx_table.cpp
   tx_table/ob_tx_table_define.cpp
   tx_table/ob_tx_table_guards.cpp

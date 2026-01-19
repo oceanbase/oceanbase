@@ -17,6 +17,7 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "storage/tx_table/ob_tx_data_util.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
@@ -556,6 +557,26 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       }
     }
 
+    if (OB_FAIL(ret)) {
+    } else if (GCONF._enable_fast_recycle_tx_data && !tablet.is_ls_inner_tablet()) {
+      // Use tmp_ret because if tablet status or max-decided-scn cannot be obtained,
+      // the regular mini merge logic can still proceed and there's no need to forcibly
+      // use a larger filled_tx_scn.
+      int tmp_ret = OB_SUCCESS;
+      SCN max_decided_scn = SCN::min_scn();
+
+      // To ensure correct concurrency between transfer and mini merge, max_decided_scn should be obtained first,
+      // then tablet status should be retrieved, to guarantee max_decided_scn <= backfill_scn
+      if (OB_TMP_FAIL(ls.get_max_decided_scn(max_decided_scn))) {
+        LOG_WARN("failed to get max decided scn", K(tmp_ret), K(ls.get_ls_id()));
+      } else if (ObTxDataUtil::tablet_is_normal_status(tablet)) {
+        result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_DATA_MINI, max_decided_scn);
+        LOG_DEBUG("tablet status is normal, fill tx with max decided scn",
+                  K(max_decided_scn),
+                  K(tablet.get_tablet_id()));
+      }
+    }
+
     if (OB_SUCC(ret) && result.version_range_.snapshot_version_ > max_snapshot_version) {
       result.schedule_major_ = true;
     }
@@ -633,6 +654,70 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
   }
   return ret;
 }
+
+int ObPartitionMergePolicy::check_need_gc_tx_data(
+    const ObTablet &tablet,
+    ObLS &ls,
+    ObGetMergeTablesResult &result)
+{
+  int ret = OB_SUCCESS;
+  SCN filling_tx_scn = SCN::min_scn();
+
+  if (!GCONF._enable_fast_recycle_tx_data ||
+      tablet.is_ls_inner_tablet() ||
+      !tablet.get_tablet_meta().ha_status_.is_data_status_complete() ||
+      result.handle_.empty()) {
+    // do nothing
+  } else if (tablet.get_clog_checkpoint_scn() > result.scn_range_.end_scn_) {
+    // This MinorMerge do not contain the last sstable, skip schedule minor merge to gc tx data
+    LOG_DEBUG("no need to gc tx data", K(tablet.get_clog_checkpoint_scn()), K(result.scn_range_.end_scn_));
+  } else if (OB_FAIL(ls.get_max_decided_scn(filling_tx_scn))) {
+    LOG_WARN("failed to get max decided scn", K(ret));
+  } else {
+    SCN min_filled_tx_scn = SCN::max_scn();
+
+    bool force_skip_gc = false;
+    for (int64_t i = 0; i < result.handle_.get_count(); ++i) {
+      ObSSTable *cur_table = static_cast<ObSSTable *>(result.handle_.get_table(i));
+      const SCN &cur_filled_tx_scn = cur_table->get_filled_tx_scn();
+
+      if (cur_filled_tx_scn.is_min() || cur_filled_tx_scn > filling_tx_scn) {
+        // cannot do minor merge, set force skip gc
+        force_skip_gc = true;
+        LOG_INFO("sstable fileed tx scn is larger than filling tx scn, cannot gc tx data",
+                 K(filling_tx_scn),
+                 K(cur_filled_tx_scn),
+                 KPC(cur_table));
+        break;
+      } else if (cur_table->contain_uncommitted_row()) {
+        min_filled_tx_scn = MIN(min_filled_tx_scn, cur_filled_tx_scn);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!force_skip_gc && ObTxDataUtil::tx_data_need_recycle(filling_tx_scn, min_filled_tx_scn)) {
+      if (ObTxDataUtil::tablet_is_normal_status(tablet)) {
+        result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_GC_TX_DATA, filling_tx_scn);
+        FLOG_INFO("tablet needs to update filled tx scn through minor merge", K(ls.get_ls_id()), K(result));
+      }
+    }
+  }
+
+#ifdef ERRSIM
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  if (OB_FAIL(ret)) {
+  } else if (tablet_id.is_inner_tablet() || tablet_id.is_sys_tablet() || tablet_id.is_ls_inner_tablet()) {
+    // do nothing
+  } else if (result.is_gc_tx_data()) {
+  } else if (EN_MINOR_MERGE_GC_TX_DATA) {
+    ret = OB_SUCCESS;
+    result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_GC_TX_DATA, filling_tx_scn);
+    FLOG_INFO("Errsim: schedule tx scn minor merge", K(ret), K(result));
+  }
+#endif
+  return ret;
+}
+
 
 int ObPartitionMergePolicy::get_boundary_snapshot_version(
     const ObTablet &tablet,
@@ -720,10 +805,8 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
     }
   }
 
-  if (OB_FAIL(tablet.get_mini_minor_sstables(minor_table_iter))) {
+  if (OB_FAIL(tablet.get_all_minor_sstables(minor_table_iter))) {
     LOG_WARN("failed to get mini  minor sstables", K(ret));
-  } else if (minor_table_iter.count() <= MAX(minor_compact_trigger, 1)) {
-    ret = OB_NO_NEED_MERGE;
   } else {
     ObSSTable *table = nullptr;
     bool found_greater = false;
@@ -805,8 +888,8 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
         minor_merge_candidates = &prev_major_table_candidates;
       }
     }
-
-    if (FAILEDx(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, *minor_merge_candidates, result))) {
+    if (FAILEDx(refine_and_get_minor_merge_result(
+            param, tablet, minor_compact_trigger, ls, *minor_merge_candidates, result))) {
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("refine and get minor merge result fail", K(ret));
       }
@@ -830,7 +913,7 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
       LOG_WARN("Failed to deal with minor merge result", K(ret), K(param), K(result));
     } else {
       LOG_TRACE("succeed to get minor merge tables", K(min_snapshot_version), K(max_snapshot_version),
-                K(result), K(tablet));
+          K(result), K(tablet));
     }
   } else if (OB_NO_NEED_MERGE == ret && tablet.get_minor_table_count() >= diagnose_table_cnt) {
     if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MINOR_MERGE, ObDiagnoseTabletType::TYPE_MINOR_MERGE,
@@ -1204,16 +1287,25 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
 }
 
 int ObPartitionMergePolicy::refine_minor_merge_result(
+    const ObTablet &tablet,
     const ObMergeType merge_type,
     const int64_t minor_compact_trigger,
-    const bool is_tablet_referenced_by_collect_mv,
+    ObLS &ls,
     ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
+  const bool is_tablet_referenced_by_collect_mv = tablet.is_tablet_referenced_by_collect_mv();
+
   if (result.handle_.get_count() <= MAX(minor_compact_trigger, 1)) {
-    ret = OB_NO_NEED_MERGE;
-    LOG_DEBUG("minor refine, no need to do minor merge", K(result));
-    result.handle_.reset();
+    if (OB_FAIL(check_need_gc_tx_data(tablet, ls, result))) {
+      LOG_WARN("failed to check need gc tx data", K(ret));
+    } else if (result.is_gc_tx_data()) {
+      LOG_INFO("do minor merge to push up tx data recycle scn", K(result.fill_tx_info_));
+    } else {
+      ret = OB_NO_NEED_MERGE;
+      LOG_DEBUG("minor refine, no need to do minor merge", K(result));
+      result.handle_.reset();
+    }
   } else if (OB_UNLIKELY(!is_minor_merge_type(merge_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected merge type to refine merge tables", K(result), K(ret));
@@ -1503,30 +1595,36 @@ int ObPartitionMergePolicy::generate_parallel_minor_interval(
   ObSEArray<ObGetMergeTablesResult, 2> input_result_array;
   int64_t fixed_input_table_cnt = 0;
 
-  if (!compaction::is_minor_merge_type(merge_type) && !compaction::is_mds_minor_merge(merge_type)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid merge type", K(ret), "merge_type", merge_type_to_str(merge_type));
-  } else if (input_result.handle_.get_count() < minor_compact_trigger) {
-    ret = OB_NO_NEED_MERGE;
-  } else if (OB_FAIL(generate_input_result_array(input_result, minor_range_mgr, fixed_input_table_cnt, input_result_array))) {
-    LOG_WARN("failed to generate input result into array", K(ret), K(input_result));
-  } else if (fixed_input_table_cnt < minor_compact_trigger) {
-    // the quantity of table that should be merged is smaller than trigger, wait for the existing minor tasks to finish.
-    ret = OB_NO_NEED_MERGE;
-  }
+  if (input_result.is_gc_tx_data()) {
+    if (OB_FAIL(parallel_result.push_back(input_result))) {
+      LOG_WARN("failed to add input result", K(ret), K(input_result));
+    }
+  } else {
+    if (!compaction::is_minor_merge_type(merge_type) && !compaction::is_mds_minor_merge(merge_type)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid merge type", K(ret), "merge_type", merge_type_to_str(merge_type));
+    } else if (input_result.handle_.get_count() < minor_compact_trigger) {
+      ret = OB_NO_NEED_MERGE;
+    } else if (OB_FAIL(generate_input_result_array(input_result, minor_range_mgr, fixed_input_table_cnt, input_result_array))) {
+      LOG_WARN("failed to generate input result into array", K(ret), K(input_result));
+    } else if (fixed_input_table_cnt < minor_compact_trigger) {
+      // the quantity of table that should be merged is smaller than trigger, wait for the existing minor tasks to finish.
+      ret = OB_NO_NEED_MERGE;
+    }
 
-  /*
-   * When existing minor dag, we should ensure that the quantity of tables per parallel dag is a reasonable value:
-   * 1. If compact_trigger is small, minor merge should be easier to schedule, we should lower the threshold;
-   * 2. If compact_trigger is big, we should upper the threshold to prevent the creation of dag frequently.
-   */
-  int64_t exist_dag_cnt = minor_range_mgr.exe_range_array_.count();
-  int64_t table_count_threshold = (0 == exist_dag_cnt)
-                                ? minor_compact_trigger
-                                : OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG + (OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG / 2) * (exist_dag_cnt - 1);
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_result_array.count(); ++i) {
-    if (OB_FAIL(split_parallel_minor_range(table_count_threshold, input_result_array.at(i), parallel_result))) {
-      LOG_WARN("failed to split parallel minor range", K(ret), K(input_result_array.at(i)));
+    /*
+    * When existing minor dag, we should ensure that the quantity of tables per parallel dag is a reasonable value:
+    * 1. If compact_trigger is small, minor merge should be easier to schedule, we should lower the threshold;
+    * 2. If compact_trigger is big, we should upper the threshold to prevent the creation of dag frequently.
+    */
+    int64_t exist_dag_cnt = minor_range_mgr.exe_range_array_.count();
+    int64_t table_count_threshold = (0 == exist_dag_cnt)
+                                  ? minor_compact_trigger
+                                  : OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG + (OB_MINOR_PARALLEL_SSTABLE_CNT_IN_DAG / 2) * (exist_dag_cnt - 1);
+    for (int64_t i = 0; OB_SUCC(ret) && i < input_result_array.count(); ++i) {
+      if (OB_FAIL(split_parallel_minor_range(table_count_threshold, input_result_array.at(i), parallel_result))) {
+        LOG_WARN("failed to split parallel minor range", K(ret), K(input_result_array.at(i)));
+      }
     }
   }
   return ret;
@@ -2364,6 +2462,7 @@ int ObCOMajorMergePolicy::decide_co_major_merge_type(
 int ObPartitionMergePolicy::refine_and_get_minor_merge_result(const ObGetMergeTablesParam &param,
                                                               const ObTablet &tablet,
                                                               const int64_t minor_compact_trigger,
+                                                              ObLS &ls,
                                                               ObTablesHandleArray &minor_merge_candidates,
                                                               ObGetMergeTablesResult &result)
 {
@@ -2371,6 +2470,7 @@ int ObPartitionMergePolicy::refine_and_get_minor_merge_result(const ObGetMergeTa
 
   int64_t left_border = 0;
   int64_t right_border = minor_merge_candidates.get_count();
+  SCN max_filled_tx_scn(SCN::min_scn());
   if (MINOR_MERGE == param.merge_type_ &&
       OB_FAIL(refine_minor_merge_tables(tablet, minor_merge_candidates, left_border, right_border))) {
     LOG_WARN("failed to adjust mini minor merge tables", K(ret));
@@ -2388,22 +2488,31 @@ int ObPartitionMergePolicy::refine_and_get_minor_merge_result(const ObGetMergeTa
     if (FAILEDx(result.handle_.add_table(tmp_table_handle))) {
       LOG_WARN("Failed to add table", K(ret), K(tmp_table_handle));
     } else {
+      ObSSTable *sstable = static_cast<ObSSTable *>(tmp_table_handle.get_table());
       if (1 == result.handle_.get_count()) {
-        result.scn_range_.start_scn_ = tmp_table_handle.get_table()->get_start_scn();
-        result.rec_scn_ = tmp_table_handle.get_table()->get_rec_scn();
+        result.scn_range_.start_scn_ = sstable->get_start_scn();
+        result.rec_scn_ = sstable->get_rec_scn();
       }
-      result.scn_range_.end_scn_ = tmp_table_handle.get_table()->get_end_scn();
+      result.scn_range_.end_scn_ = sstable->get_end_scn();
+      max_filled_tx_scn = SCN::max(sstable->get_filled_tx_scn(), max_filled_tx_scn);
     }
   }
-  if (FAILEDx(refine_minor_merge_result(param.merge_type_, minor_compact_trigger, tablet.is_tablet_referenced_by_collect_mv(), result))) {
+  if (FAILEDx(refine_minor_merge_result(tablet, param.merge_type_, minor_compact_trigger, ls, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to refine minor_merge result", K(ret));
     }
   } else {
+    if (!result.is_gc_tx_data() && !tablet.is_ls_inner_tablet()) {
+      if (max_filled_tx_scn != result.scn_range_.end_scn_) {
+        LOG_TRACE("use max_filled_tx_scn as new filled_tx_scn", KR(ret), K(max_filled_tx_scn));
+      }
+      result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_DATA_MINOR, max_filled_tx_scn);
+    }
     result.version_range_.snapshot_version_ = tablet.get_snapshot_version();
   }
   return ret;
 }
+
 
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObPartitionMergePolicy::get_ss_minor_merge_tables(
@@ -2490,10 +2599,15 @@ int ObPartitionMergePolicy::get_ss_minor_merge_tables(
     ret = OB_NO_NEED_MERGE;
     LOG_INFO("Errsim: disable ss minor merge", K(ret), "tenant_id", MTL_ID(), "tablet_id", tablet.get_tablet_meta().tablet_id_);
 #endif
-  } else if (OB_FAIL(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, minor_merge_candidates, result))) {
+  } else if (OB_FAIL(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, ls, minor_merge_candidates, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("refine and get minor merge result fail", K(ret));
     }
+  } else if (result.is_gc_tx_data()) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("Do not schedule SS MinorMerge to advance TxData recycle scn",
+             K(ret),
+             "tablet_id", tablet.get_tablet_meta().tablet_id_);
   } else if (OB_FAIL(deal_with_ss_minor_result(ls, tablet, result))) {
     LOG_WARN("Failed to deal with minor merge result", K(ret), K(result));
   } else {

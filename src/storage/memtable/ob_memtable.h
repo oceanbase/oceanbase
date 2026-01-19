@@ -427,6 +427,7 @@ public:
     ATOMIC_STORE(&transfer_freeze_flag_, true);
   }
   inline bool is_transfer_freeze() const { return ATOMIC_LOAD(&transfer_freeze_flag_); }
+  inline share::SCN get_transfer_freeze_scn() const { return recommend_snapshot_version_; }
   virtual void set_delete_insert_flag(const bool rhs) override { is_delete_insert_table_ = rhs; }
   inline bool is_delete_insert_table() const { return is_delete_insert_table_; }
   virtual void set_micro_block_format_version(const int64_t rhs) override { micro_block_format_version_ = rhs; }

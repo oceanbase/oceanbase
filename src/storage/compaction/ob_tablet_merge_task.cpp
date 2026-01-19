@@ -123,13 +123,10 @@ int ObMergeParameter::init(
     }
 
     if (OB_SUCC(ret) & static_param_.merge_scn_ > static_param_.scn_range_.end_scn_) {
-      if (!static_param_.is_backfill_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("merge scn is bigger than scn range but merge type is not backfill, unexpected",
-            K(ret), K(static_param_.merge_scn_), K(static_param_.scn_range_), K(static_param_.get_merge_type()));
-      } else {
-        FLOG_INFO("set backfill merge scn", K(static_param_.merge_scn_), K(static_param_.scn_range_), K(static_param_.get_merge_type()));
-      }
+      FLOG_INFO("merge scn is bigger than scn range",
+                K(static_param_.merge_scn_),
+                K(static_param_.scn_range_),
+                K(static_param_.get_merge_type()));
     }
   }
   if (OB_SUCC(ret)) {
