@@ -106,6 +106,7 @@ protected:
                                             ObIArray<JoinedTable*> &joined_table_list);
 
   int gather_select_item_null_propagate(ObSelectStmt *ref_query,
+                                        bool ref_query_is_scala_group_by,
                                         ObIArray<bool> &is_null_prop);
 
   int transform_from_list(ObDMLStmt &stmt,
