@@ -324,8 +324,8 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
         LOG_WARN("failed to add flag IS_ASSIGN_EXPR", K(ret));
       }
     } else if (T_OP_IS == expr.get_expr_type()) {
-      if (OB_FAIL(expr.add_flag(IS_IS_EXPR))) {
-        LOG_WARN("failed to add flag IS_IS_EXPR", K(ret));
+      if (OB_FAIL(expr.add_flag(CNT_IS_EXPR))) {
+        LOG_WARN("failed to add flag CNT_IS_EXPR", K(ret));
       }
     }
   } else if (3 == expr.get_param_count()) {
@@ -629,6 +629,13 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         }
       } else {}
     }
+    if (OB_SUCC(ret) &&
+      (expr.get_expr_type() == T_FUN_PL_COLLECTION_CONSTRUCT ||
+       expr.get_expr_type() == T_FUN_PL_OBJECT_CONSTRUCT)) {
+    if (OB_FAIL(expr.add_flag(CNT_PL_UDT_CONSTRUCT))) {
+      LOG_WARN("failed to add flag IS_OR", K(ret));
+    }
+  }
   }
   if (OB_SUCC(ret) && OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));
