@@ -137,6 +137,9 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(tenant_id_), K(data_table_id_));
+  } else if (data_table_schema->is_oracle_tmp_table_v2() || data_table_schema->is_oracle_tmp_table_v2_index_table()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("oracle temporary table v2 has no tablet, skip rebuild", K(ret), K(data_table_schema));
   } else if (!mview_refresh_info_.is_mview_complete_refresh_) {
     ObString partition_names;
     if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
@@ -885,6 +888,9 @@ int ObDDLRedefinitionTask::check_data_dest_tables_columns_checksum(const int64_t
   } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(dest_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_INFO("table is not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema), KP(dest_table_schema));
+  } else if (dest_table_schema->is_oracle_tmp_table_v2() || dest_table_schema->is_oracle_tmp_table_v2_index_table()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("oracle temporary table v2 has no tablet, skip get columns checksum", KPC(dest_table_schema), K(common::lbt()));
   } else if (OB_FAIL(validate_checksum_columns_id.create(OB_MAX_COLUMN_NUMBER / 2, lib::ObLabel("DDLRedefTmp")))) {
     LOG_WARN("fail to create validate_checksum_columns_id set", K(ret));
   } else if (OB_FAIL(get_validate_checksum_columns_id(*data_table_schema, *dest_table_schema, validate_checksum_columns_id))) {

@@ -561,7 +561,8 @@ int ObAccessService::construct_store_ctx_other_variables_(
     const int64_t timeout,
     const share::SCN &snapshot,
     ObTabletHandle &tablet_handle,
-    ObStoreCtxGuard &ctx_guard)
+    ObStoreCtxGuard &ctx_guard,
+    ObTableType table_type)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ls.get_ls_id();
@@ -577,8 +578,25 @@ int ObAccessService::construct_store_ctx_other_variables_(
     }
   } else if (OB_FAIL(tablet_service->get_tablet_with_timeout(
       tablet_id, tablet_handle, timeout, ObMDSGetTabletMode::READ_READABLE_COMMITED, snapshot))) {
-    LOG_WARN("failed to check and get tablet", K(ret), K(ls_id), K(tablet_id), K(timeout), K(snapshot));
-  } else if (OB_FAIL(get_source_ls_tx_table_guard_(tablet_handle, ctx_guard))) {
+    // The creation of GTT v2 tablets is performed in a separate transaction. Under different isolation levels,
+    // the read operation may acquire the SCN before the temporary table tablet is created,
+    // resulting in the SCN of the temporary tablet being less than that of the read operation.
+    // This leads to an OB_SNAPSHOT_DISCARDED error during this verification.
+    // To avoid this issue, this check should be skipped for temporary tables.
+    if (OB_SNAPSHOT_DISCARDED == ret && (ObTableType::TMP_TABLE_ORA_SESS_V2 == table_type ||
+        ObTableType::TMP_TABLE_ORA_TRX_V2 == table_type)) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(tablet_service->get_tablet_with_timeout(
+          tablet_id, tablet_handle, timeout, ObMDSGetTabletMode::READ_ALL_COMMITED, share::SCN::max_scn()))) {
+        LOG_WARN("failed to check and get tablet", K(ret), K(ls_id), K(tablet_id), K(timeout), K(snapshot));
+      } else {
+        LOG_INFO("oracle gtt v2 tablet, skip check allow to read", K(ret), K(ls_id), K(tablet_id), K(table_type));
+      }
+    } else {
+      LOG_WARN("failed to check and get tablet", K(ret), K(ls_id), K(tablet_id), K(timeout), K(snapshot));
+    }
+  }
+  if (FAILEDx(get_source_ls_tx_table_guard_(tablet_handle, ctx_guard))) {
     LOG_WARN("failed to get src ls tx table guard", K(ret), K(ls_id), K(tablet_id));
   }
   if (OB_TABLET_IS_SPLIT_SRC == ret) {
@@ -703,7 +721,8 @@ int ObAccessService::check_read_allowed_(
         }
       }
     } else if (OB_FAIL(construct_store_ctx_other_variables_(*ls, tablet_id, scan_param.timeout_,
-         ctx.mvcc_acc_ctx_.get_snapshot_version(), tablet_handle, ctx_guard))) {
+         ctx.mvcc_acc_ctx_.get_snapshot_version(), tablet_handle, ctx_guard,
+         nullptr != scan_param.table_param_ ? scan_param.table_param_->get_table_type() : ObTableType::MAX_TABLE_TYPE))) {
       if (OB_SNAPSHOT_DISCARDED == ret && scan_param.fb_snapshot_.is_valid()) {
         ret = OB_TABLE_DEFINITION_CHANGED;
       } else {
@@ -808,7 +827,8 @@ int ObAccessService::check_write_allowed_(
   // After locking the table, it can prevent the tablet from being deleted.
   // It is necessary to obtain the tablet handle after locking the table to avoid operating the deleted tablet.
   if (OB_SUCC(ret) && OB_FAIL(construct_store_ctx_other_variables_(*ls, tablet_id, dml_param.timeout_,
-      share::SCN::max_scn(), tablet_handle, ctx_guard))) {
+      share::SCN::max_scn(), tablet_handle, ctx_guard,
+      nullptr != dml_param.table_param_ ? dml_param.table_param_->get_data_table().get_table_type() : ObTableType::MAX_TABLE_TYPE))) {
     LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id));
   }
   return ret;

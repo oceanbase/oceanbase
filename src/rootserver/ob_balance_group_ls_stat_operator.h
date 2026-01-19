@@ -44,6 +44,10 @@ class ObTableSchema;
 class ObLatestSchemaGuard;
 }
 }
+namespace storage
+{
+class ObSessionTabletInfo;
+}
 namespace observer
 {
 class ObInnerSQLConnection;
@@ -176,6 +180,12 @@ public:
       share::schema::ObLatestSchemaGuard *latest_schema_guard = NULL);
   int prepare_like(
       const share::schema::ObTableSchema &table_schema);
+  int prepare_for_oracle_temp_table(
+      ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObTablegroupSchema *tablegroup_schema,
+      const storage::ObSessionTabletInfo &data_table_info,
+      share::schema::ObLatestSchemaGuard *latest_schema_guard = nullptr);
   int get_ls_id_array(
       common::ObIArray<share::ObLSID> &ls_id_array);
   int finish(const bool commit);
@@ -183,7 +193,8 @@ private:
   int alloc_ls_for_sys_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_local_index_tablet(
-      const share::schema::ObTableSchema &table_schema);
+      const share::schema::ObTableSchema &table_schema,
+      const storage::ObSessionTabletInfo *data_table_info = nullptr);
   int alloc_ls_for_global_index_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_in_tablegroup_tablet(
@@ -209,7 +220,8 @@ private:
       const share::schema::ObTableSchema &table_schema,
       common::ObIArray<common::ObTabletID> &ls_id_array);
   int alloc_tablet_by_primary_schema(
-      const share::schema::ObTableSchema &table_schema);
+      const share::schema::ObTableSchema &table_schema,
+      const storage::ObSessionTabletInfo *data_table_info = nullptr);
   int alloc_tablet_by_count_balance(
       const share::schema::ObTableSchema &table_schema);
   int alloc_tablet_for_non_partitioned_balance_group(

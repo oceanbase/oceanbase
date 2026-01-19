@@ -14930,6 +14930,39 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObGetRefreshedSchemaVersionsRes);
 };
 
+struct ObBatchDetectSessionAliveArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchDetectSessionAliveArg() : session_id_array_() {}
+  ~ObBatchDetectSessionAliveArg() = default;
+  int assign(const ObBatchDetectSessionAliveArg &other);
+  int init(const common::ObIArray<uint64_t> &session_id_array) { return session_id_array_.assign(session_id_array); }
+  bool is_valid() const { return session_id_array_.count() > 0; }
+  TO_STRING_KV(K_(session_id_array));
+public:
+  common::ObSArray<uint64_t> session_id_array_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBatchDetectSessionAliveArg);
+};
+
+struct ObBatchDetectSessionAliveResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchDetectSessionAliveResult() : session_alive_array_() {}
+  ~ObBatchDetectSessionAliveResult() = default;
+  int assign(const ObBatchDetectSessionAliveResult &other);
+  int init(int64_t count);
+  bool is_valid() const { return session_alive_array_.count() > 0; }
+  TO_STRING_KV(K_(session_alive_array));
+public:
+  common::ObSArray<bool> session_alive_array_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBatchDetectSessionAliveResult);
+};
+
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

@@ -17,6 +17,7 @@
 #include "lib/container/ob_fixed_array.h"
 #include "sql/das/ob_das_define.h"
 #include "sql/optimizer/ob_route_policy.h"
+#include "storage/tablet/ob_session_tablet_info_map.h"
 namespace oceanbase
 {
 namespace common
@@ -166,7 +167,9 @@ public:
       tablet_id_(ObTabletID::INVALID_TABLET_ID),
       object_id_(OB_INVALID_ID),
       related_list_(nullptr),
-      partition_id_map_(nullptr)
+      partition_id_map_(nullptr),
+      sess_tablet_info_map_(nullptr),
+      gtt_tablet_info_()
   {
   }
 
@@ -267,6 +270,13 @@ public:
   {
     partition_id_map_ = partition_id_map;
   }
+  void set_session_tablet_info(
+    const storage::ObGTTTabletInfo &gtt_tablet_info,
+    storage::ObSessionTabletInfoMap *session_tablet_info_map)
+  {
+    gtt_tablet_info_ = gtt_tablet_info;
+    sess_tablet_info_map_ = session_tablet_info_map;
+  }
   int set_partition_id_map(common::ObObjectID first_level_part_id, common::ObObjectID object_id);
   int get_partition_id_map(common::ObObjectID first_level_part_id, common::ObObjectID &object_id);
   void set_table_schema(const share::schema::ObTableSchema *schema)
@@ -340,6 +350,10 @@ private:
   int mock_vtable_related_tablet_id_map(const common::ObTabletID &tablet_id,
                                         const common::ObObjectID &part_id);
   int set_partition_id_map(common::ObObjectID first_level_part_id, common::ObIArray<common::ObObjectID> &object_ids);
+  int get_tablet_id_for_temp_table(
+      const share::schema::ObTableSchema &table_schema,
+      share::schema::RelatedTableInfo *related_info_ptr,
+      common::ObTabletID &tablet_id);
 private:
   const share::schema::ObTableSchema *table_schema_;
   const VirtualSvrPair *vt_svr_pair_;
@@ -349,6 +363,8 @@ private:
   ObObjectID object_id_;
   const RelatedTabletList *related_list_;
   ObPartitionIdMap *partition_id_map_;
+  storage::ObSessionTabletInfoMap *sess_tablet_info_map_;
+  storage::ObGTTTabletInfo gtt_tablet_info_;
 };
 
 class ObDASLocationRouter

@@ -406,7 +406,7 @@ public:
   bool operator==(const ObDictTableMeta &other) const;
 
 public:
-  int init(const share::schema::ObTableSchema &table_schema);
+  int init(const share::schema::ObTableSchema &table_schema, const int64_t schema_version = OB_INVALID_VERSION);
   int assign(const ObDictTableMeta &src_table_meta);
 
 public:
@@ -433,7 +433,9 @@ public:
   {
     return share::schema::ObTableType::TMP_TABLE == table_type_
         || share::schema::ObTableType::TMP_TABLE_ORA_TRX == table_type_
-        || share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_;
+        || share::schema::ObTableType::TMP_TABLE_ORA_SESS == table_type_
+        || share::schema::ObTableType::TMP_TABLE_ORA_TRX_V2 == table_type_
+        || share::schema::ObTableType::TMP_TABLE_ORA_SESS_V2 == table_type_;
   }
   // same meaning as the functions with the same names in TableSchema
   // todo@lanyi 可以在schema模块内抽出一些类似share::schema::is_index_table的方法，简化这里的逻辑

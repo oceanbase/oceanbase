@@ -126,6 +126,8 @@ int ObDropIndexResolver::resolve(const ParseNode &parse_tree)
                    index_table_schema->get_data_table_id(), data_table_schema))) {
           LOG_WARN("fail to get data table schema", K(ret), K(index_name));
         } else {
+          obrpc::ObDropIndexArg &drop_index_arg = drop_index_stmt->get_drop_index_arg();
+          drop_index_arg.is_oracle_tmp_table_v2_index_table_ = index_table_schema->is_oracle_tmp_table_v2_index_table();
           ObString table_name; // related issue :
           if (OB_FAIL(deep_copy_str(data_table_schema->get_table_name_str(), table_name))) {
             LOG_WARN("failed to deep copy new_db_name", K(ret));

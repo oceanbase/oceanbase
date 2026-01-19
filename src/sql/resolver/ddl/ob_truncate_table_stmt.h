@@ -31,6 +31,7 @@ public:
   void set_database_name(const common::ObString &db_name);
   void set_table_name(const common::ObString &table_name);
   void set_tenant_id(const uint64_t tenant_id);
+  void set_table_id(const uint64_t table_id);
   uint64_t get_tenant_id() const { return truncate_table_arg_.tenant_id_; }
   const common::ObString& get_database_name() const { return truncate_table_arg_.database_name_; }
   const common::ObString& get_table_name() const { return truncate_table_arg_.table_name_; }
@@ -53,6 +54,11 @@ private:
 inline void ObTruncateTableStmt::set_tenant_id(const uint64_t tenant_id)
 {
   truncate_table_arg_.tenant_id_ = tenant_id;
+}
+
+inline void ObTruncateTableStmt::set_table_id(const uint64_t table_id)
+{
+  truncate_table_arg_.table_id_ = table_id;
 }
 
 inline const obrpc::ObTruncateTableArg &ObTruncateTableStmt::get_truncate_table_arg() const

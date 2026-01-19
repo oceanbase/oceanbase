@@ -270,6 +270,9 @@ private:
   int update_all_tablet_to_ls_(
       const share::ObTransferTaskInfo &task_info,
       common::ObISQLClient &trans);
+  int update_all_session_tablet_to_temporary_table_(
+      const share::ObTransferTaskInfo &task_info,
+      common::ObISQLClient &trans);
   int lock_tablet_on_dest_ls_for_table_lock_(
       const share::ObTransferTaskInfo &task_info,
       common::ObMySQLTransaction &trans);

@@ -2926,7 +2926,7 @@ OB_SERIALIZE_MEMBER((ObTruncateTableArg, ObDDLArg),
                     is_add_to_scheduler_,
                     compat_mode_,
                     foreign_key_checks_,
-                    table_id_)
+                    table_id_);
 
 DEF_TO_STRING(ObTruncateTableArg)
 {
@@ -14798,6 +14798,43 @@ OB_SERIALIZE_MEMBER((ObSensitiveRuleDDLArg, ObDDLArg),
                      user_id_);
 
 OB_SERIALIZE_MEMBER(ObGetRefreshedSchemaVersionsRes, refreshed_schema_versions_);
+
+OB_SERIALIZE_MEMBER(ObBatchDetectSessionAliveArg, session_id_array_);
+
+int ObBatchDetectSessionAliveArg::assign(const ObBatchDetectSessionAliveArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(session_id_array_.assign(other.session_id_array_))) {
+    LOG_WARN("fail to assign session_id_array", KR(ret), K(other));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBatchDetectSessionAliveResult, session_alive_array_);
+
+int ObBatchDetectSessionAliveResult::assign(const ObBatchDetectSessionAliveResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(session_alive_array_.assign(other.session_alive_array_))) {
+    LOG_WARN("fail to assign session_alive_array", KR(ret), K(other));
+  }
+  return ret;
+}
+
+int ObBatchDetectSessionAliveResult::init(int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(session_alive_array_.reserve(count))) {
+    LOG_WARN("fail to init session_alive_array", KR(ret), K(count));
+  } else {
+    for (int64_t i = 0; i < count; i++) {
+      session_alive_array_.push_back(false);
+    }
+  }
+  return ret;
+}
 
 }//end namespace obrpc
 }//end namespace oceanbase

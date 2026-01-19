@@ -59,7 +59,8 @@ int ObLSAllPartBuilder::build(
         if (OB_NEED_RETRY != ret) {
           LOG_WARN("build part info fail", KR(ret), K(tenant_id), K(tablet));
         }
-      } else if (! need_skip && OB_FAIL(part_list.push_back(part_info))) {
+      // for oracle tmp table v2, part info can not duplicate
+      } else if (!need_skip && !is_contain(part_list, part_info) && OB_FAIL(part_list.push_back(part_info))) {
         LOG_WARN("failed to push back part_list", KR(ret), K(part_info));
       } else {
         tablet.reset();

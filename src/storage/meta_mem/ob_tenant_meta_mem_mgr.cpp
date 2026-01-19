@@ -19,6 +19,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/slog_ckpt/ob_tenant_slog_checkpoint_util.h"
 #include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 namespace oceanbase
 {
@@ -77,6 +78,36 @@ void ObTenantMetaMemMgr::TabletGCTask::runTimerTask()
   bool all_tablet_cleaned = false;
   if (OB_FAIL(t3m_->gc_tablets_in_queue(all_tablet_cleaned))) {
     LOG_WARN("fail to gc tablets in queue", K(ret));
+  }
+}
+
+void ObTenantMetaMemMgr::SessionTabletGCTask::runTimerTask()
+{
+  ObDIActionGuard ag("SessionTabletGCTask");
+  int ret = OB_SUCCESS;
+  bool is_leader = false;
+  const uint64_t tenant_id = MTL_ID();
+  ObSessionTabletGCHelper session_tablet_gc_helper(tenant_id);
+  switch (compat_mode_) {
+    case lib::Worker::CompatMode::INVALID: {
+      if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode_))) {
+        LOG_WARN("fail to get tenant mode", K(ret));
+      }
+      break;
+    }
+    case lib::Worker::CompatMode::ORACLE: {
+      if (OB_FAIL(session_tablet_gc_helper.is_sys_ls_leader(is_leader))) {
+        LOG_WARN("fail to get ls leader", KR(ret));
+      } else if (is_leader && OB_FAIL(session_tablet_gc_helper.do_work())) {
+        LOG_WARN("fail to gc session tablet", K(ret));
+      }
+      if (false == is_leader && REACH_TIME_INTERVAL(60)) {
+        LOG_INFO("session tablet gc task on non-leader ls, skip", K(ret), K(tenant_id));
+      }
+      break;
+    }
+    default:
+      break;
   }
 }
 
@@ -170,6 +201,7 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     table_gc_task_(this),
     refresh_config_task_(),
     tablet_gc_task_(this),
+    session_tablet_gc_task_(),
     tablet_gc_queue_(),
     free_tables_queue_(),
     gc_queue_lock_(common::ObLatchIds::TENANT_META_MEM_MGR_LOCK),
@@ -403,6 +435,9 @@ int ObTenantMetaMemMgr::start()
   } else if (OB_FAIL(TG_SCHEDULE(
       tg_id_, tablet_gc_task_, TABLE_GC_INTERVAL_US, true/*repeat*/))) {
     LOG_WARN("fail to schedule tablet gc task", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(
+      tg_id_, session_tablet_gc_task_, SESSION_TABLET_GC_INTERVAL_US, true/*repeat*/))) {
+    LOG_WARN("fail to schedule session tablet gc task", K(ret));
   } else if (OB_FAIL(bf_load_tg_.start())) {
     LOG_WARN("fail to lstart bloom filter load tg", K(ret));
   } else {

@@ -541,6 +541,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     if (OB_FAIL(ret)) {
     } else if (dml_op && dml_op->is_table_location_uncertain()) {
       OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                                    *ctx.get_my_session(),
                                                     ctx.get_allocator(),
                                                     ctx.get_my_session()->get_effective_tenant_id(),
                                                     table_location_key,
@@ -611,6 +612,7 @@ int ObPXServerAddrUtil::add_pdml_merge_gindex_locations(const ObTableModifySpec 
         uint64_t idx_ref_table_id = dml_ctdefs.at(i)->das_base_ctdef_.index_tid_;
         ObDASTableLoc *idx_table_loc = NULL;
         if (OB_FAIL(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                              *ctx.get_my_session(),
                                               ctx.get_allocator(),
                                               ctx.get_my_session()->get_effective_tenant_id(),
                                               idx_table_location_key,

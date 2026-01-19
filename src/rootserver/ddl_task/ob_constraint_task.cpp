@@ -64,6 +64,9 @@ int ObCheckConstraintValidationTask::process()
     LOG_WARN("table schema not exist", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, VALIDATE_CONSTRAINT_OR_FOREIGN_KEY_TASK_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+  } else if (table_schema->is_oracle_tmp_table_v2_index_table() || table_schema->is_oracle_trx_tmp_table_v2()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("oracle tmp table v2 index table or oracle trx tmp table v2, skip check constraint validation", K(ret), K(table_schema->get_table_id()));
   } else if (!check_table_empty_ && OB_ISNULL(constraint = table_schema->get_constraint(constraint_id_))) {
     ret = OB_ERR_CONTRAINT_NOT_FOUND;
     LOG_WARN("error unexpected, can not get constraint", K(ret));
@@ -674,6 +677,10 @@ int ObConstraintTask::hold_snapshot(
     LOG_WARN("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(table_schema));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
     LOG_WARN("failed to get tablet snapshots", K(ret));
+  } else if (0 == tablet_ids.count()) {
+    ret = OB_SUCCESS;
+    snapshot_version_ = share::SCN::base_scn().get_val_for_tx();
+    LOG_INFO("no tablet to hold snapshot", K(ret), K(object_id_), K(target_object_id_), K(snapshot_version_));
   } else if (table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
              OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
     LOG_WARN("failed to get data lob meta table snapshot", K(ret));
@@ -718,6 +725,9 @@ int ObConstraintTask::release_snapshot(const int64_t snapshot_version)
     } else {
       LOG_WARN("failed to get tablet snapshots", K(ret));
     }
+  } else if (0 == tablet_ids.count()) {
+    ret = OB_SUCCESS;
+    LOG_INFO("no tablet to release snapshot", K(ret), K(object_id_), K(target_object_id_), K(snapshot_version));
   } else if (table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
              OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
     LOG_WARN("failed to get data lob meta table snapshot", K(ret));

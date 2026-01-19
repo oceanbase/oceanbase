@@ -22,6 +22,7 @@
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::obrpc;
@@ -111,7 +112,8 @@ int ObDropTableHelper::lock_tables_()
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret));
-      } else if (!table_schema->has_tablet()) {
+      } else if (!table_schema->has_tablet() && !table_schema->is_oracle_tmp_table_v2() &&
+          !table_schema->is_oracle_tmp_table_v2_index_table()) {
         // skip
       } else if (OB_FAIL(sorted_table_ids.push_back(table_schema->get_table_id()))) {
         LOG_WARN("fail to push back table id", KR(ret), K(table_schema->get_table_id()));
@@ -315,6 +317,8 @@ int ObDropTableHelper::generate_schemas_()
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret));
+      } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(table_schema))) { // The Oracle mode does not support dropping multiple tables at once.
+        LOG_WARN("table has active session or error checking", KR(ret), KPC(table_schema));
       } else {
         // 1. gen mock fk parent tables when dropped table has mock parent table
         if (table_schema->get_foreign_key_real_count() > 0) {
@@ -1255,7 +1259,7 @@ int ObDropTableHelper::calc_schema_version_cnt_for_sequence_(
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else {
-    if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+    if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
       for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
            OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
         ObColumnSchemaV2 &column_schema = (**iter);
@@ -1375,7 +1379,7 @@ int ObDropTableHelper::lock_sequences_by_id_(const ObTableSchema &table_schema)
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
         OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
@@ -1605,7 +1609,7 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
     }
 
     if (OB_SUCC(ret)) {
-      if (table_schema.is_aux_table() && !is_inner_table(table_schema.get_table_id())) {
+      if (table_schema.is_aux_table() && !is_inner_table(table_schema.get_table_id()) && !table_schema.is_oracle_tmp_table_v2_index_table()) {
         ObSnapshotInfoManager snapshot_mgr;
         ObArray<ObTabletID> tablet_ids;
         SCN invalid_scn;
@@ -1857,7 +1861,7 @@ int ObDropTableHelper::drop_sequences_(const ObTableSchema &table_schema)
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table()) {
+  } else if (table_schema.is_user_table() || table_schema.is_oracle_tmp_table() || table_schema.is_oracle_tmp_table_v2()) {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin(); OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
       ObColumnSchemaV2 &column_schema = (**iter);
       if (OB_FAIL(drop_sequence_(column_schema))) {

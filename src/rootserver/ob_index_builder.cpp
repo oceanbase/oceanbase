@@ -24,6 +24,7 @@
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/table/ob_ttl_util.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 namespace oceanbase
 {
@@ -346,7 +347,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("drop hybrid vector index before version 4.4.1 is not supported", KR(ret), K(compat_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop hybrid vector index before version 4.4.1 is");
-    } else if (arg.is_add_to_scheduler_) {
+    } else if (arg.is_add_to_scheduler_ && !index_table_schema->is_oracle_tmp_table_v2_index_table()) {
       ObDDLOperator ddl_operator(ddl_service_.get_schema_service(), ddl_service_.get_sql_proxy());
       ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
       int64_t refreshed_schema_version = 0;
@@ -549,11 +550,12 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
       }
     } else {
       //construct an arg for drop table
+      const bool is_oracle_tmp_table_v2_index_table = index_table_schema->is_oracle_tmp_table_v2_index_table();
       ObTableItem table_item;
       table_item.database_name_ = arg.database_name_;
       table_item.table_name_ = index_table_schema->get_table_name();
       table_item.is_hidden_ = index_table_schema->is_user_hidden_table();
-      table_item.table_id_ = arg.index_table_id_;
+      table_item.table_id_ = is_oracle_tmp_table_v2_index_table? index_table_schema->get_table_id() : arg.index_table_id_;
       obrpc::ObDDLRes ddl_res;
       obrpc::ObDropTableArg drop_table_arg;
       drop_table_arg.tenant_id_ = tenant_id;
@@ -1668,6 +1670,9 @@ int ObIndexBuilder::do_create_local_index(
         LOG_WARN("fail to update parent task message", K(ret), K(create_index_arg.task_id_), K(res.task_id_));
       }
     }
+    if (FAILEDx(storage::ObSessionTabletGCHelper::is_table_has_active_session(&table_schema))) {
+      LOG_WARN("table has active session or error checking", KR(ret), K(table_schema));
+    }
     DEBUG_SYNC(CREATE_INDEX_ON_EMPTY_TABLE);
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;
@@ -2108,6 +2113,9 @@ int ObIndexBuilder::generate_schema(
     schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
     schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
     schema.set_micro_block_format_version(data_schema.get_micro_block_format_version());
+    if (data_schema.is_oracle_tmp_table_v2()) {
+      schema.set_oracle_tmp_table_v2_index_table();
+    }
   }
   if (OB_SUCC(ret) && OB_FAIL(ObDDLService::set_dbms_job_exec_env(arg, schema))) {
     LOG_WARN("fail to set dbms_job exec_env", K(ret), K(arg));
