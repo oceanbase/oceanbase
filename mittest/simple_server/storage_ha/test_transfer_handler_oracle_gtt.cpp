@@ -735,8 +735,68 @@ TEST_F(TestTransferHandler, test_transfer_with_cancel_retry)
   sql.reset();
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select * from gtt_session_table"));
   ASSERT_EQ(OB_SUCCESS, check_result(sql_proxy, sql, GTT_SESSION_TABLE_ROW_COUNT));
+
+
+  // retry transfer
+  //title: 1001 ls transfer to 1002 ls
+  // generate transfer task
+  ObTransferTaskID task_id2;
+  ObTransferTask transfer_task2;
+  ObMySQLTransaction trans2;
+  ASSERT_EQ(OB_SUCCESS, trans2.start(&inner_sql_proxy, g_tenant_id));
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans2, ObLSID(1001), ObLSID(1002),
+      g_part_list, ObBalanceTaskID(126), transfer_task2));
+  task_id2 = transfer_task2.get_task_id();
+  if (trans2.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans2.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  //check observer transfer
+  ObTransferStatus expected_status2(ObTransferStatus::COMPLETED);
+  ObTransferTask task2;
+  ASSERT_EQ(OB_SUCCESS, wait_transfer_task(task_id2, expected_status2, true/*is_from_his*/, task2));
+  LOG_INFO("generate transfer task", K(task2));
+  ASSERT_EQ(OB_SUCCESS, task2.result_);
+  //wait 1001 ls transfer out tablet deleted gc.
+  ASSERT_EQ(OB_SUCCESS, wait_transfer_out_deleted_tablet_gc(task2));
+
+  // get new tablet infos
+  new_tablet_ids.reset();
+  new_tablet_ids_from_session_table.reset();
+  printf("get new tablet ids and check ls after retry transfer\n");
+  ASSERT_EQ(OB_SUCCESS, get_tablet_ids_and_check_ls_from_tablet_to_ls(sql_proxy, table_ids, dest_ls_id, new_tablet_ids));
+  ASSERT_EQ(OB_SUCCESS, get_tablet_ids_and_check_ls_from_session_table(sql_proxy, table_ids, dest_ls_id, new_tablet_ids_from_session_table));
+
+  ASSERT_EQ(tablet_ids.count(), new_tablet_ids.count());
+  for (int64_t i = 0; i < tablet_ids.count(); i++) {
+    ASSERT_EQ(tablet_ids.at(i), new_tablet_ids.at(i));
+  }
+
+  ASSERT_EQ(tablet_ids_from_session_table.count(), new_tablet_ids_from_session_table.count());
+  for (int64_t i = 0; i < tablet_ids_from_session_table.count(); i++) {
+    ASSERT_EQ(tablet_ids_from_session_table.at(i), new_tablet_ids_from_session_table.at(i));
+  }
+
+  // check result
+  sql.reset();
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select * from gtt_session_table"));
+  ASSERT_EQ(OB_SUCCESS, check_result(sql_proxy, sql, GTT_SESSION_TABLE_ROW_COUNT));
 }
 
+// 测试transfer后，truncate table能否正常执行
+TEST_F(TestTransferHandler, test_transfer_and_truncate_table)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("truncate table gtt_session_table"));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+}
 } // namespace rootserver
 } // namespace oceanbase
 int main(int argc, char **argv)

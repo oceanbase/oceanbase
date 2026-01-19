@@ -397,7 +397,7 @@ int ObSessionTabletDeleteHelper::do_work()
         ret = OB_SUCCESS;
         LOG_INFO("table schema is empty, delete the tablet directly", KR(ret), K(tablet_info_.table_id_));
         // the table is not exist, delete the tablet directly
-        if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version, timeout_us))) {
+        if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version))) {
           LOG_WARN("failed to delete tablets", KR(ret));
         }
       } else {
@@ -405,7 +405,7 @@ int ObSessionTabletDeleteHelper::do_work()
       }
     } else if (OB_ISNULL(table_schema)) {
       // the table is not exist, delete the tablet directly
-      if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version, timeout_us))) {
+      if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version))) {
         LOG_WARN("failed to delete tablets", KR(ret));
       }
     } else if (OB_UNLIKELY(PARTITION_LEVEL_ZERO != table_schema->get_part_level()
@@ -436,7 +436,7 @@ int ObSessionTabletDeleteHelper::do_work()
         LOG_WARN("lock online ddl tablets failed", KR(ret), K(tablet_ids));
       } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(tenant_id_, table_id, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us /*try lock*/, conn))) {
         LOG_WARN("lock tablets failed", KR(ret), K(tablet_ids));
-      } else if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version, timeout_us))) {
+      } else if (OB_FAIL(delete_tablets(tablet_ids, new_schema_version))) {
         LOG_WARN("failed to delete tablets", KR(ret));
       } else {
         LOG_INFO("succeed to remove tablet", KR(ret), K(tablet_info_), K(lbt()));
@@ -460,21 +460,35 @@ int ObSessionTabletDeleteHelper::do_work()
 }
 
 // tablets must be locked before being deleted
-int ObSessionTabletDeleteHelper::delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version,
-      const int64_t timeout_us)
+int ObSessionTabletDeleteHelper::delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObLSID, 1> ls_ids;
   if (OB_UNLIKELY(!trans_.is_started() || tablet_ids.count() == 0 || schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(trans_.is_started()), K(tablet_ids), K(schema_version));
-  } else if (OB_FAIL(share::ObTabletToLSTableOperator::batch_remove(trans_, tenant_id_, tablet_ids))) {
-    LOG_WARN("failed to batch remove tablet", KR(ret));
-  } else if (OB_FAIL(mds_remove_tablet(tenant_id_, tablet_info_.ls_id_, tablet_ids, trans_))) {
-    LOG_WARN("failed to mds remove tablet", KR(ret));
-  } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_remove(trans_, tenant_id_, tablet_ids))) {
-    LOG_WARN("failed to batch remove session tablet", KR(ret));
-  } else if (OB_FAIL(share::ObTabletToTableHistoryOperator::drop_tablet_to_table_history(trans_, tenant_id_, schema_version, tablet_ids))) {
-    LOG_WARN("failed to drop tablet to table history", KR(ret));
+  } else if (OB_FAIL(share::ObTabletToLSTableOperator::batch_get_ls(trans_, tenant_id_, tablet_ids, ls_ids))) {
+    LOG_WARN("failed to get ls by tablet", KR(ret), K(tablet_ids));
+  } else if (OB_UNLIKELY(ls_ids.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet ids ls ids", KR(ret), K(ls_ids), K(tablet_ids));
+  } else {
+    share::ObLSID &new_ls_id = ls_ids.at(0);
+    ARRAY_FOREACH(ls_ids, idx) {
+      if (OB_UNLIKELY(new_ls_id != ls_ids.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid tablet ids ls ids, ls id must be the same", KR(ret), K(ls_ids), K(tablet_ids));
+      }
+    }
+    if (FAILEDx(share::ObTabletToLSTableOperator::batch_remove(trans_, tenant_id_, tablet_ids))) {
+      LOG_WARN("failed to batch remove tablet", KR(ret), K(tablet_ids), K(tablet_info_));
+    } else if (OB_FAIL(mds_remove_tablet(tenant_id_, new_ls_id, tablet_ids, trans_))) {
+      LOG_WARN("failed to mds remove tablet", KR(ret), K(tablet_ids), K(tablet_info_));
+    } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_remove(trans_, tenant_id_, tablet_ids))) {
+      LOG_WARN("failed to batch remove session tablet", KR(ret), K(tablet_ids), K(tablet_info_));
+    } else if (OB_FAIL(share::ObTabletToTableHistoryOperator::drop_tablet_to_table_history(trans_, tenant_id_, schema_version, tablet_ids))) {
+      LOG_WARN("failed to drop tablet to table history", KR(ret), K(tablet_ids), K(tablet_info_));
+    }
   }
   return ret;
 }
