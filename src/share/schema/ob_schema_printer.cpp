@@ -3437,14 +3437,19 @@ int ObSchemaPrinter::print_hash_sub_partition_elements(ObSubPartition **sub_part
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " (\n"))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print subpartition template", K(ret));
   } else {
+    ObArenaAllocator allocator("PrintHashSPar");
     for (int64_t i = 0 ; OB_SUCC(ret) && i < sub_part_num; ++i) {
       const ObSubPartition *sub_partition = sub_part_array[i];
       if (OB_ISNULL(sub_partition)) {
         ret = OB_ERR_UNEXPECTED;
         SHARE_SCHEMA_LOG(WARN, "sub partition is null", K(ret), K(sub_part_num));
       } else {
-        const ObString &part_name = sub_partition->get_part_name();
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "subpartition "))) {
+        ObString part_name;
+        if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+              sub_partition->get_part_name(), part_name, lib::is_oracle_mode()))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to generate new part_name with escape character",
+              K(ret), K(sub_partition->get_part_name()));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "subpartition "))) {
           SHARE_SCHEMA_LOG(WARN, "print subpartition failed", K(ret));
         } else if (OB_FAIL(print_identifier(buf, buf_len, pos, part_name, lib::is_oracle_mode()))) {
           SHARE_SCHEMA_LOG(WARN, "print part name failed", K(ret), K(part_name));
@@ -3502,14 +3507,19 @@ int ObSchemaPrinter::print_list_sub_partition_elements(
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " (\n"))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print subpartition template", K(ret));
   } else {
+    ObArenaAllocator allocator("PrintListSPar");
     for (int64_t i = 0 ; OB_SUCC(ret) && i < sub_part_num; ++i) {
       const ObSubPartition *sub_partition = sub_part_array[i];
       if (OB_ISNULL(sub_partition)) {
         ret = OB_ERR_UNEXPECTED;
         SHARE_SCHEMA_LOG(WARN, "sub partition is null", K(ret), K(sub_part_num));
       } else {
-        const ObString &part_name = sub_partition->get_part_name();
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "subpartition "))) {
+        ObString part_name;
+        if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+              sub_partition->get_part_name(), part_name, is_oracle_mode))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to generate new part_name with escape character",
+              K(ret), K(sub_partition->get_part_name()));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "subpartition "))) {
           SHARE_SCHEMA_LOG(WARN, "print subpartition failed", K(ret));
         } else if (OB_FAIL(print_identifier(buf, buf_len, pos, part_name, is_oracle_mode))) {
           SHARE_SCHEMA_LOG(WARN, "print part name failed", K(ret), K(part_name));
@@ -3554,14 +3564,19 @@ int ObSchemaPrinter::print_range_sub_partition_elements(
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " (\n"))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print subpartition template", K(ret));
   } else {
+    ObArenaAllocator allocator("PrintRangeSPar");
     for (int64_t i = 0 ; OB_SUCC(ret) && i < sub_part_num; ++i) {
       const ObSubPartition *sub_partition = sub_part_array[i];
       if (OB_ISNULL(sub_partition)) {
         ret = OB_ERR_UNEXPECTED;
         SHARE_SCHEMA_LOG(WARN, "sub partition is null", K(ret), K(sub_part_num));
       } else {
-        const ObString &part_name = sub_partition->get_part_name();
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "subpartition "))) {
+        ObString part_name;
+        if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+              sub_partition->get_part_name(), part_name, is_oracle_mode))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to generate new part_name with escape character",
+              K(ret), K(sub_partition->get_part_name()));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "subpartition "))) {
           SHARE_SCHEMA_LOG(WARN, "print subpartition failed", K(ret));
         } else if (OB_FAIL(print_identifier(buf, buf_len, pos, part_name, is_oracle_mode))) {
           SHARE_SCHEMA_LOG(WARN, "print part name failed", K(ret), K(part_name));
@@ -3696,13 +3711,14 @@ int ObSchemaPrinter::print_list_partition_elements(const ObPartitionSchema *&sch
     } else {
       int64_t part_num = schema->get_first_part_num();
       bool is_first = true;
+      ObArenaAllocator allocator("PrintListPar");
       for (int64_t i = 0 ; OB_SUCC(ret) && i < part_num; ++i) {
         const ObPartition *partition = part_array[i];
         if (OB_ISNULL(partition)) {
           ret = OB_ERR_UNEXPECTED;
           SHARE_SCHEMA_LOG(WARN, "partition is NULL", K(ret), K(part_num));
         } else {
-          const ObString &part_name = partition->get_part_name();
+          ObString part_name;
           bool print_collation = agent_mode && tablegroup_def;
           if (strict_compat_&&
               partition->get_list_row_values().count() == 1 &&
@@ -3710,6 +3726,10 @@ int ObSchemaPrinter::print_list_partition_elements(const ObPartitionSchema *&sch
               partition->get_list_row_values().at(0).get_cell(0).is_max_value()) {
             // default partition
             // do nothing
+          } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+              partition->get_part_name(), part_name, is_oracle_mode))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to generate new part_name with escape character",
+                K(ret), K(partition->get_part_name()));
           } else if (!is_first && OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
             SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
           } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition "))) {
@@ -3789,15 +3809,20 @@ int ObSchemaPrinter::print_range_partition_elements(const ObPartitionSchema *&sc
         }
       }
 
+      ObArenaAllocator allocator("PrintListPar");
       for (int64_t i = 0 ; OB_SUCC(ret) && i < part_num; ++i) {
         const ObPartition *partition = part_array[i];
         if (OB_ISNULL(partition)) {
           ret = OB_ERR_UNEXPECTED;
           SHARE_SCHEMA_LOG(WARN, "partition is NULL", K(ret), K(part_num));
         } else {
-          const ObString &part_name = partition->get_part_name();
+          ObString part_name;
           bool print_collation = agent_mode && tablegroup_def;
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition "))) {
+          if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+              partition->get_part_name(), part_name, is_oracle_mode))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to generate new part_name with escape character",
+                K(ret), K(partition->get_part_name()));
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition "))) {
             SHARE_SCHEMA_LOG(WARN, "print partition failed", K(ret));
           } else if (OB_FAIL(print_identifier(buf, buf_len, pos, part_name, is_oracle_mode))) {
             SHARE_SCHEMA_LOG(WARN, "print partition name failed", K(ret), K(part_name));
@@ -5910,14 +5935,19 @@ int ObSchemaPrinter::print_hash_partition_elements(const ObPartitionSchema *&sch
       SHARE_SCHEMA_LOG(WARN, "print enter failed", K(ret));
     } else {
       int64_t part_num = schema->get_first_part_num();
+      ObArenaAllocator allocator("PrintHashPar");
       for (int64_t i = 0 ; OB_SUCC(ret) && i < part_num; ++i) {
         const ObPartition *partition = part_array[i];
         if (OB_ISNULL(partition)) {
           ret = OB_ERR_UNEXPECTED;
           SHARE_SCHEMA_LOG(WARN, "partition is NULL", K(ret), K(part_num));
         } else {
-          const ObString &part_name = partition->get_part_name();
-          if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition "))) {
+          ObString part_name;
+          if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+                partition->get_part_name(), part_name, lib::is_oracle_mode()))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to generate new part_name with escape character",
+                K(ret), K(partition->get_part_name()));
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition "))) {
             SHARE_SCHEMA_LOG(WARN, "print partition failed", K(ret));
           } else if (OB_FAIL(print_identifier(buf, buf_len, pos, part_name, lib::is_oracle_mode()))) {
             SHARE_SCHEMA_LOG(WARN, "print partition name failed", K(ret), K(part_name));
