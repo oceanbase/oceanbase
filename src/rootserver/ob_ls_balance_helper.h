@@ -487,8 +487,14 @@ public:
   int determine_zone_sys_ls_unit_(const ObLSInfo &sys_ls_info, ObZoneLSStat &zone_stat, ObUnitLSStat *&determined_unit);
   int get_valid_unit_by_inherit_(ObZoneLSStat &zone_stat,
                       const ObUnitIDList &valid_unit_list, ObUnitLSStat* &unit);
-
+  int sort_ls_array_by_primary_zone_round_robin(const ObIArray<ObLSStatusInfo*> &ls_array,
+    ObArray<ObLSStatusInfo*> &sorted_ls_array);
 protected:
+  struct CompareByPrimaryZone
+  {
+    bool operator() (const ObSplitLSParam &left, const ObSplitLSParam &right);
+    bool operator() (const ObLSStatusInfo *left, const ObLSStatusInfo *right);
+  };
   ObTenantLSBalanceInfo *tenant_info_;
   ObMySQLProxy *sql_proxy_;
   share::ObBalanceJobID specified_job_id_;
@@ -677,11 +683,11 @@ private:
   int construct_expand_lg_(LSGroupMatrix &lg_matrix,
       const int64_t row_index, const int64_t target_lg_cnt, const int64_t curr_lg_cnt,
       ObArray<ObLSGroupStat> &expand_lg);
-  int construct_expand_task_for_cell_emtpy_lg_(ObIArray<ObLSGroupStat*> &curr_lg_array);
+  int expand_ls_group_cnt_in_cell_by_transfer_(ObIArray<ObLSGroupStat*> &curr_lg_array);
   int get_cell_expand_lg_(ObLSGroupMatrixCell &cell,
     ObIArray<ObLSGroupStat*> &curr_lg_array);
-  int balance_ls_between_lgs_in_cell_(ObArray<ObLSGroupStat*> &curr_lg_array);
-  int generate_alter_task_for_each_lg_(ObArray<ObLSGroupStat*> &curr_lg_array);
+  int expand_ls_group_cnt_in_cell_by_alter_(ObIArray<ObLSGroupStat*> &curr_lg_array);
+  int generate_alter_task_for_each_lg_(ObIArray<ObLSGroupStat*> &curr_lg_array);
   int construct_ls_expand_task(const uint64_t ls_group_id,
       const ObSplitLSParamArray &dest_split_param);
   int shrink_ls_group_cnt_(LSGroupMatrix &lg_matrix,
