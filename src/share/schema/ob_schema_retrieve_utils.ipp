@@ -1840,6 +1840,7 @@ int ObSchemaRetrieveUtils::fill_tablegroup_schema(
   tg_schema.reset();
   is_deleted  = false;
   ObString sharding_default(OB_PARTITION_SHARDING_ADAPTIVE);
+  ObString scope_default("");
   tg_schema.set_tenant_id(tenant_id);
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, tablegroup_id, tg_schema, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
@@ -1878,6 +1879,7 @@ int ObSchemaRetrieveUtils::fill_tablegroup_schema(
       tg_schema.set_def_sub_part_num(0);
     }
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, sharding, tg_schema, true, true, sharding_default);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, scope, tg_schema, true, true, scope_default);
   }
   SQL_LOG(DEBUG, "fill tablegroup schema", K(ret), K(tg_schema));
   return ret;
@@ -4888,6 +4890,7 @@ int ObSchemaRetrieveUtils::fill_tablegroup_schema(
   is_deleted = false;
   tablegroup_schema.set_tenant_id(tenant_id);
   ObString sharding_default(OB_PARTITION_SHARDING_ADAPTIVE);
+  ObString scope_default("");
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, tablegroup_id, tablegroup_schema, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
   if (!is_deleted) {
@@ -4896,6 +4899,7 @@ int ObSchemaRetrieveUtils::fill_tablegroup_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, partition_status, tablegroup_schema, ObPartitionStatus, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, partition_schema_version, tablegroup_schema, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, sharding, tablegroup_schema, true, true, sharding_default);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, scope, tablegroup_schema, true, true, scope_default);
   }
   return ret;
 }

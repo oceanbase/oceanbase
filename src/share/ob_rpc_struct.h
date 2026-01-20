@@ -1159,6 +1159,7 @@ public:
     SPLIT_PARTITION,
     FORCE_LOCALITY,
     SHARDING,
+    SCOPE,
     MAX_OPTION,
   };
   uint64_t tenant_id_;

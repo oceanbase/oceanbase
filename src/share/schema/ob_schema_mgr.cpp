@@ -375,6 +375,8 @@ ObSimpleTablegroupSchema &ObSimpleTablegroupSchema::operator =(const ObSimpleTab
       LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.sharding_, sharding_))) {
       LOG_WARN("Fail to deep copy sharding", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.scope_, scope_))) {
+      LOG_WARN("Fail to deep copy scope", KR(ret));
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -394,7 +396,8 @@ bool ObSimpleTablegroupSchema::operator ==(const ObSimpleTablegroupSchema &other
       && tablegroup_name_ == other.tablegroup_name_
       && partition_status_ == other.partition_status_
       && partition_schema_version_ == other.partition_schema_version_
-      && sharding_ == other.sharding_) {
+      && sharding_ == other.sharding_
+      && scope_ == other.scope_) {
     ret = true;
   }
 
@@ -411,6 +414,7 @@ void ObSimpleTablegroupSchema::reset()
   partition_status_ = PARTITION_STATUS_ACTIVE;
   partition_schema_version_ = 0;// Issues left over from history, set to 0
   sharding_.reset();
+  scope_.reset();
 }
 
 bool ObSimpleTablegroupSchema::is_valid() const
@@ -432,6 +436,7 @@ int64_t ObSimpleTablegroupSchema::get_convert_size() const
   convert_size += sizeof(ObSimpleTablegroupSchema);
   convert_size += tablegroup_name_.length() + 1;
   convert_size += sharding_.length() + 1;
+  convert_size += scope_.length() + 1;
 
   return convert_size;
 }

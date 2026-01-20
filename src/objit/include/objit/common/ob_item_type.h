@@ -3034,6 +3034,7 @@ typedef enum ObItemType
   T_PRE_FILTER = 4963,
   T_POST_FILTER = 4964,
   T_INDEX_DATA_GEN_EXPRESSION = 4965,
+  T_TABLEGROUP_SCOPE = 4966,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

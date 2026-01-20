@@ -537,6 +537,7 @@ all_tablegroup_def = dict(
       ('partition_schema_version', 'int', 'true', '0'),
       ('sub_part_template_flags', 'int', 'false', '0'),
       ('sharding', 'varchar:OB_MAX_PARTITION_SHARDING_LENGTH', 'false', 'ADAPTIVE'),
+      ('scope', 'varchar:OB_MAX_TABLEGROUP_SCOPE_LENGTH', 'false', ''),
     ],
 )
 

@@ -4918,6 +4918,7 @@ ObTablegroupSchema::ObTablegroupSchema()
       tablegroup_name_(),
       comment_(),
       sharding_(),
+      scope_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -4935,6 +4936,7 @@ ObTablegroupSchema::ObTablegroupSchema(common::ObIAllocator *allocator)
       tablegroup_name_(),
       comment_(),
       sharding_(),
+      scope_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -4951,6 +4953,7 @@ ObTablegroupSchema::ObTablegroupSchema(const ObTablegroupSchema &other)
       tablegroup_name_(),
       comment_(),
       sharding_(),
+      scope_(),
       part_func_expr_num_(OB_INVALID_INDEX),
       sub_part_func_expr_num_(OB_INVALID_INDEX),
       split_partition_name_(),
@@ -5006,6 +5009,8 @@ ObTablegroupSchema &ObTablegroupSchema::operator =(const ObTablegroupSchema &src
         LOG_WARN("fail to deep copy split partition name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.sharding_, sharding_))) {
         LOG_WARN("fail to deep copy split partition name", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.scope_, scope_))) {
+        LOG_WARN("fail to deep copy scope", K(ret));
       } else if (OB_FAIL(src_schema.split_high_bound_val_.deep_copy(split_high_bound_val_, *get_allocator()))) {
         LOG_WARN("fail to deep copy split row key", K(ret));
       } else if (OB_FAIL(src_schema.split_list_row_values_.deep_copy(split_list_row_values_, *get_allocator()))) {
@@ -5025,6 +5030,7 @@ int64_t ObTablegroupSchema::get_convert_size() const
   convert_size += tablegroup_name_.length() + 1;
   convert_size += comment_.length() + 1;
   convert_size += sharding_.length() + 1;
+  convert_size += scope_.length() + 1;
   convert_size += part_option_.get_convert_size() - sizeof(part_option_);
   convert_size += sub_part_option_.get_convert_size() - sizeof(sub_part_option_);
   convert_size += split_partition_name_.length() + 1;
@@ -5058,6 +5064,7 @@ void ObTablegroupSchema::reset()
   split_high_bound_val_.reset();
   split_list_row_values_.reset();
   sharding_.reset();
+  scope_.reset();
   ObPartitionSchema::reset();
 }
 
@@ -5114,6 +5121,10 @@ OB_DEF_SERIALIZE(ObTablegroupSchema)
     LST_DO_CODE(OB_UNIS_ENCODE,
                 sharding_);
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                scope_);
+  }
   LOG_TRACE("serialize tablegroup schema", K(*this));
 
   return ret;
@@ -5153,6 +5164,8 @@ OB_DEF_SERIALIZE_SIZE(ObTablegroupSchema)
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               sharding_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              scope_);
   return len;
 }
 
@@ -5218,7 +5231,11 @@ OB_DEF_DESERIALIZE(ObTablegroupSchema)
     LST_DO_CODE(OB_UNIS_DECODE,
                 sharding_);
   }
-  LOG_WARN("serialize tablegroup schema", K(*this));
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                scope_);
+  }
+  LOG_TRACE("deserialize tablegroup schema", K(*this));
   return ret;
 }
 
@@ -5247,7 +5264,8 @@ int64_t ObTablegroupSchema::to_string(char *buf, const int64_t buf_len) const
        K_(split_high_bound_val),
        K_(split_list_row_values),
        K_(sub_part_template_flags),
-       K_(sharding));
+       K_(sharding),
+       K_(scope));
   J_OBJ_END();
   return pos;
 }

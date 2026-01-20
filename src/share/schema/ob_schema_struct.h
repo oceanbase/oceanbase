@@ -3398,6 +3398,7 @@ public:
   inline int set_table_name(const common::ObString &name) { return deep_copy_str(name, tablegroup_name_); }
   inline int set_comment(const common::ObString &comment) { return deep_copy_str(comment, comment_); }
   inline int set_sharding(const common::ObString &sharding) { return deep_copy_str(sharding, sharding_); }
+  inline int set_scope(const common::ObString &scope) { return deep_copy_str(scope, scope_); }
 
   inline int set_split_partition(const common::ObString &split_partition) { return deep_copy_str(split_partition, split_partition_name_); }
   inline int set_split_rowkey(const common::ObRowkey &rowkey)
@@ -3412,6 +3413,7 @@ public:
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const char *get_comment() const { return  extract_str(comment_); }
   inline const common::ObString &get_sharding() const { return sharding_; }
+  inline const common::ObString &get_scope() const { return scope_; }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline const common::ObString &get_table_name() const { return tablegroup_name_; }
   virtual const char *get_entity_name() const override { return extract_str(tablegroup_name_); }
@@ -3500,6 +3502,7 @@ private:
   common::ObString tablegroup_name_;
   common::ObString comment_;
   common::ObString sharding_;
+  common::ObString scope_;
   //2.0 add
   int64_t part_func_expr_num_;
   int64_t sub_part_func_expr_num_;

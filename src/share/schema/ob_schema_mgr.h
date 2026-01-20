@@ -263,7 +263,8 @@ public:
                K_(tablegroup_name),
                K_(partition_status),
                K_(partition_schema_version),
-               K_(sharding));
+               K_(sharding),
+               K_(scope));
   virtual void reset();
   bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -279,7 +280,10 @@ public:
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline int set_sharding(const common::ObString &sharding)
   { return deep_copy_str(sharding, sharding_); }
+  inline int set_scope(const common::ObString &scope)
+  { return deep_copy_str(scope, scope_); }
   inline const common::ObString &get_sharding() const { return sharding_; }
+  inline const common::ObString &get_scope() const { return scope_; }
   inline ObTenantTablegroupId get_tenant_tablegroup_id() const
   { return ObTenantTablegroupId(tenant_id_, tablegroup_id_); }
 
@@ -308,6 +312,7 @@ private:
   ObPartitionStatus partition_status_;
   int64_t partition_schema_version_;
   common::ObString sharding_;
+  common::ObString scope_;
 };
 
 template<class K, class V>

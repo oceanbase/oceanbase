@@ -985,8 +985,9 @@ const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 30L * 60L * 1000L * 1000
 const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 7L * 24L * 60L * 60L * 1000L * 1000L; // 7days
 #endif
 
-const int64_t OB_MAX_PARTITION_SHARDING_LENGTH = 10;
+const int64_t OB_MAX_PARTITION_SHARDING_LENGTH = 20;
 
+const int64_t OB_MAX_TABLEGROUP_SCOPE_LENGTH = 20;
 // The default user name of the standby database to log in to the main database
 const char *const OB_STANDBY_USER_NAME = "__oceanbase_inner_standby_user";
 
