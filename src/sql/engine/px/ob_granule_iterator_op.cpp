@@ -815,11 +815,16 @@ int ObGranuleIteratorOp::inner_close()
 int ObGranuleIteratorOp::do_drain_exch()
 {
   int ret = OB_SUCCESS;
+  bool already_end = batch_reach_end_ || row_reach_end_;
   if (OB_FAIL(ObOperator::do_drain_exch())) {
     LOG_WARN("failed to basic do_drain_exch");
   } else if (enable_adaptive_task_splitting()) {
     if (OB_FAIL(wait_task_rebalance(false /*wait_new_task*/))) {
       LOG_WARN("failed to do wait_task_rebalance");
+    } else if (OB_UNLIKELY(!scan_resume_point_.empty())) {
+      LOG_INFO("reset ranges in drain when iter_end", K(already_end), K(is_paused()));
+      scan_resume_point_.reset_ranges();
+      clear_paused();
     }
   }
   return ret;
