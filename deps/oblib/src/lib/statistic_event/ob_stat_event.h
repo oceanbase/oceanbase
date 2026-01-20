@@ -921,6 +921,7 @@ STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_WAIT_ENQUEUE_COUNT, "The total enqueue count 
 STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_WAIT_DEQUEUE_COUNT, "The total dequeue count of sslog notify wait queue", ObStatClassIds::STORAGE, 240138, false, true, true, "")
 STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_READY_ENQUEUE_COUNT, "The total enqueue count of sslog notify eady queue", ObStatClassIds::STORAGE, 240139, false, true, true, "")
 STAT_EVENT_ADD_DEF(SS_SSLOG_NOTIFY_READY_DEQUEUE_COUNT, "The total dequeue count of sslog notify ready queue", ObStatClassIds::STORAGE, 240140, false, true, true, "")
+STAT_EVENT_ADD_DEF(SS_READ_OBJECT_STORAGE_COUNT, "The total read from object storage count", ObStatClassIds::STORAGE, 240141, false, true, true, "")
 
 // external table cache(2402xx)
 STAT_EVENT_ADD_DEF(OPT_EXTERNAL_TABLE_STAT_CACHE_HIT, "opt external table stat cache hit", ObStatClassIds::CACHE, 240201, false, true, true, "")
