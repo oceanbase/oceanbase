@@ -185,6 +185,9 @@ int ObPartitionSplitTask::init_send_finish_map()
         LOG_WARN("failed to set finish map", K(ret), K(tablet_id));
       }
     }
+    if (OB_SUCC(ret)) {
+      write_split_log_status_inited_ = true;
+    }
   }
   if (OB_FAIL(ret)) {
     (void)send_finish_map_.destroy();
@@ -929,27 +932,15 @@ int ObPartitionSplitTask::write_split_start_log(const share::ObDDLTaskStatus nex
   } else if (OB_FAIL(send_split_rpc(true/*is_split_start*/))) {
     LOG_WARN("failed to send split start request", K(ret));
   } else {
-    {
-      TCWLockGuard guard(lock_);
-      write_split_log_status_inited_ = true;
-    }
     ObArray<ObTabletID> not_finished_tablets;
-    hash::ObHashMap<ObCheckProgressKey<uint64_t>, ObCheckProgressStatus>::const_iterator iter = send_finish_map_.begin();
-    for (; OB_SUCC(ret) && iter != send_finish_map_.end(); iter++) {
-      const ObCheckProgressKey<uint64_t> &key = iter->first;
-      const ObCheckProgressStatus &status = iter->second;
-      if (ObCheckProgressStatus::DONE != status && OB_FAIL(not_finished_tablets.push_back(key.tablet_id_))) {
-        LOG_WARN("failed to push back", K(ret));
+    if (OB_FAIL(check_unfinished_items(not_finished_tablets))) {
+      LOG_WARN("failed to check unfinished items", K(ret));
+    } else if (not_finished_tablets.empty()) {
+      if (OB_FAIL(switch_status(next_task_status, true/*enable_flt_tracing*/, ret))) {
+        LOG_WARN("fail to switch task status", K(ret));
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (not_finished_tablets.empty()) {
-        if (OB_FAIL(switch_status(next_task_status, true/*enable_flt_tracing*/, ret))) {
-          LOG_WARN("fail to switch task status", K(ret));
-        }
-      } else {
-        LOG_INFO("dump not finished tablets", K(ret), K(not_finished_tablets));
-      }
+    } else {
+      LOG_INFO("dump not finished tablets", K(ret), K(not_finished_tablets));
     }
   }
   return ret;
@@ -1394,6 +1385,7 @@ int ObPartitionSplitTask::take_effect(
     const share::ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObTabletID> not_finished_tablets;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1406,6 +1398,10 @@ int ObPartitionSplitTask::take_effect(
     LOG_WARN("failed to setup send finish map", K(ret));
   } else if (OB_FAIL(send_split_rpc(false/*is_split_start*/))) {
     LOG_WARN("failed to send split finish to all tablets", K(ret));
+  } else if (OB_FAIL(check_unfinished_items(not_finished_tablets))) {
+    LOG_WARN("failed to check unfinished items", K(ret));
+  } else if (OB_UNLIKELY(!not_finished_tablets.empty())) {
+    LOG_INFO("dump not finished tablets", K(ret), K(not_finished_tablets));
   } else if (OB_FAIL(sync_stats_info())) {
     LOG_WARN("failed to update stat", K(ret), K(*this));
   } else {
@@ -2886,6 +2882,20 @@ int ObPartitionSplitTask::prepare_tablet_split_ranges(const share::ObDDLTaskStat
   return ret;
 }
 
+int ObPartitionSplitTask::check_unfinished_items(ObIArray<ObTabletID> &not_finished_tablets)
+{
+  int ret = OB_SUCCESS;
+  not_finished_tablets.reset();
+  hash::ObHashMap<ObCheckProgressKey<uint64_t>, ObCheckProgressStatus>::const_iterator iter = send_finish_map_.begin();
+  for (; OB_SUCC(ret) && iter != send_finish_map_.end(); iter++) {
+    const ObCheckProgressKey<uint64_t> &key = iter->first;
+    const ObCheckProgressStatus &status = iter->second;
+    if (ObCheckProgressStatus::DONE != status && OB_FAIL(not_finished_tablets.push_back(key.tablet_id_))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
 
 void ObPartitionSplitTask::clear_old_status_context()
 {

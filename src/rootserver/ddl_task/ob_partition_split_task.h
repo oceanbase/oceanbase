@@ -241,6 +241,7 @@ private:
   int update_task_message();
   int register_split_info_mds(const share::ObDDLTaskStatus next_task_status);
   int prepare_tablet_split_ranges(const share::ObDDLTaskStatus next_task_status);
+  int check_unfinished_items(ObIArray<ObTabletID> &not_finished_tablets);
 private:
   static const int64_t OB_PARTITION_SPLIT_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;
