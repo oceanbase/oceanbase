@@ -226,10 +226,6 @@ private:
                                                    ObIArray<ObRawExpr *> &true_exprs);
 
   int replace_nullsafe_equal_condition(ObDMLStmt *stmt, bool &trans_happened);
-  int inner_replace_nullsafe_equal_condition(ObDMLStmt *stmt,
-                                             ObRawExpr *&expr,
-                                             ObNotNullContext &not_null_ctx,
-                                             bool &trans_happened);
   int do_replace_nullsafe_equal_condition(ObDMLStmt *stmt,
                                           ObRawExpr *&expr,
                                           ObNotNullContext &not_null_ctx,

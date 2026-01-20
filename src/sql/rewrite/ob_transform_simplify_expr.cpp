@@ -4028,7 +4028,7 @@ int ObTransformSimplifyExpr::replace_nullsafe_equal_condition(ObDMLStmt *stmt, b
     }
     // process where conditions
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); ++i) {
-      if (OB_FAIL(inner_replace_nullsafe_equal_condition(
+      if (OB_FAIL(do_replace_nullsafe_equal_condition(
                            stmt, stmt->get_condition_exprs().at(i), not_null_ctx, is_happened))) {
         LOG_WARN("failed to replace nullsafe equal expr", K(ret));
       } else {
@@ -4056,7 +4056,7 @@ int ObTransformSimplifyExpr::replace_nullsafe_equal_condition(ObDMLStmt *stmt, b
           LOG_WARN("semi info is null", K(ret));
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && j < semi_info->semi_conditions_.count(); ++j) {
-            if (OB_FAIL(inner_replace_nullsafe_equal_condition(
+            if (OB_FAIL(do_replace_nullsafe_equal_condition(
                          stmt, semi_info->semi_conditions_.at(j), not_null_ctx, is_happened))) {
               LOG_WARN("failed to replace nullsafe equal in semi conditions", K(ret));
             } else {
@@ -4070,56 +4070,6 @@ int ObTransformSimplifyExpr::replace_nullsafe_equal_condition(ObDMLStmt *stmt, b
   return ret;
 }
 
-int ObTransformSimplifyExpr::inner_replace_nullsafe_equal_condition(ObDMLStmt *stmt,
-                                                                    ObRawExpr *&expr,
-                                                                    ObNotNullContext &not_null_ctx,
-                                                                    bool &trans_happened)
-{
-  int ret = OB_SUCCESS;
-  bool is_happened = false;
-  trans_happened = false;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null expr", K(expr), K(ret));
-  } else if (expr->is_op_expr()) {
-    // do transformation for child exprs first
-    ObOpRawExpr *op_expr = static_cast<ObOpRawExpr*>(expr);
-    for (int64_t i = 0; OB_SUCC(ret) && i < op_expr->get_param_count(); i++) {
-      ObRawExpr *temp = NULL;
-      if (OB_ISNULL(temp = op_expr->get_param_expr(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("null expr", K(ret));
-      } else if (OB_FAIL(SMART_CALL(inner_replace_nullsafe_equal_condition(stmt,
-                                                                           temp,
-                                                                           not_null_ctx,
-                                                                           is_happened)))) {
-        LOG_WARN("failed to replace nullsafe equal expr", K(ret));
-      } else {
-        trans_happened |= is_happened;
-      }
-    }
-  }
-
-  if (OB_SUCC(ret) && T_OP_NSEQ == expr->get_expr_type()) {
-    // do transformation for nullsafe equal expr
-    if (OB_FAIL(do_replace_nullsafe_equal_condition(stmt, expr, not_null_ctx, is_happened))) {
-      LOG_WARN("failed to replace nullsafe equal condition", K(ret));
-    } else {
-      trans_happened |= is_happened;
-    }
-  }
-
-  if (OB_SUCC(ret) && trans_happened) {
-    if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ctx_), K(ret));
-    } else if (OB_FAIL(expr->formalize(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize expr", K(ret));
-    } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
 int ObTransformSimplifyExpr::do_replace_nullsafe_equal_condition(ObDMLStmt *stmt,
                                                                   ObRawExpr *&expr,
                                                                   ObNotNullContext &not_null_ctx,
@@ -4127,7 +4077,8 @@ int ObTransformSimplifyExpr::do_replace_nullsafe_equal_condition(ObDMLStmt *stmt
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  if (OB_ISNULL(expr) || OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(stmt) ||
+      OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(expr), K(ret));
   } else if (T_OP_NSEQ == expr->get_expr_type()) {
@@ -4170,6 +4121,8 @@ int ObTransformSimplifyExpr::do_replace_nullsafe_equal_condition(ObDMLStmt *stmt
           expr->set_expr_type(T_OP_EQ);
           if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
             LOG_WARN("failed to add param not null constraint", K(ret));
+          } else if (OB_FAIL(expr->formalize(ctx_->session_info_))) {
+            LOG_WARN("failed to formalize expr", K(ret));
           } else {
             trans_happened = true;
           }
@@ -4203,7 +4156,7 @@ int ObTransformSimplifyExpr::recursive_replace_nullsafe_equal_join_conditions(Ob
   } else {
     // process current join conditions
     for (int64_t i = 0; OB_SUCC(ret) && i < join_table->get_join_conditions().count(); ++i) {
-      if (OB_FAIL(inner_replace_nullsafe_equal_condition(
+      if (OB_FAIL(do_replace_nullsafe_equal_condition(
                    stmt, join_table->get_join_conditions().at(i), not_null_ctx, cur_happened))) {
         LOG_WARN("failed to replace nullsafe equal in join condition", K(ret));
       } else {
