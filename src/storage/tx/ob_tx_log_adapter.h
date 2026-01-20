@@ -141,6 +141,10 @@ public:
   int get_committing_dup_trx_cnt(int64_t &dup_trx_cnt);
   int add_commiting_dup_trx(const ObTransID &tx_id);
   int remove_commiting_dup_trx(const ObTransID &tx_id);
+
+private:
+  int append_log_errsim_(ObTxBaseLogCb *cb);
+
 private:
   logservice::ObLogHandler *log_handler_;
   ObDupTableLSHandler *dup_table_ls_handler_;

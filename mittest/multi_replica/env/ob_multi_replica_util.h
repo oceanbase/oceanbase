@@ -146,9 +146,11 @@ namespace unittest
 #define BLOCK_MSG_PROCESSOR(timeout_us) \
   {                                     \
     int ret = OB_SUCCESS;               \
+    TRANS_LOG(INFO, "[ObMultiReplicaTestBase] Start to block msg", K(ret)); \
     ATOMIC_STORE(&block_msg_, true);    \
     ob_usleep(timeout_us);              \
     ATOMIC_STORE(&block_msg_, false);   \
+    TRANS_LOG(INFO, "[ObMultiReplicaTestBase] End to block msg", K(ret)); \
   }
 
 #define ACQUIRE_CONN_FROM_SQL_PROXY(CONN_NAME, SQL_PROXY) \
@@ -241,8 +243,8 @@ namespace unittest
     std::string sql_str = "select TX_ID, SNAPSHOT_VERSION, TRACE_ID, REQUEST_TIME, RET_CODE, "    \
                           "RETRY_CNT, QUERY_SQL from "                                            \
                           "oceanbase.V$OB_SQL_AUDIT where QUERY_SQL like "                        \
-                          + std::string(" \"") + std::string(sql)                                 \
-                          + std::string("\" order by REQUEST_TIME DESC");                         \
+                          + std::string(" \"%") + std::string(sql)                                 \
+                          + std::string("%\" order by REQUEST_TIME DESC");                         \
     READ_SQL_BY_CONN(conn, process_result, sql_str.c_str());                                      \
     ASSERT_EQ(OB_SUCCESS, process_result->next());                                                \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("TX_ID", tx_id));                               \
