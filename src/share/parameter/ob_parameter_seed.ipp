@@ -3301,3 +3301,11 @@ DEF_CAP(syslog_sync_size_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
 DEF_BOOL(_ob_mysql_run_definer_pl_as_invoker, OB_TENANT_PARAMETER, "False",
         "in mysql mode, run definer pl as invoker right",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(rest_oauth2_credential_refresh_interval, OB_CLUSTER_PARAMETER, "10m", "[1s, 1d]",
+        "the interval for REST catalog OAuth2 credential refresh task, "
+        "with default 10minutes. Range: [1s, 1d]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_TIME(rest_oauth2_credential_evict_time, OB_CLUSTER_PARAMETER, "10m", "[1s, 1d]",
+        "the evict time for REST catalog OAuth2 credential cache to be evicted, "
+        "with default 10minutes. Range: [1s, 1d]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));

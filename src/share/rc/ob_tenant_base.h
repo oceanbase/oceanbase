@@ -286,7 +286,9 @@ class ObResourceLimitCalculator;
 class ObWorkloadRepositoryContext;
 class ObPluginVectorIndexService;
 class ObAutoSplitTaskCache;
-class ObHMSClientPoolMgr;
+class ObCurlRestClient;
+class ObHiveMetastoreClient;
+template<typename T> class ObCatalogClientPoolMgr;
 #ifdef OB_BUILD_SHARED_STORAGE
 class ObTabletSplitTaskCache;
 #endif
@@ -367,6 +369,8 @@ namespace detector
 // 使用MTL接口可以获取实例。
 using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTransCtx>;
 using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage::ObTableScanIterator>;
+using ObCurlRestClientPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::ObCurlRestClient>;
+using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::ObHiveMetastoreClient>;
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
       common::ObDiagnosticInfoContainer*,            \
@@ -540,10 +544,11 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       omt::ObTenantAiService*,                       \
       sql::ObSQLCCLRuleManager*,                     \
       share::ObBackupDestIOPermissionMgr*,           \
-      share::ObHMSClientPoolMgr*,                     \
+      ObHMSClientUnifyPoolMgr*,                      \
       share::schema::ObAddIntervalPartitionController*, \
       observer::ObTenantTabletCleanupService*,        \
-      observer::ObTabletReplicaInfoCacheMgr*          \
+      observer::ObTabletReplicaInfoCacheMgr*  ,       \
+      ObCurlRestClientPoolMgr*                       \
   )
 
 

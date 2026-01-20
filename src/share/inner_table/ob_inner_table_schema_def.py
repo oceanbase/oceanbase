@@ -17590,7 +17590,32 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_tablet_to_global_temporary_table',
   keywords = all_def_keywords['__all_tablet_to_global_temporary_table']))
 
-# 12581: __all_virtual_external_catalog_client_pool_stat
+def_table_schema(
+  owner             = 'cjl476581',
+  table_name        = '__all_virtual_external_catalog_client_pool_stat',
+  table_id          = '12581',
+  table_type        = 'VIRTUAL_TABLE',
+  in_tenant_space   = True,
+  gm_columns        = [],
+  rowkey_columns    = [
+    ('client_type', 'varchar:128'),
+    ('svr_ip',      'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port',    'int'),
+    ('tenant_id',   'int'),
+  ],
+  normal_columns    = [
+    ('catalog_id',          'int'),
+    ('uri',                 'varchar:MAX_VALUE_LENGTH'),
+    ('total_clients',       'int'),
+    ('in_use_clients',      'int'),
+    ('idle_clients',        'int'),
+    ('client_acquire_waiting_cnt',         'int'),
+    ('ref_cnt',             'int'),
+    ('last_access_ts',      'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12582: __all_virtual_wr_sqlstat_v2
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12582',
@@ -44864,8 +44889,8 @@ def_table_schema(
   in_tenant_space = True,
   rowkey_columns = [],
   view_definition = """
-  SELECT SVR_IP,SVR_PORT,TENANT_ID,CATALOG_ID,TOTAL_CLIENTS,IN_USE_CLIENTS,IDLE_CLIENTS
-  FROM oceanbase.__all_virtual_hms_client_pool_stat
+  SELECT SVR_IP,SVR_PORT,TENANT_ID,CLIENT_TYPE,CATALOG_ID,URI,TOTAL_CLIENTS,IN_USE_CLIENTS,IDLE_CLIENTS
+  FROM oceanbase.__all_virtual_external_catalog_client_pool_stat WHERE client_type = 'HMS'
 """.replace("\n", " "),
 
   normal_columns = [
@@ -44881,7 +44906,7 @@ def_table_schema(
   in_tenant_space = True,
   rowkey_columns = [],
   view_definition = """
-  SELECT SVR_IP,SVR_PORT,TENANT_ID,CATALOG_ID,TOTAL_CLIENTS,IN_USE_CLIENTS,IDLE_CLIENTS
+  SELECT SVR_IP,SVR_PORT,TENANT_ID,CLIENT_TYPE,CATALOG_ID,URI,TOTAL_CLIENTS,IN_USE_CLIENTS,IDLE_CLIENTS
   FROM oceanbase.GV$OB_HMS_CLIENT_POOL_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -45099,8 +45124,39 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 21695: GV$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
-# 21696: V$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
+def_table_schema(
+  owner = 'cjl476581',
+  table_name     = 'GV$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT',
+  table_id       = '21695',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  view_definition = """
+  SELECT SVR_IP,SVR_PORT,TENANT_ID,CLIENT_TYPE,CATALOG_ID,URI,TOTAL_CLIENTS,IN_USE_CLIENTS,IDLE_CLIENTS
+  FROM oceanbase.__all_virtual_external_catalog_client_pool_stat
+""".replace("\n", " "),
+
+  normal_columns = [
+  ],
+)
+
+def_table_schema(
+  owner = 'cjl476581',
+  table_name     = 'V$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT',
+  table_id       = '21696',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  view_definition = """
+  SELECT SVR_IP,SVR_PORT,TENANT_ID,CLIENT_TYPE,CATALOG_ID,URI,TOTAL_CLIENTS,IN_USE_CLIENTS,IDLE_CLIENTS
+  FROM oceanbase.GV$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+
+  normal_columns = [
+  ],
+)
 
 def_table_schema(
   owner           = 'xingrui.cwh',

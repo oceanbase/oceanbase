@@ -259,6 +259,7 @@
 #include "observer/virtual_table/ob_all_virtual_deadlock_detector_stat.h"
 
 #include "observer/virtual_table/ob_all_virtual_tablet_replica_info.h"
+#include "observer/virtual_table/ob_all_virtual_catalog_client_pool_stat.h"
 namespace oceanbase
 {
 using namespace common;
@@ -3300,6 +3301,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualDeadLockDetectorStat construct fail", K(ret));
             } else {
               vt_iter = static_cast<ObAllVirtualDeadLockDetectorStat *>(deadlock_detector_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID: {
+            ObAllVirtualExternalCatalogClientPoolStat *catalog_client_pool_stat_table = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualExternalCatalogClientPoolStat, catalog_client_pool_stat_table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualExternalCatalogClientPoolStat construct failed", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(catalog_client_pool_stat_table);
             }
             break;
           }

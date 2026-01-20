@@ -2106,6 +2106,7 @@ const char *const OB_SSL_SM_SIGN_CERT_FILE = "wallet/SS.cert.pem";
 const char *const OB_SSL_SM_SIGN_KEY_FILE  = "wallet/SS.key.pem";
 const char *const OB_SSL_SM_ENC_CERT_FILE  = "wallet/SE.cert.pem";
 const char *const OB_SSL_SM_ENC_KEY_FILE   = "wallet/SE.key.pem";
+const char *const OB_SSL_REST_CA_FILE = "wallet/rest_ca_trust.pem";
 
 const int64_t MAX_CLUSTER_IDX_VALUE = 32;
 

@@ -45,6 +45,7 @@
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
 #include "share/catalog/ob_cached_catalog_meta_getter.h"
+#include "share/catalog/rest/auth/ob_rest_auth_mgr.h"
 #include "share/ob_server_blacklist.h"
 #include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
@@ -439,6 +440,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init cached external file info collector failed", KR(ret));
     } else if (OB_FAIL(ObCachedCatalogSchemaMgr::get_instance().init())) {
       LOG_ERROR("init ObCachedCatalogSchemaMgr failed", KR(ret));
+    } else if (OB_FAIL(ObRestAuthMgr::get_instance().init())) {
+      LOG_ERROR("init ObRestAuthMgr failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
     } else if (OB_FAIL(ObRsaGetter::instance().init())) {
@@ -1750,6 +1753,10 @@ int ObServer::stop()
     FLOG_INFO("begin to stop clock generator");
     ObClockGenerator::get_instance().stop();
     FLOG_INFO("clock generator stopped");
+
+    FLOG_INFO("begin to stop rest auth mgr");
+    ObRestAuthMgr::get_instance().stop();
+    FLOG_INFO("rest auth mgr stopped");
 
   }
 

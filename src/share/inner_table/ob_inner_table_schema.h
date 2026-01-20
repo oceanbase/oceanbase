@@ -1269,6 +1269,7 @@ public:
   static int all_virtual_ss_object_type_io_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_active_session_history_v2_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_to_global_temporary_table_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_external_catalog_client_pool_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_sqlstat_v2_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2184,6 +2185,8 @@ public:
   static int cdb_ob_ai_model_endpoints_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_ss_object_type_io_stat_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ss_object_type_io_stat_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_external_catalog_client_pool_stat_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_external_catalog_client_pool_stat_schema(share::schema::ObTableSchema &table_schema);
   static int dba_tables_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
@@ -4603,6 +4606,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ss_object_type_io_stat_schema,
   ObInnerTableSchema::all_virtual_wr_active_session_history_v2_schema,
   ObInnerTableSchema::all_virtual_tablet_to_global_temporary_table_schema,
+  ObInnerTableSchema::all_virtual_external_catalog_client_pool_stat_schema,
   ObInnerTableSchema::all_virtual_wr_sqlstat_v2_schema,
   ObInnerTableSchema::all_virtual_tablet_replica_info_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
@@ -5633,6 +5637,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_ai_model_endpoints_schema,
   ObInnerTableSchema::gv_ob_ss_object_type_io_stat_schema,
   ObInnerTableSchema::v_ob_ss_object_type_io_stat_schema,
+  ObInnerTableSchema::gv_ob_external_catalog_client_pool_stat_schema,
+  ObInnerTableSchema::v_ob_external_catalog_client_pool_stat_schema,
   ObInnerTableSchema::dba_tables_schema,
   ObInnerTableSchema::gv_ob_tablet_replica_info_schema,
   ObInnerTableSchema::v_ob_tablet_replica_info_schema,
@@ -6945,6 +6951,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_AI_MODEL_ENDPOINT_TID,
   OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID,
   OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TID,
+  OB_ALL_VIRTUAL_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
@@ -7713,6 +7720,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_AI_MODEL_ENDPOINTS_TID,
   OB_GV_OB_SS_OBJECT_TYPE_IO_STAT_TID,
   OB_V_OB_SS_OBJECT_TYPE_IO_STAT_TID,
+  OB_GV_OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
+  OB_V_OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
   OB_DBA_TABLES_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
@@ -10147,6 +10156,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_AI_MODEL_ENDPOINT_TNAME,
   OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TNAME,
   OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TNAME,
+  OB_ALL_VIRTUAL_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TNAME,
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
@@ -10915,6 +10925,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_AI_MODEL_ENDPOINTS_TNAME,
   OB_GV_OB_SS_OBJECT_TYPE_IO_STAT_TNAME,
   OB_V_OB_SS_OBJECT_TYPE_IO_STAT_TNAME,
+  OB_GV_OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TNAME,
+  OB_V_OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TNAME,
   OB_DBA_TABLES_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
@@ -12514,6 +12526,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_SS_GC_STATUS_TID,
   OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_TID,
   OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID,
+  OB_ALL_VIRTUAL_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,

@@ -55,6 +55,11 @@ private:
                                           const int64_t &buf_len,
                                           int64_t &pos) const;
 
+  int print_rest_catalog_definition(const share::ObRestCatalogProperties &properties,
+                                    char *buf,
+                                    const int64_t &buf_len,
+                                    int64_t &pos) const;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObShowCreateCatalog);
 };

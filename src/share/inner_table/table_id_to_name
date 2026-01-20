@@ -1353,6 +1353,7 @@
 # 12576: __wr_active_session_history_v2  # BASE_TABLE_NAME
 # 12580: __all_virtual_tablet_to_global_temporary_table
 # 12580: __all_tablet_to_global_temporary_table  # BASE_TABLE_NAME
+# 12581: __all_virtual_external_catalog_client_pool_stat
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
 # 12587: __all_virtual_tablet_replica_info
@@ -2680,6 +2681,8 @@
 # 21692: CDB_OB_AI_MODEL_ENDPOINTS
 # 21693: GV$OB_SS_OBJECT_TYPE_IO_STAT
 # 21694: V$OB_SS_OBJECT_TYPE_IO_STAT
+# 21695: GV$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
+# 21696: V$OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT
 # 21697: DBA_TABLES
 # 21708: GV$OB_TABLET_REPLICA_INFO
 # 21709: V$OB_TABLET_REPLICA_INFO

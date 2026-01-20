@@ -20,8 +20,9 @@ namespace oceanbase
 {
 namespace share
 {
-  struct ObHMSClientPoolKey;
-  class ObHMSClientPool;  // Forward declaration
+  struct ObCatalogClientPoolKey;
+  template <typename T> class ObCatalogClientPool;
+  class ObHiveMetastoreClient;
 }
 
 namespace observer
@@ -41,7 +42,7 @@ public:
   {
   }
   virtual ~ObHMSClientPoolGetter() {};
-  int operator() (common::hash::HashMapPair<ObHMSClientPoolKey, share::ObHMSClientPool*> &entry);
+  int operator() (common::hash::HashMapPair<ObCatalogClientPoolKey, share::ObCatalogClientPool<ObHiveMetastoreClient>*> &entry);
 private:
   common::ObScanner &scanner_;
   common::ObIArray<uint64_t> &output_column_ids_;

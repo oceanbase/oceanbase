@@ -13,12 +13,12 @@
 
 #include "ob_hive_metastore.h"
 #include "ob_hms_catalog.h"
-#include "ob_hms_client_pool.h"
 #include "share/catalog/ob_catalog_location_schema_provider.h"
 #include "sql/table_format/hive/ob_hive_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "ob_hive_catalog_stat_helper.h"
 #include "ob_iceberg_catalog_stat_helper.h"
+#include "share/catalog/rest/client/ob_catalog_client_pool.h"
 
 namespace oceanbase
 {
@@ -36,26 +36,25 @@ ObHMSCatalog::~ObHMSCatalog()
 int ObHMSCatalog::do_init(const common::ObString &properties)
 {
   int ret = OB_SUCCESS;
-  ObHMSCatalogProperties hms_properties_;
+  ObHMSCatalogProperties hms_properties;
   if (OB_FAIL(ob_write_string(allocator_, properties, properties_, true /*c_style*/))) {
     LOG_WARN("failed to write properties", K(ret), K(properties));
-  } else if (OB_FAIL(hms_properties_.load_from_string(properties_, allocator_))) {
+  } else if (OB_FAIL(hms_properties.load_from_string(properties_, allocator_))) {
     LOG_WARN("fail to init hive properties", K(ret), K_(properties));
-  } else if (OB_FAIL(hms_properties_.decrypt(allocator_))) {
+  } else if (OB_FAIL(hms_properties.decrypt(allocator_))) {
     LOG_WARN("failed to decrypt", K(ret));
-  } else if (OB_FAIL(ob_write_string(allocator_, hms_properties_.uri_, uri_, true /*c_style*/))) {
-    LOG_WARN("failed to write metastore uri", K(ret), K(hms_properties_.uri_));
+  } else if (OB_FAIL(ob_write_string(allocator_, hms_properties.uri_, uri_, true /*c_style*/))) {
+    LOG_WARN("failed to write metastore uri", K(ret), K(hms_properties.uri_));
   }
   LOG_TRACE(" ObHMSCatalog do_init end", K(ret), K_(properties));
 
   if (OB_FAIL(ret)) {
   } else {
-    ObHMSClientPoolMgr *hms_client_pool_mgr = MTL(ObHMSClientPoolMgr *);
-    if (OB_ISNULL(hms_client_pool_mgr)) {
+    ObCatalogClientPoolMgr<ObHiveMetastoreClient> *client_pool_mgr = MTL(ObCatalogClientPoolMgr<ObHiveMetastoreClient> *);
+    if (OB_ISNULL(client_pool_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("hms client pool mgr is null", K(ret));
-    } else if (OB_FAIL(hms_client_pool_mgr
-                           ->get_client(MTL_ID(), catalog_id_, uri_, properties_, client_))) {
+    } else if (OB_FAIL(client_pool_mgr->get_client(MTL_ID(), catalog_id_, properties_, client_))) {
       LOG_WARN("failed to get client from pool", K(ret), K_(catalog_id), K_(uri));
     }
   }

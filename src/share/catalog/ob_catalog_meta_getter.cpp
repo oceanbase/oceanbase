@@ -17,6 +17,7 @@
 #include "share/catalog/filesystem/ob_filesystem_catalog.h"
 #include "share/catalog/hive/ob_hms_catalog.h"
 #include "share/catalog/odps/ob_odps_catalog.h"
+#include "share/catalog/rest/ob_rest_catalog.h"
 
 namespace oceanbase
 {
@@ -282,7 +283,7 @@ int ObCatalogMetaGetter::get_catalog_(const uint64_t tenant_id,
       LOG_WARN("failed to get catalog schema", K(ret), K(tenant_id), K(catalog_id));
     } else if (OB_ISNULL(schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema is nullptr", K(ret));
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "current session's catalog is not existed");
     } else if (OB_FAIL(ObCatalogProperties::parse_catalog_type(schema->get_catalog_properties_str(),
                                                                catalog_type))) {
       LOG_WARN("failed to parse catalog type", K(ret));
@@ -328,6 +329,19 @@ int ObCatalogMetaGetter::get_catalog_(const uint64_t tenant_id,
                                            schema->get_catalog_properties(),
                                            &location_schema_provider_))) {
             LOG_WARN("failed to init hive catalog", K(ret));
+          }
+          break;
+        }
+        case ObCatalogProperties::CatalogType::REST_TYPE: {
+          catalog = OB_NEWx(ObRestCatalog, &allocator_, allocator_);
+          if (OB_ISNULL(catalog)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("rest catalog alloc failed", K(ret));
+          } else if (OB_FAIL(catalog->init(schema->get_tenant_id(),
+                                           schema->get_catalog_id(),
+                                           schema->get_catalog_properties(),
+                                           &location_schema_provider_))) {
+            LOG_WARN("failed to init rest catalog", K(ret));
           }
           break;
         }

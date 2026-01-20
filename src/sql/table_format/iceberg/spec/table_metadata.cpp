@@ -364,6 +364,25 @@ int TableMetadata::get_table_default_write_format(DataFileFormat &data_file_form
   return ret;
 }
 
+void TableMetadata::reset()
+{
+  format_version = FormatVersion::INVALID;
+  table_uuid.reset();
+  location.reset();
+  last_sequence_number = 0;
+  last_updated_ms = 0;
+  last_column_id = 0;
+  current_schema_id = 0;
+  default_spec_id = 0;
+  last_partition_id = 0;
+  current_snapshot_id = 0;
+  snapshots.reset();
+  statistics.reset();
+  partition_specs.reset();
+  properties.reset();
+  schemas.reset();
+}
+
 int TableMetadata::parse_schemas_(const ObJsonObject &json_object)
 {
   int ret = OB_SUCCESS;

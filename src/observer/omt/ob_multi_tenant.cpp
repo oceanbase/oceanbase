@@ -23,7 +23,8 @@
 #include "sql/das/ob_das_id_service.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"   // ObSharedMemAllocMgr
 #include "share/ob_global_autoinc_service.h"
-#include "share/catalog/hive/ob_hms_client_pool.h"
+#include "share/catalog/rest/client/ob_catalog_client_pool.h"
+#include "share/catalog/rest/client/ob_curl_rest_client.h"
 #include "logservice/archiveservice/ob_archive_service.h"    // ObArchiveService
 #include "logservice/data_dictionary/ob_data_dict_service.h" // ObDataDictService
 #include "ob_tenant_mtl_helper.h"
@@ -373,6 +374,36 @@ static void server_obj_pool_mtl_destroy(common::ObServerObjectPool<T> *&pool)
   pool = nullptr;
 }
 
+template<typename T>
+static int client_pool_mgr_mtl_new(oceanbase::share::ObCatalogClientPoolMgr<T> *&pool_mgr)
+{
+  int ret = common::OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  pool_mgr = OB_NEW(oceanbase::share::ObCatalogClientPoolMgr<T>, "CatalogPoolMgr");
+  if (OB_ISNULL(pool_mgr)) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    ret = pool_mgr->init(tenant_id);
+  }
+  return ret;
+}
+
+template<typename T>
+static void client_pool_mgr_mtl_stop(oceanbase::share::ObCatalogClientPoolMgr<T> *&pool_mgr)
+{
+  if (OB_NOT_NULL(pool_mgr)) {
+    TG_STOP(pool_mgr->get_tg_id());
+  }
+}
+
+template<typename T>
+static void client_pool_mgr_mtl_wait(oceanbase::share::ObCatalogClientPoolMgr<T> *&pool_mgr)
+{
+  if (OB_NOT_NULL(pool_mgr)) {
+    TG_WAIT(pool_mgr->get_tg_id());
+  }
+}
+
 static int start_mysql_queue(QueueThread *&qthread)
 {
   int ret = OB_SUCCESS;
@@ -648,10 +679,11 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObSessionTmpTableCleaner::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
     MTL_BIND2(ObSQLCCLRuleManager::mtl_new, ObSQLCCLRuleManager::mtl_init, nullptr, nullptr, nullptr, ObSQLCCLRuleManager::mtl_destroy);
-    MTL_BIND2(mtl_new_default, ObHMSClientPoolMgr::mtl_init, nullptr, ObHMSClientPoolMgr::mtl_stop, ObHMSClientPoolMgr::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(client_pool_mgr_mtl_new<ObHiveMetastoreClient>, nullptr, nullptr, client_pool_mgr_mtl_stop<ObHiveMetastoreClient>, client_pool_mgr_mtl_wait<ObHiveMetastoreClient>, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::schema::ObAddIntervalPartitionController::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(ObTenantTabletCleanupService::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, ObTenantTabletCleanupService::mtl_destroy);
     MTL_BIND2(mtl_new_default, observer::ObTabletReplicaInfoCacheMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(client_pool_mgr_mtl_new<ObCurlRestClient>, nullptr, nullptr, client_pool_mgr_mtl_stop<ObCurlRestClient>, client_pool_mgr_mtl_wait<ObCurlRestClient>, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {

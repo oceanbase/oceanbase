@@ -235,9 +235,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           show_resv_ctx.condition_node_ = parse_tree.children_[1];
           show_resv_ctx.stmt_type_ = stmt::T_SHOW_TABLES;
           ParseNode *condition_node = show_resv_ctx.condition_node_;
-          ObString show_db_name;
           uint64_t show_db_id = OB_INVALID_ID;
-          if (OB_FAIL(get_database_info(catalog_id,
+          if (OB_FAIL(get_database_info_with_catalog(catalog_id,
                                         parse_tree.children_[0],
                                         database_name,
                                         real_tenant_id,
@@ -364,7 +363,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           if (is_oracle_mode) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "show database in oracle mode is");
-          } else if (OB_UNLIKELY(parse_tree.num_child_ != 2 || NULL == parse_tree.children_)) {
+          } else if (OB_UNLIKELY((parse_tree.num_child_ != 2 && parse_tree.num_child_ != 3) || NULL == parse_tree.children_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
           } else {
@@ -372,7 +371,23 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             ParseNode *condition_node = show_resv_ctx.condition_node_;
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_DATABASES;
             bool show_db_status = parse_tree.children_[1] != NULL ? true : false;
-            if (NULL != show_resv_ctx.condition_node_ && T_LIKE_CLAUSE == show_resv_ctx.condition_node_->type_) {
+            ParseNode *from_node = parse_tree.num_child_ == 3 ? parse_tree.children_[2] : NULL;
+            if (NULL != from_node) {
+              ObString catalog_name;
+              catalog_name.assign_ptr(from_node->str_value_, static_cast<ObString::obstr_size_t>(from_node->str_len_));
+              ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+              if (OB_FAIL(schema_checker_->get_catalog_id_name(real_tenant_id, catalog_name, catalog_id))) {
+                LOG_WARN("failed to get catalog schema", K(ret));
+              } else if (catalog_id == OB_INTERNAL_CATALOG_ID) {
+                // do nothing
+              } else if (OB_FAIL(schema_guard->check_catalog_access(session_priv, enable_role_id_array, catalog_name))) {
+                LOG_WARN("failed to check catalog access", K(ret));
+              }
+            }
+
+            if (OB_FAIL(ret)) {
+
+            } else if (NULL != show_resv_ctx.condition_node_ && T_LIKE_CLAUSE == show_resv_ctx.condition_node_->type_) {
               if (OB_UNLIKELY(show_resv_ctx.condition_node_->num_child_ != 2
                               || NULL == show_resv_ctx.condition_node_->children_)) {
                 ret = OB_ERR_UNEXPECTED;
@@ -2616,6 +2631,58 @@ int ObShowResolver::get_database_info(const uint64_t session_catalog_id,
                                                     show_resv_ctx.show_database_name_))) {
         LOG_WARN("fail to resolve show from database", K(ret), K(real_tenant_id));
       } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObShowResolver::get_database_info_with_catalog(uint64_t &catalog_id,
+                                                  const ParseNode *database_node,
+                                                  const common::ObString &session_database_name,
+                                                  uint64_t real_tenant_id,
+                                                  ObShowResolverContext &show_resv_ctx,
+                                                  uint64_t &show_db_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_checker_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("some data member is not init", K(ret), K(schema_checker_));
+  } else if (OB_NOT_NULL(database_node)) {
+    if (database_node->num_child_ != 1
+        || OB_ISNULL(database_node->children_[0])
+        || database_node->children_[0]->num_child_ != 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("parse tree is wrong", K(ret), K(database_node->num_child_), K(database_node->children_));
+    } else {
+      ParseNode *catalog_name_node = database_node->children_[0]->children_[0];
+      ParseNode *database_name_node = database_node->children_[0]->children_[1];
+      if (OB_NOT_NULL(catalog_name_node)) {
+        ObString catalog_name;
+        catalog_name.assign_ptr(catalog_name_node->str_value_, static_cast<ObString::obstr_size_t>(catalog_name_node->str_len_));
+        if (OB_FAIL(schema_checker_->get_catalog_id_name(real_tenant_id, catalog_name, catalog_id))) {
+          LOG_WARN("failed to get catalog schema", K(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+
+      } else if (OB_FAIL(resolve_show_from_database(*database_name_node,
+                                                    real_tenant_id,
+                                                    catalog_id,
+                                                    show_db_id,
+                                                    show_resv_ctx.show_database_name_))) {
+        LOG_WARN("fail to resolve show from database", K(ret), K(real_tenant_id));
+      }
+    }
+  } else {
+    if (OB_UNLIKELY(session_database_name.empty())) {
+      ret = OB_ERR_NO_DB_SELECTED;
+      LOG_WARN("no database selected");
+    } else {
+      show_resv_ctx.show_database_name_ = session_database_name;
+      if (OB_FAIL(schema_checker_->get_database_id(real_tenant_id, catalog_id, session_database_name, show_db_id))) {
+        LOG_WARN("fail to get database_id", K(ret), K(catalog_id), K(session_database_name), K(real_tenant_id));
+      }
     }
   }
   return ret;

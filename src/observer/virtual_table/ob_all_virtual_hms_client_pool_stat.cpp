@@ -11,8 +11,8 @@
  */
 
 #include "observer/virtual_table/ob_all_virtual_hms_client_pool_stat.h"
-#include "share/catalog/hive/ob_hms_client_pool.h"
 #include "common/ob_smart_call.h"
+#include "share/catalog/rest/client/ob_catalog_client_pool.h"
 
 namespace oceanbase
 {
@@ -20,14 +20,11 @@ namespace oceanbase
 namespace observer
 {
 int ObHMSClientPoolGetter::operator()(
-    common::hash::HashMapPair<ObHMSClientPoolKey, share::ObHMSClientPool *> &entry)
+    common::hash::HashMapPair<ObCatalogClientPoolKey, share::ObCatalogClientPool<ObHiveMetastoreClient> *> &entry)
 {
   int ret = OB_SUCCESS;
   ObObj *cells = cur_row_.cells_;
-  share::ObHMSClientPool *hms_client_pool = entry.second;
-  int64_t total_clients = 0, in_use_clients = 0, idle_clients = 0;
-  hms_client_pool->get_pool_stats(total_clients, in_use_clients, idle_clients);
-  SERVER_LOG(TRACE, "client pool stats", K(ret), K(total_clients), K(in_use_clients), K(idle_clients));
+  share::ObCatalogClientPool<ObHiveMetastoreClient> *client_pool = entry.second;
   for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < output_column_ids_.count(); ++cell_idx) {
     uint64_t col_id = output_column_ids_.at(cell_idx);
     switch (col_id) {
@@ -42,23 +39,23 @@ int ObHMSClientPoolGetter::operator()(
         break;
       }
       case ObAllVirtualHMSClientPoolStat::COLUMNS::TENANT_ID: {
-        cells[cell_idx].set_int(hms_client_pool->get_tenant_id());
+        cells[cell_idx].set_int(client_pool->get_tenant_id());
         break;
       }
       case ObAllVirtualHMSClientPoolStat::COLUMNS::CATALOG_ID: {
-        cells[cell_idx].set_int(hms_client_pool->get_catalog_id());
+        cells[cell_idx].set_int(client_pool->get_catalog_id());
         break;
       }
       case ObAllVirtualHMSClientPoolStat::COLUMNS::TOTAL_CLIENTS: {
-        cells[cell_idx].set_int(total_clients);
+        cells[cell_idx].set_int(client_pool->get_size());
         break;
       }
       case ObAllVirtualHMSClientPoolStat::COLUMNS::IN_USE_CLIENTS: {
-        cells[cell_idx].set_int(in_use_clients);
+        cells[cell_idx].set_int(client_pool->get_in_use_clients_cnt());
         break;
       }
       case ObAllVirtualHMSClientPoolStat::COLUMNS::IDLE_CLIENTS: {
-        cells[cell_idx].set_int(idle_clients);
+        cells[cell_idx].set_int(client_pool->get_idle_clients_cnt());
         break;
       }
       default: {
@@ -176,7 +173,7 @@ int ObAllVirtualHMSClientPoolStat::fill_scanner(const uint64_t &tenant_id)
                                    port_,
                                    cur_row_,
                                    tenant_id);
-      ObHMSClientPoolMgr *hms_client_pool_mgr = MTL(ObHMSClientPoolMgr *);
+      ObCatalogClientPoolMgr<ObHiveMetastoreClient> *hms_client_pool_mgr = MTL(ObCatalogClientPoolMgr<ObHiveMetastoreClient> *);
       if (OB_ISNULL(hms_client_pool_mgr)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN,
@@ -184,7 +181,7 @@ int ObAllVirtualHMSClientPoolStat::fill_scanner(const uint64_t &tenant_id)
                    K(ret),
                    K(tenant_id),
                    K(effective_tenant_id_));
-      } else if (OB_FAIL(hms_client_pool_mgr->generate_pool_stat_monitoring_info_rows(getter))) {
+      } else if (OB_FAIL(hms_client_pool_mgr->get_pool_stat_info(getter))) {
         SERVER_LOG(WARN,
                    "failed to generate pool stat monitoring info rows",
                    K(ret),

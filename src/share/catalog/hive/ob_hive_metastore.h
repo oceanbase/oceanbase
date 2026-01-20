@@ -29,7 +29,7 @@ namespace oceanbase
 namespace share
 {
 // Forward declaration to avoid circular dependency
-class ObHMSClientPool;
+template <typename Obj> class ObCatalogClientPool;
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -531,11 +531,10 @@ private:
 class ObHiveMetastoreClient
 {
 public:
-  explicit ObHiveMetastoreClient();
+  explicit ObHiveMetastoreClient(ObIAllocator *allocator);
   virtual ~ObHiveMetastoreClient();
 
-  int init(const int64_t &socket_timeout, ObIAllocator *allocator);
-  int setup_hive_metastore_client(const ObString &uri, const ObString &properties);
+  int init(const ObHMSCatalogProperties &properties);
   // Open transport to connect to hive.
   int open();
   // Close transport to disconnect to hive.
@@ -596,7 +595,7 @@ public:
   }
 
   // Pool management methods
-  void set_client_pool(ObHMSClientPool *pool)
+  void set_client_pool(ObCatalogClientPool<ObHiveMetastoreClient> *pool)
   {
     client_pool_ = pool;
   }
@@ -604,7 +603,6 @@ public:
   {
     is_in_use_ = in_use;
   }
-
   int get_table_statistics(const ObString &ns_name,
                           const ObString &tb_name,
                           const ObNameCaseMode case_mode,
@@ -664,7 +662,6 @@ private:
   std::shared_ptr<TTransport> transport_;
   std::shared_ptr<TProtocol> protocol_;
   std::shared_ptr<ThriftHiveMetastoreClient> hive_metastore_client_;
-  ObString properties_;
   ObString hms_keytab_;
   ObString hms_principal_;
   ObString hms_krb5conf_;
@@ -682,7 +679,7 @@ private:
   // Used to store the last kinit timestamp if using kerberos.
   int64_t last_kinit_ts_;
   int64_t client_id_;
-  ObHMSClientPool *client_pool_; // Pool pointer for auto return
+  ObCatalogClientPool<ObHiveMetastoreClient> *client_pool_; // Pool pointer for auto return
   bool is_in_use_;               // Flag to indicate if client is currently in use
   int64_t socket_timeout_;       // us
 

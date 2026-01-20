@@ -179,6 +179,7 @@ public:
   int get_partition_spec(int32_t partition_spec_id, const PartitionSpec *&partition_spec) const;
   int get_table_property(const char *table_property_key, ObString &value) const;
   int get_table_default_write_format(DataFileFormat &data_file_format) const;
+  void reset();
 
   static constexpr const char *FORMAT_VERSION = "format-version";
   static constexpr const char *TABLE_UUID = "table-uuid";

@@ -716,11 +716,16 @@ ob_set_subtarget(ob_share catalog
   catalog/hive/thrift/transport/ob_t_sasl_transport.cpp
   catalog/hive/thrift/transport/ob_t_sasl.cpp
   catalog/hive/ob_kerberos.cpp
-  catalog/hive/ob_hms_client_pool.cpp
   catalog/hive/ob_hms_catalog.cpp
   catalog/hive/ob_hive_metastore.cpp
   catalog/hive/ob_iceberg_catalog_stat_helper.cpp
   catalog/hive/ob_hive_catalog_stat_helper.cpp
+  catalog/rest/ob_rest_catalog.cpp
+  catalog/rest/client/ob_base_rest_client.cpp
+  catalog/rest/client/ob_curl_rest_client.cpp
+  catalog/rest/requests/ob_rest_http_request.cpp
+  catalog/rest/responses/ob_rest_http_response.cpp
+  catalog/rest/auth/ob_rest_auth_mgr.cpp
 )
 
 ob_set_subtarget(ob_share io
