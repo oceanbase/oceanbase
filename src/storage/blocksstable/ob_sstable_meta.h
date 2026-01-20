@@ -320,6 +320,7 @@ public:
   bool is_shared_table() const;
   TO_STRING_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ctx), K_(is_inited));
 private:
+  int fsync_block(const ObTabletCreateSSTableParam &param);
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
   int init_data_index_tree_info(

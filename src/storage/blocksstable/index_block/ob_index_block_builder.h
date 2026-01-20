@@ -705,6 +705,7 @@ private:
   int get_clustered_micro_info(const int64_t roots_idx,
                                const int64_t macro_meta_idx,
                                ObClusteredIndexBlockMicroInfos *&clustered_micro_info) const;
+  int fsync_block();
   int merge_index_tree(const share::ObPreWarmerParam &pre_warm_param,
                        ObSSTableMergeRes &res,
                        int64_t &macro_seq,
