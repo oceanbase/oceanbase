@@ -289,6 +289,34 @@ int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::check_so
 }
 
 template <typename Store_Row, bool has_addon, bool is_basic_cmp, bool is_topn_sort>
+int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::check_sort_key_has_null(
+                                                    const ObCompactRow **sk_stored_rows, const int64_t row_size)
+{
+  int ret = OB_SUCCESS;
+  bool has_null = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_size; i++) {
+    const ObCompactRow *sk_stored_row = sk_stored_rows[i];
+    for (int64_t j = 0; j < cmp_sort_collations_->count(); j++) {
+      const ObSortFieldCollation &sort_collation = cmp_sort_collations_->at(j);
+      if (sk_stored_row->is_null(sort_collation.field_idx_)) {
+        has_null = true;
+        break;
+      }
+    }
+  }
+  if (has_null) {
+    if (cmp_sort_collations_->at(0).is_ascending_) {
+      cmp_func_ = &SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::default_compare<true>;
+      topn_cmp_func_ = &SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::default_topn_compare<true>;
+    } else {
+      cmp_func_ = &SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::default_compare<false>;
+      topn_cmp_func_ = &SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::default_topn_compare<false>;
+    }
+  }
+  return ret;
+}
+
+template <typename Store_Row, bool has_addon, bool is_basic_cmp, bool is_topn_sort>
 int SingleColCompare<Store_Row, has_addon, is_basic_cmp, is_topn_sort>::init(
   const ObIArray<ObExpr *> *cmp_sk_exprs, const RowMeta *sk_row_meta, const RowMeta *addon_row_meta,
   const ObIArray<ObSortFieldCollation> *cmp_sort_collations, ObExecContext *exec_ctx,

@@ -103,6 +103,13 @@ public:
     return OB_SUCCESS;
   }
 
+  int check_sort_key_has_null(const ObCompactRow **sk_stored_rows, const int64_t row_size)
+  {
+    UNUSED(sk_stored_rows);
+    UNUSED(row_size);
+    return OB_SUCCESS;
+  }
+
 protected:
   int init_cmp_sort_key(const ObIArray<ObExpr *> *cmp_sk_exprs,
                         const ObIArray<ObSortFieldCollation> *sort_collations);
@@ -163,6 +170,7 @@ public:
            ObExecContext *exec_ctx, bool enable_encode_sortkey);
   int init_cmp_func(const ObIArray<ObExpr *> &cmp_sk_exprs);
   int check_sort_key_has_null(ObEvalCtx &eval_ctx, const ObBatchRows &input_brs);
+  int check_sort_key_has_null(const ObCompactRow **sk_stored_rows, const int64_t row_size);
   // compare function for quick sort.
   OB_INLINE bool operator()(const Store_Row *l, const Store_Row *r);
   // compare function for in-memory merge sort

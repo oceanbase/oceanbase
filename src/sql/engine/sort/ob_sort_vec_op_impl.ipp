@@ -589,6 +589,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_batch_stored_row(
       }
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(comp_.check_sort_key_has_null(sk_stored_rows, row_size))) {
+    SQL_ENG_LOG(WARN, "failed to check sort key has null", K(ret));
+  }
   return ret;
 }
 
