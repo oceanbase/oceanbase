@@ -719,6 +719,7 @@ int construct_vsag_sindi_create_param(uint8_t create_type, const char *dtype, co
   int64_t buff_size = 0;
   // TODO(ningxin.ning): adapt vsag serial with seek
   const bool deserialize_without_footer = true;
+  const bool deserialize_without_buffer = true;
   if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos, "{\"dtype\":\"%s\"", dtype))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(dtype));
   } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos, ",\"metric_type\":\"%s\"", metric))) {
@@ -739,6 +740,10 @@ int construct_vsag_sindi_create_param(uint8_t create_type, const char *dtype, co
   } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
                                  ",\"deserialize_without_footer\":%s",
                                  (deserialize_without_footer ? "true": "false")))) {
+    LOG_WARN("failed to fill result_param_str", K(ret), K(extra_info_size));
+  } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
+                                 ",\"deserialize_without_buffer\":%s",
+                                 (deserialize_without_buffer ? "true": "false")))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(extra_info_size));
   } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos, "}}"))) {
     LOG_WARN("failed to fill result_param_str", K(ret));
