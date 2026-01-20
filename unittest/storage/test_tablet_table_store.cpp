@@ -972,7 +972,7 @@ TEST_F(TestTableStore, test_compat_serialization)
   ObITable::TableKey inc_major_ddl_key;
   inc_major_ddl_key.tablet_id_ = tablet_id_;
   inc_major_ddl_key.scn_range_.start_scn_.convert_for_tx(130);
-  inc_major_ddl_key.scn_range_.end_scn_.convert_for_tx(200);
+  inc_major_ddl_key.scn_range_.end_scn_.convert_for_tx(350);  // must >= clog_checkpoint_scn_(300) when MINI_MERGE
   inc_major_ddl_key.table_type_ = ObITable::TableType::INC_MAJOR_DDL_DUMP_SSTABLE;
   EXPECT_EQ(OB_SUCCESS, mock_sstable(inc_major_ddl_key, new_inc_major_ddl_sstable, 300, 400));
   new_inc_major_ddl_sstable->meta_->basic_meta_.upper_trans_version_ = INT64_MAX;

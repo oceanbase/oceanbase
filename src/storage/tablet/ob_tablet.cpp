@@ -6341,27 +6341,23 @@ int ObTablet::get_kept_and_old_snapshot_info(
     LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet_id));
   } else {
     old_snapshot_info = snapshot_info;
-    bool use_multi_version_start_on_tablet = false;
 
     if (!tablet_meta_.ha_status_.is_data_status_complete()) {
-      use_multi_version_start_on_tablet = true;
+      snapshot_info.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
+      snapshot_info.snapshot_ = get_multi_version_start();
     } else if (ObSnapShotType::SNAPSHOT_FOR_MAJOR_REFRESH_MV == snapshot_info.snapshot_type_ && 0 == snapshot_info.snapshot_) {
-      use_multi_version_start_on_tablet = true; // if exist new mv in restore, use special snapshot info
+      snapshot_info.snapshot_ = get_multi_version_start(); // exist new mv in restore, use special snapshot info
     } else if (min_reserved_snapshot_on_ls > 0) {
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, min_reserved_snapshot_on_ls);
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MIN_MEDIUM, min_medium_snapshot);
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_SPLIT, min_split_snapshot);
-      if (snapshot_info.snapshot_ < get_multi_version_start()) {
-        use_multi_version_start_on_tablet = true;
-      }
+      snapshot_info.snapshot_ = MAX(snapshot_info.snapshot_, get_multi_version_start());
     } else {
       // if not sync ls_reserved_snapshot yet, should use multi_version_start on tablet
-      use_multi_version_start_on_tablet = true;
-    }
-    if (use_multi_version_start_on_tablet) {
       snapshot_info.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
       snapshot_info.snapshot_ = get_multi_version_start();
     }
+
     // snapshot info should smaller than snapshot on tablet
     if (skip_tablet_snapshot_and_undo_retention) {
       if (!GCTX.is_shared_storage_mode()) {
@@ -6408,14 +6404,17 @@ int ObTablet::get_kept_snapshot_info(
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   const int64_t snapshot_version = get_snapshot_version();
   ObStorageSnapshotInfo old_snapshot_info;
+
   if (OB_FAIL(get_kept_and_old_snapshot_info(min_reserved_snapshot_on_ls, snapshot_info, old_snapshot_info, skip_tablet_snapshot_and_undo_retention))) {
     LOG_WARN("failed to get kept snapshot info", K(ret), K(tablet_id));
   } else if (is_snapshot_not_advance(snapshot_info, snapshot_version)) {
-    if (REACH_THREAD_TIME_INTERVAL(10_s)) {
+    if (table_store_cache_.last_major_macro_block_cnt_ < 50) {
+      // the major sstable's size is too small, no need to diagnose
+    } else if (REACH_THREAD_TIME_INTERVAL(10_s)) {
       LOG_INFO("tablet multi version start dont advance for a long time", K(ret),
-              "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
-              K(snapshot_info), K(old_snapshot_info),K(snapshot_version),
-              K(min_reserved_snapshot_on_ls));
+                "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
+                K(snapshot_info), K(old_snapshot_info),K(snapshot_version),
+                K(min_reserved_snapshot_on_ls));
       ADD_SUSPECT_INFO(MAJOR_MERGE,
                       share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
                       ls_id,
