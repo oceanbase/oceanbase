@@ -331,7 +331,7 @@ public:
   T_DEF_INT_INFT(fetch_log_rpc_timeout_sec, OB_CLUSTER_PARAMETER, 15, 1, "fetch log rpc timeout in seconds");
 
   // Upper limit of progress difference between partitions, in seconds
-  T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 30, 1, "dml progress limit in seconds");
+  T_DEF_INT_INFT(progress_limit_sec_for_dml, OB_CLUSTER_PARAMETER, 3, 1, "dml progress limit in seconds");
 
   // The Sys Tenant is not filtered by default
   T_DEF_BOOL(enable_filter_sys_tenant, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
