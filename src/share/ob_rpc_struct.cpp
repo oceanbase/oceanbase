@@ -2708,6 +2708,7 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
       SHARE_SCHEMA_LOG(WARN, "fail to decode sql mode", K(ret));
     }
   }
+  mview_refresh_info_.direct_dep_cnt_ = based_schema_object_infos_.count();
   LST_DO_CODE(OB_UNIS_DECODE,
               ddl_task_type_,
               compat_mode_,

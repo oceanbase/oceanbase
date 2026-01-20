@@ -2070,7 +2070,8 @@ int ObDDLService::start_mview_complete_refresh_task(
                                                                          tenant_data_version,
                                                                          schema_guard,
                                                                          *dep_infos,
-                                                                         arg.based_schema_object_infos_))) {
+                                                                         arg.based_schema_object_infos_,
+                                                                         arg.direct_dep_cnt_))) {
     LOG_WARN("fail to collect based schema object infos", KR(ret), K(tenant_id), K(tenant_data_version));
   } else {
     arg.parallelism_ = mv_refresh_info->parallel_;
@@ -17478,6 +17479,7 @@ int ObDDLService::mview_complete_refresh_in_trans(
             alter_table_arg.mview_refresh_info_.start_time_ = ObTimeUtil::current_time();
             alter_table_arg.mview_refresh_info_.mview_target_data_sync_scn_ = arg.target_data_sync_scn_;
             alter_table_arg.mview_refresh_info_.select_sql_ = arg.select_sql_;
+            alter_table_arg.mview_refresh_info_.direct_dep_cnt_ = arg.direct_dep_cnt_;
             LOG_DEBUG("alter table arg preparation complete!", K(alter_table_arg));
             ObCreateDDLTaskParam param(tenant_id,
                                         DDL_MVIEW_COMPLETE_REFRESH,
@@ -23747,6 +23749,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
             ObString dep_attrs, dep_reason;
             ObArray<ObDependencyInfo> deps;
             int64_t new_schema_version = OB_INVALID_VERSION;
+            const uint64_t direct_dep_cnt = alter_table_arg.mview_refresh_info_.direct_dep_cnt_;
             if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, new_schema_version))) {
               LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
             } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(
@@ -23754,12 +23757,16 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
                          ObObjectType::VIEW, mview_table_id, mview_table_id, property, dep_attrs,
                          dep_reason, new_schema_version))) {
               LOG_WARN("fail to collect dep infos", KR(ret), K(alter_table_arg));
+            } else if (OB_UNLIKELY(deps.count() < direct_dep_cnt)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected dep infos", K(ret), K(direct_dep_cnt),
+                            K(alter_table_arg.based_schema_object_infos_), K(deps));
             } else if (OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
                          trans, tenant_id, mview_table_id, new_schema_version,
                          ObObjectType::VIEW))) {
               LOG_WARN("fail to delete schema object dependency", KR(ret), K(mview_table_id));
             }
-            for (int64_t i = 0; OB_SUCC(ret) && i < deps.count(); ++i) {
+            for (int64_t i = 0; OB_SUCC(ret) && i < direct_dep_cnt; ++i) {
               ObDependencyInfo &dep = deps.at(i);
               if (OB_FAIL(dep.insert_schema_object_dependency(trans))) {
                 LOG_WARN("fail to insert schema object dependency", KR(ret), K(dep));

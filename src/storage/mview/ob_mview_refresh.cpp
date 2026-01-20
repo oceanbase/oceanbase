@@ -398,7 +398,7 @@ int ObMViewRefresher::fetch_based_infos(ObSchemaGetterGuard &schema_guard)
   based_schema_object_infos.reset();
   mlog_infos.reset();
   if (OB_FAIL(collect_based_schema_object_infos(tenant_id, data_version_, schema_guard,
-              dependency_infos, based_schema_object_infos))) {
+              dependency_infos, based_schema_object_infos, refresh_ctx_->direct_dep_cnt_))) {
     LOG_WARN("fail to collect based schema object infos", KR(ret), K(tenant_id),
              K(data_version_), K(dependency_infos));
   } else {
@@ -549,6 +549,7 @@ int ObMViewRefresher::complete_refresh()
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] =
       session_info->get_local_nls_timestamp_tz_format();
     arg.exec_tenant_id_ = tenant_id;
+    arg.direct_dep_cnt_ = refresh_ctx_->direct_dep_cnt_;
     if (OB_FAIL(arg.tz_info_wrap_.deep_copy(session_info->get_tz_info_wrap()))) {
       LOG_WARN("failed to deep copy tz_info_wrap", KR(ret));
     } else if (OB_FAIL(arg.based_schema_object_infos_.assign(refresh_ctx_->based_schema_object_infos_))) {
@@ -945,31 +946,32 @@ int ObMViewRefresher::collect_based_schema_object_infos(
                       const uint64_t data_version,
                       ObSchemaGetterGuard &schema_guard,
                       const ObIArray<share::schema::ObDependencyInfo> &dependency_infos,
-                      ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos)
+                      ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
+                      uint64_t &direct_dep_cnt)
 {
   int ret = OB_SUCCESS;
+  direct_dep_cnt = 0;
+  based_schema_object_infos.reuse();
   ARRAY_FOREACH(dependency_infos, i) {
     const ObDependencyInfo &dep = dependency_infos.at(i);
     const ObObjectType ref_obj_type = dep.get_ref_obj_type();
     const ObSchema *schema_obj = nullptr;
-    int64_t ref_obj_schema_version = OB_INVALID_VERSION;
-    ObSchemaType ref_obj_schema_type = OB_MAX_SCHEMA;
-    const uint64_t schema_id = dep.get_ref_obj_id();
+    ObBasedSchemaObjectInfo based_info;
+    based_info.schema_id_ = dep.get_ref_obj_id();
+    based_info.schema_tenant_id_ = tenant_id;
     if (OB_FAIL(ObMViewUtils::get_schema_object_from_dependency(
-                tenant_id, schema_guard, schema_id, ref_obj_type,
-                schema_obj, ref_obj_schema_version, ref_obj_schema_type))) {
+                based_info.schema_tenant_id_, schema_guard, based_info.schema_id_, ref_obj_type,
+                schema_obj, based_info.schema_version_, based_info.schema_type_))) {
       LOG_WARN("fail to get schema object from dependency", KR(ret), K(dep));
-    }
-    if (OB_FAIL(ret)) {
-    } else {
-      ObBasedSchemaObjectInfo based_info;
-      based_info.schema_id_ = dep.get_ref_obj_id();
-      based_info.schema_type_ = ref_obj_schema_type;
-      based_info.schema_version_ = ref_obj_schema_version;
-      based_info.schema_tenant_id_ = tenant_id;
-      if (OB_FAIL(based_schema_object_infos.push_back(based_info))) {
-        LOG_WARN("fail to push back base info", KR(ret));
-      }
+    } else if (OB_FAIL(based_schema_object_infos.push_back(based_info))) {
+      LOG_WARN("fail to push back base info", KR(ret));
+    } else if (OB_INVALID_ID != dep.get_dep_obj_id()) {
+      /* do nothing */
+    } else if (OB_UNLIKELY(based_schema_object_infos.count() != ++direct_dep_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      //  In function ObDependencyInfo::collect_dep_infos_for_view,
+      //  directly dependency base objects placed at the front of the array.
+      LOG_WARN("unexpected ordering in based_schema_object_infos", K(ret), K(direct_dep_cnt), K(dependency_infos));
     }
   }
   return ret;

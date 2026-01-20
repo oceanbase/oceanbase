@@ -44,12 +44,15 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
   dependency_infos_.reuse();
   tables_need_mlog_.reuse();
   operators_.reuse();
+  uint64_t data_version = 0;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("mv provider is inited twice", K(ret));
   } else if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(session_info));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
   } else if (check_refreshable_only && OB_NOT_NULL(refresh_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("refresh info should be null when check refreshable only", K(ret), K(refresh_info));
@@ -70,7 +73,6 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
       const ObTableSchema *mv_schema = NULL;
       const ObTableSchema *mv_container_schema = NULL;
       ObQueryCtx *query_ctx = NULL;
-      int64_t max_version = OB_INVALID_VERSION;
       ObSEArray<ObString, 4> operators;
       ObSEArray<ObDependencyInfo, 4> dependency_infos;
       ObSEArray<uint64_t, 4> tables_need_mlog;
@@ -89,6 +91,8 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                                       expr_factory,
                                       refresh_info);
         bool is_vars_matched = false;
+        const bool need_nested_dep = (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
+                                     || (data_version >= DATA_VERSION_4_5_1_0);
         if (OB_ISNULL(query_ctx = stmt_factory.get_query_ctx())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(query_ctx));
@@ -126,11 +130,9 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
         } else if (OB_ISNULL(view_stmt = static_cast<ObSelectStmt *>(trans_stmt))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null stmt", K(ret));
-        } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(query_ctx->reference_obj_tables_,
-                                                               dependency_infos,
-                                                               ObObjectType::VIEW,
-                                                               OB_INVALID_ID,
-                                                               max_version))) {
+        } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos_for_view(query_ctx->reference_obj_tables_,
+                                                                        need_nested_dep,
+                                                                        dependency_infos))) {
           LOG_WARN("failed to collect dep infos", K(ret));
         } else if (OB_FAIL(dependency_infos_.assign(dependency_infos))) {
           LOG_WARN("failed to assign fixed array", K(ret));
