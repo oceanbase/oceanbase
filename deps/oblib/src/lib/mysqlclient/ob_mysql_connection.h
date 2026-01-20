@@ -138,6 +138,9 @@ public:
                              uint64_t array_size,
                              uint32_t *out_valid_array_size);
   int execute_proc();
+  void set_is_dblink_reverse_conn(bool v) { is_dblink_revers_conn_ = v; }
+  bool is_dblink_reverse_conn() const { return is_dblink_revers_conn_; }
+  void handler_dblink_error(int &ret, bool is_connect, char *errmsg);
 private:
   int switch_tenant(const uint64_t tenant_id);
   int reset_read_consistency();
@@ -162,6 +165,7 @@ private:
   uint64_t tenant_id_;
   int64_t read_consistency_;
   ObMySQLProcStatement proc_stmt_;
+  bool is_dblink_revers_conn_;
   DISALLOW_COPY_AND_ASSIGN(ObMySQLConnection);
 };
 inline bool ObMySQLConnection::is_busy() const

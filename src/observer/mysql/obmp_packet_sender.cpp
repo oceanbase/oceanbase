@@ -372,11 +372,7 @@ int ObMPPacketSender::send_error_packet(int err,
   sql::ObSQLSessionInfo *session = NULL;
   BACKTRACE(ERROR, (OB_SUCCESS == err), "BUG send error packet but err code is 0");
   if (OB_ERR_PROXY_REROUTE != err) {
-    int client_error = lib::is_oracle_mode() ? common::ob_oracle_errno(err) :
-                      common::ob_mysql_errno(err);
-    // OB error codes that are not compatible with mysql will be displayed using
-    // OB error codes
-    client_error = lib::is_mysql_mode() && client_error == -1 ? err : client_error;
+    int client_error = ob_errpkt_errno(err, lib::is_oracle_mode());
     LOG_INFO("sending error packet", "ob_error", err, "client error", client_error,
             K(extra_err_info), K(lbt()));
   }
