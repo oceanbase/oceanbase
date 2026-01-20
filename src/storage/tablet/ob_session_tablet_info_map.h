@@ -116,6 +116,9 @@ public:
             && tablet_id_.is_valid();
   }
   inline const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
+  // The ls_id of the tablet may change after migration, but the ls_id in this structure does not get updated.
+  // Therefore, you can only use the ls_id in this structure if you are sure it has not changed.
+  // Otherwise, you should get the ls_id from the internal table __all_tablet_to_ls.
   inline const share::ObLSID &get_ls_id() const { return ls_id_; }
   inline uint64_t get_table_id() const { return table_id_; }
   inline int64_t get_sequence() const { return sequence_; }

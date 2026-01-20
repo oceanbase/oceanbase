@@ -117,7 +117,7 @@ public:
   int do_work();
   TO_STRING_KV(K_(tenant_id), K_(tablet_info));
 private:
-  int delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version, const int64_t timeout_us);
+  int delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version);
   int mds_remove_tablet(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
@@ -125,6 +125,7 @@ private:
       common::ObMySQLTransaction &trans);
 private:
   uint64_t tenant_id_;
+  // The ls_id of the tablet may change after migration, but the ls_id in the tablet_info_ does not get updated.
   ObSessionTabletInfo tablet_info_;
   common::ObMySQLTransaction trans_;
   common::ObArenaAllocator allocator_;
