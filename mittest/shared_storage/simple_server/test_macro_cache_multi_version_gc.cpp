@@ -517,7 +517,7 @@ TEST_F(ObMacroCacheMultiVersionGCTest, multi_version_gc_and_tablet_gc)
     const uint64_t tenant_id = MTL_ID();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     ASSERT_TRUE(tenant_config.is_valid());
-    tenant_config->_ss_micro_cache_max_block_size = 0;
+    tenant_config->_ss_micro_cache_max_block_size = 1;
   }
   // trigger minor compaction by minor freeze 3 times. it prewarms minor sstable into local
   // macro cache, and update tablet table store.

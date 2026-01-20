@@ -482,17 +482,32 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
 
   // 2. Free space is below free threshold while hot tablet space is exceed min value
   int64_t max_tablet_size4 = tnt_disk_space_mgr->get_macro_cache_size();
-  // hot tablet macro cache: 75%
-  const int64_t alloc_hot_tablet_perc = (hot_tablet_macro_cache_min_threshold + 5);
-  int64_t alloc_size1 = (max_tablet_size4 * alloc_hot_tablet_perc) / 100;
-  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
+  int64_t max_free_size4 = tnt_disk_space_mgr->get_macro_cache_free_size();
   ObSSMacroCacheStat macro_cache_stat1;
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, macro_cache_stat1));
-  ASSERT_GT(macro_cache_stat1.used_, (max_tablet_size4 * hot_tablet_macro_cache_min_threshold) / 100);
+  // hot tablet macro cache: 75%
+  const int64_t alloc_hot_tablet_perc = (hot_tablet_macro_cache_min_threshold);
+  // Get current HOT_TABLET usage and only allocate the delta needed
+  // Use +100 to ensure target_hot_tablet_size is strictly greater than the threshold after integer division
+  int64_t target_hot_tablet_size = (max_tablet_size4 * (alloc_hot_tablet_perc + 2)) / 100;
+  int64_t alloc_size1 = target_hot_tablet_size - macro_cache_stat1.used_;
+  if (alloc_size1 < 0) {
+    alloc_size1 = 0;
+  }
+  FLOG_INFO("[TEST] alloc_size1 calculation", K(max_tablet_size4), K(max_free_size4), K(target_hot_tablet_size), K(alloc_size1));
+  if (alloc_size1 > 0) {
+    OK(tnt_disk_space_mgr->alloc_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
+  ObSSMacroCacheStat macro_cache_stat2;
+  ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, macro_cache_stat2));
+  ASSERT_GT(macro_cache_stat2.used_, (max_tablet_size4 * hot_tablet_macro_cache_min_threshold) / 100);
   int64_t alloc_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
+  ASSERT_GT(alloc_size2, (max_tablet_size4 * ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD) / 100);
+  FLOG_INFO("[TEST] alloc_size2", K(alloc_size2), K(max_tablet_size4));
   alloc_size2 -= (max_tablet_size4 * (ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD + 2)) / 100;
-
-  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
+  if (alloc_size2 > 0) {
+    OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
+  }
   for (int i=0; i<SS_MACRO_CACHE_MAX_TYPE_VAL; i++) {
     FLOG_INFO("[TEST] print macro cache all stats444", K(tnt_disk_space_mgr->macro_cache_stats_[i]));
   }

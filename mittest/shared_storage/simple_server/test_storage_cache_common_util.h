@@ -64,16 +64,16 @@ public:
   {
     if (!scp_tenant_created) {
       ObSimpleClusterTestBase::SetUp();
-      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8));
+      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 8, "3G"));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       OK(get_curr_simple_server().init_sql_proxy2());
       scp_tenant_created = true;
     }
-    const uint64_t tenant_id = MTL_ID();
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    // Note: MTL_ID() returns sys tenant in SetUp context, use run_ctx_.tenant_id_ instead
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(run_ctx_.tenant_id_));
     ASSERT_TRUE(tenant_config.is_valid());
-    tenant_config->_ss_micro_cache_max_block_size = 0;
+    tenant_config->_ss_micro_cache_max_block_size = 1;
   }
 
   static void TearDownTestCase()
@@ -379,20 +379,24 @@ void ObStorageCachePolicyPrewarmerTest::check_macro_cache_exist()
   OK(get_macro_blocks(run_ctx_.ls_id_, run_ctx_.tablet_id_, data_block_ids, meta_block_ids));
   FLOG_INFO("[TEST] current info", K(run_ctx_), K(data_block_ids), K(meta_block_ids));
 
-  ObSSMacroCacheMgr *ss_cache_mgr = MTL(ObSSMacroCacheMgr*);
-  ASSERT_NE(nullptr, ss_cache_mgr);
-  bool is_exist = false;
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr*);
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache*);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  bool is_exsit_in_macro_cache = false;
+  bool is_exist_in_mem_macro_cache = false;
   int64_t retry_times = 0;
   wait_task_finished(run_ctx_.tablet_id_.id());
   for (int i = 0; i < data_block_ids.count(); i++) {
-    is_exist = false;
+    is_exsit_in_macro_cache = false;
     FLOG_INFO("[TEST] macro id", K(data_block_ids.at(i)), K(i));
-    if (data_block_ids.at(i).is_data()) {
-      OK(ss_cache_mgr->exist(data_block_ids.at(i), is_exist));
-      if (!is_exist) {
+    if (data_block_ids.at(i).is_data() && data_block_ids.at(i).is_shared_data_or_meta()) {
+      OK(macro_cache_mgr->exist(data_block_ids.at(i), is_exsit_in_macro_cache));
+      OK(mem_macro_cache->check_exist(data_block_ids.at(i), is_exist_in_mem_macro_cache));
+      if (!is_exsit_in_macro_cache && !is_exist_in_mem_macro_cache) {
         FLOG_INFO("macro is not exist", K(i), K(run_ctx_), K(data_block_ids.at(i)));
       }
-      ASSERT_TRUE(is_exist);
+      ASSERT_TRUE(is_exsit_in_macro_cache || is_exist_in_mem_macro_cache);
     }
   }
   LOG_INFO("[TEST] finish to check macro cache exist", K(run_ctx_));
