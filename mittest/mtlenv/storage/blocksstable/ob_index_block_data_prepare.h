@@ -34,6 +34,7 @@
 #include "storage/mock_access_service.h"
 #include "storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {
@@ -443,6 +444,7 @@ void TestIndexBlockDataPrepare::prepare_data()
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     read_info.offset_ = 0;
     read_info.size_ = macro_block_size;
+    ASSERT_EQ(OB_SUCCESS, THE_IO_DEVICE->fsync_block());
     ASSERT_EQ(OB_SUCCESS, ObBlockManager::read_block(read_info, macro_handle));
     ASSERT_NE(macro_handle.get_buffer(), nullptr);
     ASSERT_EQ(macro_handle.get_data_size(), macro_block_size);

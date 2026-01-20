@@ -17,6 +17,8 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_force_print_log.h"
+#include "share/ob_io_device_helper.h"
+#include "share/ob_occam_time_guard.h"
 #include "share/ob_task_define.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
@@ -1325,6 +1327,7 @@ int ObMacroBlockWriter::try_switch_macro_block()
 
 int ObMacroBlockWriter::check_write_complete(const MacroBlockId &macro_block_id)
 {
+  TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
 
   ObMacroBlockReadInfo read_info;
@@ -1333,7 +1336,9 @@ int ObMacroBlockWriter::check_write_complete(const MacroBlockId &macro_block_id)
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   ObMacroBlockHandle read_handle;
-  if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
+  if (CLICK_FAIL(THE_IO_DEVICE->fsync_block())) {
+    STORAGE_LOG(WARN, "fail to fsync block before async read", K(ret), K(read_info));
+  } else if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
     STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info));
   } else if (OB_FAIL(read_handle.wait(io_timeout_ms))) {
     STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(io_timeout_ms));

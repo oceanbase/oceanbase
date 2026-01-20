@@ -37,6 +37,7 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "share/scn.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {
@@ -628,6 +629,7 @@ TEST_F(TestIndexTree, test_macro_id_index_block)
   read_info.offset_ = 0;
   read_info.size_ = macro_block_size;
 
+  OK(THE_IO_DEVICE->fsync_block());
   OK(ObBlockManager::read_block(read_info, macro_handle));
   ASSERT_NE(macro_handle.get_buffer(), nullptr);
   ASSERT_EQ(macro_handle.get_data_size(), macro_block_size);
@@ -1101,6 +1103,7 @@ TEST_F(TestIndexTree, test_single_row_desc)
   info.offset_ = 0;
   info.size_ = macro_block_size;
   info.macro_block_id_ = res.data_block_ids_[0];
+  OK(THE_IO_DEVICE->fsync_block());
   OK(ObBlockManager::read_block(info, macro_handle));
   OK(rebuilder.append_macro_row(macro_handle.get_buffer(), macro_handle.get_data_size(), info.macro_block_id_));
   OK(rebuilder.close());
@@ -1388,6 +1391,7 @@ TEST_F(TestIndexTree, test_rebuilder)
   ObDataMacroBlockMeta *macro_meta = nullptr;
   ObArenaAllocator meta_allocator;
   ASSERT_EQ(data_block_ids.count(), test_num);
+  OK(THE_IO_DEVICE->fsync_block());
   // rebuild index tree
   for (int64_t i = data_block_ids.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
     // i starts from count()-1, to mock disordered data

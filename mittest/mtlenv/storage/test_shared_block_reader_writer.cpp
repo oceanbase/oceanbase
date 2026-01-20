@@ -28,6 +28,7 @@
 #include "share/ob_simple_mem_limit_getter.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/tablet/ob_tablet.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {
@@ -154,6 +155,7 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
 
     read_info.addr_ = write_ctx.addr_;
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+    OK(THE_IO_DEVICE->fsync_block());
     OK(rwriter.async_read(read_info, read_handle));
     char *buf = nullptr;
     int64_t buf_len = 0;
@@ -174,6 +176,7 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
   const int64_t io_timeout_ms =
       std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
+  OK(THE_IO_DEVICE->fsync_block());
   OK(ObBlockManager::async_read_block(read_info, macro_handle));
   OK(macro_handle.wait(io_timeout_ms));
   OK((ObSSTableMacroBlockChecker::check(macro_handle.get_buffer(),
@@ -208,6 +211,7 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_easy_block)
   OK(write_handle.batch_get_write_ctx(write_ctxs));
   ASSERT_EQ(test_round, write_ctxs.count());
 
+  OK(THE_IO_DEVICE->fsync_block());
   for (int i = 0; i < test_round; ++i) {
     ObSharedBlockReadInfo read_info;
     ObSharedBlockReadHandle read_handle;
@@ -252,6 +256,7 @@ TEST_F(TestSharedBlockRWriter, test_link_write)
   OK(iter.init(write_ctx.addr_));
   char *buf = nullptr;
   int64_t buf_len = 0;
+  OK(THE_IO_DEVICE->fsync_block());
   for (int i = 0; i < test_round; ++i) {
     OK(iter.get_next_block(allocator_, buf, buf_len));
     ASSERT_EQ(10, buf_len);
@@ -302,6 +307,7 @@ TEST_F(TestSharedBlockRWriter, test_cb_single_write)
   read_info.addr_ = write_ctx.addr_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_callback_ = &cb;
+  OK(THE_IO_DEVICE->fsync_block());
   OK(rwriter.async_read(read_info, read_handle));
   OK(read_handle.wait());
   // test the buf of read handle
@@ -367,6 +373,7 @@ TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
   read_info.addr_ = write_ctxs[test_round].addr_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_callback_ = &cb;
+  OK(THE_IO_DEVICE->fsync_block());
   OK(rwriter.async_read(read_info, read_handle));
   OK(read_handle.wait());
   // test the buf of read handle
@@ -413,6 +420,7 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_switch_block)
   OK(write_handle.batch_get_write_ctx(write_ctxs));
   ASSERT_EQ(write_infos.count(), write_ctxs.count());
 
+  OK(THE_IO_DEVICE->fsync_block());
   for (int i = 0; i < write_ctxs.count(); ++i) {
     ObSharedBlockReadInfo read_info;
     ObSharedBlockReadHandle read_handle;
