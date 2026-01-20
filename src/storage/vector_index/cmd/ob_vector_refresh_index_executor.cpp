@@ -1054,7 +1054,9 @@ int ObVectorRefreshIndexExecutor::get_parallel_value(const ObString &parallel_st
       }
     }
     if (OB_SUCC(ret)) {
-      parallel_int = std::atoi(parallel_str.ptr());
+      if (OB_FAIL(ObSchemaUtils::str_to_int(tmp_parallel_str, parallel_int))) {
+        LOG_WARN("fail to get str value", K(ret), K(tmp_parallel_str));
+      }
     }
   }
   return ret;
@@ -1165,10 +1167,24 @@ int ObVectorRefreshIndexExecutor::set_attribute_inner(
       }
 
     } else if (0 == attribute_str.compare("REBUILD_REPEAT_INTERVAL")) {
-      ObString repeat_interval("repeat_interval");
-      ObObj repeat_interval_obj;
-      repeat_interval_obj.set_char(value);
-      OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, repeat_interval, repeat_interval_obj));
+      const int64_t start_date_usec = ObTimeUtility::current_time();
+      ObObj start_date_obj;
+      start_date_obj.set_timestamp(start_date_usec);
+      if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, ObString("start_date"), start_date_obj))) {
+        LOG_WARN("failed to update start_date", K(ret), K(job_info), K(start_date_usec));
+      } else {
+        job_info.start_date_ = start_date_usec;
+      }
+      // if not set by user, we dont need change start time of job
+      if (OB_SUCC(ret)) {
+        ObString repeat_interval("repeat_interval");
+        ObObj repeat_interval_obj;
+        repeat_interval_obj.set_char(value);
+        if(OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, repeat_interval, repeat_interval_obj))) {
+          LOG_WARN("failed to update start_date", K(ret), K(job_info), K(value));
+        }
+      }
+
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support attribute", K(ret), K(attribute));
