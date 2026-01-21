@@ -236,8 +236,7 @@ int ObStaticMergeParam::init_sstable_logic_seq()
 
 int ObStaticMergeParam::init_sstable_need_full_merge(
     const int64_t sstable_idx,
-    const ObSSTable &sstable,
-    const bool need_calc_progressive_merge)
+    const ObSSTable &sstable)
 {
   int ret = OB_SUCCESS;
   if (data_version_ >= DATA_VERSION_4_5_0_0) {
@@ -247,8 +246,7 @@ int ObStaticMergeParam::init_sstable_need_full_merge(
     } else if (sstable.is_co_sstable() &&
         static_cast<const ObCOSSTableV2 &>(sstable).is_all_cg_base() &&
         !schema_->has_all_column_group() &&
-        is_build_row_store() &&
-        !need_calc_progressive_merge) {
+        is_build_row_store()) {
       int64_t full_stored_col_cnt = 0;
       if (OB_FAIL(schema_->get_stored_column_count_in_sstable(full_stored_col_cnt))) {
         LOG_WARN("failed to get stored column count in sstable", K(ret), KPC(schema_));
@@ -472,7 +470,7 @@ int ObStaticMergeParam::cal_major_merge_param(
             }
           }
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(init_sstable_need_full_merge(i, *sstable, progressive_mgr.need_calc_progressive_merge()))) {
+          } else if (OB_FAIL(init_sstable_need_full_merge(i, *sstable))) {
             LOG_WARN("failed to init sstable need full merge", KR(ret), K(i), K(sstable), K(progressive_mgr));
           } else if (is_full_merge_
             || (merge_sstable_status_array_.at(i).merge_level_ != MACRO_BLOCK_MERGE_LEVEL && merge_sstable_status_array_.at(i).is_schema_changed_)

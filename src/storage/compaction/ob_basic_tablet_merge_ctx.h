@@ -97,8 +97,7 @@ struct ObStaticMergeParam final
       const ObSSTableMeta &sstable_meta);
   int init_sstable_need_full_merge(
       const int64_t sstable_idx,
-      const ObSSTable &sstable,
-      const bool need_calc_progressive_merge);
+      const ObSSTable &sstable);
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int64_t get_compaction_scn() const {
     return is_multi_version_merge(get_merge_type()) ?
