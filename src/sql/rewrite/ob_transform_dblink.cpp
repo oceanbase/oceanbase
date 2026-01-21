@@ -627,7 +627,7 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
              (stmt->is_select_stmt() && sel_stmt->has_select_into()) ||
              stmt->is_dml_write_stmt()) {
     all_table_from_one_dblink = false;
-  } else if (has_invalid_link_expr(*stmt, has_special_expr)) {
+  } else if (OB_FAIL(has_invalid_link_expr(*stmt, has_special_expr))) {
     LOG_WARN("failed to check stmt has invalid link expr", K(ret));
   } else if (has_special_expr) {
     all_table_from_one_dblink = false;
