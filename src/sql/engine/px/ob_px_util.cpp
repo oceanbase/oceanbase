@@ -266,6 +266,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
                                                                                     is_external_files_on_disk,
                                                                                     ctx.get_allocator(),
                                                                                     ext_file_urls,
+                                                                                    ctx,
                                                                                     ranges.empty() ? NULL : &ranges));
     }
 

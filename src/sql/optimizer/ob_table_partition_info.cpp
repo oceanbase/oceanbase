@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "ob_table_partition_info.h"
+
+#include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
@@ -61,15 +63,63 @@ int ObTablePartitionInfo::init_table_location(ObSqlSchemaGuard &schema_guard,
       LOG_WARN("fail to init table location", K(ret));
     }
   }
-  //判断并设置是否为复制表
+
   if (OB_SUCC(ret)) {
     const ObTableSchema *table_schema = NULL;
     if (OB_FAIL(schema_guard.get_table_schema(table_id, ref_table_id, &stmt, table_schema))) {
       LOG_WARN("fail to get table schema", K(ref_table_id), K(ret));
-    } else if (table_schema->is_duplicate_table()) {
-      //如果复制表本身有改动, 只能选择leader, 不再设置duplicate table属性
-      candi_table_loc_.set_duplicate_type(is_dml_table ? ObDuplicateType::DUPLICATE_IN_DML :
-                                                               ObDuplicateType::DUPLICATE);
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is NULL", K(ref_table_id));
+    }
+
+    if (OB_SUCC(ret)) {
+      // 判断并设置是否为复制表
+      if (table_schema->is_duplicate_table()) {
+        // 如果复制表本身有改动, 只能选择leader, 不再设置duplicate table属性
+        candi_table_loc_.set_duplicate_type(is_dml_table ? ObDuplicateType::DUPLICATE_IN_DML
+                                                         : ObDuplicateType::DUPLICATE);
+      }
+
+      // 判断是否是hive表
+      bool is_hive_table = false;
+      bool need_refresh_table_schema = false;
+      if (OB_FAIL(ObSQLUtils::is_opt_hdfs_external_hive_table(table_schema, is_hive_table))) {
+        LOG_WARN("fail to check is a hive table", K(ret));
+      } else if (is_hive_table && table_schema->is_partitioned_table()) {
+        int64_t num = table_schema->get_partition_num();
+        ObPartition **parts = table_schema->get_part_array();
+        CK(OB_NOT_NULL(parts));
+        bool is_updated_from_old_version = false;
+        for (int64_t i = 0; OB_SUCC(ret) && !is_updated_from_old_version && i < num; i++) {
+          CK(OB_NOT_NULL(parts[i]));
+          if (parts[i]->get_part_name().case_compare("P_DEFAULT") != 0
+              && OB_ISNULL(parts[i]->get_part_name().find('='))) {
+            // 是从老的版本升级上来的
+            is_updated_from_old_version = true;
+          }
+        }
+
+        ObArenaAllocator tmp_allocator;
+        if (OB_SUCC(ret)
+            && (is_updated_from_old_version
+                || num <= 1) // 外表自带一个 P_DEFAULT 分区，没有更新过分区信息，才需要更新
+            && OB_FAIL(
+                ObExternalTableFileManager::get_instance().get_partitions_info_from_filesystem(
+                    *exec_ctx,
+                    *table_schema,
+                    tmp_allocator,
+                    need_refresh_table_schema))) {
+          LOG_WARN("fail to get partitions info from filesystem",
+                   K(ret),
+                   K(table_schema->get_external_file_location()));
+        }
+      }
+
+      if (OB_SUCC(ret) && need_refresh_table_schema) {
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_TRACE("partition has changed.");
+      }
     }
   }
   return ret;

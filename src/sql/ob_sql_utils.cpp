@@ -6997,3 +6997,28 @@ int ObSQLUtils::append_obj_param(ObSqlString & reconstruct_sql, const common::Ob
 
   return ret;
 }
+
+int ObSQLUtils::is_opt_hdfs_external_hive_table(const ObTableSchema *table_schema,
+                                                bool &is_hive_table)
+{
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat::FormatType type = ObExternalFileFormat::FormatType::INVALID_FORMAT;
+
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+    is_hive_table = false;
+  } else if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else {
+    const ObString &location = table_schema->get_external_file_location();
+    // 1. 非分区表
+    // 2. 分区表，必须是自动检测分区方式的分区表
+    is_hive_table = table_schema->is_external_table()
+                    && (type == ObExternalFileFormat::FormatType::CSV_FORMAT
+                        || type == ObExternalFileFormat::FormatType::ORC_FORMAT
+                        || type == ObExternalFileFormat::FormatType::PARQUET_FORMAT)
+                    && location.prefix_match(OB_HDFS_PREFIX)
+                    && (!table_schema->is_partitioned_table()
+                        || !table_schema->is_user_specified_partition_for_external_table());
+  }
+  return ret;
+}

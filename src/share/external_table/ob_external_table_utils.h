@@ -43,16 +43,6 @@ class ObExprRegexpSessionVariables;
 namespace share
 {
 
-struct ObExternalPathFilter {
-  ObExternalPathFilter(sql::ObExprRegexContext &regex_ctx, common::ObIAllocator &allocator)
-    : regex_ctx_(regex_ctx), allocator_(allocator) {}
-  int init(const common::ObString &pattern, const sql::ObExprRegexpSessionVariables &regexp_vars);
-  bool is_inited();
-  int is_filtered(const common::ObString &path, bool &is_filtered);
-  sql::ObExprRegexContext &regex_ctx_;
-  common::ObIAllocator &allocator_;
-  common::ObArenaAllocator temp_allocator_;
-};
 
 class ObCachedExternalFileInfoKey final : public common::ObIKVCacheKey
 {
@@ -113,7 +103,12 @@ public:
                                 common::ObIArray<int64_t> &modify_times);
   int collect_file_modify_time(const common::ObString &url, int64_t &modify_time);
   int collect_file_size(const common::ObString &url, int64_t &file_size, bool enable_cache = false);
-
+  int collect_dirs_with_spec_level(
+      ObIAllocator &allocator,
+      const common::ObString &path,
+      int64_t spec_level,
+      common::ObIArray<common::ObString> &dir_urls,
+      common::ObIArray<int64_t> &modify_times);
 private:
   int convert_to_full_file_urls(const common::ObString &location,
                                 const common::ObIArray<common::ObString> &file_urls,

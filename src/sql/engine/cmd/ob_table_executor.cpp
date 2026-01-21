@@ -612,8 +612,11 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
   }
 
   ObArray<share::ObExternalTableBasicFileInfo> basic_file_infos;
+  bool is_hive_table = false;
   if (OB_FAIL(ret)) {
-  } else if (table_schema.is_external_table() && !table_schema.is_user_specified_partition_for_external_table()) {
+  } else if (OB_FAIL(ObSQLUtils::is_opt_hdfs_external_hive_table(&table_schema, is_hive_table))) {
+    LOG_WARN("failed to check is a hive table", K(ret));
+  } else if (!is_hive_table) {
     ObExprRegexpSessionVariables regexp_vars;
     ObString file_location;
     ObString access_info;
@@ -736,9 +739,18 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
             collect_statistics_on_create = ex_format.odps_format_.collect_statistics_on_create_;
           }
         }
-        OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(
-          ctx, tenant_id, res.table_id_, basic_file_infos, updated_part_ids, has_partition_changed,
-          part_id, collect_statistics_on_create));
+
+        if (OB_SUCC(ret) && !is_hive_table) {
+          OZ(ObExternalTableFileManager::get_instance().update_inner_table_file_list(
+              ctx,
+              tenant_id,
+              res.table_id_,
+              basic_file_infos,
+              updated_part_ids,
+              has_partition_changed,
+              part_id,
+              collect_statistics_on_create));
+        }
       }
     } else {
       if (table_schema.is_external_table()) {
@@ -1094,31 +1106,47 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
         OZ (ObSQLUtils::check_location_access_priv(access_info, ctx.get_my_session()));
       }
       ObSqlString full_path;
-      CK (GCTX.location_service_);
-      OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
-      OZ (ObExternalTableUtils::collect_external_file_list(
-                  ctx.get_my_session(),
-                  stmt.get_tenant_id(),
-                  arg.alter_table_schema_.get_table_id(),
-                  file_location,
-                  access_info,
-                  arg.alter_table_schema_.get_external_file_pattern(),
-                  arg.alter_table_schema_.get_external_properties(),
-                  arg.alter_table_schema_.is_partitioned_table(),
-                  regexp_vars, ctx.get_allocator(),
-                  full_path,
-                  basic_file_infos));
-
-      //TODO [External Table] opt performance
-      ObSEArray<ObAddr, 8> all_servers;
-      ObSEArray<uint64_t, 64> updated_part_ids;
+      bool is_opt_hive_table = false;
       bool has_partition_changed = false;
-      OZ (GCTX.location_service_->external_table_get(stmt.get_tenant_id(), all_servers));
-      OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, stmt.get_tenant_id(),
-                  arg.alter_table_schema_.get_table_id(), basic_file_infos, updated_part_ids, has_partition_changed));
-      for (int64_t i = 0; OB_SUCC(ret) && i < updated_part_ids.count(); i++) {
-        OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(stmt.get_tenant_id(),
-                  arg.alter_table_schema_.get_table_id(), updated_part_ids.at(i), all_servers));
+      CK(GCTX.location_service_);
+      OZ(ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
+      if (OB_FAIL(ObSQLUtils::is_opt_hdfs_external_hive_table(&arg.alter_table_schema_,
+                                                              is_opt_hive_table))) {
+        LOG_WARN("failed to check opt hive table", K(ret));
+      } else if (is_opt_hive_table) {
+        if (OB_FAIL(ObExternalTableFileManager::get_instance().get_partitions_info_from_filesystem(
+                ctx,
+                arg.alter_table_schema_,
+                ctx.get_allocator(),
+                has_partition_changed))) {
+          LOG_WARN("fail to get partitions info from filesystem",
+                   K(ret),
+                   K(arg.alter_table_schema_.get_external_file_location()));
+        }
+      } else {
+        OZ (ObExternalTableUtils::collect_external_file_list(
+                    ctx.get_my_session(),
+                    stmt.get_tenant_id(),
+                    arg.alter_table_schema_.get_table_id(),
+                    file_location,
+                    access_info,
+                    arg.alter_table_schema_.get_external_file_pattern(),
+                    arg.alter_table_schema_.get_external_properties(),
+                    arg.alter_table_schema_.is_partitioned_table(),
+                    regexp_vars, ctx.get_allocator(),
+                    full_path,
+                    basic_file_infos));
+
+        //TODO [External Table] opt performance
+        ObSEArray<ObAddr, 8> all_servers;
+        ObSEArray<uint64_t, 64> updated_part_ids;
+        OZ (GCTX.location_service_->external_table_get(stmt.get_tenant_id(), all_servers));
+        OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(ctx, stmt.get_tenant_id(),
+                    arg.alter_table_schema_.get_table_id(), basic_file_infos, updated_part_ids, has_partition_changed));
+        for (int64_t i = 0; OB_SUCC(ret) && i < updated_part_ids.count(); i++) {
+          OZ (ObExternalTableFileManager::get_instance().flush_external_file_cache(stmt.get_tenant_id(),
+                    arg.alter_table_schema_.get_table_id(), updated_part_ids.at(i), all_servers));
+        }
       }
       break;
     }

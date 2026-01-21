@@ -437,6 +437,7 @@ public:
   static int reconstruct_ps_sql(ObSqlString &reconstruct_sql, const ObString &ps_sql,
                                 const ObIArray<const common::ObObjParam *> &const_tokens);
   static int append_obj_param(ObSqlString &reconstruct_sql, const common::ObObjParam & obj_param);
+  static int is_opt_hdfs_external_hive_table(const ObTableSchema *table_schema, bool &is_hive_table);
   static int print_sql(char *buf,
                        int64_t buf_len,
                        int64_t &pos,

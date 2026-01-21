@@ -388,7 +388,7 @@ int ObExternalTableUtils::prepare_single_scan_task_(const uint64_t tenant_id,
     } else {
       if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(
                             tenant_id, table_id, partition_ids, is_file_on_disk,
-                            allocator, file_urls, tmp_ranges.empty() ? NULL : &tmp_ranges))) {
+                            allocator, file_urls, ctx, tmp_ranges.empty() ? NULL : &tmp_ranges))) {
         LOG_WARN("failed to get external files by part ids", K(ret));
       }
     }
@@ -668,49 +668,6 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_task(ObExecContext &exe
   return ret;
 }
 
-
-bool ObExternalPathFilter::is_inited() {
-  return regex_ctx_.is_inited();
-}
-
-int ObExternalPathFilter::is_filtered(const ObString &path, bool &is_filtered)
-{
-  int ret = OB_SUCCESS;
-  bool match = false;
-  ObString out_text;
-  if (OB_FAIL(ObExprUtil::convert_string_collation(path,
-                                                   CS_TYPE_UTF8MB4_BIN,
-                                                   out_text,
-                                                   CS_TYPE_UTF16_BIN,
-                                                   temp_allocator_))) {
-    LOG_WARN("convert charset failed", K(ret), K(path));
-  } else if (OB_FAIL(regex_ctx_.match(temp_allocator_, out_text, CS_TYPE_UTF16_BIN, 0, match))) {
-    LOG_WARN("regex match failed", K(ret));
-  }
-  is_filtered = !match;
-  temp_allocator_.reuse();
-  return ret;
-}
-
-int ObExternalPathFilter::init(const ObString &pattern,
-                               const ObExprRegexpSessionVariables &regexp_vars)
-{
-  int ret = OB_SUCCESS;
-  if (regex_ctx_.is_inited()) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("fail to init", K(ret));
-  } else {
-    uint32_t flags = 0;
-    ObString match_string;
-    if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_string, true, false, false, flags))) {
-      LOG_WARN("failed to get regexp flags", K(ret));
-    } else if (OB_FAIL(regex_ctx_.init(allocator_, regexp_vars,
-                                       pattern, flags, true, CS_TYPE_UTF8MB4_BIN))) {
-      LOG_WARN("init regex context failed", K(ret), K(pattern));
-    }
-  }
-  return ret;
-}
 
 // dfo.get_sqcs(sqcs) sqcs 里面是dfo的地址
 int ObExternalTableUtils::assign_odps_file_to_sqcs(
@@ -2377,6 +2334,160 @@ int ObExternalFileInfoCollector::convert_to_full_file_urls(
   }
   return ret;
 }
+
+
+//                path                    0
+//          /     |        \
+//       A        B         C             1
+//      |       /  \      /   \
+//      D      E    F    G     H          2
+//    /  \     |    |    |    / \
+//   I   J     K    L    M   N   O        3
+//
+// 入参 path 的 level 是 0
+// 入参 spec_level 是指定要遍历多少层 level，相当于要获取第几层的path
+int ObExternalFileInfoCollector::collect_dirs_with_spec_level(
+    ObIAllocator &allocator,
+    const common::ObString &path,
+    int64_t spec_level,
+    common::ObIArray<common::ObString> &dir_urls,
+    common::ObIArray<int64_t> &modify_times)
+{
+  int ret = OB_SUCCESS;
+  int max_visit_count = 1000000;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    max_visit_count = tenant_config->_max_access_entries_for_external_table_partition;
+  }
+  ObExprRegexContext regexp_ctx;
+  ObString path_cstring;
+  ObSEArray<ObString, 16> temp_file_urls;
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
+
+  if (spec_level < 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid spec level, should >= 1", K(ret), K(spec_level));
+  } else if (OB_UNLIKELY(!storage_info_->is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(storage_info));
+  } else if (OB_FAIL(ob_write_string(allocator_, path, path_cstring, true /*c_style*/))) {
+    LOG_WARN("fail to copy string", KR(ret), K(path));
+  } else if (OB_STORAGE_FILE == storage_type_ || OB_STORAGE_HDFS == storage_type_) {
+    ObSEArray<ObString, 4> base_dirs;
+    ObSEArray<int64_t, 4> base_tss;
+    bool is_dir = false;
+
+    if (OB_STORAGE_FILE == storage_type_) {
+      ObString path_without_prefix;
+      path_without_prefix = path_cstring;
+      path_without_prefix += strlen(OB_FILE_PREFIX);
+      OZ(FileDirectoryUtils::is_directory(path_without_prefix.ptr(), is_dir));
+      if (!is_dir) {
+        LOG_INFO("external location is not a directory", K(path_without_prefix));
+      } else {
+        OZ(base_dirs.push_back(path_cstring));
+        OZ(base_tss.push_back(-1));
+      }
+    } else {
+      // OB_STORAGE_HDFS
+      if (OB_FAIL(ObExternalIoAdapter::is_directory(path_cstring, storage_info_, is_dir))) {
+        if (OB_HDFS_PATH_NOT_FOUND == ret) {
+          // Skip to collect a directory that not exists
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to check if directory", K(ret), K(path_cstring), KPC(storage_info_));
+        }
+      } else if (!is_dir) {
+        LOG_INFO("external location is not a directory", K(path_cstring));
+      } else {
+        OZ(base_dirs.push_back(path_cstring));
+        OZ(base_tss.push_back(-1));
+      }
+    }
+    ObSEArray<int64_t, 8> useless_size;
+    ObSEArray<ObString, 1> useless_content_digests;
+    ObSEArray<ObString, 8> temp_dirs;
+    ObSEArray<int64_t, 8> temp_modify_times;
+    int64_t current_level = 0;                    // 当前level
+    int64_t current_level_dir_count_total = 1;    // 当前level的目录个数
+    int64_t current_level_dir_count_resolved = 0; // 当前level已经处理过的目录个数
+    int64_t next_level_dir_count_total = 0;       // 下一个level的目录个数
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < base_dirs.count(); i++) {
+      ObString base_dir = base_dirs.at(i);
+      if (current_level < spec_level && current_level_dir_count_resolved == current_level_dir_count_total) {
+        current_level += 1;
+        current_level_dir_count_total = next_level_dir_count_total;
+        current_level_dir_count_resolved = 0;
+        next_level_dir_count_total = 0;
+      }
+      current_level_dir_count_resolved += 1;
+
+      if (current_level < spec_level) {
+
+        useless_size.reuse();
+        useless_content_digests.reuse();
+        temp_dirs.reuse();
+        temp_modify_times.reuse();
+        ObExternalFileListArrayOpWithFilter dir_op(temp_dirs,
+                                                   useless_size,
+                                                   temp_modify_times,
+                                                   useless_content_digests,
+                                                   NULL,
+                                                   allocator_);
+        dir_op.set_dir_flag();
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(
+                       ObExternalIoAdapter::list_directories(base_dir, storage_info_, dir_op))) {
+          LOG_WARN("fail to list dirs", KR(ret), K(base_dir), KPC(storage_info_));
+        } else if (temp_dirs.count() != temp_modify_times.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dirs's size should be equal with time's size.",
+                   K(ret),
+                   K(base_dir),
+                   KPC(storage_info_),
+                   K(temp_dirs.count()),
+                   K(temp_modify_times.count()));
+        } else if (base_dirs.count() + temp_dirs.count() > max_visit_count) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("too many dirs to visit", K(ret));
+        } else {
+          next_level_dir_count_total += temp_dirs.count();
+          LOG_TRACE("get dirs: ", K(temp_dirs));
+        }
+
+        for (int64_t j = 0; OB_SUCC(ret) && j < temp_dirs.count(); j++) {
+          ObSqlString temp_part_location;
+          ObString part_location;
+          if (OB_FAIL(temp_part_location.assign_fmt("%.*s/%.*s",
+                                                    base_dir.length(),
+                                                    base_dir.ptr(),
+                                                    temp_dirs.at(j).length(),
+                                                    temp_dirs.at(j).ptr()))) {
+            LOG_WARN("failed to assign full path", K(ret), K(base_dir), K(temp_dirs.at(j)));
+          } else if (OB_FAIL(
+                         ob_write_string(allocator, temp_part_location.string(), part_location))) {
+            LOG_WARN("failed to write full path", K(ret), K(temp_part_location));
+          } else if (OB_FAIL(base_dirs.push_back(part_location))) {
+            LOG_WARN("fail to push directory to base_dirs", K(ret), K(temp_part_location));
+          } else if (OB_FAIL(base_tss.push_back(temp_modify_times.at(j)))) {
+            LOG_WARN("fail to push directory to temp_modify_times", K(ret), K(base_tss.at(j)));
+          }
+        }
+      } else {
+        OZ(dir_urls.push_back(base_dirs.at(i)));
+        OZ(modify_times.push_back(base_tss.at(i)));
+        LOG_TRACE("get one dir.", K(base_dirs.at(i)));
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support type", K(ret), K(storage_type_));
+  }
+  return ret;
+}
+
 
 int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
                                                const common::ObString &pattern,

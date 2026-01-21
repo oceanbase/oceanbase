@@ -351,22 +351,13 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
           if (!partition_exists) {
             // 添加新的分区信息
             ObTableSchema *tmp_update_table_schema = const_cast<ObTableSchema *>(table_schema);
-            ObSqlString tmp_part_name;
-            ObString part_name;
             ObPartition partition;
             OX(partition.set_part_id(part_index));
-            if (OB_FAIL(tmp_part_name.append_fmt("P%ld", part_index))) {
-              LOG_WARN("failed to append part name", K(ret));
-            } else if (OB_FAIL(partition.set_external_location(
+            if (OB_FAIL(partition.set_external_location(
                            const_cast<ObString &>(partition_info->path_)))) {
               LOG_WARN("failed to set external location", K(ret), K(partition_info->path_));
-            } else if (OB_FAIL(ob_write_string(allocator_,
-                                               tmp_part_name.string(),
-                                               part_name,
-                                               true /*c_style*/))) {
-              LOG_WARN("failed to write part name", K(ret));
-            } else if (OB_FAIL(partition.set_part_name(part_name))) {
-              LOG_WARN("set partition name failed", K(ret));
+            } else if (OB_FAIL(partition.set_part_name(partition_info->partition_))) {
+              LOG_WARN("set partition name failed", K(ret), K(partition_info->partition_));
             } else if (OB_FAIL(partition.add_list_row(ob_part_row))) {
               LOG_WARN("add list row failed", K(ret));
             } else if (OB_FAIL(tmp_update_table_schema->add_partition(partition))) {

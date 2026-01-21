@@ -634,6 +634,9 @@ int ObStorageHdfsJniUtil::list_directories(
                 static_cast<int64_t>(obj_name_len - uri.length()));
 
             MEMCPY(entry.d_name, file_name.ptr(), file_name.length());
+            ObFileExtraInfo extra_info;
+            extra_info.last_modified_time_ms_ = file_info.mLastMod * 1000;
+            op.set_extra_info(extra_info);
             entry.d_name[file_name.length()] = '\0'; // set str end
             if (OB_FAIL(op.func(&entry))) {
               OB_LOG(WARN, "fail to list hdfs files", K(ret));
