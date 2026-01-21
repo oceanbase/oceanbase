@@ -75,6 +75,8 @@ int ObTransService::mtl_init(ObTransService *&it)
     TRANS_LOG(ERROR, "dup table rpc init error", KR(ret));
   } else if (OB_FAIL(it->dup_table_rpc_impl_.init(req_transport, self))) {
     TRANS_LOG(ERROR, "dup table rpc init error", KR(ret));
+  } else if (OB_FAIL(it->sby_rpc_impl_.init(req_transport, self))) {
+    TRANS_LOG(ERROR, "sby rpc init error", KR(ret));
   } else if (OB_FAIL(it->location_adapter_def_.init(schema_service, location_service))) {
     TRANS_LOG(ERROR, "location adapter init error", KR(ret));
   } else if (OB_FAIL(it->gti_source_def_.init(self, req_transport, MTL_ID()))) {
