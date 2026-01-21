@@ -179,7 +179,7 @@ public:
                    const table::ObTTLHRowkeyTaskParam &ttl_para,
                    table::ObTTLTaskInfo &ttl_info);
 private:
-  virtual int get_scan_range(ObIArray<ObNewRange> &ranges);
+  virtual int get_scan_ranges(ObIArray<ObNewRange> &ranges, const ObKVAttr &kv_attributes) override;
 
 private:
   common::ObArenaAllocator hrowkey_alloc_;
