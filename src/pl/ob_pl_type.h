@@ -974,7 +974,6 @@ public:
     is_scrollable_(false),
     snapshot_(),
     is_need_check_snapshot_(false),
-    is_read_uncommitted_(true),
     last_execute_time_(0),
     last_stream_cursor_(false),
     sql_text_(),
@@ -1029,7 +1028,6 @@ public:
     first_row_.reset();
     last_row_.reset();
     is_need_check_snapshot_ = false;
-    is_read_uncommitted_ = true;
     sql_trace_id_.reset();
     is_packed_ = false;
     sql_text_.reset();
@@ -1039,7 +1037,6 @@ public:
     cursor_total_elapsed_time_ = 0;
     in_tx_cursor_ = false;
     tx_cursor_idx_ = std::make_tuple(OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_INDEX);
-    tx_desc_ = NULL;
   }
 
   void reset()
@@ -1119,15 +1116,11 @@ public:
 
   void set_need_check_snapshot(bool is_need_check_snapshot) { is_need_check_snapshot_ = is_need_check_snapshot; }
   bool is_need_check_snapshot() { return is_need_check_snapshot_; }
-  void set_read_uncommitted(bool is_read_uncommitted) { is_read_uncommitted_ = is_read_uncommitted; }
-  bool is_read_uncommitted() { return is_read_uncommitted_; }
   void set_is_in_tx_cursor(bool is_in_tx_cursor) { in_tx_cursor_ = is_in_tx_cursor; }
   bool is_in_tx_cursor() { return in_tx_cursor_; }
   void set_tx_cursor_idx(uint64_t package_id, uint64_t routine_id, int64_t cursor_index) { tx_cursor_idx_ = std::make_tuple(package_id, routine_id, cursor_index); }
   std::tuple<uint64_t, uint64_t, int64_t> get_tx_cursor_idx() const { return tx_cursor_idx_; }
-  int set_and_register_snapshot(const transaction::ObTxReadSnapshot &snapshot,
-                                transaction::ObTxDesc *tx = NULL,
-                                bool is_read_uncommitted = false);
+  int set_and_register_snapshot(const transaction::ObTxReadSnapshot &snapshot);
 
   int set_current_position(int64_t position);
   int set_rowcount(int64_t rowcount);
@@ -1247,12 +1240,10 @@ public:
                K_(is_scrollable),
                K_(snapshot),
                K_(is_need_check_snapshot),
-               K_(is_read_uncommitted),
                K_(last_execute_time),
                K_(sql_trace_id),
                K_(is_packed),
-               K_(cursor_total_exec_time),
-               KP_(tx_desc));
+               K_(cursor_total_exec_time));
 
 protected:
   int64_t id_;            // Cursor ID
@@ -1286,7 +1277,6 @@ protected:
   // and the snapshot were acquired in an active transaction
   // it is required to check snapshot state is valid before doing fetch
   bool is_need_check_snapshot_;
-  bool is_read_uncommitted_;
   int64_t last_execute_time_; // 记录上一次cursor操作的时间点
   bool last_stream_cursor_; // cursor复用场景下，记录上一次是否是流式cursor
   ObCurTraceId::TraceId sql_trace_id_; // trace id of cursor sql statement
@@ -1297,7 +1287,6 @@ protected:
   int64_t cursor_total_elapsed_time_;
   bool in_tx_cursor_; // 是否是流式游标，且读取未提交事务的数据
   std::tuple<uint64_t, uint64_t, int64_t> tx_cursor_idx_; // 读取未提交事务的数据的流式游标的idx<package_id, routine_id, cursor_index>
-  transaction::ObTxDesc *tx_desc_; // the txdesc of streaming cursor
 };
 
 class ObPsCursorInfo : public ObPLCursorInfo

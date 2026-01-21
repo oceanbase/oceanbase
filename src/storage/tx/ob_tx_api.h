@@ -290,11 +290,10 @@ int release_snapshot(ObTxDesc &tx);
  * is safe not register to verify
  *
  * @snapshot:                    the snapshot need verify
- * @tx_desc:                     the txdesc of streaming cursor
  *
  * Return: OB_SUCCESS - OK
  */
-int register_tx_snapshot_verify(ObTxReadSnapshot &snapshot, ObTxDesc *tx_desc);
+int register_tx_snapshot_verify(ObTxReadSnapshot &snapshot);
 
 /**
  * unregister_tx_snapshot_verify - unregister a snapshot reigstered
@@ -303,9 +302,8 @@ int register_tx_snapshot_verify(ObTxReadSnapshot &snapshot, ObTxDesc *tx_desc);
  * unregistered before release its memory to make memory safe
  *
  * @snapshot:                      the snapshot to unregister
- * @tx_desc:                       the txdesc of streaming cursor
  */
-void unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot, ObTxDesc *tx_desc);
+void unregister_tx_snapshot_verify(ObTxReadSnapshot &snapshot);
 
 // ------------------------------------------------------------------
 // savepoint creation and rollback to and release

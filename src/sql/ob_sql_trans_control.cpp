@@ -1847,7 +1847,7 @@ int ObSqlTransControl::reset_session_tx_state(ObBasicSessionInfo *session,
     MTL_SWITCH(effect_tid) {
       ObTransService *txs = NULL;
       OZ (get_tx_service(session, txs), *session, tx_desc);
-      if (reuse_tx_desc && !tx_desc.has_external_ref()) {
+      if (reuse_tx_desc) {
         if (OB_FAIL(txs->reuse_tx(tx_desc, data_version))) {
           LOG_ERROR("reuse txn descriptor fail, will release it", K(ret), KPC(session), K(tx_desc));
           OZ (txs->release_tx(tx_desc), tx_id);
