@@ -4099,6 +4099,7 @@ def_storage_object_type_cfg(
     read_odirect = False,
     write_odirect = True,
     is_support_fd_cache = True,
+    is_major = True,
     is_read_out_of_bounds = False,
     is_valid = '''
 bool is_valid(const MacroBlockId &file_id) const

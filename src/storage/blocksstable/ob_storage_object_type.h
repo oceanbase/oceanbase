@@ -1128,6 +1128,7 @@ public:
   virtual bool is_direct_write() const { return true; }
   virtual bool is_support_fd_cache() const { return true; }
   virtual bool is_read_out_of_bounds() const { return false; }
+  virtual bool is_major() const { return true; }
   virtual bool is_valid(const MacroBlockId &file_id) const;
   virtual bool has_effective_tablet_id() const { return true; }
 
