@@ -1997,6 +1997,19 @@ int ObIOHandle::get_io_time_us(int64_t &io_time_us) const
   return ret;
 }
 
+int ObIOHandle::get_io_callback_time_us(int64_t &io_callback_time_us) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(result_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("io result is null", KR(ret));
+  } else {
+    io_callback_time_us = get_io_interval(static_cast<int64_t>(result_->time_log_.callback_finish_ts_),
+                                          static_cast<int64_t>(result_->time_log_.callback_enqueue_ts_));
+  }
+  return ret;
+}
+
 int ObIOHandle::check_is_finished(bool &is_finished)
 {
   int ret = OB_SUCCESS;

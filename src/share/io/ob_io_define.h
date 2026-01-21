@@ -734,6 +734,7 @@ public:
   int get_io_ret() const;
   int get_io_flag(ObIOFlag &flag) const;
   int get_io_time_us(int64_t &io_time_us) const;
+  int get_io_callback_time_us(int64_t &io_callback_time_us) const;
   int check_is_finished(bool &is_finished);
   void clear_io_callback();
   ObIOCallback *get_io_callback();
