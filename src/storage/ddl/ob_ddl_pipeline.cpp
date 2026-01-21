@@ -1225,7 +1225,7 @@ int ObHNSWIndexBuildOperator::execute(
       } else if (OB_SUCCESS != (end_trans_ret = storage::ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, INT64_MAX))) {
         LOG_WARN("fail to end read trans", K(ret), K(end_trans_ret));
         ret = end_trans_ret;
-      } else if (OB_FAIL(OB_E(EventTable::EN_TRANS_AFTER_COMMIT) OB_SUCCESS)) {
+      } else if (OB_SUCC(ret) && OB_FAIL(OB_E(EventTable::EN_TRANS_AFTER_COMMIT) OB_SUCCESS)) {
         LOG_WARN("mock hnsw build fail after end trans", K(is_vec_tablet_rebuild), K_(tablet_id));
       }
     }
