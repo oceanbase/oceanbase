@@ -3638,7 +3638,7 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         } else if (has_null_cell) {
           /*do nothing*/
         } else {
-          ret = llc_add_value(hash_value, llc_bitmap.get_string());
+          ret = llc_add_value(hash_value, llc_bitmap.get_string(), approx_cnt_distinct_prec_);
         }
       }
       break;
