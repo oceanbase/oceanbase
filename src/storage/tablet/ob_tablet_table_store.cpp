@@ -3969,7 +3969,9 @@ int ObTabletTableStore::replace_ha_inc_major_ddl_tables_(
       LOG_WARN("failed to find inc major sstable", KR(ret), KPC(new_table));
     } else if (exist_inc_major_sstable) {
       // bypass
-    } else if (OB_NOT_NULL(last_ddl_table) && OB_UNLIKELY(new_table->get_start_scn() < last_ddl_table->get_end_scn())) {
+    } else if (OB_NOT_NULL(last_ddl_table)
+        && (new_table->get_key().slice_range_ == last_ddl_table->get_key().slice_range_)
+        && OB_UNLIKELY(new_table->get_start_scn() < last_ddl_table->get_end_scn())) {
       // the scn_ranges of inc_major_ddl_sstables are not necessarily continuous, but should not cross
       ret = OB_DDL_SSTABLE_RANGE_CROSS;
       LOG_WARN("inc major ddl table version range cross", K(ret),
@@ -3986,7 +3988,9 @@ int ObTabletTableStore::replace_ha_inc_major_ddl_tables_(
     if (OB_ISNULL(new_table) || (!new_table->is_inc_major_ddl_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new table is null or table type is unexpected", K(ret), KPC(new_table));
-    } else if (OB_NOT_NULL(last_ddl_table) && OB_UNLIKELY(new_table->get_start_scn() < last_ddl_table->get_end_scn())) {
+    } else if (OB_NOT_NULL(last_ddl_table)
+        && (new_table->get_key().slice_range_ == last_ddl_table->get_key().slice_range_)
+        && OB_UNLIKELY(new_table->get_start_scn() < last_ddl_table->get_end_scn())) {
       // the scn_ranges of inc_major_ddl_sstables are not necessarily continuous, but should not cross
       ret = OB_DDL_SSTABLE_RANGE_CROSS;
       LOG_WARN("inc major ddl table version range cross", K(ret),
