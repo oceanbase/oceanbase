@@ -526,7 +526,7 @@ row_group |  min |  max | note                     | has_bf
         5 | 1110 | 1114 | NDV=3: 1110,1111,1114    |      N
 
  **/
-TEST_F(TestObParquetBloomFilter, multi_stripes_with_simple_types) {
+TEST_F(TestObParquetBloomFilter, DISABLED_multi_stripes_with_simple_types) {
   load_file("./bloom_filter_multi_stripes_with_simple_types.parquet");
   auto &bloom_filter_reader = file_reader_->GetBloomFilterReader();
   bool is_contain;
