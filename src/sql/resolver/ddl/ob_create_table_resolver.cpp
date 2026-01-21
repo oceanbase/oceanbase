@@ -463,9 +463,14 @@ int ObCreateTableResolver::set_default_micro_index_clustered_(share::schema::ObT
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SET_ENABLE_MACRO_BLOOM_FILTER);
 int ObCreateTableResolver::set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema)
 {
-  table_schema.set_enable_macro_block_bloom_filter(false);
+  if (ERRSIM_SET_ENABLE_MACRO_BLOOM_FILTER) {
+    table_schema.set_enable_macro_block_bloom_filter(true);
+  } else {
+    table_schema.set_enable_macro_block_bloom_filter(false);
+  }
   return OB_SUCCESS;
 }
 
