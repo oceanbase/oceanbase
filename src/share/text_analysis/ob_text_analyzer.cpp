@@ -96,7 +96,7 @@ int ObITextAnalyzer::add_normalizer(
   } else {
     ObIFTTokenStream *token_stream = nullptr;
     switch (type) {
-    case ObTokenNormalizer::STOPWORD_FILTER: {
+    case ObTokenNormalizer::STOP_TOKEN_FILTER: {
       if (OB_FAIL(add_token_stream<ObTokenStopWordNormalizer>(token_stream))) {
         LOG_WARN("failed to add token stop word filter", K(ret));
       }
@@ -160,7 +160,7 @@ int ObEnglishTextAnalyzer::inner_init(const ObTextAnalysisCtx &ctx, ObIAllocator
   UNUSEDx(ctx); // TODO: generate specific analyse pipeline by ctx
   if (OB_FAIL(add_tokenizer(ObTextTokenizer::WHITESPACE))) {
     LOG_WARN("failed to add white space tokenizer", K(ret));
-  } else if (ctx.filter_stopword_ && OB_FAIL(add_normalizer(ObTokenNormalizer::STOPWORD_FILTER, ctx))) {
+  } else if (ctx.filter_stopword_ && OB_FAIL(add_normalizer(ObTokenNormalizer::STOP_TOKEN_FILTER, ctx))) {
     LOG_WARN("failed to add stop word filter", K(ret));
   } else if (OB_FAIL(add_normalizer(ObTokenNormalizer::ENG_BASIC_NORM, ctx))) {
     LOG_WARN("failed to add basic english normalizer", K(ret));

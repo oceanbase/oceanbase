@@ -667,7 +667,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     est_cost_simple_info_(),
     pseudo_column_exprs_(alloc),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
-    lake_table_format_(share::ObLakeTableFormat::INVALID)
+    lake_table_format_(share::ObLakeTableFormat::INVALID),
+    ft_doc_id_expr_idx_(-1)
 {
 }
 
@@ -697,7 +698,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     parser_properties_,
                     pseudo_column_exprs_,
                     lob_inrow_threshold_,
-                    lake_table_format_);
+                    lake_table_format_,
+                    ft_doc_id_expr_idx_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -726,7 +728,8 @@ DEF_TO_STRING(ObTableScanSpec)
        K_(parser_name),
        K_(parser_properties),
        K_(lob_inrow_threshold),
-       K_(lake_table_format));
+       K_(lake_table_format),
+       K_(ft_doc_id_expr_idx));
   J_OBJ_END();
   return pos;
 }

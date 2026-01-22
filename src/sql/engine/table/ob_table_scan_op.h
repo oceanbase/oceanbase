@@ -496,6 +496,7 @@ public:
   ExprFixedArray pseudo_column_exprs_;
   int64_t lob_inrow_threshold_;
   share::ObLakeTableFormat lake_table_format_;
+  int64_t ft_doc_id_expr_idx_;
 };
 
 // for random batch_size & skip

@@ -79,9 +79,9 @@ private:
 
 class ObTokenNormalizer : public ObIFTTokenStream {
 public:
-  enum TokenNormalizerType : uint8_t
+  enum TokenNormalizerType : uint8_t // FARM COMPAT WHITELIST
   {
-    STOPWORD_FILTER = 0,
+    STOP_TOKEN_FILTER = 0,
     TEXT_GROUPING_FILTER = 1,
     ENG_BASIC_NORM = 2,
     MAX
