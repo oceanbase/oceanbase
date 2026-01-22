@@ -1581,8 +1581,13 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
   }
   if (OB_FAIL(ret)) {
   } else if (0 == match_infos.count()) { // 没有匹配的routine直接报错
-    ret = OB_ERR_SP_WRONG_ARG_NUM;
-    // ret = OB_ERR_CALL_WRONG_ARG;
+    if (lib::is_oracle_mode() && routine_infos.count() > 0 && OB_NOT_NULL(routine_infos.at(0))) {
+      const ObString &routine_name = routine_infos.at(0)->get_routine_name();
+      ret = OB_ERR_CALL_WRONG_ARG;
+      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, routine_name.length(), routine_name.ptr());
+    } else {
+      ret = OB_ERR_SP_WRONG_ARG_NUM;
+    }
     LOG_WARN("PLS-00306: wrong number or types of arguments in call to 'string'",
              K(ret), KPC(routine_info), K(expr_params), K(routine_infos));
   } else if (1 == match_infos.count()) { // 恰好有一个, 直接返回
