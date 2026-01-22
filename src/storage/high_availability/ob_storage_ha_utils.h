@@ -90,6 +90,7 @@ public:
   static int deal_compat_with_ls_inner_tablet(const ObLSID &ls_id);
 #ifdef ERRSIM
   static int is_errsim_transfer_server(bool &is_errsim_server);
+  static int is_errsim_tablet_id(const common::ObTabletID &tablet_id, bool &is_errsim_tablet_id);
 #endif
 private:
   struct TableKeySnapshotVersionComparator final

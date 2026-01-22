@@ -14,6 +14,7 @@
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/ob_ls_inc_sstable_uploader.h"
 #endif
@@ -72,13 +73,7 @@ int ObMdsTableMergeTask::process()
   DEBUG_SYNC(AFTER_EMPTY_SHELL_TABLET_CREATE);
   bool need_schedule_mds_minor = true;
 
-#ifdef ERRSIM
-  if (OB_SUCCESS != EN_SKIP_MDS_MINI_MERGE) {
-    ret = OB_NO_NEED_MERGE;
-    LOG_INFO("[ERRSIM] mds mini merge, skip", KR(ret), KPC_(mds_merge_dag));
-    return ret;
-  }
-#endif
+
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -98,7 +93,17 @@ int ObMdsTableMergeTask::process()
     ctx.static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
     const share::ObLSID &ls_id = ctx.get_ls_id();
     const common::ObTabletID &tablet_id = ctx.get_tablet_id();
+
 #ifdef ERRSIM
+    bool is_errsim_tablet_id = false;
+    if (OB_FAIL(ObStorageHAUtils::is_errsim_tablet_id(tablet_id, is_errsim_tablet_id))) {
+      LOG_WARN("failed to check if tablet id is errsim tablet id", K(ret), K(tablet_id));
+    } else if (is_errsim_tablet_id && OB_SUCCESS != EN_SKIP_MDS_MINI_MERGE) {
+      ret = OB_NO_NEED_MERGE;
+      LOG_INFO("[ERRSIM] mds mini merge, skip", KR(ret), K(ls_id), K(tablet_id), KPC_(mds_merge_dag));
+      return ret;
+    }
+
     if (GCONF.errsim_test_tablet_id.get_value() > 0 && tablet_id.id() == GCONF.errsim_test_tablet_id.get_value()) {
       LOG_INFO("test tablet mds dump start", K(ret), K(tablet_id));
       DEBUG_SYNC(BEFORE_DDL_LOB_META_TABLET_MDS_DUMP);

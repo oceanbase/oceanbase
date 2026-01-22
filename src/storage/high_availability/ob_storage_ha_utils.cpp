@@ -1585,6 +1585,25 @@ int ObStorageHAUtils::is_errsim_transfer_server(bool &is_errsim_server)
 
   return ret;
 }
+
+int ObStorageHAUtils::is_errsim_tablet_id(const common::ObTabletID &tablet_id, bool &is_errsim_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  is_errsim_tablet_id = false;
+  const int64_t errsim_tablet_id = GCONF.errsim_test_tablet_id.get_value();
+
+  // if errsim_tablet_id is not set, set is_errsim_tablet_id to true
+  if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("is errsim tablet id get invalid argument", K(ret), K(tablet_id));
+  } else if (errsim_tablet_id <= 0) {
+    is_errsim_tablet_id = true;
+  } else if (tablet_id.id() == errsim_tablet_id) {
+    is_errsim_tablet_id = true;
+  }
+
+  return ret;
+}
 #endif
 
 bool ObTransferUtils::enable_transfer_dml_ctrl(const uint64_t data_version)

@@ -1231,14 +1231,10 @@ int ObTabletStartTransferInHelper::check_transfer_dest_tablet_(
         ret = OB_SUCCESS;
         FLOG_INFO("tablet is already exist", KPC(tablet), K(tablet_meta));
       }
-    } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_
-        && ObTabletStatus::NORMAL != user_data.tablet_status_
-        && ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
-        && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_
-        && ObTabletStatus::DELETED != user_data.tablet_status_) {
+    } else if (!user_data.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet status is unexpected", K(ret), K(user_data), KPC(tablet), K(tablet_meta));
-    } else {
+      LOG_WARN("user data is invalid", K(ret), K(user_data), K(tablet_handle), K(tablet_meta));
+    }else {
       FLOG_INFO("tablet is already exist", K(tablet_handle), K(tablet_meta), K(user_data));
     }
   }
