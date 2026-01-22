@@ -24,6 +24,7 @@ constexpr int64_t SQL_STAT_SNAPSHOT_AHEAD_SNAP_ID = -2;
 constexpr int64_t SQL_STAT_MAX_COUNT = 200000;
 ObSqlStatManager::ObSqlStatManager(int64_t tenant_id)
     : is_inited_(false),
+      is_stopped_(true),
       tenant_id_(tenant_id),
       memory_limit_percentage_(MEMORY_LIMIT_DEFAULT),
       memory_evict_high_percentage_(MEMORY_EVICT_HIGH_DEFAULT),
@@ -34,7 +35,9 @@ ObSqlStatManager::ObSqlStatManager(int64_t tenant_id)
 {}
 
 ObSqlStatManager::~ObSqlStatManager()
-{}
+{
+  is_inited_ = false;
+}
 
 int ObSqlStatManager::mtl_new(ObSqlStatManager *&sql_stat_manager) {
   int ret = OB_SUCCESS;
@@ -72,7 +75,6 @@ void ObSqlStatManager::mtl_destroy(ObSqlStatManager *&sql_stat_manager) {
   if (is_virtual_tenant_id(MTL_ID())) {
     // do nothing
   } else if (OB_NOT_NULL(sql_stat_manager)) {
-    sql_stat_manager->destroy();
     common::ob_delete(sql_stat_manager);
     LOG_INFO("success to destroy sql stat manager", K(MTL_ID()));
   }
@@ -93,7 +95,6 @@ int ObSqlStatManager::init() {
       LOG_WARN("failed to init sql stat allocator", K(ret), K(total_limit));
     } else if (OB_FAIL(sql_stat_infos_.init("sqlstat_infos", MTL_ID()))) {
       LOG_WARN("failed to init sql stat infos", K(ret));
-      allocator_.destroy();
     } else {
       is_inited_ = true;
     }
@@ -103,16 +104,17 @@ int ObSqlStatManager::init() {
 
 int ObSqlStatManager::start() {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
+  if (is_virtual_tenant_id(MTL_ID())) {
+    // do nothing
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sql stat manager is not inited", K(ret));
-  } else if (is_virtual_tenant_id(MTL_ID())) {
-    // do nothing
   } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer *)->get_tg_id(),
                                  stat_task_, ObSqlStatTask::REFRESH_INTERVAL,
                                  true))) {
     LOG_WARN("failed to schedule task", K(ret));
   } else {
+    set_stopped(false);
     LOG_INFO("success to start sql stat manager", K(MTL_ID()));
   }
   return ret;
@@ -120,38 +122,51 @@ int ObSqlStatManager::start() {
 
 void ObSqlStatManager::stop() {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
+  if (is_virtual_tenant_id(MTL_ID())) {
+    // do nothing
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sql stat manager is not inited", K(ret));
-  } else if (is_virtual_tenant_id(MTL_ID())) {
-    // do nothing
   } else {
     TG_CANCEL_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), stat_task_);
+    set_stopped(true);
     LOG_INFO("success to stop sql stat manager", K(MTL_ID()));
   }
 }
 
 void ObSqlStatManager::wait() {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
+  if (is_virtual_tenant_id(MTL_ID())) {
+    // do nothing
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sql stat manager is not inited", K(ret));
-    } else if (is_virtual_tenant_id(MTL_ID())) {
-    // do nothing
+  } else if (!is_stopped()) {
+    ret = OB_ERROR;
+    LOG_WARN("sql stat manager is not stopped", K(ret));
   } else {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), stat_task_);
+    sql_stat_infos_.reset();
+    //wait for all sql stat values to be freed, or will memory leak
+    while(alloc_handle_.get_alloc_count() > 0) {
+      ob_usleep(1000 * 1000);
+      LOG_WARN("wait sql stat linkhash map to be empty", K(alloc_handle_.get_alloc_count()));
+    }
+    LOG_INFO("success to wait sql stat manager", K(MTL_ID()), K(alloc_handle_.get_alloc_count()));
   }
 }
 
 void ObSqlStatManager::destroy() {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
+  if (is_virtual_tenant_id(MTL_ID())) {
+    // do nothing
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sql stat manager is not inited", K(ret));
+  } else if (!is_stopped()) {
+    ret = OB_ERROR;
+    LOG_WARN("sql stat manager is not stopped", K(ret));
   } else {
-    sql_stat_infos_.reset();
-    sql_stat_infos_.destroy();
-    allocator_.destroy();
     is_inited_ = false;
   }
 }
@@ -163,6 +178,9 @@ int ObSqlStatManager::get_sql_stat_record(const ObSqlStatRecordKey &key,
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sql stat manager is not inited", K(ret));
+  } else if (is_stopped()) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("sql stat manager is not running", K(ret));
   } else if (OB_FAIL(sql_stat_infos_.get(key, record))) {
     // LOG_WARN("failed to get sql stat record", K(ret), K(key));
   }
@@ -177,6 +195,9 @@ int ObSqlStatManager::get_or_create_sql_stat_record(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sql stat manager is not inited", K(ret));
+  } else if (is_stopped()) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("sql stat manager is not running", K(ret));
   } else if (OB_FAIL(sql_stat_infos_.get(key, record))) {
     if (ret == OB_ENTRY_NOT_EXIST) {
       ret = OB_SUCCESS;
