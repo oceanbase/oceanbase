@@ -42,7 +42,6 @@
 #include "lib/container/ob_iarray.h"
 #include "observer/ob_server_struct.h"
 #include "common/storage/ob_sequence.h"
-#include "ob_tx_elr_util.h"
 #include "storage/tx/ob_dup_table_util.h"
 #include "ob_tx_free_route.h"
 #include "ob_tx_free_route_msg.h"
@@ -181,6 +180,25 @@ public:
 class ObTransService : public common::ObSimpleThreadPool
 {
 public:
+  struct TenantConfigCache {
+    TenantConfigCache();
+    ~TenantConfigCache();
+    const TenantConfigCache &refresh_and_get();
+    int init(const uint64_t tenant_id) {
+       tenant_id_ = tenant_id;
+       return OB_SUCCESS;
+    }
+    int refresh();
+    void reset();
+    ObSpinLock lock_;
+    uint64_t tenant_id_;
+    volatile bool can_tenant_elr_;
+    volatile int64_t tenant_config_refresh_ts_;
+    volatile int64_t write_throttle_by_pending_log_size_limit_;
+    volatile int64_t write_throttle_by_pending_log_sleep_interval_;
+    volatile int64_t trx_max_log_cb_limit_;
+  };
+public:
   ObTransService();
   virtual ~ObTransService() { destroy(); }
   static int mtl_init(ObTransService* &trans_service);
@@ -243,7 +261,6 @@ public:
                            const int64_t request_id = 0,
                            const ObRegisterMdsFlag &register_flag = ObRegisterMdsFlag(),
                            const transaction::ObTxSEQ seq_no = transaction::ObTxSEQ());
-  ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
   int create_tablet(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
   {
     return tablet_to_ls_cache_.create_tablet(tablet_id, ls_id);
@@ -313,6 +330,8 @@ public:
                     const int64_t expire_ts);
   int get_max_commit_version(share::SCN &commit_version) const;
   int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
+  TenantConfigCache &get_tenant_config_cache() { return tenant_config_cache_; }
+  int refresh_tenant_config() { return tenant_config_cache_.refresh(); }
   #include "ob_trans_service_v4.h"
   #include "ob_tx_free_route_api.h"
 private:
@@ -385,7 +404,6 @@ private:
   ObTxSbyRpc sby_rpc_impl_;
 
   obrpc::ObSrvRpcProxy *rpc_proxy_;
-  ObTxELRUtil elr_util_;
   // for rollback-savepoint request-id
   int64_t rollback_sp_msg_sequence_;
   // for rollback-savepoint msg resp callback to find tx_desc
@@ -394,6 +412,8 @@ private:
   // tenant level atomic inc seq, just for debug
   int64_t tx_debug_seq_;
   ObReadOnlyTxChecker read_only_checker_;
+private:
+  TenantConfigCache tenant_config_cache_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransService);
 };

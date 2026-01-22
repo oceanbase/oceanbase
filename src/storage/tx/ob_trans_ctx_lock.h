@@ -58,6 +58,7 @@ public:
 
 class CtxLock
 {
+  friend class CtxLockGuard;
 public:
 CtxLock() : ctx_lock_(), access_lock_(), flush_redo_lock_(),
             ctx_(NULL), lock_start_ts_(0), waiting_lock_cnt_(0) {}
@@ -98,7 +99,7 @@ class CtxLockGuard
 {
 public:
   enum MODE { CTX = 1, ACCESS = 2, REDO_FLUSH_X = 4, REDO_FLUSH_R = 8, ALL = (CTX | REDO_FLUSH_X | ACCESS) };
-  CtxLockGuard() : lock_(NULL), mode_(0), request_ts_(0), hold_ts_(0) {}
+  CtxLockGuard() : lock_(NULL), mode_(0), request_ts_(0), hold_ts_(0), ctx_lock_val_(0), access_lock_val_(0), flush_redo_lock_val_(0) {}
   explicit CtxLockGuard(CtxLock &lock, int mode, bool need_lock = true): lock_(&lock), mode_(mode)
   { do_lock_(need_lock); }
   void do_lock_(bool need_lock)
@@ -106,21 +107,25 @@ public:
     request_ts_ = ObTimeUtility::fast_current_time();
     if (mode_ & ACCESS) {
       if (need_lock) {
+        access_lock_val_ = lock_->access_lock_.get_wid();
         lock_->wrlock_access();
       }
     }
     if (mode_ & REDO_FLUSH_X) {
       if (need_lock) {
+        flush_redo_lock_val_ = lock_->flush_redo_lock_.get_wid();
         lock_->wrlock_flush_redo();
       }
     }
     if (mode_ & REDO_FLUSH_R) {
       if (need_lock) {
+        flush_redo_lock_val_ = lock_->flush_redo_lock_.get_wid();
         lock_->rdlock_flush_redo();
       }
     }
     if (mode_ & CTX) {
       if (need_lock) {
+        ctx_lock_val_ = lock_->ctx_lock_.get_wid();
         lock_->wrlock_ctx();
       }
     }
@@ -143,6 +148,9 @@ private:
   uint8_t mode_;
   int64_t request_ts_;
   int64_t hold_ts_;
+  uint32_t ctx_lock_val_;
+  uint32_t access_lock_val_;
+  uint32_t flush_redo_lock_val_;
 };
 
 

@@ -328,7 +328,7 @@ void ObTxLoopWorker::refresh_tenant_config_()
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "unexpected transaction service", K(ret), KP(txs));
   } else {
-    txs->get_tx_elr_util().check_and_update_tx_elr_info();
+    txs->refresh_tenant_config();
   }
 }
 

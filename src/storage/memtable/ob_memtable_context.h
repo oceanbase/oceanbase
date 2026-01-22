@@ -428,7 +428,8 @@ public:
   int64_t get_trans_mem_total_size() const { return trans_mem_total_size_; }
   void add_lock_for_read_elapse(const int64_t elapse) { lock_for_read_elapse_ += elapse; }
   int64_t get_lock_for_read_elapse() const { return lock_for_read_elapse_; }
-  bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no);
+  bool pending_log_size_too_large(const int16_t branch_id, int64_t limit = 0);
+  int16_t get_pending_log_size_too_large_list(const int64_t limit = 0) const;
   void reset_pdml_stat();
   int clean_unlog_callbacks();
   int check_tx_mem_size_overflow(bool &is_overflow);
@@ -479,6 +480,7 @@ public: // callback
     return trans_mgr_.append(head, tail, length);
   }
   int64_t get_pending_log_size() { return trans_mgr_.get_pending_log_size(); }
+  int64_t get_branch_pending_log_size(const int16_t branch) { return trans_mgr_.get_branch_pending_log_size(branch); }
   int64_t get_flushed_log_size() { return trans_mgr_.get_flushed_log_size(); }
   int acquire_callback_list(const bool new_epoch)
   { return trans_mgr_.acquire_callback_list(new_epoch); }

@@ -3312,3 +3312,9 @@ DEF_TIME(rest_oauth2_credential_evict_time, OB_CLUSTER_PARAMETER, "10m", "[1s, 1
         "the evict time for REST catalog OAuth2 credential cache to be evicted, "
         "with default 10minutes. Range: [1s, 1d]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_CAP(_write_throttle_by_pending_log_size_limit, OB_TENANT_PARAMETER, "0", "[0B,)",
+        "the pending log size limit to trigger write throttle. 0, means disabled. Range: [0B, +∞)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_write_throttle_by_pending_log_sleep_interval, OB_TENANT_PARAMETER, "20ms", "[0ms, 1h]",
+         "the sleep interval when write throttle by pending log size. Range: [0ms, 1h]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

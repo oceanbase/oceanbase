@@ -53,7 +53,8 @@ ObTransService::ObTransService()
       palf_kv_gc_task_(nullptr),
 #endif
       tx_debug_seq_(0),
-      read_only_checker_()
+      read_only_checker_(),
+      tenant_config_cache_()
 {
   check_env_();
 }
@@ -154,6 +155,8 @@ int ObTransService::init(const ObAddr &self,
     TRANS_LOG(WARN, "init tablet to ls cache failed", K(ret));
   } else if (OB_FAIL(read_only_checker_.init(tenant_id))) {
     TRANS_LOG(WARN, "read only checker init failed", K(ret));
+  } else if (OB_FAIL(tenant_config_cache_.init(tenant_id))) {
+    TRANS_LOG(WARN, "tenant config cache init failed", K(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
@@ -229,12 +232,50 @@ int ObTransService::start()
     TRANS_LOG(WARN, "tx_ctx_mgr_ start error", KR(ret));
   } else if (OB_FAIL(tx_desc_mgr_.start())) {
     TRANS_LOG(WARN, "tx_desc_mgr_ start error", KR(ret));
+  } else if (OB_FAIL(tenant_config_cache_.refresh())) {
+    TRANS_LOG(WARN, "refresh tenant config error", KR(ret));
   } else {
     is_running_ = true;
-
     TRANS_LOG(INFO, "transaction service start success", KPC(this));
   }
 
+  return ret;
+}
+
+ObTransService::TenantConfigCache::TenantConfigCache()
+{
+  reset();
+}
+
+ObTransService::TenantConfigCache::~TenantConfigCache()
+{
+  reset();
+}
+
+void ObTransService::TenantConfigCache::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  can_tenant_elr_ = false;
+  tenant_config_refresh_ts_ = 0;
+  write_throttle_by_pending_log_size_limit_ = 0;
+  write_throttle_by_pending_log_sleep_interval_ = 0;
+  trx_max_log_cb_limit_ = 0;
+}
+
+int ObTransService::TenantConfigCache::refresh()
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (OB_LIKELY(tenant_config.is_valid())) {
+    can_tenant_elr_ = tenant_config->enable_early_lock_release;
+    tenant_config_refresh_ts_ = ObTimeUtil::current_time();
+    write_throttle_by_pending_log_size_limit_ = tenant_config->_write_throttle_by_pending_log_size_limit;
+    write_throttle_by_pending_log_sleep_interval_ = tenant_config->_write_throttle_by_pending_log_sleep_interval;
+    trx_max_log_cb_limit_ = tenant_config->_trx_max_log_cb_limit;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid tenant config", KR(ret), K(tenant_id_));
+  }
   return ret;
 }
 
@@ -340,6 +381,7 @@ void ObTransService::destroy()
       defensive_check_mgr_ = NULL;
     }
 #endif
+    tenant_config_cache_.reset();
 #ifdef OB_BUILD_SHARED_STORAGE
     sslog::ObPalfKVGcTask::free_palf_kv_gc_task(palf_kv_gc_task_);
 #endif

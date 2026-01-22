@@ -1013,7 +1013,7 @@ public:
    * end_access - end of txn protected resources access
    */
   int end_access();
-  int check_pending_log_overflow(const int64_t stmt_timeout);
+  int check_pending_log_overflow(const int64_t stmt_timeout, const ObTxSEQ &write_seq_no);
   int rollback_to_savepoint(const int64_t op_sn,
                             ObTxSEQ from_seq,
                             const ObTxSEQ to_seq,

@@ -280,7 +280,9 @@ public:
   void inc_flushed_log_size(const int64_t size);
   void clear_pending_log_size() { ATOMIC_STORE(&pending_log_size_, 0); }
   int64_t get_pending_log_size() const;
-  bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no, const int64_t limit);
+  int64_t get_branch_pending_log_size(const int16_t branch) const;
+  int16_t get_pending_log_size_too_large_list(const int64_t limit) const;
+  bool pending_log_size_too_large(const int16_t branch_id, const int64_t limit);
   int64_t get_flushed_log_size() const;
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,
@@ -321,6 +323,7 @@ public:
   { return  callback_lists_ ? MAX_CALLBACK_LIST_COUNT : 1; }
   int get_logging_list_count() const;
   ObTxCallbackList *get_callback_list_(const int16_t index, const bool nullable);
+  const ObTxCallbackList *get_callback_list_(const int16_t index, const bool nullable) const;
   bool is_serial_final() const { return is_serial_final_(); }
   bool is_callback_list_append_only(const int idx) const
   {

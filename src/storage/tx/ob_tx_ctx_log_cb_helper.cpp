@@ -141,10 +141,7 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
       ObSpinLockGuard guard(log_cb_lock_);
       if (free_cbs_.is_empty()) {
         const int64_t busy_cbs_cnt = busy_cbs_.get_size();
-        const int64_t trx_max_log_cb_limit =
-            trans_service_->get_tx_elr_util().get_trx_max_log_cb_limit() >= 0
-                ? trans_service_->get_tx_elr_util().get_trx_max_log_cb_limit()
-                : 16;
+        const int64_t trx_max_log_cb_limit = trans_service_->get_tenant_config_cache().trx_max_log_cb_limit_ ?: 16;
         if (busy_cbs_cnt < trx_max_log_cb_limit || trx_max_log_cb_limit <= 0) {
           if (OB_TMP_FAIL(extend_log_cb_group_())) {
             TRANS_LOG(WARN, "extend a log cb group  failed", K(ret), K(tmp_ret), K(trans_id_),
@@ -162,7 +159,8 @@ int ObPartTransCtx::get_log_cb_(const bool need_freeze_cb, ObTxLogCb *&log_cb)
 
       if (OB_ISNULL(log_cb = free_cbs_.remove_first())) {
         ret = OB_TX_NOLOGCB;
-        TRANS_LOG(WARN, "no free cbs in ctx", KR(ret), K(free_cbs_.get_size()), K(*this));
+        int64_t busy_cbs_cnt = busy_cbs_.get_size();
+        TRANS_LOG(WARN, "no free cbs in ctx", KR(ret), K(free_cbs_.get_size()), K(busy_cbs_cnt), K(*this));
       } else {
         TRANS_LOG(DEBUG, "get a extra log cb", K(ret), K(trans_id_), K(ls_id_), KPC(log_cb),
                   K(reserve_log_cb_group_));
