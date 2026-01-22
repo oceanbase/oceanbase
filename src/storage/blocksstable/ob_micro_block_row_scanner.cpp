@@ -1806,13 +1806,25 @@ int ObMultiVersionMicroBlockRowScanner::locate_cursor_to_read(bool &found_first_
       reuse_prev_micro_row();
     }
   } else {
+    need_locate_next_rowkey = true;
     if (ObIMicroBlockReaderInfo::INVALID_ROW_INDEX == reserved_pos_) {
-      ret = OB_ITER_END;
+      // For reverse scan, if reserved_pos_ is INVALID_ROW_INDEX and we have cached row in prev_micro_row_,
+      // it means we have read a rowkey from the right micro block but all data in the left micro block
+      // is filtered out (e.g., by skip_range). In this case, we should output the cached row.
+      if (OB_UNLIKELY(param_->is_skip_scan() &&
+                      ObIMicroBlockReaderInfo::INVALID_ROW_INDEX == current_ &&
+                      !finish_scanning_cur_rowkey_ &&
+                      !is_row_empty(prev_micro_row_))) {
+        found_first_row = true;
+        finish_scanning_cur_rowkey_ = true;
+      } else {
+        ret = OB_ITER_END;
+      }
+      need_locate_next_rowkey = false;
     } else if (finish_scanning_cur_rowkey_) {
       current_ = reserved_pos_ - 1; // skip current L
       reuse_prev_micro_row();
     }
-    need_locate_next_rowkey = true;
   }
 
   // 1)For forward scanning: only after reading the current rowkey,
