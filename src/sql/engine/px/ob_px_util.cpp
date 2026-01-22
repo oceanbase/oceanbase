@@ -1548,7 +1548,8 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(
 int ObPXServerAddrUtil::build_tablet_idx_map(ObTaskExecutorCtx &task_exec_ctx,
                                               int64_t tenant_id,
                                               uint64_t ref_table_id,
-                                              ObTabletIdxMap &idx_map)
+                                              ObTabletIdxMap &idx_map,
+                                              int64_t &local_tenant_version_latest)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard schema_guard;
@@ -1563,6 +1564,8 @@ int ObPXServerAddrUtil::build_tablet_idx_map(ObTaskExecutorCtx &task_exec_ctx,
     LOG_WARN("fail get schema", K(ref_table_id), K(ret));
   } else if (OB_FAIL(build_tablet_idx_map(table_schema, idx_map))) {
     LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
+  } else {
+    int tmp_ret = schema_guard.get_schema_version(tenant_id, local_tenant_version_latest);
   }
   return ret;
 }
@@ -1580,10 +1583,10 @@ public:
     bool bret = false;
     int64_t lv, rv;
     if (OB_FAIL(map_->get_refactored(left->tablet_id_.id(), lv))) {
-      LOG_WARN("fail get partition index", K(asc_), K(left), K(right), K(ret));
+      LOG_WARN("fail get partition index", K(asc_), KPC(left), KPC(right), K(ret));
       throw OB_EXCEPTION<OB_HASH_NOT_EXIST>();
     } else if (OB_FAIL(map_->get_refactored(right->tablet_id_.id(), rv))) {
-      LOG_WARN("fail get partition index", K(asc_), K(left), K(right), K(ret));
+      LOG_WARN("fail get partition index", K(asc_), KPC(left), KPC(right), K(ret));
       throw OB_EXCEPTION<OB_HASH_NOT_EXIST>();
     } else {
       bret = asc_ ? (lv < rv) : (lv > rv);
@@ -1605,6 +1608,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(
   dst_locations.reset();
   if (src_locations.size() > 1) {
     ObTabletIdxMap tablet_order_map;
+    int64_t local_tenant_version_latest = 0;
     if (OB_FAIL(dst_locations.reserve(src_locations.size()))) {
       LOG_WARN("fail reserve locations", K(ret), K(src_locations.size()));
     // virtual table is list partition now,
@@ -1613,7 +1617,8 @@ int ObPXServerAddrUtil::reorder_all_partitions(
     } else if (!is_virtual_table(ref_table_id) &&
         OB_FAIL(build_tablet_idx_map(exec_ctx.get_task_exec_ctx(),
                                      GET_MY_SESSION(exec_ctx)->get_effective_tenant_id(),
-                                     ref_table_id, tablet_order_map))) {
+                                     ref_table_id, tablet_order_map,
+                                     local_tenant_version_latest))) {
       LOG_WARN("fail build index lookup map", K(ret));
     }
     for (auto iter = src_locations.begin(); iter != src_locations.end() && OB_SUCC(ret); ++iter) {
@@ -1636,7 +1641,18 @@ int ObPXServerAddrUtil::reorder_all_partitions(
       }
       GroupPWJTabletIdMap *group_pwj_map = nullptr;
       if (OB_FAIL(ret)) {
-        LOG_WARN("fail to sort  locations", K(ret));
+        int tmp_ret = OB_SUCCESS;
+        ObArray<int64_t> tablet_ids;
+        if (OB_TMP_FAIL(tablet_ids.reserve(tablet_order_map.size()))) {
+          LOG_WARN("reserve failed", K(tmp_ret));
+        } else {
+          ObTabletIdxMap::iterator iter = tablet_order_map.begin();
+          for (; iter != tablet_order_map.end(); iter++) {
+            tablet_ids.push_back(iter->first);
+          }
+        }
+        LOG_WARN("fail to sort locations", K(ret), K(local_tenant_version_latest),
+                 K(tablet_order_map.size()), K(tablet_ids));
       } else if (OB_NOT_NULL(group_pwj_map = exec_ctx.get_group_pwj_map())) {
         GroupPWJTabletIdInfo group_pwj_tablet_id_info;
         TabletIdArray &tablet_id_array = group_pwj_tablet_id_info.tablet_id_array_;

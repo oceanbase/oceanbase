@@ -286,7 +286,8 @@ private:
       ObTaskExecutorCtx &task_exec_ctx,
       int64_t tenant_id,
       uint64_t ref_table_id,
-      ObTabletIdxMap &idx_map);
+      ObTabletIdxMap &idx_map,
+      int64_t &local_tenant_version_latest);
   static int reorder_all_partitions(
       int64_t location_key, int64_t ref_table_id, const DASTabletLocList &src_locations,
       DASTabletLocIArray &tsc_locations, bool asc, ObExecContext &exec_ctx,
