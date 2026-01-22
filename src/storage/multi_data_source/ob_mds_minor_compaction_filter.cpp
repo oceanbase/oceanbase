@@ -30,7 +30,8 @@ ERRSIM_POINT_DEF(INC_MAJOR_MDS_EXPIRED_TIME_SMALL);
 ObMdsMinorFilter::ObMdsMinorFilter()
   : ObICompactionFilter(),
     is_inited_(false),
-    last_major_snapshot_(0),
+    medium_filter_snapshot_(0),
+    truncate_filter_snapshot_(0),
     ls_id_(ObLSID::INVALID_LS_ID),
     allocator_(ObMemAttr(MTL_ID(), "MdsMinorFilter"))
 {
@@ -50,10 +51,13 @@ int ObMdsMinorFilter::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("is inited", K(ret), K(first_major_snapshot), K(last_major_snapshot), K(multi_version_start));
   } else {
-    last_major_snapshot_ = last_major_snapshot;
+    medium_filter_snapshot_ = last_major_snapshot;
+    if (GCTX.is_shared_storage_mode()) {
+      medium_filter_snapshot_ = MIN(multi_version_start, last_major_snapshot);
+    }
     truncate_filter_snapshot_ = MIN(multi_version_start, first_major_snapshot);
     ls_id_ = ls_id;
-    LOG_INFO("truncate info filter snapshot", KR(ret), K(first_major_snapshot), K(multi_version_start), K_(truncate_filter_snapshot), K_(ls_id));
+    LOG_INFO("init MdsMinor filter success", KR(ret), K(first_major_snapshot), K(multi_version_start), K_(medium_filter_snapshot), K_(truncate_filter_snapshot), K_(ls_id));
     is_inited_ = true;
   }
   return ret;
@@ -85,7 +89,7 @@ int ObMdsMinorFilter::filter(
     ret = filter_ddl_complete_mds_info(row, kv_adapter, filter_ret);
   } else {
     filter_ret = FILTER_RET_NOT_CHANGE;
-    LOG_DEBUG("not medium info/truncate info", K(ret), K(row), K_(last_major_snapshot), K_(truncate_filter_snapshot), K(kv_adapter));
+    LOG_DEBUG("not medium info/truncate info", K(ret), K(row), K_(medium_filter_snapshot), K_(truncate_filter_snapshot), K(kv_adapter));
   }
 
   return ret;
@@ -105,12 +109,12 @@ int ObMdsMinorFilter::filter_medium_info(
     LOG_WARN("uncommitted row or uncompacted row in mds table", K(ret), K(row));
   } else if (OB_FAIL(medium_info_key.mds_deserialize(kv_adapter.get_key().ptr(), kv_adapter.get_key().length(), pos))) {
     LOG_WARN("fail to deserialize medium_info_key", K(ret), K(kv_adapter));
-  } else if (medium_info_key.get_medium_snapshot() <= last_major_snapshot_) {
+  } else if (medium_info_key.get_medium_snapshot() <= medium_filter_snapshot_) {
     filter_ret = FILTER_RET_REMOVE;
-    LOG_DEBUG("medium info is filtered", K(ret), K(row), K(last_major_snapshot_), K(medium_info_key), K(kv_adapter));
+    LOG_DEBUG("medium info is filtered", K(ret), K(row), K(medium_filter_snapshot_), K(medium_info_key), K(kv_adapter));
   } else {
     filter_ret = FILTER_RET_NOT_CHANGE;
-    LOG_DEBUG("medium info is not filtered", K(ret), K(row), K(last_major_snapshot_), K(medium_info_key), K(kv_adapter));
+    LOG_DEBUG("medium info is not filtered", K(ret), K(row), K(medium_filter_snapshot_), K(medium_info_key), K(kv_adapter));
   }
   return ret;
 }

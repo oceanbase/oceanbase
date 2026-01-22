@@ -36,7 +36,7 @@ public:
     const share::ObLSID &ls_id);
   void reset()
   {
-    last_major_snapshot_ = 0;
+    medium_filter_snapshot_ = 0;
     truncate_filter_snapshot_ = 0;
     ls_id_ = share::ObLSID::INVALID_LS_ID;
     is_inited_ = false;
@@ -44,7 +44,7 @@ public:
   virtual CompactionFilterType get_filter_type() const override { return MDS_MINOR_FILTER_DATA; }
   virtual int filter(const blocksstable::ObDatumRow &row, ObFilterRet &filter_ret) override;
   INHERIT_TO_STRING_KV("ObICompactionFilter", ObICompactionFilter, "filter_name", "ObMdsMinorFilter", K_(is_inited),
-      K_(last_major_snapshot), K_(truncate_filter_snapshot), K_(ls_id));
+      K_(medium_filter_snapshot), K_(truncate_filter_snapshot), K_(ls_id));
 private:
   int filter_medium_info(
     const blocksstable::ObDatumRow &row,
@@ -66,7 +66,7 @@ private:
   int is_ddl_inc_major_mds_expired(share::SCN start_scn, bool &expired);
 private:
   bool is_inited_;
-  int64_t last_major_snapshot_;
+  int64_t medium_filter_snapshot_;
   int64_t truncate_filter_snapshot_;
   share::ObLSID ls_id_;
   ObArenaAllocator allocator_;
