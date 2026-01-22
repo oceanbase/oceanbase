@@ -204,11 +204,7 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
         plugin = user_info->get_plugin();
       }
       // resolve password
-      if (OB_FAIL(ret)) {
-      } else if (0 == password.length()) {
-        // empty password, do not need to encrypt
-        set_pwd_stmt->set_need_enc(false);
-      } else {
+      if (OB_SUCC(ret)) {
         // set need_enc
         bool need_enc = (1 == node->children_[2]->value_) ? true : false;
         // deal with plugin info
@@ -222,10 +218,8 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
             need_enc = true;
           }
         } else if (NULL == node->children_[4]) {
-          // [alter user xxxx], did not set plugin, use default_authentication_plugin system variable as default
-          if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
-            LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
-          }
+          // [alter user xxxx], did not set plugin, use user's plugin
+          // do nothing
         } else {
           // [alter user xxxx], set plugin
           plugin.assign_ptr(str_tolower(const_cast<char *>(node->children_[4]->str_value_),
@@ -251,6 +245,9 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
           } else if (lib::is_oracle_mode()
                      && OB_FAIL(resolve_oracle_password_strength(user_name, host_name, password))) {
             LOG_WARN("fail to check password strength", K(ret));
+          } else if (0 == password.length()) {
+            // empty password, do not need to encrypt
+            set_pwd_stmt->set_need_enc(false);
           } else {
             set_pwd_stmt->set_need_enc(true);
           }
