@@ -788,7 +788,11 @@ int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
     if (OB_FAIL(ret)) {
       LOG_WARN("fail to get next row", K(ret));
     } else if (dfc_.all_ch_drained()) {
-      LOG_DEBUG("all channel has been drained");
+      int tmp_ret = child_->drain_exch();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("drain exchange data failed", K(tmp_ret));
+      }
+      LOG_TRACE("all channel has been drained");
       break;
     } else if (OB_FAIL(try_wait_channel())) {
       LOG_WARN("failed to wait channel", K(ret));
