@@ -216,13 +216,18 @@ int ObExternalTableColumnSchemaHelper::setup_string(const bool &is_oracle_mode,
                                                     ObColumnSchemaV2 &column_schema)
 {
   int ret = OB_SUCCESS;
-  UNUSED(is_oracle_mode);
-  column_schema.set_data_type(ObMediumTextType);
-  column_schema.set_is_string_lob(); // 默认为ob的string类型
-  column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH - 1);
+  column_schema.set_data_type(is_oracle_mode ? ObVarcharType : ObMediumTextType);
+  if (is_oracle_mode) {
+  } else {
+    column_schema.set_is_string_lob(); // 默认为ob的string类型
+  }
+  column_schema.set_data_length(is_oracle_mode ? OB_MAX_ORACLE_VARCHAR_LENGTH
+                                               : OB_MAX_MEDIUMTEXT_LENGTH - 1);
   column_schema.set_collation_type(collation);
   column_schema.set_charset_type(cs_type);
-  set_column_accuracy(is_oracle_mode ? ORACLE_MODE : MYSQL_MODE, ObMediumTextType, column_schema);
+  set_column_accuracy(is_oracle_mode ? ORACLE_MODE : MYSQL_MODE,
+                      is_oracle_mode ? ObVarcharType : ObMediumTextType,
+                      column_schema);
   return ret;
 }
 
