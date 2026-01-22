@@ -181,6 +181,8 @@ public:
   inline int64_t get_parse_question_mark_count()const { return parse_question_mark_count_; }
   inline void set_external_params_count(int64_t count) { external_params_count_ = count; }
   inline int64_t get_external_params_count()const { return external_params_count_; }
+  inline bool get_is_select_for_update()const { return is_select_for_update_; }
+  inline void set_is_select_for_update(bool is_select_for_update) { is_select_for_update_ = is_select_for_update; }
   inline int64_t get_ref_count() const { return ATOMIC_LOAD(&ref_count_); }
   inline int64_t get_num_of_param() const { return ps_sql_meta_.get_param_size(); }
   inline int64_t get_num_of_column() const { return ps_sql_meta_.get_column_size(); }
@@ -307,6 +309,7 @@ private:
   bool ps_need_parameterization_;
   int64_t parse_question_mark_count_;
   int64_t external_params_count_;
+  bool is_select_for_update_;
 };
 
 struct TypeInfo {

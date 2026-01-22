@@ -1077,6 +1077,7 @@ int ObSql::fill_result_set(const ObPsStmtId stmt_id, const ObPsStmtInfo &stmt_in
   result.set_p_column_fileds(const_cast<common::ParamsFieldIArray *>(&sql_meta.get_column_fields()));
   result.get_external_retrieve_info().parse_question_mark_cnt_ = stmt_info.get_parse_question_mark_count();
   result.get_external_retrieve_info().external_params_cnt_ = stmt_info.get_external_params_count();
+  result.get_external_retrieve_info().is_select_for_update_ = stmt_info.get_is_select_for_update();
   if (stmt_info.get_num_of_returning_into() >= 0) {
     result.get_external_retrieve_info().into_exprs_cnt_ = stmt_info.get_num_of_returning_into();
     result.set_returning(true);

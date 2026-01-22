@@ -287,7 +287,8 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator)
     literal_stmt_type_(stmt::T_NONE),
     ps_need_parameterization_(true),
     parse_question_mark_count_(0),
-    external_params_count_(0)
+    external_params_count_(0),
+    is_select_for_update_(false)
 
 {
 }
@@ -320,7 +321,8 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
     literal_stmt_type_(stmt::T_NONE),
     ps_need_parameterization_(true),
     parse_question_mark_count_(0),
-    external_params_count_(0)
+    external_params_count_(0),
+    is_select_for_update_(false)
 {
 }
 
@@ -470,6 +472,7 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     ps_need_parameterization_ = other.ps_need_parameterization_;
     parse_question_mark_count_ = other.parse_question_mark_count_;
     external_params_count_ = other.external_params_count_;
+    is_select_for_update_ = other.is_select_for_update_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion *>
