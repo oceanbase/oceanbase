@@ -2457,10 +2457,6 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_CATALOG);
         break;
       }
-      case stmt::T_LOAD_TIME_ZONE_INFO: {
-        DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
-        break;
-      }
       case stmt::T_CREATE_LOCATION:
       case stmt::T_DROP_LOCATION: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_LOCATION);
