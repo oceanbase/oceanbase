@@ -168,16 +168,11 @@ int ObMySQLResultImpl::next()
         int tmp_ret = ret;
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null ptr", K(errmsg), K(tmp_ret), K(ret));
-      } else if (OB_INVALID_ID != conn->get_dblink_id()) {
-        LOG_WARN("dblink connection error", K(ret),
-                                            KP(conn),
-                                            K(conn->get_dblink_id()),
-                                            K(conn->get_sessid()),
-                                            K(conn->usable()));
-        TRANSLATE_CLIENT_ERR(ret, errmsg);
-        if (ObMySQLStatement::is_need_disconnect_error(ret)) {
-          conn->set_usable(false);
-        }
+      } else {
+        conn->handler_dblink_error(ret, false, errmsg);
+      }
+      if (ObMySQLStatement::is_need_disconnect_error(ret)) {
+        conn->set_usable(false);
       }
     }
   } else if (OB_ISNULL(cur_row_result_lengths_ = mysql_fetch_lengths(result_))) {
