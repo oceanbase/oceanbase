@@ -66,7 +66,7 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("Session info  and nodeshould not be NULL", KP(session_info_), KP(node), K(ret));
   } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_) ||
              OB_UNLIKELY(lib::is_oracle_mode() && 4 != node->num_child_) ||
-             OB_UNLIKELY(lib::is_mysql_mode() && 5 != node->num_child_)) {
+             OB_UNLIKELY(lib::is_mysql_mode() && 6 != node->num_child_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Set password ParseNode error", K(node->type_), K(node->num_child_), K(ret));
   } else {
@@ -177,10 +177,9 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                      resolve_oracle_password_strength(user_name, host_name, password))) {
             LOG_WARN("fail to check password strength", K(ret));
           } else if (0 != password.length()) {//set password
-            bool plain_password;
-            if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::RECV_PLAIN_PASSWORD, plain_password))) {
-              LOG_WARN("failed to check feature enable", K(ret));
-            } else if (lib::is_oracle_mode() || !plain_password) {
+            if (!lib::is_oracle_mode() && OB_NOT_NULL(node->children_[5])) {
+              // alter user set xxx
+              const ParseNode *from_alter = node->children_[5];
               bool need_enc = (1 == node->children_[2]->value_) ? true : false;
               if (OB_UNLIKELY(!need_enc && (!is_valid_mysql41_passwd(password)))) {
                 ret = OB_ERR_PASSWORD_FORMAT;
@@ -189,7 +188,21 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                 set_pwd_stmt->set_need_enc(need_enc);
               }
             } else {
-              set_pwd_stmt->set_need_enc(true);
+              // set password for xxx
+              bool plain_password;
+              if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::RECV_PLAIN_PASSWORD, plain_password))) {
+                LOG_WARN("failed to check feature enable", K(ret));
+              } else if (lib::is_oracle_mode() || !plain_password) {
+                bool need_enc = (1 == node->children_[2]->value_) ? true : false;
+                if (OB_UNLIKELY(!need_enc && (!is_valid_mysql41_passwd(password)))) {
+                  ret = OB_ERR_PASSWORD_FORMAT;
+                  LOG_WARN("Wrong password hash format", K(ret));
+                } else {
+                  set_pwd_stmt->set_need_enc(need_enc);
+                }
+              } else {
+                set_pwd_stmt->set_need_enc(true);
+              }
             }
           } else {
             set_pwd_stmt->set_need_enc(false); //clear password
