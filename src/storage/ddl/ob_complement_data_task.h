@@ -59,6 +59,11 @@ class ObChunk;
 class ObComplementDataDag;
 class ObComplementFailCallback : public ObDDLFailCallback
 {
+private:
+  bool is_white_list_ret(int ret_code)
+  {
+    return OB_EAGAIN == ret_code;
+  }
 public:
   ObComplementFailCallback():dag_(nullptr) {};
   virtual ~ObComplementFailCallback() {};

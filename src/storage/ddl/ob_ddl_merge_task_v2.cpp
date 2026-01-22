@@ -57,12 +57,16 @@ int ObDDLMergeGuardTask::init(const bool for_replay, const ObTabletID &tablet_id
   int ret = OB_SUCCESS;
   char* buf = nullptr;
   ObDDLMergeBucketLock *mtl_bucket_lock = MTL(ObDDLMergeBucketLock*);
+  ObIDag *dag = get_dag();
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_id));
   } else if (OB_ISNULL(mtl_bucket_lock)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bucket lock should not be null", K(ret));
+  }  else if (nullptr == dag) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be null", K(ret), K(tablet_id));
   }
 
   int64_t max_retry_times = 100;
@@ -70,7 +74,9 @@ int ObDDLMergeGuardTask::init(const bool for_replay, const ObTabletID &tablet_id
     if (OB_FAIL(mtl_bucket_lock->lock(tablet_id))) {
       if (OB_EAGAIN == ret && !for_replay) {
         LOG_WARN("failed to lock tablet, but execute again", K(ret), K(tablet_id));
-        if (retry_uitl_get && max_retry_times > 0) {
+        if (ObDagType::DAG_TYPE_DDL == dag->get_type()) {
+          /* skip */
+        } else if (retry_uitl_get && max_retry_times > 0) {
           ret = OB_SUCCESS;
           ob_usleep(1000 * 10); // 10ms
           max_retry_times--;

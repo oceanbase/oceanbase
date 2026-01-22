@@ -294,7 +294,11 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
     if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), arena, user_data))) {
       if (OB_EMPTY_RESULT == ret) {
         /* for ddl execute node, should wait take effect */
-        ret = ddl_merge_param.for_replay_ ? OB_EAGAIN : OB_DAG_TASK_IS_SUSPENDED;
+        if (ObDagType::DAG_TYPE_DDL == dag->get_type()) {
+          ret = OB_EAGAIN;
+        } else {
+          ret = ddl_merge_param.for_replay_ ? OB_EAGAIN : OB_DAG_TASK_IS_SUSPENDED;
+        }
       }
       LOG_WARN("failed to get ddl complete mds user data", K(ret));
     } else if (!user_data.has_complete_) {

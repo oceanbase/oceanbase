@@ -1029,7 +1029,9 @@ int ObComplementFailCallback::init(ObComplementDataDag *dag)
 int ObComplementFailCallback::process(int ret_code)
 {
   int ret = OB_SUCCESS;
-  if (nullptr == dag_) {
+  if (is_white_list_ret(ret_code)) {
+    LOG_INFO("ignore white list ret code", K(ret_code));
+  } else if (nullptr == dag_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementFailCallback has not been inited", K(ret));
   } else if (OB_SUCCESS != (dag_->get_context().complement_data_ret_)) {
