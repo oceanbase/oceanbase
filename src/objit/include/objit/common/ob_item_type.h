@@ -992,6 +992,9 @@ typedef enum ObItemType
   T_FUN_SYS_SEARCH_INDEX_INNER_TYPE = 1943,
   T_FUN_SYS_SEARCH_INDEX_INNER_VALUE = 1944,
   T_FUN_CK_TO_TYPE_NAME = 1945,
+  T_FUN_SYS_TO_FLOAT64_OR_NULL = 1946,
+  T_FUN_SYS_NEW_TIME = 1947,
+  T_FUN_SYS_NLS_CHARSET_ID = 1948,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

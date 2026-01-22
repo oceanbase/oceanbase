@@ -1477,6 +1477,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprSearchIndexInnerType::calc_search_index_inner_type   /* 893 */
   NULL, // ObExprSearchIndexInnerValue::calc_search_index_inner_value /* 894 */
   NULL, // ObExprToTypeName::eval_to_type_name,                       /* 895 */
+  NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null,            /* 896 */
+  NULL, // ObExprNewTime::eval_new_time,                              /* 897 */
+  NULL, // ObExprNLSCharsetId::eval_nls_charset_id,                   /* 898 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1986,6 +1989,9 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprLoadFile::eval_load_file_vector                         /* 319 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document_vector          /* 320 */
   NULL, // ObExprToTypeName::eval_to_type_name_vector,                   /* 321 */
+  NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null_vector,        /* 322 */
+  NULL, // ObExprNewTime::eval_new_time_vector,                          /* 323 */
+  NULL, // ObExprNLSCharsetId::eval_nls_charset_id_vector,               /* 324 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
