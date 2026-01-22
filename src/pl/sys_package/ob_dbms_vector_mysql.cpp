@@ -285,7 +285,7 @@ int ObDBMSVectorMySql::index_vector_memory_estimate(ObPLExecCtx &ctx, ParamStore
   } else if (!params.at(0).is_varchar()
              || !params.at(1).is_varchar()
              || !params.at(2).is_varchar()
-             || (!params.at(3).is_text() && !params.at(4).is_null())) {
+             || (!params.at(3).is_text() && !params.at(3).is_null())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
   } else {
