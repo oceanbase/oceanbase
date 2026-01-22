@@ -193,7 +193,8 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
     tree_value = new (buf) ObBlockMetaTreeValue(insert_meta, rowkey);
 
     tree_value->co_sstable_row_offset_ = co_sstable_row_offset;
-    tree_value->header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3;
+    tree_value->header_.version_ = data_desc_.get_desc().get_major_working_cluster_version() >= DATA_VERSION_4_5_0_0 ?
+      ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V3 : ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
     tree_value->header_.row_store_type_ = static_cast<uint8_t>(insert_meta->val_.row_store_type_);
     tree_value->header_.compressor_type_ = static_cast<uint8_t>(insert_meta->val_.compressor_type_);
     tree_value->header_.is_data_index_ = true;

@@ -351,10 +351,13 @@ int ObStaticMergeParam::get_basic_info_from_result(
 int ObStaticMergeParam::cal_minor_merge_param(const bool has_compaction_filter)
 {
   int ret = OB_SUCCESS;
+  uint64_t min_data_version = 0;
   //some input param check
   if (OB_UNLIKELY(tables_handle_.empty() || NULL == tables_handle_.get_table(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tables handle is invalid", K(ret), K(tables_handle_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
   } else {
     read_base_version_ = 0;
     if (get_tablet_id().is_ls_inner_tablet() && has_compaction_filter) {
@@ -363,7 +366,7 @@ int ObStaticMergeParam::cal_minor_merge_param(const bool has_compaction_filter)
     } else {
       set_full_merge_and_level(false/*is_full_merge*/);
     }
-    data_version_ = DATA_CURRENT_VERSION;
+    data_version_ = min_data_version;
   }
   return ret;
 }
