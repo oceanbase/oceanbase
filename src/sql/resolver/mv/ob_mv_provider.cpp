@@ -209,7 +209,10 @@ int ObMVProvider::collect_tables_need_mlog(const ObSelectStmt* stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
     } else if (table->is_mv_proctime_table_) {
-      // do nothing
+      if (NULL != table->ref_query_
+          && OB_FAIL(ObOptimizerUtil::remove_item(child_stmts, table->ref_query_))) {
+        LOG_WARN("failed to remove proctime view stmt", K(ret));
+      }
     } else if (OB_FAIL(add_var_to_array_no_dup(tables_need_mlog, table->ref_id_))) {
       LOG_WARN("failed to push back table ref id", K(ret));
     }

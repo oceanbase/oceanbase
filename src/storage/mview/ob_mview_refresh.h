@@ -19,6 +19,7 @@ namespace oceanbase
 namespace sql
 {
 class ObExecContext;
+class ObMVDepInfo;
 } // namespace sql
 namespace storage
 {
@@ -75,7 +76,7 @@ private:
   int lock_mview_for_refresh();
   int prepare_for_refresh();
   int fetch_based_infos(share::schema::ObSchemaGetterGuard &schema_guard);
-  int check_fast_refreshable_(const ObIArray<share::schema::ObDependencyInfo> &previous_dependency_infos,
+  int check_fast_refreshable_(const ObIArray<sql::ObMVDepInfo> &previous_mv_dep_infos,
                               share::schema::ObSchemaGetterGuard &schema_guard);
   int complete_refresh();
   int fast_refresh();
