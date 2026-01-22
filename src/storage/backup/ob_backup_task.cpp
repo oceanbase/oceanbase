@@ -3197,7 +3197,7 @@ int ObLSBackupDataTask::do_backup_single_meta_data_(const ObBackupProviderItem &
   } else if (OB_FAIL(tablet_stat->check_can_release_tablet(tablet_id, can_release))) {
     LOG_WARN("failed to check can release tablet", K(ret), K(tablet_id));
   } else if (!can_release) {
-    LOG_ERROR("can not release tablet", K(ret), K(tablet_id));
+    // do nothing
   } else if (OB_FAIL(tablet_stat->free_tablet_stat(tablet_id))) {
     LOG_WARN("failed to free tablet stat", K(ret), K_(finished_tablet_list), K(tablet_id));
   } else if (OB_FAIL(release_tablet_handle_(tablet_id))) {
@@ -5260,7 +5260,7 @@ int ObBackupIndexRebuildTask::check_all_tablet_released_()
   } else {
     bool all_released = ls_backup_ctx_->tablet_holder_.is_empty();
     if (!all_released) {
-      LOG_ERROR("tablet handle not released", K(ret));
+      LOG_WARN("tablet handle not released", K(ret));
       if (OB_SUCCESS != (tmp_ret = ls_backup_ctx_->tablet_stat_.print_tablet_stat())) {
         LOG_WARN("failed to print tablet stat", K(ret), K(tmp_ret));
       }

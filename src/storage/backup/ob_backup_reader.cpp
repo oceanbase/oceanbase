@@ -741,7 +741,9 @@ int ObSSTableMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffe
         }
       }
     }
-    if (OB_SUCC(ret)) {
+    if (FAILEDx(remove_sstable_index_builder_())) {
+      LOG_WARN("failed to remove sstable index builder", K(ret));
+    } else {
       buffer_reader.assign(buffer_writer_.data(), buffer_writer_.length(), buffer_writer_.length());
     }
   }
@@ -857,6 +859,18 @@ int ObSSTableMetaBackupReader::free_sstable_index_builder_(const storage::ObITab
     LOG_WARN("index builder mgr should not be null", K(ret));
   } else if (OB_FAIL(builder_mgr_->free_sstable_index_builder(tablet_id_, table_key))) {
     LOG_WARN("failed to close index builder", K(ret), K_(tablet_id), K(table_key));
+  }
+  return ret;
+}
+
+int ObSSTableMetaBackupReader::remove_sstable_index_builder_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(builder_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index builder mgr should not be null", K(ret));
+  } else if (OB_FAIL(builder_mgr_->remove_sstable_index_builder(tablet_id_))) {
+    LOG_WARN("failed to remove sstable index builder", K(ret), K_(tablet_id));
   }
   return ret;
 }

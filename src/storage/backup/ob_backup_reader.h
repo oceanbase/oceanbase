@@ -287,6 +287,7 @@ private:
   int inner_check_all_sstable_macro_block_ready_(bool &finished);
   int close_sstable_index_builder_(const storage::ObITable::TableKey &table_key);
   int free_sstable_index_builder_(const storage::ObITable::TableKey &table_key);
+  int remove_sstable_index_builder_();
   int get_macro_block_id_list_(const blocksstable::ObSSTable &sstable, ObBackupSSTableMeta &sstable_meta);
   int deal_with_ddl_sstable_(const storage::ObITable::TableKey &table_key,
       ObBackupLinkedBlockItemWriter *linked_writer, ObBackupSSTableMeta &sstable_meta);
