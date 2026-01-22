@@ -135,8 +135,7 @@ public:
   int init(const uint64_t tenant_id, const int64_t backup_set_id, const share::ObLSID &ls_id,
       const share::ObBackupDataType &backup_data_type);
   int prepare_tablet_sstables(const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
-      const storage::ObTabletHandle &tablet_handle, const common::ObIArray<storage::ObSSTableWrapper> &sstable_array,
-      const int64_t total_tablet_meta_count);
+      const storage::ObTabletHandle &tablet_handle, const common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   int mark_items_pending(
       const share::ObBackupDataType &backup_data_type, const common::ObIArray<ObBackupProviderItem> &items);
   int mark_items_reused(const share::ObBackupDataType &backup_data_type,

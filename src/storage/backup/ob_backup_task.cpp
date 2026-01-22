@@ -3197,7 +3197,7 @@ int ObLSBackupDataTask::do_backup_single_meta_data_(const ObBackupProviderItem &
   } else if (OB_FAIL(tablet_stat->check_can_release_tablet(tablet_id, can_release))) {
     LOG_WARN("failed to check can release tablet", K(ret), K(tablet_id));
   } else if (!can_release) {
-    // do nothing
+    LOG_ERROR("can not release tablet", K(ret), K(tablet_id));
   } else if (OB_FAIL(tablet_stat->free_tablet_stat(tablet_id))) {
     LOG_WARN("failed to free tablet stat", K(ret), K_(finished_tablet_list), K(tablet_id));
   } else if (OB_FAIL(release_tablet_handle_(tablet_id))) {

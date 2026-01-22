@@ -747,7 +747,7 @@ int ObBackupTabletStat::init(const uint64_t tenant_id, const int64_t backup_set_
 
 int ObBackupTabletStat::prepare_tablet_sstables(const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type,
     const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
-    const common::ObIArray<storage::ObSSTableWrapper> &sstable_array, const int64_t total_tablet_meta_count)
+    const common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
@@ -764,8 +764,6 @@ int ObBackupTabletStat::prepare_tablet_sstables(const uint64_t tenant_id, const 
   } else if (backup_data_type.type_ != backup_data_type_.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup data type not match", K(backup_data_type), K(backup_data_type_));
-  } else {
-    stat->total_tablet_meta_count_ = total_tablet_meta_count;
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
@@ -1069,6 +1067,7 @@ int ObBackupTabletStat::do_with_stat_when_pending_(const ObBackupProviderItem &i
         ++stat->total_major_macro_block_count_;
       }
     } else if (PROVIDER_ITEM_TABLET_AND_SSTABLE_META == type) {
+      ++stat->total_tablet_meta_count_;
       stat->is_all_loaded_ = true;
     }
   }
@@ -2084,7 +2083,6 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   } else {
     ObITable::TableKey ss_ddl_table_key;
     bool has_ss_ddl = false;
-    int64_t cur_tablet_meta_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
       int64_t count = 0;
       storage::ObSSTableWrapper &sstable_wrapper = sstable_array.at(i);
@@ -2113,7 +2111,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ls_backup_ctx_->tablet_stat_.prepare_tablet_sstables(
-          tenant_id, backup_data_type, tablet_id, tablet_ref->tablet_handle_, sstable_array, cur_tablet_meta_count))) {
+          tenant_id, backup_data_type, tablet_id, tablet_ref->tablet_handle_, sstable_array))) {
         LOG_WARN("failed to prepare tablet sstable", K(ret), K(backup_data_type), K(tablet_id), K(sstable_array));
       }
     }
