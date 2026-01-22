@@ -36,6 +36,7 @@ EVENT_INFO(SCHEDULE_TIME, schedule_time)
 EVENT_INFO(NETWORK_WAIT_TIME, network_wait_time)
 EVENT_INFO(TX_TABLE_READ_CNT, tx_table_read_cnt)
 EVENT_INFO(OUTROW_LOB_CNT, outrow_lob_cnt)
+EVENT_INFO(SS_READ_OBJECT_STORAGE_COUNT, ss_read_object_storage_count)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -112,6 +113,7 @@ struct ObExecRecord
       network_wait_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::NETWORK_WAIT_TIME);                   \
       tx_table_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::TX_TABLE_READ_CNT);                   \
       outrow_lob_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::OUTROW_LOB_CNT);                   \
+      ss_read_object_storage_count_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SS_READ_OBJECT_STORAGE_COUNT); \
     } \
   } while(0);
 
@@ -155,6 +157,7 @@ struct ObExecRecord
     UPDATE_EVENT(network_wait_time);
     UPDATE_EVENT(tx_table_read_cnt);
     UPDATE_EVENT(outrow_lob_cnt);
+    UPDATE_EVENT(ss_read_object_storage_count);
   }
 
   uint64_t get_cur_memstore_read_row_count(common::ObDiagnosticInfo *di = NULL) {

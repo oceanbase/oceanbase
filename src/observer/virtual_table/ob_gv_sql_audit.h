@@ -187,6 +187,7 @@ private:
     COMMIT_TIME,
     TX_TABLE_READ_CNT,
     OUTROW_LOB_CNT,
+    SS_OBJECT_STORAGE_READS,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

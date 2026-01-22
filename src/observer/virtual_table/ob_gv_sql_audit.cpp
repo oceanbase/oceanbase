@@ -553,7 +553,8 @@ bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
     case PUSHDOWN_STORAGE_FILTER_ROW_CNT:
     case NETWORK_WAIT_TIME:
     case TX_TABLE_READ_CNT:
-    case OUTROW_LOB_CNT: {
+    case OUTROW_LOB_CNT:
+    case SS_OBJECT_STORAGE_READS: {
       is_contain = true;
       break;
     }
@@ -1168,6 +1169,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         } break;
         case OUTROW_LOB_CNT: {
           cells[cell_idx].set_int(record.data_.exec_record_.outrow_lob_cnt_);
+        } break;
+        case SS_OBJECT_STORAGE_READS: {
+          cells[cell_idx].set_int(record.data_.exec_record_.ss_read_object_storage_count_);
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
