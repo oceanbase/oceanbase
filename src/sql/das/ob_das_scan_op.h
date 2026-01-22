@@ -162,6 +162,19 @@ public:
                || lake_table_format_ == share::ObLakeTableFormat::HIVE);
   }
 
+  bool check_need_fill_scn() const
+  {
+    bool bret = false;
+    for (int64_t i = 0; i < access_column_ids_.count(); ++i) {
+      uint64_t column_id = access_column_ids_.at(i);
+      if (column_id == OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
+        bret = true;
+        break;
+      }
+    }
+    return bret;
+  }
+
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        K_(ref_table_id),
                        K_(access_column_ids),
