@@ -482,6 +482,7 @@ class ObVectorIndexMemSyncInfo
 public:
   ObVectorIndexMemSyncInfo(uint64_t tenant_id) :
     processing_first_mem_sync_(true),
+    switch_lock_(ObLatchIds::VECTOR_SYNC_SWITCH_LOCK),
     first_mem_sync_map_(),
     second_mem_sync_map_(),
     first_task_allocator_(ObMemAttr(tenant_id, "VecIdxTask")),

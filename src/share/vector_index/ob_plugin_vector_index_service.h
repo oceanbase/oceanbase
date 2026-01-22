@@ -128,7 +128,7 @@ public:
       complete_index_adpt_map_(),
       partial_index_adpt_map_(),
       ivf_index_helper_map_(),
-      adapter_map_rwlock_(),
+      adapter_map_rwlock_(ObLatchIds::VECTOR_ADAPTER_MAP_LOCK),
       ls_tablet_task_ctx_(),
       tenant_id_(tenant_id),
       interval_factor_(0),

@@ -425,7 +425,18 @@ LATCH_DEF(CONNECT_RESOURCE_MGR_LOCK, 387, "connect resource manager lock", LATCH
 LATCH_DEF(OB_DIAG_LOCK, 388, "ob diag lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TRANSPORT_SERVICE_TASK_LOCK, 389, "transport status task lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(STANDBY_ACK_STATUS_LOCK, 390, "standby ack status lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 391, "latch end", LATCH_FIFO, 2000, 0, true)
+
+// vector index
+LATCH_DEF(VECTOR_MEM_DATA, 391, "vector mem data lock", LATCH_READ_PREFER, 200, 0, true)
+LATCH_DEF(VECTOR_BITMAP_LOCK, 392, "vector bitmap lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(VECTOR_RELOAD_LOCK, 393, "vector reload lock", LATCH_FIFO, 200, 0, true)
+LATCH_DEF(VECTOR_QUERY_LOCK, 394, "vector query lock", LATCH_FIFO, 1000, 0, true)
+LATCH_DEF(VECTOR_ADAPTER_MAP_LOCK, 395, "vector adapter map lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(VECTOR_SYNC_SWITCH_LOCK, 396, "vector sync switch lock", LATCH_FIFO, 500, 0, true)
+LATCH_DEF(VECTOR_IVF_CACHE_LOCK, 397, "vector ivf cache lock", LATCH_READ_PREFER, 1000, 0, true)
+
+
+LATCH_DEF(LATCH_END, 398, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

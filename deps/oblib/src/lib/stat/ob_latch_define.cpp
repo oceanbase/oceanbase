@@ -32,7 +32,7 @@ LATCH_DEF_##enable(def, id, name, policy, max_spin_cnt, max_yield_cnt)
 template<int64_t N>
 struct ObLatchCountChecker
 {
-  static_assert(N == 297, "DO NOT delete latch defination");
+  static_assert(N == 304, "DO NOT delete latch defination");
 };
 static ObLatchCountChecker<ARRAYSIZEOF(OB_LATCHES)> ob_latch_count_checker_guard;
 static_assert(ObLatchIds::LATCH_END == ARRAYSIZEOF(OB_LATCHES) - 1, "update id of LATCH_END before adding your defination");
