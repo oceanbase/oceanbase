@@ -6329,7 +6329,9 @@ int ObAdminStorageArg::assign(const ObAdminStorageArg &other)
 
 OB_SERIALIZE_MEMBER(ObTriggerStorageCacheArg,
                     op_,
-                    tenant_id_);
+                    tenant_id_,
+                    tablet_id_,
+                    policy_status_);
 OB_SERIALIZE_MEMBER(ObAutoincSyncArg,
                     tenant_id_, table_id_, column_id_, table_part_num_, auto_increment_,
                     sync_value_, autoinc_is_order_);
