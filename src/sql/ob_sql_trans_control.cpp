@@ -325,7 +325,7 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
                                                          is_rollback,
                                                          is_explicit,
                                                          need_disconnect);
-    if (is_rollback || OB_FAIL(ret) || !callback || pl_async_commit_need_wait) {
+    if (is_rollback || OB_FAIL(ret) || !callback) {
       bool reuse_tx = OB_SUCCESS == ret
         || OB_TRANS_COMMITED == ret
         || OB_TRANS_ROLLBACKED == ret;
