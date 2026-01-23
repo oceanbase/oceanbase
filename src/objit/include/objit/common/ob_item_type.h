@@ -3040,6 +3040,7 @@ typedef enum ObItemType
   T_TABLEGROUP_SCOPE = 4966,
   T_GROUP_COMMIT = 4967,
 
+  T_ALTER_VIEW_COMPILE = 4968,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
