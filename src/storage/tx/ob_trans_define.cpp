@@ -169,6 +169,7 @@ void ObTraceInfo::reset()
     app_trace_info_.set_length(0);
   }
   app_trace_id_.set_length(0);
+  app_trace_id_confirmed_ = false;
 }
 
 int ObTraceInfo::set_app_trace_info(const ObString &app_trace_info)
