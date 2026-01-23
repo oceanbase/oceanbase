@@ -529,7 +529,8 @@ public:
                          const common::ObString &base_object_name,
                          const ParseNode &parse_node,
                          const common::ObDataTypeCastParams &dtc_params);
-  int gen_procedure_source(const common::ObString &base_object_database,
+  int gen_procedure_source(const common::ObString &trigger_database,
+                           const common::ObString &base_object_database,
                            const common::ObString &base_object_name,
                            const ParseNode &parse_node,
                            const ObDataTypeCastParams &dtc_params,

@@ -452,7 +452,9 @@ int ObTriggerResolver::resolve_simple_dml_trigger(const ParseNode &parse_node,
       OZ (trigger_arg.trigger_info_.set_ref_parent_name(REF_PARENT));
     }
     OZ (resolve_schema_name(*parse_node.children_[1],
-                            trigger_arg.base_object_database_, trigger_arg.base_object_name_));
+                            trigger_arg.base_object_database_,
+                            trigger_arg.base_object_name_,
+                            &trigger_arg.trigger_database_));
     OZ (resolve_base_object(trigger_arg, false));
   }
   OZ (resolve_order_clause(parse_node.children_[2], trigger_arg));
@@ -1020,7 +1022,8 @@ int ObTriggerResolver::resolve_trigger_body(const ParseNode &parse_node,
     pl::ObPLParser parser(*allocator_, session_info_->get_charsets4parser(), session_info_->get_sql_mode());
     ObStmtNodeTree *parse_tree = NULL;
     CHECK_COMPATIBILITY_MODE(session_info_);
-    OZ (trigger_info.gen_procedure_source(trigger_arg.base_object_database_,
+    OZ (trigger_info.gen_procedure_source(trigger_arg.trigger_database_,
+                                          trigger_arg.base_object_database_,
                                           trigger_arg.base_object_name_,
                                           parse_node,
                                           session_info_->get_dtc_params(),
@@ -1077,11 +1080,12 @@ int ObTriggerResolver::resolve_compound_trigger_body(const ParseNode &parse_node
 
 int ObTriggerResolver::resolve_schema_name(const ParseNode &parse_node,
                                            ObString &database_name,
-                                           ObString &schema_name)
+                                           ObString &schema_name,
+                                           const ObString *default_db_name)
 {
   int ret = OB_SUCCESS;
   OV (OB_NOT_NULL(session_info_));
-  OZ (ObResolverUtils::resolve_sp_name(*session_info_, parse_node, database_name, schema_name));
+  OZ (ObResolverUtils::resolve_sp_name(*session_info_, parse_node, database_name, schema_name, true, default_db_name));
   return ret;
 }
 
