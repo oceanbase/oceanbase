@@ -813,6 +813,9 @@ public:
       const uint64_t tenant_id,
       common::ObIArray<const ObSimpleTableSchemaV2 *> &schema_array) const;
   #undef GET_TABLE_SCHEMAS_IN_DST_SCHEMA_FUNC_DECLARE
+  int get_vector_index_schemas_in_tenant(
+      const uint64_t tenant_id,
+      common::ObIArray<const ObSimpleTableSchemaV2 *> &schema_array) const;
   int get_primary_table_schema_in_tablegroup(
       const uint64_t tenant_id,
       const uint64_t tablegroup_id,

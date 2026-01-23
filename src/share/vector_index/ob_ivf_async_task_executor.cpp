@@ -256,46 +256,6 @@ bool ObIvfAsyncTaskExector::check_operation_allow()
   return bret;
 }
 
-int ObIvfAsyncTaskExector::check_has_ivf_index(bool &has_ivf_index)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<uint64_t, DEFAULT_TABLE_ID_ARRAY_SIZE> table_id_array;
-  ObMemAttr memattr(tenant_id_, "IvfTaskExec");
-  if (OB_FAIL(ObTTLUtil::get_tenant_table_ids(tenant_id_, table_id_array))) {
-    LOG_WARN("fail to get tenant table ids", KR(ret), K_(tenant_id));
-  }
-
-  int64_t start_idx = 0;
-  int64_t end_idx = 0;
-  has_ivf_index = false;
-  while (OB_SUCC(ret) && start_idx < table_id_array.count() && !has_ivf_index) {
-    ObSchemaGetterGuard schema_guard;
-    start_idx = end_idx;
-    end_idx = MIN(table_id_array.count(), start_idx + DEFAULT_TABLE_ID_ARRAY_SIZE);
-
-    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
-            tenant_id_, schema_guard))) {
-      LOG_WARN("fail to get schema guard", KR(ret), K_(tenant_id));
-    }
-
-    const ObTableSchema *table_schema = nullptr;
-    for (int64_t idx = start_idx; OB_SUCC(ret) && idx < end_idx && !has_ivf_index; ++idx) {
-      const int64_t table_id = table_id_array.at(idx);
-      if (is_sys_table(table_id)) {
-        // do nothing
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
-        LOG_WARN("failed to get simple schema", KR(ret), K(table_id));
-      } else if (OB_ISNULL(table_schema)) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("table schema is null", KR(ret), K(table_id), K_(tenant_id));
-      } else if (table_schema->is_vec_ivf_index()) {
-        has_ivf_index = true;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObIvfAsyncTaskExector::check_and_set_thread_pool()
 {
   int ret = OB_SUCCESS;
@@ -312,12 +272,8 @@ int ObIvfAsyncTaskExector::check_and_set_thread_pool()
     ObIAllocator *allocator = index_ls_mgr->get_async_task_opt().get_allocator();
     ObVecIndexAsyncTaskHandler &thread_pool_handle =
         vector_index_service_->get_vec_async_task_handle();
-    bool has_ivf_index = false;
     common::ObSpinLockGuard init_guard(thread_pool_handle.lock_); // lock thread pool init to avoid init twice
     if (thread_pool_handle.get_tg_id() != INVALID_TG_ID) {  // no need to init twice, skip
-    } else if (OB_FAIL(check_has_ivf_index(has_ivf_index))) {
-      LOG_WARN("fail to check has ivf index", K(ret));
-    } else if (!has_ivf_index) {  // no vector index exist, skip
     } else if (OB_FAIL(thread_pool_handle.init())) {
       LOG_WARN("fail to init vec async task handle", K(ret), K(tenant_id_));
     } else if (OB_FAIL(thread_pool_handle.start())) {
