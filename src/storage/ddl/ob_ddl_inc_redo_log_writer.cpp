@@ -842,7 +842,7 @@ int ObDDLIncRedoLogWriterCallback::write(
     redo_info_.data_format_version_ = param_.data_format_version_;
     redo_info_.type_ = param_.direct_load_type_;
     redo_info_.trans_id_ = param_.trans_id_;
-    redo_info_.macro_block_id_ = MacroBlockId::mock_valid_macro_id();
+    redo_info_.macro_block_id_ = macro_handle.get_macro_id();
     redo_info_.macro_block_id_.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
     redo_info_.parallel_cnt_ = param_.parallel_cnt_;
     redo_info_.cg_cnt_ = param_.cg_cnt_;
