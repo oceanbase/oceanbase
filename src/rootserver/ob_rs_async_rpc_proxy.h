@@ -110,6 +110,7 @@ RPC_F(obrpc::OB_ALL_SERVER_TRACER_BROADCAST, obrpc::ObRefreshTenantInfoArg, obrp
 RPC_F(obrpc::OB_CLEAR_FETCHED_LOG_CACHE, share::ObClearFetchedLogCacheArg, share::ObClearFetchedLogCacheRes, ObClearFetchedLogCacheProxy);
 RPC_F(obrpc::OB_CHECK_BACKUP_DEST_RW_CONSISTENCY, obrpc::ObCheckBackupDestRWConsistencyArg, obrpc::Int64, ObCheckBackupDestRWConsistencyProxy);
 RPC_F(obrpc::OB_CHECK_SYS_TABLE_SCHEMA, obrpc::ObCheckSysTableSchemaArg, obrpc::ObCheckSysTableSchemaResult, ObCheckSysTableSchemaProxy);
+RPC_RS(obrpc::OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE, obrpc::ObDropTableArg, obrpc::ObDropTableRes, ObNonAtomicDropTableInDBProxy);
 
 
 }//end namespace rootserver

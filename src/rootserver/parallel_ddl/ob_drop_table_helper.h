@@ -61,7 +61,6 @@ private:
 
   int lock_tables_();
   int check_legitimacy_();
-  int gen_mock_fk_parent_table_schemas_();
   int drop_schemas_();
 
 private:

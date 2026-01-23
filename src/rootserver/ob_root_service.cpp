@@ -4261,6 +4261,22 @@ int ObRootService::parallel_drop_table(const ObDropTableArg &arg, ObDropTableRes
   return ret;
 }
 
+int ObRootService::non_atomic_drop_table_in_database(const ObDropTableArg &arg, ObDropTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(arg.exec_tenant_id_));
+  } else if (data_version < DATA_VERSION_4_5_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("non atomic drop table in database before version 4.5.1.0 is not supported", KR(ret), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "non atomic drop table in database before version 4.5.1.0 is");
+  } else if (OB_FAIL(parallel_drop_table(arg, res))) {
+    LOG_WARN("fail to drop table", KR(ret), K(arg));
+  }
+  return ret;
+}
+
 int ObRootService::drop_database(const obrpc::ObDropDatabaseArg &arg, ObDropDatabaseRes &drop_database_res)
 {
   int ret = OB_SUCCESS;

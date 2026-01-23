@@ -346,5 +346,8 @@
   //----Definitions for sensitive rule----
   RPC_S(PRD handle_sensitive_rule_ddl, obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, (ObSensitiveRuleDDLArg));
   //----End of definitions for sensitive rule----
+  //----Functions for managing table non atomic in database----
+  RPC_AP(PRD non_atomic_drop_table_in_database, obrpc::OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE, (ObDropTableArg), ObDropTableRes);
+  //----End of functions for managing table non atomic in database----
 
   RPC_S(PR5 get_refreshed_schema_versions, obrpc::OB_GET_REFRESHED_SCHEMA_VERSIONS, obrpc::ObGetRefreshedSchemaVersionsRes);

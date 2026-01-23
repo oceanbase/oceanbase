@@ -97,9 +97,11 @@ int ObDDLHelperUtils::write_1503_ddl_operation(ObMultiVersionSchemaService *sche
   return ret;
 }
 
-int ObDDLHelperUtils::wait_ddl_trans(ObDDLTransController *controller,
+int ObDDLHelperUtils::wait_ddl_trans(ObMultiVersionSchemaService *schema_service,
+                                     ObDDLTransController *controller,
                                      const uint64_t tenant_id,
-                                     const int64_t task_id)
+                                     const int64_t task_id,
+                                     ObDDLSQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
@@ -107,6 +109,12 @@ int ObDDLHelperUtils::wait_ddl_trans(ObDDLTransController *controller,
   if (OB_ISNULL(controller)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("controller is null", KR(ret));
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  // write 1503 ddl operation
+  } else if (OB_FAIL(write_1503_ddl_operation(schema_service, tenant_id, trans))) {
+    LOG_WARN("fail to write 1503 ddl operation", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFAULT_TS))) {
     LOG_WARN("fail to set default ts", KR(ret));
   } else if (OB_FAIL(controller->wait_task_ready(tenant_id, task_id, ctx.get_timeout()))) {
@@ -124,10 +132,6 @@ int ObDDLHelperUtils::end_ddl_trans(ObMultiVersionSchemaService *schema_service,
                                     ObDDLSQLTransaction &trans)
 {
   int ret = return_ret;
-  // write 1503 ddl operation
-  if(FAILEDx(write_1503_ddl_operation(schema_service, tenant_id, trans))) {
-    LOG_WARN("fail to write 1503 ddl operation", KR(ret), K(tenant_id));
-  }
 
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -175,7 +179,7 @@ int ObDDLHelperUtils::wait_and_end_ddl_trans(const int return_ret,
 {
   int ret = return_ret;
   need_clean_failed = false;
-  if (FAILEDx(wait_ddl_trans(ddl_trans_controller, tenant_id, task_id))) {
+  if (FAILEDx(wait_ddl_trans(schema_service, ddl_trans_controller, tenant_id, task_id, trans))) {
     LOG_WARN("fail to wait ddl trans", KR(ret));
   }
   bool commit = OB_SUCC(ret);
