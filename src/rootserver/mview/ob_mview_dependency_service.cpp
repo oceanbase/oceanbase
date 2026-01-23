@@ -138,39 +138,32 @@ int ObMViewDependencyService::update_mview_dep_infos(
           LOG_WARN("failed to add cur ref table id to array", KR(ret));
         }
       }
-    }
 
-    if (OB_FAIL(ret)) {
-    } else if (prev_mv_dep_infos.empty()) { // creating a new mview
-    } else if (OB_UNLIKELY(prev_mv_dep_infos.count() != cur_mv_dep_infos.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("mv dep infos count not match",
-          KR(ret), K(prev_mv_dep_infos), K(cur_mv_dep_infos));
-    } else { // updating an existing mview
-      for (int64_t i = 0; OB_SUCC(ret) && (i < cur_mv_dep_infos.count()); ++i) {
-        const ObMVDepInfo &prev_mv_dep = prev_mv_dep_infos.at(i);
-        const ObMVDepInfo &cur_mv_dep = cur_mv_dep_infos.at(i);
-        if (OB_UNLIKELY(prev_mv_dep.p_order_ != cur_mv_dep.p_order_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("p_order is not match",
-              KR(ret), K(prev_mv_dep.p_order_), K(cur_mv_dep.p_order_));
-        } else if (prev_mv_dep.p_obj_ != cur_mv_dep.p_obj_) {
-          const uint64_t old_ref_table_id = prev_mv_dep.p_obj_;
-          // if an old_ref_table_id exists in the cur_mv_dep_infos,
-          // then its table_referenced_by_mv_flag does not need to be cleared
-          if (has_exist_in_array(new_ref_table_ids, old_ref_table_id)) {
-          } else if (has_exist_in_array(table_ids_only_ref_by_this_mv, old_ref_table_id)) {
-            // only when an old_ref_table_id exists in the list of table_ids_only_ref_by_this_mv,
-            // its table_referenced_by_mv_flag needs to be cleared
-            if (OB_FAIL(stale_ref_table_ids.push_back(old_ref_table_id))) {
-              LOG_WARN("failed to add old ref table id to array", KR(ret), K(old_ref_table_id));
-            }
-          } else if (has_exist_in_array(table_ids_only_ref_by_this_fast_lsm_mv, old_ref_table_id)) {
-            if (OB_FAIL(stale_fast_lsm_ref_table_ids.push_back(old_ref_table_id))) {
-              LOG_WARN("failed to add old ref table id to array", KR(ret), K(old_ref_table_id));
-            }
+      for (int64_t i = 0; OB_SUCC(ret) && (i < prev_mv_dep_infos.count()); ++i) {
+        const uint64_t old_ref_table_id = prev_mv_dep_infos.at(i).p_obj_;
+        // if an old_ref_table_id exists in the cur_mv_dep_infos,
+        // then its table_referenced_by_mv_flag does not need to be cleared
+        if (has_exist_in_array(new_ref_table_ids, old_ref_table_id)) {
+        } else if (has_exist_in_array(table_ids_only_ref_by_this_mv, old_ref_table_id)) {
+          // only when an old_ref_table_id exists in the list of table_ids_only_ref_by_this_mv,
+          // its table_referenced_by_mv_flag needs to be cleared
+          if (OB_FAIL(stale_ref_table_ids.push_back(old_ref_table_id))) {
+            LOG_WARN("failed to add old ref table id to array", KR(ret), K(old_ref_table_id));
+          }
+        } else if (has_exist_in_array(table_ids_only_ref_by_this_fast_lsm_mv, old_ref_table_id)) {
+          if (OB_FAIL(stale_fast_lsm_ref_table_ids.push_back(old_ref_table_id))) {
+            LOG_WARN("failed to add old ref table id to array", KR(ret), K(old_ref_table_id));
           }
         }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (prev_mv_dep_infos.empty()) {
+        // do nothing, creating a new mview
+      } else if (OB_UNLIKELY(prev_mv_dep_infos.count() != cur_mv_dep_infos.count())
+                 && OB_FAIL(OB_E(EventTable::EN_MVIEW_DEFENSIVE_CHECK) OB_SUCCESS)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mv dep infos count not match", K(prev_mv_dep_infos), K(cur_mv_dep_infos));
       }
     }
 

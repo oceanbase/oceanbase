@@ -17,6 +17,7 @@
 #include "storage/mview/ob_mview_transaction.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "src/share/schema/ob_mview_info.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
 
 namespace oceanbase
 {
@@ -468,22 +469,25 @@ int ObMViewRefreshHelper::sync_get_min_target_data_sync_scn(
 
 int ObMViewRefreshHelper::get_dep_mviews_from_dep_info(
                           const uint64_t tenant_id,
-                          const ObIArray<share::schema::ObDependencyInfo> &dependency_infos,
+                          const ObIArray<sql::ObMVDepInfo> &mv_dep_infos,
                           ObSchemaGetterGuard &schema_guard,
                           ObIArray<uint64_t> &dep_mview_ids)
 {
   int ret = OB_SUCCESS;
   dep_mview_ids.reuse();
-  ARRAY_FOREACH(dependency_infos, idx) {
-    const ObDependencyInfo &dep_info = dependency_infos.at(idx);
+  const int64_t view_type = static_cast<int64_t>(ObObjectType::VIEW);
+  ARRAY_FOREACH(mv_dep_infos, idx) {
+    const ObMVDepInfo &dep_info = mv_dep_infos.at(idx);
     const ObTableSchema *table_schema = nullptr;
-    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep_info.get_ref_obj_id(), table_schema))) {
+    if (view_type != dep_info.p_type_) {
+      /* do nothing */
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep_info.p_obj_, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(tenant_id));
     } else if (OB_ISNULL(table_schema)) {
       LOG_INFO("table schema is null, maybe dep container tale not exist",
-                K(ret), K(tenant_id), K(dep_info.get_ref_obj_id()));
+                K(ret), K(tenant_id), K(dep_info.p_type_));
     } else if (table_schema->is_materialized_view() &&
-               OB_FAIL(dep_mview_ids.push_back(dep_info.get_ref_obj_id()))) {
+               OB_FAIL(dep_mview_ids.push_back(dep_info.p_type_))) {
       LOG_WARN("fail to push back dep mview id", K(ret));
     }
   }
@@ -544,7 +548,7 @@ int ObMViewRefreshHelper::collect_deps_and_check_satisfy(
                           bool oracle_mode)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObDependencyInfo> dep_infos;
+  ObArray<ObMVDepInfo> mv_dep_infos;
   ObSEArray<uint64_t, 2> dep_mview_ids;
   share::SCN target_data_sync_scn;
   share::SCN read_snapshot;
@@ -559,11 +563,10 @@ int ObMViewRefreshHelper::collect_deps_and_check_satisfy(
     LOG_WARN("failed to convert to scn", K(target_data_sync_ts));
   } else if (OB_FAIL(read_snapshot.convert_for_sql(snapshot_version))) {
     LOG_WARN("failed to convert to scn", K(snapshot_version));
-  } else if (OB_FAIL(ObDependencyInfo::collect_ref_infos(tenant_id,
-              mview_id, sql_proxy, dep_infos))) {
-    LOG_WARN("fail to collect mview ref infos", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(ObMVDepUtils::get_mview_dep_infos(sql_proxy, tenant_id, mview_id, mv_dep_infos))) {
+      LOG_WARN("fail to get mv dep infos", K(ret), K(mview_id));
   } else if (OB_FAIL(ObMViewRefreshHelper::get_dep_mviews_from_dep_info(
-                     tenant_id, dep_infos, schema_guard, dep_mview_ids))) {
+                     tenant_id, mv_dep_infos, schema_guard, dep_mview_ids))) {
     LOG_WARN("fail to get dep mview ids", K(ret));
   } else if (OB_FAIL(ObMViewRefreshHelper::check_dep_mviews_satisfy_target_scn(
                      tenant_id, target_data_sync_scn, read_snapshot,

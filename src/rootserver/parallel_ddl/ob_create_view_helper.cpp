@@ -771,16 +771,18 @@ int ObCreateViewHelper::insert_schema_object_dependency_()
     LOG_WARN("new view schema is null", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < arg_.dep_infos_.count(); ++i) {
-      ObDependencyInfo dep;
-      if (OB_FAIL(dep.assign(arg_.dep_infos_.at(i)))) {
-        LOG_WARN("fail to assign dependency info", KR(ret));
-      } else {
-        dep.set_tenant_id(tenant_id_);
-        dep.set_dep_obj_id(new_view_schema_->get_table_id());
-        dep.set_dep_obj_owner_id(new_view_schema_->get_table_id());
-        dep.set_schema_version(new_view_schema_->get_schema_version());
-        if (OB_FAIL(dep.insert_schema_object_dependency(get_trans_()))) {
-          LOG_WARN("fail to insert schema object dependency", KR(ret), K(dep));
+      if (OB_INVALID_ID == arg_.dep_infos_.at(i).get_dep_obj_id()) {
+        ObDependencyInfo dep;
+        if (OB_FAIL(dep.assign(arg_.dep_infos_.at(i)))) {
+          LOG_WARN("fail to assign dependency info", KR(ret));
+        } else {
+          dep.set_tenant_id(tenant_id_);
+          dep.set_dep_obj_id(new_view_schema_->get_table_id());
+          dep.set_dep_obj_owner_id(new_view_schema_->get_table_id());
+          dep.set_schema_version(new_view_schema_->get_schema_version());
+          if (OB_FAIL(dep.insert_schema_object_dependency(get_trans_()))) {
+            LOG_WARN("fail to insert schema object dependency", KR(ret), K(dep));
+          }
         }
       }
     }

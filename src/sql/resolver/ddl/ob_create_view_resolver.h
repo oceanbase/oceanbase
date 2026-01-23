@@ -127,8 +127,7 @@ private:
   int print_star_expanded_view_stmt(common::ObString &expanded_view,
                                     const int64_t view_definition_start_pos,
                                     const int64_t view_definition_end_pos);
-  int collect_dependency_infos(ObQueryCtx *query_ctx,
-                               obrpc::ObCreateTableArg &create_arg);
+  int collect_dependency_infos(obrpc::ObCreateTableArg &create_arg);
   int get_child_stmt_without_view(const ObSelectStmt *select_stmt,
                                   ObIArray<ObSelectStmt*> &child_stmts);
   int get_sel_priv_tables_in_subquery(const ObSelectStmt *child_stmt,

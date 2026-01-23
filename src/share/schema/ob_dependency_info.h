@@ -148,11 +148,9 @@ public:
              common::ObString &dep_attrs,
              common::ObString &dep_reason,
              bool is_pl = true);
-  static int collect_dep_infos(ObReferenceObjTable &ref_objs,
-                               common::ObIArray<ObDependencyInfo> &deps,
-                               ObObjectType dep_obj_type,
-                               uint64_t dep_obj_id,
-                               int64_t &max_version);
+  static int collect_dep_infos_for_view(const ObReferenceObjTable &ref_objs,
+                                        const bool need_nested_dep,
+                                        common::ObIArray<ObDependencyInfo> &deps);
   static int collect_dep_infos(
     const common::ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
     common::ObIArray<ObDependencyInfo> &deps,

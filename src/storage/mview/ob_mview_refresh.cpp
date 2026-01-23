@@ -23,6 +23,7 @@
 #include "rootserver/mview/ob_mview_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
 
 namespace oceanbase
 {
@@ -181,7 +182,7 @@ int ObMViewRefresher::prepare_for_refresh()
   ObSchemaGetterGuard schema_guard;
   SCN current_scn;
   const ObTableSchema *mview_table_schema = nullptr;
-  ObArray<ObDependencyInfo> previous_dependency_infos;
+  ObArray<ObMVDepInfo> previous_mv_dep_infos;
   // get refreshed schema and scn
   if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -227,8 +228,8 @@ int ObMViewRefresher::prepare_for_refresh()
       } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
                    tenant_id, mview_id, refresh_ctx_->is_oracle_mode_))) {
         LOG_WARN("check if oracle mode failed", KR(ret), K(mview_id));
-      } else if (OB_FAIL(ObDependencyInfo::collect_ref_infos(tenant_id,
-                         mview_id, trans, previous_dependency_infos))) {
+      } else if (OB_FAIL(ObMVDepUtils::get_mview_dep_infos(trans, tenant_id, mview_id,
+                                                           previous_mv_dep_infos))) {
         LOG_WARN("fail to parse mview ref infos", KR(ret), K(tenant_id), K(mview_id));
       }
     }
@@ -259,7 +260,7 @@ int ObMViewRefresher::prepare_for_refresh()
           LOG_INFO("curr mview satisfied this target scn, skip refresh task", K(ret),
                    K(mview_info), K(target_data_sync_scn));
         } else if (OB_FAIL(ObMViewRefreshHelper::get_dep_mviews_from_dep_info(
-                    tenant_id, previous_dependency_infos, schema_guard, dep_mview_ids))) {
+                    tenant_id, previous_mv_dep_infos, schema_guard, dep_mview_ids))) {
           LOG_WARN("fail to get dep mview ids", K(ret));
         } else if (OB_FAIL(ObMViewRefreshHelper::check_dep_mviews_satisfy_target_scn(
                            tenant_id, target_data_sync_scn, current_scn,
@@ -344,7 +345,7 @@ int ObMViewRefresher::prepare_for_refresh()
       LOG_WARN("mv can not fast refresh", KR(ret));
       LOG_USER_ERROR(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, mview_table_schema->get_table_name(),
                      mv_provider.get_error_str().ptr());
-    } else if (OB_FAIL(check_fast_refreshable_(previous_dependency_infos, schema_guard))) {
+    } else if (OB_FAIL(check_fast_refreshable_(previous_mv_dep_infos, schema_guard))) {
       if (ObMVRefreshMethod::FORCE == refresh_method &&
           OB_LIKELY(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret || OB_ERR_MLOG_IS_YOUNGER == ret)) {
         refresh_type = ObMVRefreshType::COMPLETE;
@@ -396,7 +397,7 @@ int ObMViewRefresher::fetch_based_infos(ObSchemaGetterGuard &schema_guard)
   based_schema_object_infos.reset();
   mlog_infos.reset();
   if (OB_FAIL(collect_based_schema_object_infos(tenant_id, data_version_, schema_guard,
-              dependency_infos, based_schema_object_infos))) {
+              dependency_infos, based_schema_object_infos, refresh_ctx_->direct_dep_cnt_))) {
     LOG_WARN("fail to collect based schema object infos", KR(ret), K(tenant_id),
              K(data_version_), K(dependency_infos));
   } else {
@@ -464,54 +465,57 @@ int ObMViewRefresher::fetch_based_infos(ObSchemaGetterGuard &schema_guard)
 }
 
 int ObMViewRefresher::check_fast_refreshable_(
-                      const ObIArray<share::schema::ObDependencyInfo> &previous_dependency_infos,
+                      const ObIArray<sql::ObMVDepInfo> &previous_mv_dep_infos,
                       share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObDependencyInfo> &dependency_infos = refresh_ctx_->dependency_infos_;
   const ObIArray<ObMLogInfo> &mlog_infos = refresh_ctx_->mlog_infos_;
   const bool nested_consistent_refresh = refresh_ctx_->target_data_sync_scn_.is_valid();
-  const uint64_t tenant_id = refresh_param_.tenant_id_;
-  if (OB_UNLIKELY(previous_dependency_infos.count() != dependency_infos.count())) {
+  uint64_t check_scn = refresh_ctx_->mview_info_.get_is_synced()
+                       ? refresh_ctx_->mview_info_.get_data_sync_scn()
+                       : refresh_ctx_->mview_info_.get_last_refresh_scn();
+  if (OB_UNLIKELY(previous_mv_dep_infos.count() > dependency_infos.count())) {
     ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
     LOG_WARN("dependency num not match", KR(ret), K(dependency_infos),
-             K(previous_dependency_infos));
-  } else {
-    // check dependency consistent
-    for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
-      const ObDependencyInfo &dep = dependency_infos.at(i);
-      const ObDependencyInfo &pre_dep = previous_dependency_infos.at(i);
-      if (dep.get_ref_obj_id() != pre_dep.get_ref_obj_id()) {
-        if (nested_consistent_refresh) {
-          ret = OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH;
-          LOG_WARN("can not consistent refresh", KR(ret), K(i), K(dependency_infos),
-                   K(previous_dependency_infos));
-        } else {
-          ret = OB_ERR_MVIEW_MISSING_DEPENDENCE;
-          LOG_WARN("dependency changed", KR(ret), K(i), K(dep), K(pre_dep));
-        }
+             K(previous_mv_dep_infos));
+  }
+
+  // check dependency consistent
+  for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
+    const ObDependencyInfo &dep = dependency_infos.at(i);
+    if (i >= previous_mv_dep_infos.count()) {
+      //  For fast refresh mview with user define proctime view, tables in user define proctime view
+      //  not recorded in previous_mv_dep_infos in earlier version and the dep_obj_id recorded as the valid_id.
+      //  For upgrade from the earlier version, skip check those tables.
+      if (OB_UNLIKELY(OB_INVALID_ID == dep.get_dep_obj_id())) {
+        ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+        LOG_WARN("dependency num not match", KR(ret), K(i), K(dependency_infos));
+      }
+    } else if (dep.get_ref_obj_id() != previous_mv_dep_infos.at(i).p_obj_) {
+      if (nested_consistent_refresh) {
+        ret = OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH;
+        LOG_WARN("can not consistent refresh", KR(ret), K(i), K(dependency_infos),
+                  K(previous_mv_dep_infos));
+      } else {
+        ret = OB_ERR_MVIEW_MISSING_DEPENDENCE;
+        LOG_WARN("dependency changed", KR(ret), K(i), K(dep), K(previous_mv_dep_infos.at(i)));
       }
     }
-    if (OB_SUCC(ret)) {
-      // check mlog
-      for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
-        const ObMLogInfo &mlog_info = mlog_infos.at(i);
-        if (OB_UNLIKELY(!mlog_info.is_valid())) {
-          ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
-          LOG_WARN("table does not have mlog", KR(ret), K(i), K(dependency_infos), K(mlog_info));
-        } else {
-          uint64_t check_scn = refresh_ctx_->mview_info_.get_is_synced() ?
-                              refresh_ctx_->mview_info_.get_data_sync_scn():
-                              refresh_ctx_->mview_info_.get_last_refresh_scn();
-          if (OB_UNLIKELY(mlog_info.get_last_purge_scn() > check_scn)) {
-            ret = OB_ERR_MLOG_IS_YOUNGER;
-            LOG_WARN("mlog is younger than last refresh", KR(ret), K(refresh_ctx_->mview_info_), K(i),
-                    K(mlog_info), K(check_scn));
-          }
-        }
-        LOG_DEBUG("check fast refresh", K(ret), K(mlog_info), K(refresh_ctx_->mview_info_));
-      }
+  }
+
+  // check mlog
+  for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
+    const ObMLogInfo &mlog_info = mlog_infos.at(i);
+    if (OB_UNLIKELY(!mlog_info.is_valid())) {
+      ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+      LOG_WARN("table does not have mlog", KR(ret), K(i), K(dependency_infos), K(mlog_info));
+    } else if (OB_UNLIKELY(mlog_info.get_last_purge_scn() > check_scn)) {
+      ret = OB_ERR_MLOG_IS_YOUNGER;
+      LOG_WARN("mlog is younger than last refresh", KR(ret), K(refresh_ctx_->mview_info_), K(i),
+                K(mlog_info), K(check_scn));
     }
+    LOG_DEBUG("check fast refresh", K(ret), K(mlog_info), K(refresh_ctx_->mview_info_));
   }
   return ret;
 }
@@ -547,6 +551,7 @@ int ObMViewRefresher::complete_refresh()
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] =
       session_info->get_local_nls_timestamp_tz_format();
     arg.exec_tenant_id_ = tenant_id;
+    arg.direct_dep_cnt_ = refresh_ctx_->direct_dep_cnt_;
     if (OB_FAIL(arg.tz_info_wrap_.deep_copy(session_info->get_tz_info_wrap()))) {
       LOG_WARN("failed to deep copy tz_info_wrap", KR(ret));
     } else if (OB_FAIL(arg.based_schema_object_infos_.assign(refresh_ctx_->based_schema_object_infos_))) {
@@ -941,31 +946,32 @@ int ObMViewRefresher::collect_based_schema_object_infos(
                       const uint64_t data_version,
                       ObSchemaGetterGuard &schema_guard,
                       const ObIArray<share::schema::ObDependencyInfo> &dependency_infos,
-                      ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos)
+                      ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
+                      uint64_t &direct_dep_cnt)
 {
   int ret = OB_SUCCESS;
+  direct_dep_cnt = 0;
+  based_schema_object_infos.reuse();
   ARRAY_FOREACH(dependency_infos, i) {
     const ObDependencyInfo &dep = dependency_infos.at(i);
     const ObObjectType ref_obj_type = dep.get_ref_obj_type();
     const ObSchema *schema_obj = nullptr;
-    int64_t ref_obj_schema_version = OB_INVALID_VERSION;
-    ObSchemaType ref_obj_schema_type = OB_MAX_SCHEMA;
-    const uint64_t schema_id = dep.get_ref_obj_id();
+    ObBasedSchemaObjectInfo based_info;
+    based_info.schema_id_ = dep.get_ref_obj_id();
+    based_info.schema_tenant_id_ = tenant_id;
     if (OB_FAIL(ObMViewUtils::get_schema_object_from_dependency(
-                tenant_id, schema_guard, schema_id, ref_obj_type,
-                schema_obj, ref_obj_schema_version, ref_obj_schema_type))) {
+                based_info.schema_tenant_id_, schema_guard, based_info.schema_id_, ref_obj_type,
+                schema_obj, based_info.schema_version_, based_info.schema_type_))) {
       LOG_WARN("fail to get schema object from dependency", KR(ret), K(dep));
-    }
-    if (OB_FAIL(ret)) {
-    } else {
-      ObBasedSchemaObjectInfo based_info;
-      based_info.schema_id_ = dep.get_ref_obj_id();
-      based_info.schema_type_ = ref_obj_schema_type;
-      based_info.schema_version_ = ref_obj_schema_version;
-      based_info.schema_tenant_id_ = tenant_id;
-      if (OB_FAIL(based_schema_object_infos.push_back(based_info))) {
-        LOG_WARN("fail to push back base info", KR(ret));
-      }
+    } else if (OB_FAIL(based_schema_object_infos.push_back(based_info))) {
+      LOG_WARN("fail to push back base info", KR(ret));
+    } else if (OB_INVALID_ID != dep.get_dep_obj_id()) {
+      /* do nothing */
+    } else if (OB_UNLIKELY(based_schema_object_infos.count() != ++direct_dep_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      //  In function ObDependencyInfo::collect_dep_infos_for_view,
+      //  directly dependency base objects placed at the front of the array.
+      LOG_WARN("unexpected ordering in based_schema_object_infos", K(ret), K(direct_dep_cnt), K(dependency_infos));
     }
   }
   return ret;

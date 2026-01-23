@@ -437,50 +437,55 @@ int ObDependencyInfo::collect_dep_infos(const ObIArray<ObSchemaObjVersion> &sche
   return ret;
 }
 
-int ObDependencyInfo::collect_dep_infos(ObReferenceObjTable &ref_objs,
-                                        ObIArray<ObDependencyInfo> &deps,
-                                        ObObjectType dep_obj_type,
-                                        uint64_t dep_obj_id,
-                                        int64_t &max_version)
+int ObDependencyInfo::collect_dep_infos_for_view(const ObReferenceObjTable &ref_objs,
+                                                 const bool need_nested_dep,
+                                                 ObIArray<ObDependencyInfo> &deps)
 {
   int ret = OB_SUCCESS;
-  int64_t order = 0;
-  max_version = OB_INVALID_VERSION;
-  auto &ref_obj_map = ref_objs.get_ref_obj_table();
-  for (auto it = ref_obj_map.begin(); OB_SUCC(ret) && it != ref_obj_map.end(); ++it) {
-    ObDependencyInfo dep;
-    uint64_t curr_dep_obj_id = it->first.dep_obj_id_;
-    // create view path, only record directly dependency
-    if (curr_dep_obj_id == dep_obj_id) {
-      bool exist = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < it->second->ref_obj_versions_.count(); ++i) {
-        exist = false;
-        for (int j = 0; j < deps.count(); j++) {
-          const ObDependencyInfo& tmp_dep = deps.at(j);
-          if (tmp_dep.get_dep_obj_type() == it->first.dep_obj_type_
-              && tmp_dep.get_ref_obj_id() == it->second->ref_obj_versions_.at(i).object_id_
-              && tmp_dep.get_ref_timestamp() == it->second->ref_obj_versions_.at(i).version_
-              && tmp_dep.get_ref_obj_type()
-                 == ObSchemaObjVersion::get_schema_object_type(it->second->ref_obj_versions_.at(i).object_type_)) {
-            exist = true;
-            break;
-          }
-        }
-        if (exist) {
-          continue;
-        }
-        ObDependencyInfo dep;
-        max_version = std::max(it->second->ref_obj_versions_.at(i).version_, max_version);
-        dep.set_dep_obj_id(OB_INVALID_ID);
-        dep.set_dep_obj_type(it->first.dep_obj_type_);
-        dep.set_dep_obj_owner_id(it->first.dep_db_id_);
-        dep.set_ref_obj_id(it->second->ref_obj_versions_.at(i).object_id_);
-        dep.set_ref_obj_type(ObSchemaObjVersion::get_schema_object_type(it->second->ref_obj_versions_.at(i).object_type_));
-        dep.set_order(order);
-        ++order;
-        dep.set_dep_timestamp(-1);
-        dep.set_ref_timestamp(it->second->ref_obj_versions_.at(i).version_);
-        OZ (deps.push_back(dep));
+  const ObString dummy_str;
+  const ObReferenceObjTable::RefObjVersionMap &ref_obj_map = ref_objs.get_ref_obj_table();
+  // record directly dependency
+  for (ObReferenceObjTable::RefObjVersionMap::const_iterator it = ref_obj_map.begin(); OB_SUCC(ret) && it != ref_obj_map.end(); ++it) {
+    const ObReferenceObjTable::ObDependencyObjKey &dep_obj_key = it->first;
+    for (int64_t i = 0; OB_SUCC(ret) && i < it->second->ref_obj_versions_.count(); ++i) {
+      const ObSchemaObjVersion &schema_obj_version = it->second->ref_obj_versions_.at(i);
+      if (OB_INVALID_ID != dep_obj_key.dep_obj_id_) {
+        /* skip nested dependency */
+      } else if (OB_FAIL(add_dependency_if_not_duplicate(deps,
+                                                         dep_obj_key.dep_obj_type_,
+                                                         schema_obj_version.object_id_,
+                                                         schema_obj_version.version_,
+                                                         ObSchemaObjVersion::get_schema_object_type(schema_obj_version.object_type_),
+                                                         0,
+                                                         dummy_str,
+                                                         dummy_str,
+                                                         OB_INVALID_ID, /* tenant_id */
+                                                         dep_obj_key.dep_obj_id_,
+                                                         dep_obj_key.dep_db_id_))) {
+        LOG_WARN("failed to try add direct dep", K(ret), K(dep_obj_key.dep_obj_id_));
+      }
+    }
+  }
+
+  // for create mview view, record nested dependency
+  for (ObReferenceObjTable::RefObjVersionMap::const_iterator it = ref_obj_map.begin(); need_nested_dep && OB_SUCC(ret) && it != ref_obj_map.end(); ++it) {
+    const ObReferenceObjTable::ObDependencyObjKey &dep_obj_key = it->first;
+    for (int64_t i = 0; OB_SUCC(ret) && i < it->second->ref_obj_versions_.count(); ++i) {
+      const ObSchemaObjVersion &schema_obj_version = it->second->ref_obj_versions_.at(i);
+      if (OB_INVALID_ID == it->first.dep_obj_id_) {
+        /* skip directly dependency */
+      } else if (OB_FAIL(add_dependency_if_not_duplicate(deps,
+                                                         dep_obj_key.dep_obj_type_,
+                                                         schema_obj_version.object_id_,
+                                                         schema_obj_version.version_,
+                                                         ObSchemaObjVersion::get_schema_object_type(schema_obj_version.object_type_),
+                                                         0,
+                                                         dummy_str,
+                                                         dummy_str,
+                                                         OB_INVALID_ID,  /* tenant_id */
+                                                         dep_obj_key.dep_obj_id_,
+                                                         dep_obj_key.dep_db_id_))) {
+        LOG_WARN("failed to try add direct dep", K(ret), K(dep_obj_key.dep_obj_id_));
       }
     }
   }
@@ -488,6 +493,8 @@ int ObDependencyInfo::collect_dep_infos(ObReferenceObjTable &ref_objs,
   return ret;
 }
 
+// construct deps from based_schema_object_infos for mview.
+//  there is no duplicate dep obj in based_schema_object_infos
 int ObDependencyInfo::collect_dep_infos(
     const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
     ObIArray<ObDependencyInfo> &deps,
@@ -526,6 +533,10 @@ int ObDependencyInfo::collect_dep_infos(
         ++order;
       }
     }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(based_schema_object_infos.count() != deps.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected based schema object infos", KR(ret), K(based_schema_object_infos));
   }
   return ret;
 }

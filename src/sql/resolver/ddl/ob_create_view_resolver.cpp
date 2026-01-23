@@ -114,6 +114,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                || 1 == parse_tree.reserved_;
     create_arg.is_alter_view_ = (1 == parse_tree.reserved_);
     bool is_materialized_view = 2 == parse_tree.reserved_;
+    params_.is_mview_definition_sql_ = is_materialized_view;
     table_schema.get_view_schema().set_materialized(is_materialized_view);
     table_schema.set_force_view(is_force_view);
     table_schema.set_tenant_id(session_info_->get_effective_tenant_id());
@@ -214,7 +215,6 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       ObViewTableResolver view_table_resolver(params_, stmt->get_database_name(),
                                               table_schema.get_table_name());
       view_table_resolver.params_.is_from_create_view_ = true;
-      view_table_resolver.params_.is_mview_definition_sql_ = is_materialized_view;
       view_table_resolver.params_.is_specified_col_name_ = parse_tree.children_[VIEW_COLUMNS_NODE] != NULL;
       view_table_resolver.set_current_view_level(1);
       view_table_resolver.set_is_top_stmt(true);
@@ -377,7 +377,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(collect_dependency_infos(params_.query_ctx_, create_arg))) {
+      } else if (OB_FAIL(collect_dependency_infos(create_arg))) {
         LOG_WARN("failed to collect dependency infos", K(ret));
       } else if (is_force_view && (!resolve_succ || add_undefined_columns)
                  && FALSE_IT(table_schema.set_object_status(ObObjectStatus::INVALID))) {
@@ -1300,22 +1300,27 @@ int ObCreateViewResolver::resolve_column_list(ParseNode *view_columns_node,
   return ret;
 }
 
-int ObCreateViewResolver::collect_dependency_infos(ObQueryCtx *query_ctx,
-                                                   ObCreateTableArg &create_arg)
+int ObCreateViewResolver::collect_dependency_infos(ObCreateTableArg &create_arg)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  int64_t max_ref_obj_schema_version = -1;
-  CK (OB_NOT_NULL(query_ctx));
-  if (OB_FAIL(ret)) {
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(query_ctx = params_.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(query_ctx));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(create_arg.schema_.get_tenant_id(), data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (data_version >= DATA_VERSION_4_1_0_0) {
-    OZ (ObDependencyInfo::collect_dep_infos(query_ctx->reference_obj_tables_,
-                                            create_arg.dep_infos_,
-                                            ObObjectType::VIEW,
-                                            OB_INVALID_ID,
-                                            max_ref_obj_schema_version));
+    int64_t max_ref_obj_schema_version = OB_INVALID_VERSION;
+    ObIArray<ObDependencyInfo> &deps = create_arg.dep_infos_;
+    const bool need_nested_dep = params_.is_mview_definition_sql_
+                                 && data_version >= DATA_VERSION_4_4_2_0;
+    OZ (ObDependencyInfo::collect_dep_infos_for_view(query_ctx->reference_obj_tables_,
+                                                     need_nested_dep,
+                                                     deps));
+    for (int64_t i = 0; OB_SUCC(ret) && i < deps.count(); ++i) {
+      max_ref_obj_schema_version = std::max(deps.at(i).get_ref_timestamp(), max_ref_obj_schema_version);
+    }
     OX (create_arg.schema_.set_max_dependency_version(max_ref_obj_schema_version));
   } else {
     ObReferenceObjTable::ObDependencyObjItem *dep_obj_item = nullptr;

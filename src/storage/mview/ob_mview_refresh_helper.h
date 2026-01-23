@@ -24,6 +24,7 @@ namespace oceanbase
 namespace sql
 {
 class ObExecContext;
+class ObMVDepInfo;
 } // namespace sql
 namespace common
 {
@@ -71,7 +72,7 @@ public:
                                                  bool &satisfy,
                                                  bool oracle_mode = false);
   static int get_dep_mviews_from_dep_info(const uint64_t tenant_id,
-                                          const ObIArray<share::schema::ObDependencyInfo> &dependency_infos,
+                                          const ObIArray<sql::ObMVDepInfo> &mv_dep_infos,
                                           ObSchemaGetterGuard &schema_guard,
                                           ObIArray<uint64_t> &dep_mview_ids);
   static int collect_deps_and_check_satisfy(const uint64_t tenant_id,

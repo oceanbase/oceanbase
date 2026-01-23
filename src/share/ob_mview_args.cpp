@@ -58,6 +58,7 @@ void ObMViewCompleteRefreshArg::reset()
   allocator_.reset();
   ObDDLArg::reset();
   use_direct_load_for_complete_refresh_ = true;
+  direct_dep_cnt_ = 0;
 }
 
 int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
@@ -76,6 +77,7 @@ int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
       parent_task_id_ = other.parent_task_id_;
       target_data_sync_scn_ = other.target_data_sync_scn_;
       use_direct_load_for_complete_refresh_ = other.use_direct_load_for_complete_refresh_;
+      direct_dep_cnt_ = other.direct_dep_cnt_;
       if (OB_FAIL(tz_info_.assign(other.tz_info_))) {
         LOG_WARN("fail to assign tz info", KR(ret), "tz_info", other.tz_info_);
       } else if (OB_FAIL(tz_info_wrap_.deep_copy(other.tz_info_wrap_))) {
@@ -121,6 +123,7 @@ OB_DEF_SERIALIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_ENCODE, select_sql_);
     LST_DO_CODE(OB_UNIS_ENCODE, required_columns_infos_);
     LST_DO_CODE(OB_UNIS_ENCODE, use_direct_load_for_complete_refresh_);
+    LST_DO_CODE(OB_UNIS_ENCODE, direct_dep_cnt_);
   }
   return ret;
 }
@@ -154,11 +157,13 @@ OB_DEF_DESERIALIZE(ObMViewCompleteRefreshArg)
     }
   }
   if (OB_SUCC(ret)) {
+    direct_dep_cnt_ = based_schema_object_infos_.count();
     LST_DO_CODE(OB_UNIS_DECODE, parent_task_id_);
     LST_DO_CODE(OB_UNIS_DECODE, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_DECODE, select_sql_);
     LST_DO_CODE(OB_UNIS_DECODE, required_columns_infos_);
     LST_DO_CODE(OB_UNIS_DECODE, use_direct_load_for_complete_refresh_);
+    LST_DO_CODE(OB_UNIS_DECODE, direct_dep_cnt_);
   }
   return ret;
 }
@@ -188,6 +193,7 @@ OB_DEF_SERIALIZE_SIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_ADD_LEN, select_sql_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, required_columns_infos_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, use_direct_load_for_complete_refresh_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, direct_dep_cnt_);
   }
   if (OB_FAIL(ret)) {
     len = -1;
@@ -217,6 +223,7 @@ void ObMViewRefreshInfo::reset()
   mview_target_data_sync_scn_.reset();
   select_sql_.reset();
   use_direct_load_for_complete_refresh_ = true;
+  direct_dep_cnt_ = 0;
 }
 
 int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
@@ -231,6 +238,7 @@ int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
     mview_target_data_sync_scn_ = other.mview_target_data_sync_scn_;
     select_sql_ = other.select_sql_;
     use_direct_load_for_complete_refresh_ = other.use_direct_load_for_complete_refresh_;
+    direct_dep_cnt_ = other.direct_dep_cnt_;
   }
   return ret;
 }
@@ -243,7 +251,8 @@ OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
                     is_mview_complete_refresh_,
                     mview_target_data_sync_scn_,
                     select_sql_,
-                    use_direct_load_for_complete_refresh_);
+                    use_direct_load_for_complete_refresh_,
+                    direct_dep_cnt_);
 
 OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     refresh_method_,
