@@ -91,6 +91,7 @@ public:
     tx_desc_(NULL),
     err_(OB_SUCCESS),
     need_response_packet_(false),
+    can_release_tx_desc_(false),
     lock_() {}
 
   ~ObPLEndTransCb() override { reset(); }
@@ -113,6 +114,8 @@ public:
   int get_err() { return ATOMIC_LOAD(&err_); }
   void set_need_response_packet(bool v) { ATOMIC_STORE(&need_response_packet_, v); }
   bool get_need_response_packet() { return ATOMIC_LOAD(&need_response_packet_); }
+  void set_can_release_tx_desc(bool v) { ATOMIC_STORE(&can_release_tx_desc_, v); }
+  bool get_can_release_tx_desc() { return ATOMIC_LOAD(&can_release_tx_desc_); }
   ObSpinLock &get_lock() { return lock_; }
 
   int wait_tx_end(sql::ObPhysicalPlanCtx *plan_ctx = NULL, bool force_wait = false);
@@ -122,6 +125,7 @@ protected:
   transaction::ObTxDesc *tx_desc_;
   int err_;
   bool need_response_packet_;
+  bool can_release_tx_desc_;
   ObSpinLock lock_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLEndTransCb);

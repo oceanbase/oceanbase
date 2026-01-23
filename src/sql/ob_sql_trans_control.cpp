@@ -314,7 +314,7 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
     set_audit_tx_id_(session);
     int64_t expire_ts = get_stmt_expire_ts(NULL, *session);
     if (pl_async_commit_need_wait) {
-      OZ (process_pl_async_commit(session, plan_ctx, expire_ts, callback));
+      OZ (before_submit_pl_async_commit(session, plan_ctx, expire_ts, callback));
     }
     OZ (do_end_trans_(session,
                               is_rollback,
@@ -331,16 +331,8 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
         || OB_TRANS_ROLLBACKED == ret;
       reset_session_tx_state(session, reuse_tx, reset_trans_variable);
     }
-    if (pl_async_commit_need_wait) {
-      if (OB_FAIL(ret)) {
-        ObSpinLockGuard lock_guard(session->get_pl_end_trans_cb().get_lock());
-        session->get_pl_end_trans_cb().reset();
-        LOG_WARN("fail to submit pl async commit task", K(ret));
-      } else if (OB_NOT_NULL(callback)) {
-        ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
-        session->get_tx_desc() = NULL;
-        reset_session_tx_state(session, false, reset_trans_variable);
-      }
+    if (pl_async_commit_need_wait && OB_NOT_NULL(callback)) {
+      after_submit_pl_async_commit(ret, session, reset_trans_variable);
     }
   }
   if (callback && !is_rollback) {
@@ -542,31 +534,62 @@ int ObSqlTransControl::rollback_trans(ObSQLSessionInfo *session,
   return ret;
 }
 
-int ObSqlTransControl::process_pl_async_commit(ObSQLSessionInfo *session,
+void ObSqlTransControl::after_submit_pl_async_commit(int ret,
+                                                     ObSQLSessionInfo *session,
+                                                     bool reset_trans_variable)
+{
+  if (OB_FAIL(ret)) {
+    // If the transaction commit fails here, need to clean up tx_desc on cb, just reset it.
+    session->get_pl_end_trans_cb().reset();
+    LOG_WARN("fail to submit pl async commit task", K(ret));
+  } else {
+    // direct_execute_commit_cb_ will exec cb in pl worker thread and will set tx_desc to null
+    bool has_already_execute_cb = !OB_NOT_NULL(session->get_pl_end_trans_cb().get_tx_desc());
+
+    if (!has_already_execute_cb) {
+      // tx_desc will release by pl cb
+      {
+        ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
+        // the tx_desc is always valid before we set it to null
+        OX (session->get_tx_desc() = NULL);
+      }
+      ObSpinLockGuard lock_guard(session->get_pl_end_trans_cb().get_lock());
+      OX (session->get_pl_end_trans_cb().set_can_release_tx_desc(true));
+    }
+    // if has_already_execute_cb, here will release tx_desc
+    // if not,  tx_desc will release by pl cb
+    reset_session_tx_state(session, false, reset_trans_variable);
+  }
+}
+
+int ObSqlTransControl::before_submit_pl_async_commit(ObSQLSessionInfo *session,
                                                ObPhysicalPlanCtx *plan_ctx,
                                                const int64_t expire_ts,
                                                ObEndTransAsyncCallback *callback)
 {
   int ret = OB_SUCCESS;
-  observer::ObPLEndTransCb &pl_end_trans_cb = session->get_pl_end_trans_cb();
-  if (OB_NOT_NULL(pl_end_trans_cb.get_tx_desc())) {
-    OZ (pl_end_trans_cb.wait_tx_end(plan_ctx));
-  }
-  if (OB_FAIL(ret)) {
-    // If a preceding transaction fails, the current transaction needs to be rolled back.
-    LOG_WARN("[PL_ASYNC_COMMIT] preceding transaction failed, rollback current transaction",
-              "session_id", session->get_sid(), K(ret));
-    int tmp_ret = do_end_trans_(session, true, false, expire_ts, NULL);
-    if (OB_SUCCESS != tmp_ret) {
-      LOG_WARN("fail to do rollback current trans", K(tmp_ret));
+  // session must not be null
+  CK (OB_NOT_NULL(session));
+  if (OB_SUCC(ret)) {
+    observer::ObPLEndTransCb &pl_end_trans_cb = session->get_pl_end_trans_cb();
+    if (OB_NOT_NULL(pl_end_trans_cb.get_tx_desc())) {
+      OZ (pl_end_trans_cb.wait_tx_end(plan_ctx));
     }
-  }
-  ObSpinLockGuard lock_guard(pl_end_trans_cb.get_lock());
-  pl_end_trans_cb.reset();
-  if (OB_NOT_NULL(callback)) {
-    int64_t tx_id = session->get_tx_desc() ? session->get_tx_desc()->get_tx_id().get_id() : 0;
-    OX (pl_end_trans_cb.set_tx_desc(session->get_tx_desc()));
-    LOG_TRACE("[PL_ASYNC_COMMIT] Use async commit callback and set tx_desc", "tx_id", tx_id, K(ret));
+    if (OB_FAIL(ret)) {
+      // If a preceding transaction fails, the current transaction needs to be rolled back.
+      LOG_WARN("[PL_ASYNC_COMMIT] preceding transaction failed, rollback current transaction",
+                "session_id", session->get_sid(), K(ret));
+      int tmp_ret = do_end_trans_(session, true, false, expire_ts, NULL);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to do rollback current trans", K(tmp_ret));
+      }
+    } else if (OB_NOT_NULL(callback)) {
+      ObSpinLockGuard lock_guard(session->get_pl_end_trans_cb().get_lock());
+      OX (pl_end_trans_cb.set_tx_desc(session->get_tx_desc()));
+      // The tx_desc ptr of the session has not been set to null,
+      // so it cannot be released in pl cb.
+      OX (pl_end_trans_cb.set_can_release_tx_desc(false));
+    }
   }
   return ret;
 }
