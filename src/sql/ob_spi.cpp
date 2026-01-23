@@ -5441,7 +5441,7 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
       OZ (ObCharset::charset_convert(tmp_alloc,
                                      errmsg_result.get_string(),
                                      errmsg_result.get_collation_type(),
-                                     session_info->get_local_collation_connection(),
+                                     CS_TYPE_UTF8MB4_BIN, //WarningBuffer default collation is utf8mb4_bin
                                      convert_sqlmsg));
       if (OB_SUCC(ret)) {
         LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR,
