@@ -10261,6 +10261,7 @@ int ObRawExprUtils::build_bm25_expr(ObRawExprFactory &expr_factory,
                                     ObRawExpr *related_token_cnt,
                                     ObRawExpr *total_doc_cnt,
                                     ObRawExpr *doc_token_cnt,
+                                    ObRawExpr *doc_length,
                                     ObRawExpr *avg_doc_token_cnt,
                                     ObOpRawExpr *&bm25,
                                     const bool use_avg_doc_token_cnt_pseudo_column,
@@ -10269,7 +10270,12 @@ int ObRawExprUtils::build_bm25_expr(ObRawExprFactory &expr_factory,
   int ret = OB_SUCCESS;
   ObConstRawExpr *approx_avg_token_cnt = nullptr;
   ObOpRawExpr *bm25_expr = nullptr;
+  ObOpPseudoColumnRawExpr *token_weight = nullptr;
+  ObRawExprResType token_weight_res_type;
+  token_weight_res_type.set_type(ObDoubleType);
+  token_weight_res_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObDoubleType]);
   constexpr double mock_approx_avg_cnt = 10;
+  const bool use_new_version = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0);
   if (!use_avg_doc_token_cnt_pseudo_column &&
       OB_FAIL(build_const_double_expr(expr_factory, ObDoubleType, mock_approx_avg_cnt, approx_avg_token_cnt))) {
     LOG_WARN("create approx average token count failed", K(ret));
@@ -10278,11 +10284,27 @@ int ObRawExprUtils::build_bm25_expr(ObRawExprFactory &expr_factory,
   } else if (OB_ISNULL(bm25_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer to created bm25 related exprs", K(ret), KP(bm25));
-  } else {
+  } else if (!use_new_version) {
     OZ(bm25_expr->init_param_exprs(5));
     OZ(bm25_expr->add_param_expr(related_doc_cnt));
     OZ(bm25_expr->add_param_expr(total_doc_cnt));
     OZ(bm25_expr->add_param_expr(doc_token_cnt));
+  } else if (OB_FAIL(ObRawExprUtils::build_op_pseudo_column_expr(
+      expr_factory,
+      T_PSEUDO_COLUMN,
+      "token_weight_expr",
+      token_weight_res_type,
+      token_weight))) {
+    LOG_WARN("failed to build token weight pseudo column expr", K(ret));
+  } else {
+
+    OZ(bm25_expr->init_param_exprs(6));
+    OZ(bm25_expr->add_param_expr(related_doc_cnt));
+    OZ(bm25_expr->add_param_expr(total_doc_cnt));
+    OZ(bm25_expr->add_param_expr(doc_length));
+    OZ(bm25_expr->add_param_expr(token_weight));
+  }
+  if (OB_SUCC(ret)) {
     if (use_avg_doc_token_cnt_pseudo_column) {
       OZ(bm25_expr->add_param_expr(avg_doc_token_cnt));
     } else {

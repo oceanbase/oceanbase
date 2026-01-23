@@ -115,6 +115,7 @@ public:
   virtual int table_rescan(
       ObVTableScanParam &vparam,
       ObNewRowIterator *result) override;
+  virtual int table_advance_scan(ObVTableScanParam &vparam, ObNewRowIterator *result) override;
   virtual int reuse_scan_iter(const bool switch_param, common::ObNewRowIterator *iter) override;
   virtual int revert_scan_iter(common::ObNewRowIterator *iter) override;
   virtual int get_multi_ranges_cost(

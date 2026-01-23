@@ -396,7 +396,7 @@ public:
       ObMicroIndexInfo &idx_block_row,
       const bool is_multi_check = false,
       const bool is_sorted_multi_get = false,
-      storage::ObIndexSkipScanner *skip_scanner = nullptr);
+      storage::ObISkipScanner *skip_scanner = nullptr);
   void set_iter_param(const ObSSTable *sstable,
                       const ObTablet *tablet);
   bool end_of_block() const;

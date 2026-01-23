@@ -784,7 +784,7 @@ protected:
     OB_INLINE int get_next_data_row(
         const bool is_multi_check,
         ObMicroIndexInfo &block_info,
-        ObIndexSkipScanner *skip_scanner = nullptr)
+        ObISkipScanner *skip_scanner = nullptr)
     {
       int ret = OB_SUCCESS;
       if (is_skip_prefetch_) {
@@ -811,7 +811,7 @@ protected:
         ObIndexTreeMultiPassPrefetcher &prefetcher)
     {
       int ret = OB_SUCCESS;
-      ObIndexSkipScanner *skip_scanner = prefetcher.access_ctx_->query_flag_.is_reverse_scan() ? nullptr : prefetcher.skip_scanner_;
+      ObISkipScanner *skip_scanner = prefetcher.access_ctx_->query_flag_.is_reverse_scan() ? nullptr : prefetcher.skip_scanner_;
       while (OB_SUCC(ret)) {
         if (is_skip_prefetch_) {
           ret = OB_ITER_END;
@@ -993,7 +993,7 @@ public:
   int64_t micro_data_prefetch_idx_;
   int64_t row_lock_check_version_;
   ObAggStoreBase *agg_store_;
-  ObIndexSkipScanner *skip_scanner_;
+  ObISkipScanner *skip_scanner_;
 protected:
   bool can_blockscan_;
   bool need_check_prefetch_depth_;

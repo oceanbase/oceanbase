@@ -149,8 +149,18 @@ public:
   { return get_group_idx_col_index() != common::OB_INVALID_INDEX; }
   OB_INLINE int64_t get_ss_rowkey_prefix_cnt() const
   { return ss_rowkey_prefix_cnt_; }
-  OB_INLINE bool is_skip_scan() const
+  OB_INLINE bool is_index_skip_scan() const
   { return ss_rowkey_prefix_cnt_ > 0; }
+  OB_INLINE bool is_skip_scan() const
+  { return ss_rowkey_prefix_cnt_ > 0 || is_advance_skip_scan_; }
+  OB_INLINE void set_is_advance_skip_scan()
+  {
+    is_advance_skip_scan_ = true;
+  }
+  OB_INLINE bool is_advance_skip_scan() const
+  {
+    return is_advance_skip_scan_;
+  }
   OB_INLINE void disable_blockscan()
   {
     pd_storage_flag_.set_blockscan_pushdown(false);
@@ -249,6 +259,7 @@ public:
   bool limit_prefetch_;
   bool is_mds_query_;
   bool is_non_unique_local_index_;
+  bool is_advance_skip_scan_;
   int64_t ss_rowkey_prefix_cnt_;
   sql::ObStoragePushdownFlag pd_storage_flag_;
   ObTableScanOption table_scan_opt_;

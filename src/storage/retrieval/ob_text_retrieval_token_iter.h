@@ -92,12 +92,15 @@ private:
   int fill_token_cnt_with_doc_len();
   int batch_fill_token_cnt_with_doc_len(const int64_t count);
   int fill_token_doc_cnt();
+  int fill_token_weight();
   int eval_relevance_expr();
   int batch_eval_relevance_expr(const int64_t count);
   int estimate_token_doc_cnt();
   inline bool need_inv_idx_agg() { return inv_idx_agg_iter_ != nullptr; }
   inline bool need_fwd_idx_agg() { return fwd_idx_agg_iter_ != nullptr; }
   inline bool need_calc_relevance() { return inv_idx_agg_iter_ != nullptr; }
+  inline bool need_fill_token_cnt() { return nullptr != relevance_expr_ && !sql::ObExprBM25::use_new_version(*relevance_expr_); }
+  inline bool need_fill_token_weight() { return !need_fill_token_cnt(); }
   // tools method
   // In ivector2.0, need use the size which is created by precision to alloc the memeory.
   static int set_decimal_int_by_precision(ObDatum &result_datum, const uint64_t decint, const ObPrecision precision);
@@ -120,6 +123,7 @@ private:
   sql::ObExpr *inv_scan_doc_length_col_; // read from inv_scan_table
   sql::ObExpr *inv_scan_domain_id_col_; // read from inv_scan_table
   sql::ObExpr *doc_token_cnt_expr_; // fill the expr from another expr, and use the expr to calc the relevance_expr_
+  sql::ObExpr *token_weight_expr_; // fill the expr from with max_token_relevance_
   common::ObSEArray<sql::ObExpr *, 2> relevance_calc_exprs_;
   sql::ObBitVector *skip_;
   ObObj *fwd_range_objs_;

@@ -37,6 +37,7 @@ ObTextRetrievalTokenIter::ObTextRetrievalTokenIter()
     inv_scan_doc_length_col_(nullptr),
     inv_scan_domain_id_col_(nullptr),
     doc_token_cnt_expr_(nullptr),
+    token_weight_expr_(nullptr),
     relevance_calc_exprs_(),
     skip_(nullptr),
     fwd_range_objs_(nullptr),
@@ -84,7 +85,7 @@ int ObTextRetrievalTokenIter::init(const ObTextRetrievalScanIterParam &iter_para
     LOG_WARN("fwd_idx_agg_iter or fwd_idx_agg_expr is NULL", K(ret), K_(fwd_idx_agg_iter), KPC_(fwd_idx_agg_expr), KPC_(fwd_idx_scan_param));
   } else if (OB_FAIL(init_calc_exprs_in_relevance_expr())) {
     LOG_WARN("failed to init row-wise calc exprs", K(ret));
-  } else if (OB_ISNULL(doc_token_cnt_expr_) || OB_UNLIKELY(doc_token_cnt_expr_->datum_meta_.get_type() != ObDecimalIntType && doc_token_cnt_expr_->datum_meta_.get_type() != ObNumberType)) {
+  } else if (need_fill_token_cnt() && (OB_ISNULL(doc_token_cnt_expr_) || OB_UNLIKELY(doc_token_cnt_expr_->datum_meta_.get_type() != ObDecimalIntType && doc_token_cnt_expr_->datum_meta_.get_type() != ObNumberType))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", K(ret), KPC_(doc_token_cnt_expr), KPC_(inv_scan_doc_length_col), KPC_(eval_ctx));
   } else if (OB_ISNULL(skip_ = to_bit_vector(allocator_->alloc(ObBitVector::memory_size(max_batch_size_))))) {
@@ -135,7 +136,7 @@ int ObTextRetrievalTokenIter::init_calc_exprs_in_relevance_expr()
       }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && need_fill_token_cnt()) {
       sql::ObExpr *doc_token_cnt_param_expr = relevance_expr_->args_[sql::ObExprBM25::DOC_TOKEN_CNT_PARAM_IDX];
       if (T_FUN_SYS_CAST == doc_token_cnt_param_expr->type_) {
         doc_token_cnt_param_expr = doc_token_cnt_param_expr->args_[0];
@@ -149,6 +150,26 @@ int ObTextRetrievalTokenIter::init_calc_exprs_in_relevance_expr()
         if (max_batch_size_ > 0) {
           doc_token_cnt_expr_->locate_datums_for_update(*eval_ctx_, max_batch_size_);
         }
+      }
+    }
+
+    if (OB_SUCC(ret) && !need_fill_token_cnt()) {
+      sql::ObExpr *doc_length_param_expr = relevance_expr_->args_[sql::ObExprBM25::DOC_LENGTH_PARAM_IDX];
+      if (OB_UNLIKELY(nullptr == doc_length_param_expr || doc_length_param_expr->type_ != T_REF_COLUMN ||
+                      doc_length_param_expr != inv_scan_doc_length_col_ ||
+                      doc_length_param_expr->datum_meta_.get_type() != ObUInt64Type)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected doc token cnt expr type", K(ret), KP(doc_length_param_expr), KPC(doc_length_param_expr),
+                 KP(inv_scan_doc_length_col_));
+      }
+    }
+    if (OB_SUCC(ret) && need_fill_token_weight()) {
+      sql::ObExpr *token_weight_param_expr = relevance_expr_->args_[sql::ObExprBM25::TOKEN_WEIGHT_PARAM_IDX];
+      if (OB_UNLIKELY(nullptr == token_weight_param_expr || token_weight_param_expr->type_ != T_PSEUDO_COLUMN)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected token weight expr type", K(ret), KPC(token_weight_param_expr));
+      } else {
+        token_weight_expr_ = token_weight_param_expr;
       }
     }
   }
@@ -185,10 +206,8 @@ int ObTextRetrievalTokenIter::get_next_doc_token_cnt(const bool use_fwd_idx_agg)
     } else if (OB_FAIL(do_token_cnt_agg(cur_doc_id))) {
       LOG_WARN("failed to do token count agg on fwd index", K(ret));
     }
-  } else {
-    if (OB_FAIL(fill_token_cnt_with_doc_len())) {
-      LOG_WARN("failed to fill token cnt with document length", K(ret));
-    }
+  } else if (need_fill_token_cnt() && OB_FAIL(fill_token_cnt_with_doc_len())) {
+    LOG_WARN("failed to fill token cnt with document length", K(ret));
   }
   return ret;
 }
@@ -315,6 +334,21 @@ int ObTextRetrievalTokenIter::fill_token_doc_cnt()
   return ret;
 }
 
+int ObTextRetrievalTokenIter::fill_token_weight()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(token_weight_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null token weight expr", K(ret));
+  } else {
+    ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx_);
+    guard.set_batch_idx(0);
+    ObDatum &token_weight_datum = token_weight_expr_->locate_datum_for_write(*eval_ctx_);
+    token_weight_datum.set_double(max_token_relevance_);
+  }
+  return ret;
+}
+
 int ObTextRetrievalTokenIter::eval_relevance_expr()
 {
   int ret = OB_SUCCESS;
@@ -344,6 +378,8 @@ int ObTextRetrievalTokenIter::get_next_row()
         LOG_WARN("failed to get next doc token count", K(ret));
       } else if (OB_FAIL(fill_token_doc_cnt())) {
         LOG_WARN("failed to get token doc cnt", K(ret));
+      } else if (need_fill_token_weight() && OB_FAIL(fill_token_weight())) {
+        LOG_WARN("failed to fill token weight", K(ret));
       } else if (OB_FAIL(eval_relevance_expr())) {
         LOG_WARN("failed to evaluate simarity expr", K(ret));
       }
@@ -429,10 +465,12 @@ int ObTextRetrievalTokenIter::get_next_batch(const int64_t capacity, int64_t &co
     const ObBitVector *skip = NULL;
     PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *inv_idx_scan_param_->output_exprs_, count, skip);
     clear_batch_wise_evaluated_flag(count);
-    if (OB_FAIL(batch_fill_token_cnt_with_doc_len(count))) {
+    if (need_fill_token_cnt() && OB_FAIL(batch_fill_token_cnt_with_doc_len(count))) {
       LOG_WARN("failed to fill batch token cnt with document length", K(ret));
     } else if (OB_FAIL(fill_token_doc_cnt())) {
       LOG_WARN("failed to get token doc cnt", K(ret));
+    } else if (need_fill_token_weight() &&OB_FAIL(fill_token_weight())) {
+      LOG_WARN("failed to fill token weight", K(ret));
     } else if (OB_FAIL(batch_eval_relevance_expr(count))) {
       LOG_WARN("failed to evaluate simarity expr", K(ret));
     }
@@ -469,14 +507,13 @@ int ObTextRetrievalTokenIter::advance_to(const ObDatum &id_datum)
       scan_range.border_flag_.set_inclusive_end();
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(inv_idx_scan_iter_->reuse())) {
-      LOG_WARN("failed to reuse inverted index scan iterator", K(ret));
+    } else if (FALSE_IT(inv_idx_scan_param_->key_ranges_.reuse())) {
     } else if (OB_UNLIKELY(!inv_idx_scan_param_->key_ranges_.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected non-empty scan range", K(ret), K(inv_idx_scan_param_->key_ranges_));
     } else if (OB_FAIL(inv_idx_scan_param_->key_ranges_.push_back(scan_range))) {
       LOG_WARN("failed to push back scan range", K(ret));
-    } else if (OB_FAIL(inv_idx_scan_iter_->rescan())) {
+    } else if (OB_FAIL(inv_idx_scan_iter_->advance_scan())) {
       LOG_WARN("failed to rescan inverted index", K(ret));
     }
   }

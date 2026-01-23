@@ -5499,7 +5499,7 @@ int ObLogTableScan::prepare_text_retrieval_dep_exprs(ObTextRetrievalInfo &tr_inf
       LOG_WARN("failed to formalize avg doc token count expr", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_bm25_expr(*expr_factory, related_doc_cnt,
                                                       token_cnt_column, total_doc_cnt,
-                                                      doc_token_cnt, avg_doc_token_cnt_expr,
+                                                      doc_token_cnt, doc_length_column, avg_doc_token_cnt_expr,
                                                       relevance_expr, need_est_avg_doc_token_cnt,
                                                       session_info))) {
       LOG_WARN("failed to build bm25 expr", K(ret));

@@ -1754,7 +1754,7 @@ int ObIndexBlockRowScanner::get_next(
     ObMicroIndexInfo &idx_block_row,
     const bool is_multi_check,
     const bool is_sorted_multi_get,
-    storage::ObIndexSkipScanner *skip_scanner)
+    storage::ObISkipScanner *skip_scanner)
 {
   int ret = OB_SUCCESS;
   idx_block_row.reset();

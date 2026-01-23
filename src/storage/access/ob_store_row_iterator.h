@@ -74,6 +74,11 @@ public:
       ObTableAccessContext &context,
       ObITable *table,
       const void *query_range);
+  virtual int advance_scan(const blocksstable::ObDatumRange &range)
+  {
+    UNUSED(range);
+    return OB_NOT_SUPPORTED;
+  }
   virtual bool is_sstable_iter() const { return is_sstable_iter_; }
   virtual int refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey)
   {
@@ -197,6 +202,11 @@ public:
   virtual void reclaim()
   {
     OB_ASSERT_MSG(false, "ObQueryRowIterator dose not impl reclaim");
+  }
+  virtual int advance_scan(const blocksstable::ObDatumRange &range)
+  {
+    UNUSED(range);
+    return OB_NOT_SUPPORTED;
   }
   // Iterate row interface for vectorized engine.
   virtual int get_next_rows(int64_t &count, int64_t capacity)

@@ -57,6 +57,7 @@ public:
   virtual int get_next_row() override { blocksstable::ObDatumRow *r = nullptr; return get_next_row(r); }
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   int rescan(ObTableScanParam &scan_param);
+  int advance_scan(ObTableScanParam &scan_param);
   void reuse();
   void reset_for_switch();
   virtual void reset();
@@ -100,7 +101,7 @@ private:
   int init_and_open_memtable_row_sample_iter_(const ObIArray<blocksstable::ObDatumRange> &scan_ranges);
   int sort_sample_ranges();
   int set_skip_scan_range();
-
+  int check_advance_scan_supported();
 private:
   bool is_inited_;
   ObQRIterType current_iter_type_;

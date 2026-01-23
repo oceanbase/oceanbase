@@ -49,6 +49,7 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   virtual void reclaim() override;
+  virtual int advance_scan(const blocksstable::ObDatumRange &range) override;
   virtual bool can_blockscan() const override;
   virtual bool can_batch_scan() const override;
   OB_INLINE bool is_di_base_iter() { return is_di_base_iter_; }
@@ -119,6 +120,10 @@ private:
       index_info.skip_state_.set_state(0, ObIndexSkipNodeState::PREFIX_SKIPPED_LEFT);
     }
   }
+  OB_INLINE bool has_skip_scanner_and_force_skip() const
+  {
+    return has_skip_scanner() && skip_scanner_->force_skip();
+  }
 
 protected:
   bool is_opened_;
@@ -131,7 +136,7 @@ protected:
   ObMicroBlockRowScanner *micro_data_scanner_;
   ObMultiVersionMicroBlockRowScanner *mv_micro_data_scanner_;
   ObMultiVersionDIMicroBlockRowScanner *mv_di_micro_data_scanner_;
-  ObIndexSkipScanner *skip_scanner_;
+  ObISkipScanner *skip_scanner_;
   ObIndexSkipState skip_state_;
   int64_t range_idx_;
 private:

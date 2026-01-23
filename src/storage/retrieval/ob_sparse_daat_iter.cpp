@@ -134,13 +134,8 @@ int ObSRDaaTIterImpl::init(
       LOG_WARN("failed to prepare allocate buffered relevances array", K(ret));
     } else if (OB_FAIL(merge_cmp_.init(iter_param_->id_proj_expr_->datum_meta_, &iter_domain_ids_))) {
       LOG_WARN("failed to init loser tree comparator", K(ret));
-    } else if (OB_ISNULL(merge_heap_ = OB_NEWx(ObSRMergeLoserTree, iter_allocator_, merge_cmp_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate loser tree", K(ret));
-    } else if (OB_FAIL(merge_heap_->init(dim_iters_->count(), dim_iters_->count(), *iter_allocator_))) {
-      LOG_WARN("failed to init iter loser tree", K(ret));
-    } else if (OB_FAIL(merge_heap_->open(dim_iters_->count()))) {
-      LOG_WARN("failed to open iter loser tree", K(ret));
+    } else if (OB_FAIL(init_merge_heap(dim_iters_->count()))) {
+      LOG_WARN("failed to init merge heap", K(ret));
     } else {
       for (int64_t i = 0; i < dim_iters.count(); ++i) {
         next_round_iter_idxes_[i] = i;
@@ -160,7 +155,7 @@ int ObSRDaaTIterImpl::init(
 void ObSRDaaTIterImpl::reset()
 {
   if (OB_NOT_NULL(merge_heap_)) {
-    merge_heap_->~ObSRMergeLoserTree();
+    merge_heap_->~ObSRMergeHeap();
     merge_heap_ = nullptr;
   }
   if (OB_NOT_NULL(relevance_collector_)) {
@@ -326,6 +321,8 @@ int ObSRDaaTIterImpl::fill_merge_heap()
     } else if (FALSE_IT(item.iter_idx_ = iter_idx)) {
     } else if (OB_FAIL(merge_heap_->push(item))) {
       LOG_WARN("fail to push item to merge heap", K(ret), K(item));
+    } else {
+      LOG_DEBUG("push item to merge heap", K(ret), K(i), K(iter_idx), K(next_round_cnt_), K(item), K(iter_domain_ids_[iter_idx]));
     }
   }
 
@@ -1047,6 +1044,32 @@ int ObSRBlockMaxTopKIterImpl::project_rows_from_top_k_heap(const int64_t capacit
   return ret;
 }
 
+int ObSRDaaTIterImpl::init_merge_heap(const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  ObSRSimpleMerger *simple_merge = nullptr;
+  ObSRMergeHeap *loser_tree = nullptr;
+  if (count <= ObSRSimpleMerger::USE_SIMPLE_MERGER_MAX_TABLE_CNT) {
+    if (OB_ISNULL(simple_merge = OB_NEWx(ObSRSimpleMerger, iter_allocator_, merge_cmp_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate simple merger", K(ret), K(count));
+    } else {
+      merge_heap_ = simple_merge;
+    }
+  } else if (OB_ISNULL(loser_tree = OB_NEWx(ObSRLoserTree, iter_allocator_, merge_cmp_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate loser tree", K(ret));
+  } else {
+    merge_heap_ = loser_tree;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(merge_heap_->init(count, count, *iter_allocator_))) {
+    LOG_WARN("failed to init iter loser tree", K(ret));
+  } else if (OB_FAIL(merge_heap_->open(count))) {
+    LOG_WARN("failed to open iter loser tree", K(ret));
+  }
+  return ret;
+}
 
 } // namespace storage
 } // namespace oceanbase

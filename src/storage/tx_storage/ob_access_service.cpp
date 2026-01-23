@@ -433,6 +433,28 @@ int ObAccessService::table_rescan(
   }
   return ret;
 }
+
+int ObAccessService::table_advance_scan(ObVTableScanParam &vparam, ObNewRowIterator *result)
+{
+  int ret = OB_SUCCESS;
+  ObTableScanParam &param = static_cast<ObTableScanParam &>(vparam);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ob access service is not running.", K(ret));
+  } else if (OB_ISNULL(result) || OB_UNLIKELY(!vparam.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(result), K(vparam), K(lbt()));
+  } else if (OB_UNLIKELY(ObNewRowIterator::ObTableScanIterator != result->get_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only table scan iter can be rescan", K(ret), K(result->get_type()));
+  } else if (OB_FAIL(static_cast<ObTableScanIterator*>(result)->advance_scan(param))) {
+    LOG_WARN("advance scan ObTableScanIterator failed", K(ret), K(result), K(vparam));
+  } else {
+    LOG_DEBUG("table advance scan success", K(ret), K(result), K(vparam));
+  }
+  return ret;
+}
+
 int ObAccessService::get_write_store_ctx_guard(
     const share::ObLSID &ls_id,
     const int64_t timeout,

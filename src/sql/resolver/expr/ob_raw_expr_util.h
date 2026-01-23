@@ -1364,6 +1364,7 @@ public:
                              ObRawExpr *related_token_cnt,
                              ObRawExpr *total_doc_cnt,
                              ObRawExpr *doc_token_cnt,
+                             ObRawExpr *doc_length,
                              ObRawExpr *avg_doc_token_cnt,
                              ObOpRawExpr *&bm25,
                              const bool use_avg_doc_token_cnt_pseudo_column,

@@ -391,6 +391,72 @@ void ObMultipleScanMerge::reclaim()
   ObMultipleMerge::reclaim();
 }
 
+int ObMultipleScanMerge::advance_scan(const blocksstable::ObDatumRange &range)
+{
+  int ret = OB_SUCCESS;
+  is_unprojected_row_valid_ = false;
+  ObStoreRowIterator *iter = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < iters_.count(); ++i) {
+    if (OB_ISNULL(iter = iters_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null iter", K(ret), K(i));
+    } else if (OB_FAIL(iter->advance_scan(range))) {
+      STORAGE_LOG(WARN, "failed to advance scan", K(ret), K(i), KPC(iter));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_LIKELY(rows_merger_ != nullptr && !rows_merger_->empty())) {
+    if (OB_NOT_NULL(block_row_store_)) {
+      block_row_store_->disable();
+    }
+    int cmp_ret = 0;
+    const int64_t rowkey_cnt = access_param_->iter_param_.get_schema_rowkey_count();
+    const blocksstable::ObStorageDatumUtils &datum_utils = access_param_->iter_param_.get_read_info()->get_datum_utils();
+    const ObScanMergeLoserTreeItem *top_item = nullptr;
+    blocksstable::ObDatumRowkey top_key;
+    ObScanMergeLoserTreeItem item;
+    while (OB_SUCC(ret) && !rows_merger_->empty()) {
+      if (OB_FAIL(rows_merger_->rebuild())) {
+        LOG_WARN("failed to rebuild rows merger", K(ret), KPC(rows_merger_));
+      } else if (OB_FAIL(rows_merger_->top(top_item))) {
+        STORAGE_LOG(WARN, "failed to get top item", K(ret));
+      } else if (nullptr == top_item || nullptr == top_item->row_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("item or row is null", K(ret), KP(top_item));
+      } else if (OB_FAIL(top_key.assign(top_item->row_->storage_datums_, rowkey_cnt))) {
+        LOG_WARN("failed to assign top key", K(ret), K(rowkey_cnt));
+      } else if (OB_FAIL(top_key.compare(range.start_key_, datum_utils, cmp_ret))) {
+        LOG_WARN("failed to compare top key", K(ret), K(top_key), K(range));
+      } else if (cmp_ret > 0 || (0 == cmp_ret && range.is_left_closed())) {
+        break;
+      } else if (OB_FAIL(rows_merger_->pop())) {
+        STORAGE_LOG(WARN, "failed to pop rows merger", K(ret), KPC(rows_merger_));
+      } else if (FALSE_IT(iter = iters_.at(top_item->iter_idx_))) {
+      } else if (OB_FAIL(iter->get_next_row(item.row_))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get next row from iterator", K(ret), K(top_item), KPC(iter));
+        }
+      } else if (OB_ISNULL(item.row_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "get next row return NULL row", K(ret), "iter_index", top_item->iter_idx_);
+      } else if (FALSE_IT(item.iter_idx_ = top_item->iter_idx_)) {
+      } else if (OB_FAIL(rows_merger_->push(item))) {
+        STORAGE_LOG(WARN, "loser tree push error", K(ret));
+      } else {
+        STORAGE_LOG(DEBUG, "yuanzhe debug", K(consumer_cnt_), K(top_item->iter_idx_));
+      }
+    }
+    if (FAILEDx(rows_merger_->rebuild())) {
+      LOG_WARN("failed to rebuild rows merger", K(ret), KPC(rows_merger_));
+    } else if (OB_NOT_NULL(block_row_store_)) {
+      block_row_store_->enable();
+    }
+  }
+  return ret;
+}
+
 int ObMultipleScanMerge::supply_consume()
 {
   int ret = OB_SUCCESS;
