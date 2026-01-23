@@ -2346,7 +2346,11 @@ DEF_BOOL(_enable_range_extraction_for_not_in, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_new_query_range_extraction, OB_TENANT_PARAMETER, "True",
     "decide whether use new algorithm to extract query range.",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+#ifdef OB_BUILD_PACKAGE
+DEF_BOOL(_enable_new_oracle_temporary_table, OB_TENANT_PARAMETER, "False",
+#else
 DEF_BOOL(_enable_new_oracle_temporary_table, OB_TENANT_PARAMETER, "True",
+#endif
     "Decide whether to use the new Oracle global temporary table.",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_new_oracle_trx_temporary_table, OB_TENANT_PARAMETER, "True",
