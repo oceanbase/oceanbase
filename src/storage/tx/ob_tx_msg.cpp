@@ -98,18 +98,18 @@ OB_SERIALIZE_MEMBER(ObTxMsg,
     return len;                                                         \
   }
 
-OB_TX_MSG_SERDE(ObTxSubPrepareMsg, ObTxMsg, expire_ts_, xid_, parts_, app_trace_info_, commit_parts_);
+OB_TX_MSG_SERDE(ObTxSubPrepareMsg, ObTxMsg, expire_ts_, xid_, parts_, app_trace_info_, commit_parts_, app_trace_id_);
 OB_TX_MSG_SERDE(ObTxSubPrepareRespMsg, ObTxMsg, ret_);
 OB_TX_MSG_SERDE(ObTxSubCommitMsg, ObTxMsg, xid_);
 OB_TX_MSG_SERDE(ObTxSubCommitRespMsg, ObTxMsg, ret_);
 OB_TX_MSG_SERDE(ObTxSubRollbackMsg, ObTxMsg, xid_);
 OB_TX_MSG_SERDE(ObTxSubRollbackRespMsg, ObTxMsg, ret_);
-OB_TX_MSG_SERDE(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trace_info_, commit_start_scn_, commit_parts_);
+OB_TX_MSG_SERDE(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trace_info_, commit_start_scn_, commit_parts_, app_trace_id_);
 OB_TX_MSG_SERDE(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_, need_wait_interval_us_);
 OB_TX_MSG_SERDE(ObTxAbortMsg, ObTxMsg, reason_);
 OB_TX_MSG_SERDE(ObTxKeepaliveMsg, ObTxMsg, status_);
 OB_TX_MSG_SERDE(ObTxKeepaliveRespMsg, ObTxMsg, status_);
-OB_TX_MSG_SERDE(Ob2pcPrepareReqMsg, ObTxMsg, upstream_, app_trace_info_);
+OB_TX_MSG_SERDE(Ob2pcPrepareReqMsg, ObTxMsg, upstream_, app_trace_info_, app_trace_id_);
 OB_TX_MSG_SERDE(Ob2pcPrepareRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
 OB_TX_MSG_SERDE(Ob2pcPreCommitReqMsg, ObTxMsg, commit_version_);
 OB_TX_MSG_SERDE(Ob2pcPreCommitRespMsg, ObTxMsg, commit_version_);
@@ -119,7 +119,7 @@ OB_TX_MSG_SERDE(Ob2pcAbortReqMsg, ObTxMsg, upstream_);
 OB_TX_MSG_SERDE(Ob2pcAbortRespMsg, ObTxMsg);
 OB_TX_MSG_SERDE(Ob2pcClearReqMsg, ObTxMsg, max_commit_log_scn_);
 OB_TX_MSG_SERDE(Ob2pcClearRespMsg, ObTxMsg);
-OB_TX_MSG_SERDE(Ob2pcPrepareRedoReqMsg, ObTxMsg, xid_, upstream_, app_trace_info_);
+OB_TX_MSG_SERDE(Ob2pcPrepareRedoReqMsg, ObTxMsg, xid_, upstream_, app_trace_info_, app_trace_id_);
 OB_TX_MSG_SERDE(Ob2pcPrepareRedoRespMsg, ObTxMsg);
 OB_TX_MSG_SERDE(Ob2pcPrepareVersionReqMsg, ObTxMsg, upstream_);
 OB_TX_MSG_SERDE(Ob2pcPrepareVersionRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);

@@ -937,6 +937,16 @@ def check_enable_logonly_replica(cur, query_cur):
   else:
     logging.info('check enable_logonly_replica success')
 
+# 检查是否开启了app_trace_id，如果开启了app_trace_id则不允许升级到44x版本
+def check_enable_record_trace_id(cur, query_cur):
+  sql = """select count(1) from GV$OB_PARAMETERS where name like '%enable_record_trace_id%' and value like '%true%'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if 0 != results[0][0]:
+    fail_list.append("enable_record_trace_id should be false")
+    logging.info('check enable_record_trace_id failed, can not upgrade because enable_record_trace_id should be false')
+  else:
+    logging.info('check enable_record_trace_id success')
+
 # 检查cs_encoding格式是否兼容，对小于4.3.3版本的cpu不支持avx2指令集的集群，我们要求升级前schema上不存在cs_encoding的存储格式
 # 注意：这里对混布集群 / schema上row_format进行了ddl变更的场景无法做到完全的防御
 def check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch):
@@ -1144,6 +1154,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_
       check_direct_load_job_exist(cur, query_cur)
       check_enable_insertup_direct_update(query_cur)
       check_enable_logonly_replica(cur, query_cur)
+      check_enable_record_trace_id(cur, query_cur)
       check_sys_table_progressive_merge_round(query_cur)
       check_fail_list()
       modify_server_permanent_offline_time(cur)
