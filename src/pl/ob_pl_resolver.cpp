@@ -6266,9 +6266,15 @@ int ObPLResolver::check_value_expr_can_transform(ObRawExpr *expr,
   for (int64_t i = 0; OB_SUCC(ret) && i < into_idx; ++i) {
     ObRawExpr *into_expr = func.get_expr(sql_stmt->get_into().at(i));
     CK (OB_NOT_NULL(into_expr));
-    if (OB_SUCC(ret) && into_expr->inner_same_as(*expr, &equal_ctx)) {
-      OX (can_transform = false);
-      break;
+    if (OB_SUCC(ret)) {
+      bool inner_same = into_expr->inner_same_as(*expr, &equal_ctx);
+      if (!inner_same && into_expr->is_obj_access_expr() && expr->is_obj_access_expr()) {
+        inner_same = ObObjAccessIdx::has_same_collection_access(into_expr, static_cast<const ObObjAccessRawExpr*>(expr));
+      }
+      if (inner_same) {
+        OX (can_transform = false);
+        break;
+      }
     }
   }
   if (OB_FAIL(ret)) {
