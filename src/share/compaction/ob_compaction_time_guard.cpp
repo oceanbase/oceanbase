@@ -127,6 +127,8 @@ uint16_t ObCompactionTimeGuard::get_max_event_count(const ObCompactionTimeGuardT
     max_event_count = ObStorageCompactionTimeGuard::COMPACTION_EVENT_MAX;
   } else if (CO_MERGE_TIME_GUARD == guard_type) {
     max_event_count = ObCOMergeTimeGuard::COMPACTION_EVENT_MAX;
+  } else if (WINDOW_COMPACT_TIME_GUARD == guard_type) {
+    // TODO: only used for window compaction, waiting for solving conflicts.
   }
   return max_event_count;
 }

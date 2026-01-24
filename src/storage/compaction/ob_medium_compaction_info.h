@@ -176,6 +176,72 @@ public:
   IncMajorInfo *info_list_;
 };
 
+// very tmp, only for pass unique_id_check
+struct ObTabletCompactionScoreDynamicInfo
+{
+public:
+  ObTabletCompactionScoreDynamicInfo() {}
+  virtual ~ObTabletCompactionScoreDynamicInfo() = default;
+  TO_STRING_KV(K_(queuing_mode), K_(is_hot_tablet), K_(is_insert_mostly), K_(is_update_or_delete_mostly), K_(has_slow_query),
+               K_(has_accumulated_delete), K_(need_recycle_mds), K_(need_progressive_merge), K_(cg_merge_batch_cnt),
+               K_(query_cnt), K_(read_amplification_factor));
+  OB_UNIS_VERSION(1);
+public:
+  static constexpr uint32_t TCSDI_ONE_BIT = 1;
+  static constexpr uint32_t TCSDI_TEN_BITS = 10;
+  static constexpr uint32_t TCSDI_ONE_BYTE = 8;
+  static constexpr uint32_t TCSDI_RESERVED_BITS = 7;
+  static constexpr uint32_t DYNAMIC_INFO_VERSION = 0;
+  static constexpr uint32_t DYNAMIC_INFO_VERSION_LATEST = DYNAMIC_INFO_VERSION;
+public:
+  union {
+    uint32_t info_; // for alignment
+    struct {
+      uint32_t queuing_mode_               : TCSDI_ONE_BYTE;
+      uint32_t is_hot_tablet_              : TCSDI_ONE_BIT;
+      uint32_t is_insert_mostly_           : TCSDI_ONE_BIT;
+      uint32_t is_update_or_delete_mostly_ : TCSDI_ONE_BIT;
+      uint32_t has_slow_query_             : TCSDI_ONE_BIT;
+      uint32_t has_accumulated_delete_     : TCSDI_ONE_BIT;
+      uint32_t need_recycle_mds_           : TCSDI_ONE_BIT;
+      uint32_t need_progressive_merge_     : TCSDI_ONE_BIT;
+      uint32_t cg_merge_batch_cnt_         : TCSDI_TEN_BITS; // OceanBase support 4096 columns at most, at most 410 batch when co merge (DEFAULT_CG_MERGE_BATCH_SIZE = 10)
+      uint32_t reserved_                   : TCSDI_RESERVED_BITS;
+    };
+  };
+  uint32_t query_cnt_;
+  double read_amplification_factor_;
+};
+
+struct ObWindowCompactionDecisionLogInfo final
+{
+public:
+  ObWindowCompactionDecisionLogInfo()
+    : info_(0),
+      score_(0),
+      base_inc_row_cnt_(0),
+      dynamic_info_()
+  {}
+  ~ObWindowCompactionDecisionLogInfo() = default;
+  void reset() {}
+  TO_STRING_KV(K_(score), K_(base_inc_row_cnt), K_(dynamic_info), K_(is_inited), K_(compat_version));
+  OB_UNIS_VERSION(1);
+public:
+  static constexpr uint32_t MAX_TABLET_SCORE = UINT32_MAX;
+  static constexpr uint32_t MAX_INC_ROW_CNT = UINT32_MAX;
+public:
+  union {
+    uint8_t info_;
+    struct {
+      uint8_t compat_version_ : 4;
+      uint8_t is_inited_      : 1;
+      uint8_t reserved_       : 3;
+    };
+  };
+  uint32_t score_;
+  uint32_t base_inc_row_cnt_;
+  ObTabletCompactionScoreDynamicInfo dynamic_info_;
+};
 
 struct ObMediumCompactionInfoKey final
 {
@@ -313,10 +379,11 @@ public:
   static const int64_t MEDIUM_COMPAT_VERSION_V3 = 3; // for stanby tenant, not throw medium info
   static const int64_t MEDIUM_COMPAT_VERSION_V4 = 4; // after this version, use is_schema_changed on medium info
   static const int64_t MEDIUM_COMPAT_VERSION_V5 = 5; // after this version, use encoding row limit
-  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V5;
+  static const int64_t MEDIUM_COMPAT_VERSION_V6 = 6; // after this version, support window decision info in medium info
+  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V6;
 private:
   static const int32_t SCS_ONE_BIT = 1;
-  static const int32_t SCS_RESERVED_BITS = 25;
+  static const int32_t SCS_RESERVED_BITS = 24;
 
 public:
   union {
@@ -332,6 +399,7 @@ public:
       uint64_t is_skip_tenant_major_            : SCS_ONE_BIT;
       uint64_t contain_mds_filter_info_         : SCS_ONE_BIT;
       uint64_t contain_inc_major_info_          : SCS_ONE_BIT;
+      uint64_t contain_window_decision_log_info_: SCS_ONE_BIT;
       uint64_t reserved_                        : SCS_RESERVED_BITS;
     };
   };
@@ -346,6 +414,7 @@ public:
   ObMdsFilterInfo mds_filter_info_;
   ObIncMajorSSTableInfo inc_major_info_; // store inc major sstable checksum and end scn
   ObCOMajorMergeStrategy co_major_merge_strategy_;
+  ObWindowCompactionDecisionLogInfo window_decision_log_info_; // store score and other dynamic info for window compaction decision
   ObIAllocator *allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMediumCompactionInfo);

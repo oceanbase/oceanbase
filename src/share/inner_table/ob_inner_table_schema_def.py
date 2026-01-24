@@ -4484,7 +4484,8 @@ def_table_schema(
     ('schedule_type', 'varchar:12', 'true'),
     ('this_exec_date', 'timestamp', 'true'),
     ('this_exec_addr', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
-    ('this_exec_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true')
+    ('this_exec_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('job_config', 'longtext', 'true')
   ],
 )
 
@@ -4904,6 +4905,7 @@ def_table_schema(
       ('suspend_merging', 'int'),
       ('merge_start_time', 'int'),
       ('last_merged_time', 'int'),
+      ('merge_mode', 'int', 'false', 0)
   ],
 )
 
@@ -17627,7 +17629,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12583: __all_virtual_lob_check_exception_result
 # 12584: __all_virtual_sync_standby_dest
 # 12585: __all_virtual_sync_standby_status
-# 12586: __all_virtual_window_loop_info
+# 12586: __all_virtual_tablet_window_loop_info
 
 def_table_schema(
   owner             = 'zhaoziqian.zzq',
@@ -23896,7 +23898,11 @@ def_table_schema(
          (CASE ERROR_TYPE
                 WHEN 0 THEN ''
                 WHEN 1 THEN 'CHECKSUM_ERROR'
-                ELSE 'UNKNOWN' END) AS INFO
+                ELSE 'UNKNOWN' END) AS INFO,
+         (CASE MERGE_MODE
+                WHEN 0 THEN 'TENANT'
+                WHEN 1 THEN 'WINDOW'
+                ELSE 'UNKNOWN' END) AS MODE
   FROM OCEANBASE.__ALL_VIRTUAL_MERGE_INFO
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
@@ -23929,7 +23935,11 @@ def_table_schema(
          (CASE ERROR_TYPE
                 WHEN 0 THEN ''
                 WHEN 1 THEN 'CHECKSUM_ERROR'
-                ELSE 'UNKNOWN' END) AS INFO
+                ELSE 'UNKNOWN' END) AS INFO,
+         (CASE MERGE_MODE
+                WHEN 0 THEN 'TENANT'
+                WHEN 1 THEN 'WINDOW'
+                ELSE 'UNKNOWN' END) AS MODE
   FROM OCEANBASE.__ALL_VIRTUAL_MERGE_INFO
   """.replace("\n", " "),
 )
@@ -61673,7 +61683,11 @@ def_table_schema(
          (CASE ERROR_TYPE
                 WHEN 0 THEN ''
                 WHEN 1 THEN 'CHECKSUM_ERROR'
-                ELSE 'UNKNOWN' END) AS INFO
+                ELSE 'UNKNOWN' END) AS INFO,
+         (CASE MERGE_MODE
+                WHEN 0 THEN 'TENANT'
+                WHEN 1 THEN 'WINDOW'
+                ELSE 'UNKNOWN' END) AS "MODE"
   FROM SYS.ALL_VIRTUAL_MERGE_INFO
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
