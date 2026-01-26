@@ -3914,6 +3914,13 @@ int ObVectorIndexSliceStore::init(
 {
   int ret = OB_SUCCESS;
   UNUSED(context_id);
+  vector_visible_col_idx_ = -1;
+  vector_key_col_idx_ = -1;
+  vector_vid_col_idx_ = -1;
+  vector_col_idx_ = -1;
+  vector_data_col_idx_ = -1;
+  int64_t pk_increment_col_idx = -1;
+
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -3953,14 +3960,10 @@ int ObVectorIndexSliceStore::init(
     for (int64_t i = 0; OB_SUCC(ret) && i < col_array.count(); i++) {
       // version control col is not valid
       if (!col_array.at(i).is_valid_) {
-      } else if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_) ||
-                 col_desc_array.at(i).col_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
-        if (vector_vid_col_idx_ == -1) {
-          vector_vid_col_idx_ = i;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get valid vector index col idx", K(ret), K(vector_vid_col_idx_), K(i));
-        }
+      } else if (ObSchemaUtils::is_vec_hnsw_vid_column(col_array.at(i).column_flags_)) {
+        vector_vid_col_idx_ = i;
+      } else if (col_desc_array.at(i).col_id_ == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+        pk_increment_col_idx = i;
       } else if (ObSchemaUtils::is_vec_hnsw_vector_column(col_array.at(i).column_flags_)) {
         vector_col_idx_ = i;
       } else if (ObSchemaUtils::is_vec_hnsw_key_column(col_array.at(i).column_flags_)) {
@@ -3973,6 +3976,18 @@ int ObVectorIndexSliceStore::init(
         if (OB_FAIL(extra_column_idx_types_.push_back(ObExtraInfoIdxType(i, col_array.at(i).col_type_)))) {
           LOG_WARN("failed to push back extra info col idx", K(ret), K(i));
         }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (vector_vid_col_idx_ == -1 && pk_increment_col_idx == -1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get valid vector index col idx", K(ret), K(vector_vid_col_idx_), K(pk_increment_col_idx), K(col_array));
+    } else if (vector_vid_col_idx_ == -1 && pk_increment_col_idx != -1) {
+      vector_vid_col_idx_ = pk_increment_col_idx;
+    } else if (vector_vid_col_idx_ != -1 && pk_increment_col_idx != -1) {
+      if (OB_FAIL(extra_column_idx_types_.push_back(ObExtraInfoIdxType(pk_increment_col_idx, col_array.at(pk_increment_col_idx).col_type_)))) {
+        LOG_WARN("failed to push back extra info col idx", K(ret), K(pk_increment_col_idx));
       }
     }
 
