@@ -42,6 +42,7 @@
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
+#include "share/compaction/ob_schedule_daily_maintenance_window.h"
 
 namespace oceanbase
 {
@@ -11941,6 +11942,11 @@ int ObDDLOperator::init_tenant_scheduled_job(
       false/*schedule_at_once*/,
       trans))) {
     LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::create_jobs_for_tenant_creation(
+                     sys_variable,
+                     tenant_id,
+                     trans))) {
+    LOG_WARN("create scheduled daily maintenance window job failed", KR(ret), K(tenant_id));
   }
   return ret;
 }

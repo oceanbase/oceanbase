@@ -26,6 +26,7 @@ namespace oceanbase
 namespace compaction
 {
 struct ObTabletSchedulePair;
+struct ObWindowCompactionDecisionLogInfo;
 
 class ObMediumCompactionScheduleFunc
 {
@@ -36,14 +37,16 @@ public:
     const ObMediumCompactionInfoList &medium_info_list,
     ObScheduleTabletCnt *schedule_tablet_cnt,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE,
-    const int64_t least_medium_snapshot = 0)
+    const int64_t least_medium_snapshot = 0,
+    const ObWindowCompactionDecisionLogInfo *window_decision_log_info = nullptr)
     : allocator_("MediumSchedule"),
       ls_(ls),
       weak_read_ts_(weak_read_ts.get_val_for_tx()),
       medium_info_list_(&medium_info_list),
       schedule_tablet_cnt_(schedule_tablet_cnt),
       merge_reason_(merge_reason),
-      least_medium_snapshot_(least_medium_snapshot)
+      least_medium_snapshot_(least_medium_snapshot),
+      window_decision_log_info_(window_decision_log_info)
   {}
   ~ObMediumCompactionScheduleFunc() {}
   int init_tablet_handle(ObTabletHandle &tablet_handle)
@@ -194,8 +197,12 @@ protected:
     ObMediumCompactionInfo &medium_info,
     ObGetMergeTablesResult &result,
     int64_t &schema_version);
+  int get_valid_schema_version(
+    const ObTablet &tablet,
+    int64_t &schema_version);
   int get_adaptive_reason(const int64_t schedule_major_snapshot);
   int fill_mds_filter_info(ObMediumCompactionInfo &medium_info);
+  int fill_window_decision_log_info(ObMediumCompactionInfo &medium_info);
   static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60_s;
   static constexpr double SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD = 0.2;
   static const int64_t SCHEDULE_RANGE_ROW_COUNT_THRESHOLD = 1000 * 1000L; // 100w
@@ -216,6 +223,7 @@ private:
   ObScheduleTabletCnt *schedule_tablet_cnt_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   int64_t least_medium_snapshot_; // choosen medium snapshot should >= least_medium_snapshot_
+  const ObWindowCompactionDecisionLogInfo *window_decision_log_info_; // optional debug payload from window compaction
 };
 
 } //namespace compaction

@@ -257,9 +257,10 @@
 #include "observer/virtual_table/ob_all_virtual_ccl_status.h"
 #include "observer/virtual_table/ob_all_virtual_ss_object_type_io_stat.h"
 #include "observer/virtual_table/ob_all_virtual_deadlock_detector_stat.h"
-
 #include "observer/virtual_table/ob_all_virtual_tablet_replica_info.h"
 #include "observer/virtual_table/ob_all_virtual_catalog_client_pool_stat.h"
+#include "observer/virtual_table/ob_all_virtual_tablet_window_loop_info.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -3278,6 +3279,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "failed to init ObAllVirtualSSObjectTypeIoStat", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(ss_object_type_io_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_TID: {
+            ObAllVirtualTabletWindowLoopInfo *all_virtual_tablet_window_loop_info = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTabletWindowLoopInfo, all_virtual_tablet_window_loop_info))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualTabletWindowLoopInfo", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_tablet_window_loop_info);
             }
             break;
           }

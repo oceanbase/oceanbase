@@ -63,6 +63,8 @@ public:
 
   uint64_t get_tenant_id() const { return tenant_id_; }
   int launch_major_freeze(const ObMajorFreezeReason freeze_reason);
+  int launch_window_compaction(const ObWindowCompactionParam &param);
+  int finish_window_compaction();
 
   int suspend_merge();
 
@@ -78,13 +80,15 @@ private:
   // major merge one by one
   static const int64_t UNMERGED_VERSION_LIMIT = 1;
 
-  int check_freeze_info();
+  int check_before_freeze(bool is_window_compaction);
+  int check_freeze_info_and_merge_mode(bool is_window_compaction);
   int check_tenant_status() const;
 
   int set_freeze_info(const ObMajorFreezeReason freeze_reason);
+  int set_window_compaction_info(const ObWindowCompactionParam &param);
 
   bool is_primary_service() const { return is_primary_service_; }
-  int try_schedule_minor_before_major_();
+  int try_schedule_minor_before_major_(const bool is_window_compaction);
 
 private:
   bool is_inited_;

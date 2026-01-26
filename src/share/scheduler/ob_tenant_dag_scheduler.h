@@ -1189,6 +1189,7 @@ public:
   int64_t get_running_task_cnt();
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
+  void adapt_window_thread_cnt(); // only for DAG_PRIO_COMPACTION_LOW
 private:
   OB_INLINE bool is_waiting_dag_type(ObDagType::ObDagTypeEnum dag_type)
   { // will add into waiting dag list in add_dag() func
@@ -1470,6 +1471,7 @@ private:
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
   void inner_reload_config();
+  void adapt_window_thread_cnt() { (void) prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_LOW].adapt_window_thread_cnt(); }
 #ifdef OB_BUILD_SHARED_STORAGE
   #include "share/scheduler/ob_tenant_ss_dag_scheduler.h"
 #endif

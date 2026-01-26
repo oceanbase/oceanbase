@@ -1103,9 +1103,16 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
   write_infos.set_attr(lib::ObMemAttr(MTL_ID(), "WriteInfos", ctx_id));
   // fetch member wrapper
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  ObStorageSchema *storage_schema = nullptr;
 
   if (OB_FAIL(multi_stats_.acquire_stats("convert_tablet_to_disk_arg", time_stats))) {
     LOG_WARN("fail to acquire time stats", K(ret));
+  } else if (OB_FAIL(tablet.load_storage_schema(allocator_, storage_schema))) {
+    LOG_WARN("fail to load storage schema", K(ret));
+  } else if (OB_ISNULL(storage_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage schema is null", K(ret), KP(storage_schema));
+  } else if (FALSE_IT(time_stats->click("load_storage_schema"))) {
   } else if (OB_FAIL(arg.tablet_meta_.assign(tablet.tablet_meta_))) {
     LOG_WARN("fail to copy tablet meta", K(ret), K(tablet));
   } else if (FALSE_IT(arg.rowkey_read_info_ptr_ = tablet.rowkey_read_info_)) {
@@ -1114,10 +1121,8 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
   } else if (OB_FAIL(fetch_table_store_and_write_info(tablet, table_store_wrapper,
       write_infos, total_write_ctxs, &new_table_store, total_tablet_meta_size, block_info_set))) {
     LOG_WARN("fail to fetch table store and write info", K(ret));
-  } else if (OB_FAIL(arg.table_store_cache_.init(new_table_store.get_major_sstables(),
-                                                 new_table_store.get_minor_sstables(),
-                                                 tablet.is_row_store(),
-                                                 tablet.is_tablet_referenced_by_collect_mv()))) {
+  } else if (OB_FAIL(arg.table_store_cache_.init(new_table_store,
+                                                 *storage_schema))) {
     LOG_WARN("fail to init table store cache", K(ret), K(tablet));
   } else {
     time_stats->click("fetch_table_store_and_write_info");
@@ -1129,9 +1134,9 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(load_storage_schema_and_fill_write_info(tablet, allocator_, write_infos))) {
-    LOG_WARN("fail to load storage schema and fill write info", K(ret));
-  } else if (FALSE_IT(time_stats->click("load_storage_schema"))) {
+  } else if (OB_FAIL(fill_write_info(allocator_, storage_schema, write_infos))) {
+    LOG_WARN("fail to fill write info", K(ret), KP(storage_schema));
+  } else if (FALSE_IT(time_stats->click("fill_storage_schema"))) {
   } else if (OB_FAIL(write_and_fill_args(write_infos, arg, total_write_ctxs, total_tablet_meta_size, block_info_set.shared_meta_block_info_set_))) {
     LOG_WARN("fail to write and fill address", K(ret), K(write_infos));
   } else if (FALSE_IT(time_stats->click("write_and_fill_args"))) {
@@ -1142,6 +1147,7 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
     arg.is_row_store_ = tablet.is_row_store();
     arg.is_tablet_referenced_by_collect_mv_ = tablet.is_tablet_referenced_by_collect_mv();
   }
+  ObTabletObjLoadHelper::free(allocator_, storage_schema);
 
   return ret;
 }
@@ -2720,25 +2726,6 @@ int ObTabletPersister::fetch_table_store_and_write_info(
   } else {
     time_stats->click("fill_write_info");
   }
-  return ret;
-}
-
-int ObTabletPersister::load_storage_schema_and_fill_write_info(
-    const ObTablet &tablet,
-    common::ObArenaAllocator &allocator,
-    common::ObIArray<ObSharedObjectWriteInfo> &write_infos)
-{
-  int ret = OB_SUCCESS;
-  ObStorageSchema *storage_schema = nullptr;
-  if (OB_FAIL(tablet.load_storage_schema(allocator, storage_schema))) {
-    LOG_WARN("fail to load storage schema", K(ret));
-  } else if (OB_ISNULL(storage_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage schema is null", K(ret), KP(storage_schema));
-  } else if (OB_FAIL(fill_write_info(allocator, storage_schema, write_infos))) {
-    LOG_WARN("fail to fill write info", K(ret), KP(storage_schema));
-  }
-  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 

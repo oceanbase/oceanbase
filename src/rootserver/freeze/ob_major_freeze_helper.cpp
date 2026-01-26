@@ -14,7 +14,11 @@
 
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/ob_freeze_info_proxy.h"
+#include "share/ob_global_merge_table_operator.h"
+#include "share/ob_global_stat_proxy.h"
+#include "share/ob_zone_merge_info.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 #include "src/observer/ob_srv_network_frame.h"
 
 namespace oceanbase
@@ -640,6 +644,106 @@ int ObMajorFreezeHelper::add_user_warning(
   }
   return ret;
 }
+
+int ObGlobalCompactionSchemaHelper::get_global_safe_recycle_schema_version(
+    const int64_t tenant_id,
+    common::ObMySQLProxy &sql_proxy,
+    share::schema::ObMultiVersionSchemaService &schema_service,
+    int64_t &safe_recycle_schema_version)
+{
+  int ret = OB_SUCCESS;
+  safe_recycle_schema_version = OB_INVALID_VERSION;
+  ObGlobalMergeInfo global_info;
+  // system tenant's schema history recycle is handled separately
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_SYS_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(sql_proxy, tenant_id, global_info))) {
+    LOG_WARN("fail to load global merge info", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!global_info.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid global merge info", KR(ret), K(tenant_id), K(global_info));
+  } else if (global_info.last_merged_scn() <= SCN::base_scn()) {
+    // For tenant never do major compaction, its last_merged_scn is base_scn. In this case, we should take snapshot_gc_ts as a reference.
+    LOG_INFO("[SCHEMA_RECYCLE] tenant never do major compaction, use snapshot_gc_ts as reference", KR(ret), K(tenant_id), K(global_info));
+  } else if (OB_FAIL(get_safe_recycle_schema_version_by_freeze_info(tenant_id, sql_proxy, global_info.last_merged_scn(), safe_recycle_schema_version))) {
+    LOG_WARN("fail to get safe recycle schema version by freeze info", KR(ret), K(tenant_id), K(global_info));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_INVALID_VERSION != safe_recycle_schema_version) {
+  } else if (OB_FAIL(get_safe_recycle_schema_version_by_timestamp(tenant_id, sql_proxy, safe_recycle_schema_version))) {
+    LOG_WARN("fail to get safe recycle schema version by timestamp", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObGlobalCompactionSchemaHelper::get_safe_recycle_schema_version_by_freeze_info(
+    const int64_t tenant_id,
+    common::ObMySQLProxy &sql_proxy,
+    const share::SCN &last_merged_scn,
+    int64_t &safe_recycle_schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObFreezeInfoProxy freeze_info_proxy(tenant_id);
+  TenantIdAndSchemaVersion schema_version;
+  if (OB_FAIL(freeze_info_proxy.get_freeze_schema_info(sql_proxy, tenant_id, last_merged_scn, schema_version))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // All freeze info is recycled and no newer major freeze is executed.
+      // We should use snapshot_gc_ts as a reference.
+      ret = OB_SUCCESS;
+      LOG_INFO("[SCHEMA_RECYCLE] all freeze info is recycled and no newer major freeze is executed", KR(ret), K(tenant_id), K(last_merged_scn));
+    } else {
+      LOG_WARN("fail to get freeze schema info", KR(ret), K(tenant_id), K(last_merged_scn));
+    }
+  } else if (OB_UNLIKELY(!schema_version.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema version from freeze info", KR(ret), K(tenant_id), K(last_merged_scn), K(schema_version));
+  } else {
+    safe_recycle_schema_version = schema_version.schema_version_;
+    LOG_INFO("[SCHEMA_RECYCLE] get safe recycle schema version by last_merged_scn",
+             KR(ret), K(tenant_id), K(last_merged_scn), K(safe_recycle_schema_version));
+  }
+  return ret;
+}
+
+int ObGlobalCompactionSchemaHelper::get_safe_recycle_schema_version_by_timestamp(
+    const int64_t tenant_id,
+    common::ObMySQLProxy &sql_proxy,
+    int64_t &safe_recycle_schema_version)
+{
+  int ret = OB_SUCCESS;
+  safe_recycle_schema_version = OB_INVALID_VERSION;
+  SCN snapshot_gc_scn;
+  int64_t recycle_timestamp = 0;
+  int64_t boundary_schema_version = OB_INVALID_VERSION;
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = tenant_id;
+  if (OB_FAIL(ObGlobalStatProxy::get_snapshot_gc_scn(sql_proxy, tenant_id, snapshot_gc_scn))) {
+    LOG_WARN("fail to get snapshot_gc_scn", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!snapshot_gc_scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid snapshot_gc_scn", KR(ret), K(tenant_id), K(snapshot_gc_scn));
+  } else if (snapshot_gc_scn.is_min()) { // for special cases, such as newly created tenant
+    recycle_timestamp = ObTimeUtility::current_time_us() - MAX_RESERVED_SCHEMA_VERSION_US;
+  } else {
+    recycle_timestamp = snapshot_gc_scn.convert_to_ts() - MAX_RESERVED_SCHEMA_VERSION_US;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(recycle_timestamp < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid timestamp", KR(ret), K(tenant_id), K(snapshot_gc_scn), K(recycle_timestamp));
+  } else if (OB_FAIL(GCTX.schema_service_->get_schema_version_by_timestamp(schema_status, tenant_id, recycle_timestamp, boundary_schema_version))) {
+    LOG_WARN("fail to get schema version by timestamp", KR(ret), K(tenant_id), K(schema_status), K(recycle_timestamp));
+  } else {
+    safe_recycle_schema_version = boundary_schema_version;
+    LOG_INFO("[SCHEMA_RECYCLE] get safe recycle schema version by snapshot_gc_ts",
+             KR(ret), K(tenant_id), K(schema_status), K(recycle_timestamp), K(safe_recycle_schema_version));
+  }
+  return ret;
+}
+
 
 } // namespace rootserver
 } // namespace oceanbase

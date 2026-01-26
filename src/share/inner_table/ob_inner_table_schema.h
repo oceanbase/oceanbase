@@ -1271,6 +1271,7 @@ public:
   static int all_virtual_tablet_to_global_temporary_table_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_external_catalog_client_pool_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_sqlstat_v2_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tablet_window_loop_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1610,6 +1611,7 @@ public:
   static int all_virtual_wr_sqlstat_v2_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sensitive_rule_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sensitive_column_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tablet_window_loop_info_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -4608,6 +4610,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tablet_to_global_temporary_table_schema,
   ObInnerTableSchema::all_virtual_external_catalog_client_pool_stat_schema,
   ObInnerTableSchema::all_virtual_wr_sqlstat_v2_schema,
+  ObInnerTableSchema::all_virtual_tablet_window_loop_info_schema,
   ObInnerTableSchema::all_virtual_tablet_replica_info_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
@@ -4947,6 +4950,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_wr_sqlstat_v2_ora_schema,
   ObInnerTableSchema::all_virtual_sensitive_rule_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_sensitive_column_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_tablet_window_loop_info_ora_schema,
   NULL,};
 
 const schema_create_func virtual_table_index_schema_creators [] = {
@@ -6953,6 +6957,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TID,
   OB_ALL_VIRTUAL_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TID,
+  OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -7301,6 +7306,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_ORA_TID,
   OB_ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -9321,7 +9327,8 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SOURCE_TID,
   OB_ALL_VIRTUAL_SS_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TID,
-  OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TID,  };
+  OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TID,
+  OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_TID,  };
 
 const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID
 ,  OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID
@@ -9514,6 +9521,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_SS_DIAGNOSE_INFO_ORA_TID
 ,  OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_ORA_TID
 ,  OB_ALL_VIRTUAL_WR_SQLSTAT_V2_ORA_TID
+,  OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_ORA_TID
 ,  };
 
 /* start/end_pos is start/end postition for column with tenant id */
@@ -10158,6 +10166,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_WR_ACTIVE_SESSION_HISTORY_V2_TNAME,
   OB_ALL_VIRTUAL_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TNAME,
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TNAME,
+  OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -10506,6 +10515,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_ORA_TNAME,
   OB_ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -12527,6 +12537,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_TID,
   OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID,
   OB_ALL_VIRTUAL_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
+  OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -12621,7 +12632,8 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TID,
   OB_ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO_ORA_TID,
   OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_ORA_TID,
-  OB_ALL_VIRTUAL_SS_DIAGNOSE_INFO_ORA_TID,  };
+  OB_ALL_VIRTUAL_SS_DIAGNOSE_INFO_ORA_TID,
+  OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_ORA_TID,  };
 
 const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS_COMPACTION
 
 #include "rootserver/freeze/ob_major_merge_scheduler.h"
+#include "rootserver/freeze/window/ob_window_compaction_helper.h"
 
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
@@ -61,7 +62,8 @@ ObMajorMergeScheduler::ObMajorMergeScheduler(const uint64_t tenant_id)
     merge_info_mgr_(nullptr),
     config_(nullptr),
     merge_strategy_(),
-    progress_checker_(tenant_id, stop_)
+    progress_checker_(tenant_id, stop_),
+    window_resource_cache_()
 {
 }
 
@@ -238,10 +240,41 @@ int ObMajorMergeScheduler::get_uncompacted_tablets(
   return ret;
 }
 
+int ObMajorMergeScheduler::check_or_update_major_merge_state(
+    const int64_t curr_round_epoch,
+    const share::ObGlobalMergeInfo &global_info,
+    bool &need_merge)
+{
+  int ret = OB_SUCCESS;
+  need_merge = true;
+  if (global_info.is_merge_error()) {
+    need_merge = false;
+    LOG_WARN("cannot do this round major merge cuz is_merge_error", K(need_merge), K(global_info));
+  } else if (global_info.is_last_merge_complete()) {
+    if (global_info.global_broadcast_scn() == global_info.frozen_scn()) {
+      need_merge = false;
+    } else if (global_info.global_broadcast_scn() < global_info.frozen_scn()) {
+      // should do next round merge with higher broadcast_scn, and clean window compaction resources before broadcast_scn
+      const int64_t merge_start_time_us = global_info.merge_start_time(); // take merge start time of major compaction as a new round
+      if (is_user_tenant(tenant_id_) && OB_FAIL(ObWindowCompactionHelper::clean_before_major_merge(merge_start_time_us, window_resource_cache_))) {
+        LOG_WARN("fail to clean before major merge", KR(ret), K(merge_start_time_us), K_(window_resource_cache));
+      } else if (OB_FAIL(generate_next_global_broadcast_scn(curr_round_epoch))) {
+        LOG_WARN("fail to generate next broadcast scn", KR(ret), K(global_info), K(curr_round_epoch));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid frozen_scn", KR(ret), K(global_info));
+    }
+  } else {
+    // do major freeze with current broadcast_scn
+  }
+  return ret;
+}
+
 int ObMajorMergeScheduler::do_work()
 {
   int ret = OB_SUCCESS;
-
+  bool need_merge = true;
   HEAP_VARS_2((ObZoneMergeInfoArray, info_array), (ObGlobalMergeInfo, global_info)) {
     const int64_t curr_round_epoch = get_epoch();
     if (IS_NOT_INIT) {
@@ -255,34 +288,17 @@ int ObMajorMergeScheduler::do_work()
     }
     if (FAILEDx(merge_info_mgr_->get_zone_merge_mgr().get_snapshot(global_info, info_array))) {
       LOG_WARN("fail to get merge info", KR(ret), K_(tenant_id));
-    } else {
-      bool need_merge = true;
-      if (global_info.is_merge_error()) {
-        need_merge = false;
-        LOG_WARN("cannot do this round major merge cuz is_merge_error", K(need_merge), K(global_info));
-      } else if (global_info.is_last_merge_complete()) {
-        if (global_info.global_broadcast_scn() == global_info.frozen_scn()) {
-          need_merge = false;
-        } else if (global_info.global_broadcast_scn() < global_info.frozen_scn()) {
-          // should do next round merge with higher broadcast_scn
-          if (OB_FAIL(generate_next_global_broadcast_scn(curr_round_epoch))) {
-            LOG_WARN("fail to generate next broadcast scn", KR(ret), K(global_info), K(curr_round_epoch));
-          }
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid frozen_scn", KR(ret), K(global_info));
-        }
-      } else {
-        // do major freeze with current broadcast_scn
+    } else if (OB_FAIL(check_or_update_major_merge_state(curr_round_epoch, global_info, need_merge))) {
+      LOG_WARN("fail to check or update major merge state", KR(ret), K(curr_round_epoch), K(global_info));
+    } else if (need_merge) {
+      if (OB_FAIL(do_before_major_merge(curr_round_epoch, true/*start_merge*/))) {
+        LOG_WARN("fail to do before major merge", KR(ret), K(curr_round_epoch));
+      } else if (OB_FAIL(do_one_round_major_merge(curr_round_epoch))) {
+        LOG_WARN("fail to do major merge", KR(ret), K(curr_round_epoch));
       }
-
-      if (OB_SUCC(ret) && need_merge) {
-        if (OB_FAIL(do_before_major_merge(curr_round_epoch, true/*start_merge*/))) {
-          LOG_WARN("fail to do before major merge", KR(ret), K(curr_round_epoch));
-        } else if (OB_FAIL(do_one_round_major_merge(curr_round_epoch))) {
-          LOG_WARN("fail to do major merge", KR(ret), K(curr_round_epoch));
-        }
-      }
+    } else if (!is_user_tenant(tenant_id_)) { // only user tenant need do window compaction
+    } else if (OB_FAIL(ObWindowCompactionHelper::check_and_alter_window_status_for_leader(tenant_id_, curr_round_epoch, global_info, window_resource_cache_))) {
+      LOG_WARN("fail to check and alter window status for leader", KR(ret), K_(tenant_id), K(curr_round_epoch), K(global_info), K_(window_resource_cache));
     }
 
     LOG_TRACE("finish do merge scheduler work", KR(ret), K(curr_round_epoch), K(global_info));
@@ -839,7 +855,8 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging, con
           LOG_WARN("tenant config is not valid", KR(ret), K_(tenant_id));
         } else if (((now - max_merge_time) > MAX_NO_MERGE_INTERVAL) &&
                    (GCONF.enable_major_freeze) &&
-                   (!tenant_config->major_freeze_duty_time.disable())) {
+                   (!tenant_config->major_freeze_duty_time.disable()) &&
+                   (!tenant_config->enable_window_compaction)) {
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
             // standby tenant cannot launch major freeze itself, it perform major freeze according
             // to freeze info synchronized from primary tenant. therefore, standby tenants that

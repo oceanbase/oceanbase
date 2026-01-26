@@ -217,4 +217,5 @@ TG_DEF(LogFetcherBGWorker, LogFetcherBGW, TIMER)
 TG_DEF(MaBlkBFLoader, MBFLoad, THREAD_POOL, 1)
 TG_DEF(TLD_HTimer, TLD_HTimer, TIMER)
 TG_DEF(ShrBlkChk, ShrBlkChk, TIMER)
+TG_DEF(WindowLoop, WindowLoop, TIMER)
 #endif

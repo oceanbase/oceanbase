@@ -537,6 +537,7 @@ const int64_t OB_MAX_SYNONYM_NAME_LENGTH = 128;
 const int64_t OB_MAX_PARAMETERS_NAME_LENGTH = 128;
 const int64_t OB_MAX_RESOURCE_PLAN_NAME_LENGTH = 128;
 // end for const define replace OB_MAX_TABLE_NAME_LENGTH
+const int64_t OB_MAX_JOB_INFO_JOB_CONFIG_LENGTH = 512; // resource_plan 128 + consumer_group 128 + other 256
 
 ///////////////////////////////////////////////////////
 //          Schema defination                        //
@@ -592,6 +593,9 @@ const char *const FLASHBACK_VERIFY_MODE_STR = "physical_flashback_verify";
 const char *const DISABLED_CLUSTER_MODE_STR = "disabled_cluster";
 const char *const DISABLED_WITH_READONLY_CLUSTER_MODE_STR = "disabled_with_readonly_cluster";
 const char *const SHARED_STORAGE_MODE_STR = "shared_storage";
+const char *const DAILY_MAINTENANCE_WINDOW_JOB_NAME = "DAILY_MAINTENANCE_WINDOW";
+const char *const INNER_DAILY_WINDOW_PLAN_NAME = "INNER_DAILY_WINDOW_PLAN";
+const char *const INNER_DAILY_WINDOW_COMPACTION_LOW_GROUP_NAME = "INNER_DAILY_WINDOW_COMPACTION_LOW_GROUP";
 
 static const int64_t MODIFY_GC_SNAPSHOT_INTERVAL = 2 * 1000 * 1000; //2s
 

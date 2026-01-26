@@ -25,7 +25,7 @@
 #include "pl/ob_pl_warning.h"
 #endif
 #include "lib/charset/ob_charset.h"
-
+#include "rootserver/freeze/window/ob_window_compaction_helper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -2221,8 +2221,6 @@ int ObSysVarOnCheckFuncs::check_update_resource_manager_plan(ObExecContext &ctx,
       // maybe NULL, do nothing
     } else if (OB_FAIL(val.get_string(plan))) {
       LOG_WARN("fail to get sql mode str", K(ret), K(val), K(sys_var));
-    } else if (0 == plan.length()) {
-      // do nothing.
     } else {
       // check if plan exists
       ObResourceManagerProxy proxy;
@@ -2232,13 +2230,23 @@ int ObSysVarOnCheckFuncs::check_update_resource_manager_plan(ObExecContext &ctx,
         LOG_WARN("fail to get session info", K(ret));
       } else {
         uint64_t tenant_id = session->get_effective_tenant_id();
-        bool exists = false;
-        if (OB_FAIL(proxy.check_if_plan_exist(tenant_id, plan, exists))) {
+        bool exists = (0 == plan.length());
+        bool is_window_compaction_active = false;
+        if (!exists && OB_FAIL(proxy.check_if_plan_exist(tenant_id, plan, exists))) {
           LOG_WARN("fail check plan exists", K(tenant_id), K(plan), K(val), K(ret));
         } else if (!exists) {
           ret = OB_ERR_RES_MGR_PLAN_NOT_EXIST;
           LOG_USER_ERROR(OB_ERR_RES_MGR_PLAN_NOT_EXIST);
           LOG_WARN("plan not exist", K(plan), K(ret));
+        } else if (session->is_inner()) {
+          // allow inner sql to alter resource manager plan
+        } else if (OB_FAIL(rootserver::ObWindowCompactionHelper::check_window_compaction_global_active(tenant_id, is_window_compaction_active))) {
+          LOG_WARN("fail to check window compaction global active", KR(ret), K(tenant_id));
+        } else if (is_window_compaction_active) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant is during window compaction now, "
+                                           "please stop window compaction by CALL DBMS_SCHEDULER.DISABLE('DAILY_MAINTENANCE_WINDOW');"
+                                           "directly alter resource manager plan");
         }
       }
     }

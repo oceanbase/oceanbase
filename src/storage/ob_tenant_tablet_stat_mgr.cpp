@@ -217,6 +217,15 @@ ObTabletStatAnalyzer::ObTabletStatAnalyzer()
 {
 }
 
+void ObTabletStatAnalyzer::reset()
+{
+  tablet_stat_.reset();
+  total_tablet_stat_.reset();
+  mode_ = TABLE_MODE_MAX;
+  boost_factor_ = 1;
+  is_small_tenant_ = false;
+}
+
 bool ObTabletStatAnalyzer::is_hot_tablet() const
 {
   // the mini merge count && query count during the past 10 mins
@@ -275,7 +284,7 @@ bool ObTabletStatAnalyzer::has_frequent_slow_query() const
   return bret;
 }
 
-bool ObTabletStatAnalyzer::has_accumnulated_delete() const
+bool ObTabletStatAnalyzer::has_accumulated_delete() const
 {
   bool bret = false;
   if (is_queuing_table_mode(mode_)) {
@@ -285,6 +294,26 @@ bool ObTabletStatAnalyzer::has_accumnulated_delete() const
         || tablet_stat_.update_row_cnt_ + tablet_stat_.delete_row_cnt_ > adaptive_threshold;
   }
   return bret;
+}
+
+double ObTabletStatAnalyzer::get_read_amplification() const
+{
+  double read_amplification = 1.0;
+  if (total_tablet_stat_.scan_physical_row_cnt_ >= 1 && total_tablet_stat_.scan_logical_row_cnt_ >= 1) {
+    read_amplification = MAX(1.0, static_cast<double>(total_tablet_stat_.scan_physical_row_cnt_) / total_tablet_stat_.scan_logical_row_cnt_);
+  }
+  return read_amplification;
+}
+
+int64_t ObTabletStatAnalyzer::get_satisfied_condition_number() const
+{
+  int count = 1;
+  count += is_hot_tablet() ? 1 : 0;
+  count += is_insert_mostly() ? 1 : 0;
+  count += is_update_or_delete_mostly() ? 1 : 0;
+  count += has_frequent_slow_query() ? 1 : 0;
+  count += has_accumulated_delete() ? 1 : 0;
+  return count;
 }
 
 /************************************* ObTenantSysStat *************************************/
@@ -848,6 +877,36 @@ int ObTenantTabletStatMgr::get_all_tablet_stats(
         // no tablet stat has been collected in the past 16 minutes.
       } else if (OB_FAIL(tablet_stats.push_back(cur_stat))) {
         LOG_WARN("failed to add tablet stat", K(ret), K(cur_stat));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantTabletStatMgr::get_all_tablet_analyzers(
+    common::ObIArray<ObTabletStatAnalyzer> &tablet_analyzers)
+{
+  int ret = OB_SUCCESS;
+  ObBucketWLockAllGuard lock_guard(bucket_lock_);
+  if (OB_FAIL(lock_guard.get_ret())) {
+    LOG_WARN("failed to acquire lock", K(ret));
+  } else if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantTabletStatMgr not inited", K(ret));
+  } else {
+    ObTabletStreamNode *cur_node = nullptr;
+    ObTabletStatAnalyzer cur_analyzer;
+    FOREACH_X(bucket_it, stream_map_, OB_SUCC(ret)) {
+      if (OB_NOT_NULL(cur_node = bucket_it->second)) {
+        cur_analyzer.reset();
+        cur_node->stream_.get_latest_stat(cur_analyzer.tablet_stat_);
+        if (cur_analyzer.tablet_stat_.is_valid()) {
+          cur_analyzer.total_tablet_stat_ = cur_node->stream_.get_total_stats();
+          cur_analyzer.mode_ = cur_node->dynamic_table_option_.mode_;
+          if (cur_analyzer.total_tablet_stat_.is_valid() && OB_FAIL(tablet_analyzers.push_back(cur_analyzer))) {
+            LOG_WARN("failed to push back tablet analyzer", K(ret), K(cur_analyzer));
+          }
+        }
       }
     }
   }

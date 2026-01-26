@@ -111,7 +111,7 @@ class ObSSTabletTableStoreMetaInfo;
 struct ObTableStoreCache
 {
 public:
-  enum class ObMajorStoreType : uint8_t
+  enum ObMajorStoreType : uint8_t
   {
     NONE = 0,
     ROW_STORE = 1,
@@ -124,20 +124,25 @@ public:
   ~ObTableStoreCache() { reset(); }
   void reset();
   int init(
-      const ObSSTableArray &major_tables,
-      const ObSSTableArray &minor_tables,
-      const bool is_row_store,
-      const bool is_tablet_referenced_by_collect_mv);
+      const ObTabletTableStore &table_store,
+      const ObStorageSchema &storage_schema);
   void assign(const ObTableStoreCache &other);
   inline bool is_last_major_column_store() const { return ObMajorStoreType::PURE_COLUMN_STORE == last_major_store_type_
                                                        || ObMajorStoreType::REDUNDANT_ROW_STORE == last_major_store_type_; }
   inline bool is_last_major_row_store() const { return ObMajorStoreType::ROW_STORE == last_major_store_type_; }
+  inline bool is_global_index_table() const { return is_global_index_table_; }
+  inline bool need_progressive_merge() const { return need_progressive_merge_; }
   TO_STRING_KV(K_(last_major_snapshot_version), K_(major_table_cnt),
       K_(minor_table_cnt), K_(recycle_version), K_(last_major_column_count),
-      K_(last_major_macro_block_cnt), K_(is_row_store), K_(is_tablet_referenced_by_collect_mv),
+      K_(last_major_macro_block_cnt), K_(last_major_row_cnt), K_(inc_row_cnt),
+      K_(is_row_store), K_(is_tablet_referenced_by_collect_mv),
+      K_(is_global_index_table), K_(need_progressive_merge),
       K_(last_major_compressor_type), K_(last_major_latest_row_store_type),
-      K_(last_major_store_type));
-
+      K_(last_major_store_type), K_(unmerged_inc_major_cnt));
+private:
+  static const int32_t TSC_ONE_BIT = 1;
+  static const int32_t TSC_ONE_BYTE = 8;
+  static const int32_t TSC_RESERVED = 28;
 public:
   int64_t last_major_snapshot_version_;
   int64_t major_table_cnt_;
@@ -145,11 +150,22 @@ public:
   int64_t recycle_version_;
   int64_t last_major_column_count_;
   int64_t last_major_macro_block_cnt_;
-  bool is_row_store_;
-  bool is_tablet_referenced_by_collect_mv_;     //indicate tablet referenced by collect mv
-  common::ObCompressorType last_major_compressor_type_;
-  common::ObRowStoreType last_major_latest_row_store_type_;
-  ObMajorStoreType last_major_store_type_;
+  int64_t last_major_row_cnt_;
+  int64_t inc_row_cnt_;
+  union {
+    uint64_t merge_info_;
+    struct {
+      uint64_t is_row_store_                       : TSC_ONE_BIT;  // not only used by merge, but put here for alignment
+      uint64_t is_tablet_referenced_by_collect_mv_ : TSC_ONE_BIT;  // indicate tablet referenced by collect mv
+      uint64_t is_global_index_table_              : TSC_ONE_BIT;  // for adaptive compaction
+      uint64_t need_progressive_merge_             : TSC_ONE_BIT;  // for progressive merge
+      uint64_t last_major_compressor_type_         : TSC_ONE_BYTE; // for progressive merge
+      uint64_t last_major_latest_row_store_type_   : TSC_ONE_BYTE; // for progressive merge
+      uint64_t last_major_store_type_              : TSC_ONE_BYTE; // for cs replica
+      uint64_t unmerged_inc_major_cnt_             : TSC_ONE_BYTE; // for adaptive compaction
+      uint64_t reserved_                           : TSC_RESERVED;
+    };
+  };
 };
 
 class ObTablet final : public ObITabletMdsCustomizedInterface
@@ -190,17 +206,22 @@ public:
   inline int64_t get_last_major_snapshot_version() const { return table_store_cache_.last_major_snapshot_version_; }
   inline int64_t get_major_table_count() const { return table_store_cache_.major_table_cnt_; }
   inline int64_t get_minor_table_count() const { return table_store_cache_.minor_table_cnt_; }
+  inline int64_t get_unmerged_inc_major_count() const { return table_store_cache_.unmerged_inc_major_cnt_; }
   inline int64_t get_recycle_version() const { return table_store_cache_.recycle_version_; }
   inline int64_t get_last_major_column_count() const { return table_store_cache_.last_major_column_count_; }
   inline int64_t get_last_major_total_macro_block_count() const { return table_store_cache_.last_major_macro_block_cnt_; }
-  inline common::ObCompressorType get_last_major_compressor_type() const { return table_store_cache_.last_major_compressor_type_; }
-  inline common::ObRowStoreType get_last_major_latest_row_store_type() const { return table_store_cache_.last_major_latest_row_store_type_; }
+  inline int64_t get_last_major_row_count() const { return table_store_cache_.last_major_row_cnt_; }
+  inline int64_t get_inc_row_cnt() const { return table_store_cache_.inc_row_cnt_; }
+  inline common::ObCompressorType get_last_major_compressor_type() const { return static_cast<ObCompressorType>(table_store_cache_.last_major_compressor_type_); }
+  inline common::ObRowStoreType get_last_major_latest_row_store_type() const { return static_cast<ObRowStoreType>(table_store_cache_.last_major_latest_row_store_type_); }
   inline share::ObLSID get_ls_id() const { return tablet_meta_.ls_id_; }
   inline common::ObTabletID get_tablet_id() const { return tablet_meta_.tablet_id_; }
   inline common::ObTabletID get_data_tablet_id() const { return tablet_meta_.data_tablet_id_; }
   inline int64_t get_last_compaction_scn() const { return tablet_meta_.extra_medium_info_.last_medium_scn_; }
   inline bool is_row_store() const { return table_store_cache_.is_row_store_; }
   inline bool is_tablet_referenced_by_collect_mv() const { return table_store_cache_.is_tablet_referenced_by_collect_mv_; }
+  inline bool is_global_index_table() const { return table_store_cache_.is_global_index_table_; }
+  inline bool need_progressive_merge() const { return table_store_cache_.need_progressive_merge_; }
   inline bool is_user_tablet() const { return tablet_meta_.tablet_id_.is_user_tablet(); }
   inline bool is_user_data_table() const { return tablet_meta_.table_store_flag_.is_user_data_table(); }
   inline bool is_last_major_column_store() const { return table_store_cache_.is_last_major_column_store(); }

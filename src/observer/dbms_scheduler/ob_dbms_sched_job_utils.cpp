@@ -306,6 +306,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.job_type_, job_type_));
   OZ (ob_write_string(allocator, other.this_exec_addr_, this_exec_addr_));
   OZ (ob_write_string(allocator, other.this_exec_trace_id_, this_exec_trace_id_));
+  OZ (ob_write_string(allocator, other.job_config_, job_config_));
   //处理存在兼容性问题的列
   //job style
   OZ (ob_write_string(allocator, "REGULAR", job_style_));
@@ -615,6 +616,9 @@ int ObDBMSSchedJobUtils::create_dbms_sched_job(
           OZ (dml.add_column("max_failures", job_info.max_failures_));
           if ( DATA_VERSION_4_3_5_1 <= data_version) {
             OZ (dml.add_column("func_type", static_cast<uint64_t>(job_info.func_type_)));
+          }
+          if (DATA_VERSION_SUPPORT_JOB_CONFIG(data_version)) {
+            OZ (dml.add_column("job_config", ObHexEscapeSqlStr(job_info.job_config_)));
           }
           OZ (dml.finish_row());
         }

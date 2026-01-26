@@ -414,6 +414,8 @@ ob_set_subtarget(ob_share common_mixed
   compaction/ob_compaction_timer_task_mgr.cpp
   compaction/ob_batch_exec_dag.cpp
   compaction/ob_new_micro_info.cpp
+  compaction/ob_schedule_daily_maintenance_window.cpp
+  compaction/ob_compaction_resource_manager.cpp
   storage/ob_i_pre_warmer.cpp
   storage_cache_policy/ob_storage_cache_common.cpp
   storage_cache_policy/ob_storage_cache_partition_sql_helper.cpp

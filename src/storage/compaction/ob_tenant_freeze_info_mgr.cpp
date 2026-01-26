@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
 #endif
@@ -598,6 +599,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::init()
 int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   const uint64_t tenant_id = MTL_ID();
 
@@ -606,15 +608,24 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
   global_merge_info.tenant_id_ = tenant_id;
   int64_t cur_broadcast_version = 0;
   int64_t global_broadcast_version = 0;
+  int64_t current_window_start_time = 0;
+  ObZoneMergeInfo::MergeStatus merge_status = ObZoneMergeInfo::MERGE_STATUS_MAX;
+  ObGlobalMergeInfo::MergeMode merge_mode = ObGlobalMergeInfo::MERGE_MODE_MAX;
 
   if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*GCTX.sql_proxy_, tenant_id, global_merge_info))) {
     LOG_WARN("failed to load global merge info", KR(ret), K(global_merge_info));
   } else {
+    merge_status = static_cast<ObZoneMergeInfo::MergeStatus>(global_merge_info.merge_status_.get_value());
+    merge_mode = static_cast<ObGlobalMergeInfo::MergeMode>(global_merge_info.merge_mode_.get_value());
+    current_window_start_time = global_merge_info.merge_start_time();
     // set merged version
     MERGE_SCHEDULER_PTR->set_inner_table_merged_scn(global_merge_info.last_merged_scn_.get_scn().get_val_for_tx());
+    if (is_user_tenant(tenant_id) && OB_TMP_FAIL(MERGE_SCHEDULER_PTR->update_merge_info(merge_mode, merge_status, current_window_start_time))) {
+      LOG_WARN("fail to update merge info", K(tmp_ret), "zone", GCTX.config_->zone.str(), K(merge_mode), K(merge_status), K(current_window_start_time));
+    }
     if (global_merge_info.suspend_merging_.get_value()) { // suspend_merge
       MERGE_SCHEDULER_PTR->stop_major_merge();
-      LOG_INFO("schedule zone to stop major merge", K(tenant_id), K(global_merge_info));
+      LOG_INFO("schedule zone to stop major merge", K(ret), K(tenant_id), K(global_merge_info));
     } else {
       if (check_tenant_status_) {
         if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
@@ -635,7 +646,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
         cur_broadcast_version = MERGE_SCHEDULER_PTR->get_frozen_version();
         global_broadcast_version = global_merge_info.global_broadcast_scn_.get_scn().get_val_for_tx();
         if (global_broadcast_version > cur_broadcast_version) {
-          FLOG_INFO("try to schedule merge", K(tenant_id), "zone", GCTX.config_->zone.str(), K(global_broadcast_version), K(cur_broadcast_version));
+          FLOG_INFO("try to schedule tenant major merge", K(tenant_id), "zone", GCTX.config_->zone.str(), K(global_broadcast_version), K(cur_broadcast_version));
           if (OB_FAIL(MERGE_SCHEDULER_PTR->schedule_merge(global_broadcast_version))) {
             LOG_WARN("fail to schedule merge", K(ret), "zone", GCTX.config_->zone.str(), K(global_broadcast_version));
           } else if (OB_FAIL(MTL(ObTenantFreezer*)->update_frozen_scn(global_broadcast_version))) {

@@ -76,6 +76,8 @@ public:
   int resume_leader() { return switch_to_leader(); }
 
   int launch_major_freeze(const ObMajorFreezeReason freeze_reason);
+  int launch_window_compaction(const ObWindowCompactionParam &param);
+  int finish_window_compaction();
   int suspend_merge();
   int resume_merge();
   int clear_merge_error();

@@ -123,6 +123,7 @@ struct ObMergeStaticInfo
   void shallow_copy(const ObMergeStaticInfo &other);
   int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MDS_FILTER_INFO_LENGTH = 256;
+  static const int64_t WINDOW_DECISION_LOG_INFO_LENGTH = 256;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   ObMergeType merge_type_;
@@ -134,11 +135,13 @@ struct ObMergeStaticInfo
   storage::ObStorageSnapshotInfo kept_snapshot_info_;
   PartTableInfo participant_table_info_;
   char mds_filter_info_str_[MDS_FILTER_INFO_LENGTH];
+  char window_decision_log_info_str_[WINDOW_DECISION_LOG_INFO_LENGTH];
   ObMergeLevel merge_level_;
   ObExecMode exec_mode_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   ObCOMajorSSTableStatus base_major_status_;
   ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type_;
+  ObWindowCompactionDecisionLogInfo window_decision_log_info_;
   bool is_full_merge_;
 };
 

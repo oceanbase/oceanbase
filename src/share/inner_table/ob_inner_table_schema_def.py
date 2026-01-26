@@ -17629,7 +17629,41 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12583: __all_virtual_lob_check_exception_result
 # 12584: __all_virtual_sync_standby_dest
 # 12585: __all_virtual_sync_standby_status
-# 12586: __all_virtual_tablet_window_loop_info
+
+def_table_schema(
+  owner = 'ouyanghongrong.oyh',
+  table_name      = '__all_virtual_tablet_window_loop_info',
+  table_id        = '12586',
+  table_type      = 'VIRTUAL_TABLE',
+  gm_columns      = [],
+  rowkey_columns  = [
+    ],
+  in_tenant_space = True,
+  normal_columns  = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('tablet_id', 'int'),
+    ('inc_row_cnt', 'int'),
+    ('score', 'int'),
+    ('compact_status', 'varchar:16'),
+    ('add_timestamp', 'timestamp'),
+    ('queuing_mode', 'varchar:16'),
+    ('is_hot', 'bool'),
+    ('is_insert_mostly', 'bool'),
+    ('is_update_or_delete_mostly', 'bool'),
+    ('has_accumulated_delete', 'bool'),
+    ('need_recycle_mds', 'bool'),
+    ('need_progressive_merge', 'bool'),
+    ('has_slow_query', 'bool'),
+    ('query_cnt', 'int'),
+    ('read_amplification', 'double'),
+    ('comment', 'varchar:512'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner             = 'zhaoziqian.zzq',
@@ -18249,7 +18283,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_ke
 
 # 15540: __all_sync_standby_dest
 # 15541: __all_sync_standby_status
-# 15542: __all_virtual_tablet_window_loop_info
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15542', all_def_keywords['__all_virtual_tablet_window_loop_info']))
 
 # 15543: __all_virtual_macro_block_copy_task
 # 15544: __all_virtual_macro_block_copy_task_progress

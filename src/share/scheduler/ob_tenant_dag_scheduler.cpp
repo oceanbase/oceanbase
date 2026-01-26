@@ -14,6 +14,7 @@
 #include "lib/thread/thread_mgr.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "share/compaction/ob_batch_exec_dag.h"
@@ -2772,9 +2773,6 @@ int ObDagPrioScheduler::rank_compaction_dags_()
     }
   }
 
-  if (OB_SUCC(ret)) {
-    adaptive_task_limit_ = limits_;
-  }
   return ret;
 }
 
@@ -3814,6 +3812,28 @@ bool ObDagPrioScheduler::try_switch(ObTenantDagWorker &worker)
   }
 
   return need_pause;
+}
+
+void ObDagPrioScheduler::adapt_window_thread_cnt()
+{
+  int ret = OB_SUCCESS;
+  int64_t adaptive_thread_cnt = 0;
+  ObTenantTabletScheduler *tablet_scheduler = MTL(ObTenantTabletScheduler *);
+  ObMutexGuard guard(prio_lock_);
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_WARN("failed to get lock", KR(ret));
+  } else if (OB_UNLIKELY(ObDagPrio::DAG_PRIO_COMPACTION_LOW != priority_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only compaction low thread affected by window compaction", KR(ret), K_(priority));
+  } else if (OB_ISNULL(tablet_scheduler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet scheduler is nullptr", KR(ret));
+  } else if (OB_FAIL(tablet_scheduler->get_window_loop().get_adaptive_compaction_thread_cnt(limits_, adaptive_thread_cnt))) {
+    adaptive_task_limit_ = limits_;
+    LOG_WARN("failed to get adaptive compaction thread cnt, take limits_", KR(ret), K(limits_));
+  } else {
+    adaptive_task_limit_ = adaptive_thread_cnt;
+  }
 }
 
 // under prio lock
@@ -5142,6 +5162,9 @@ void ObTenantDagScheduler::run1()
       adapt_ss_work_thread();
     }
 #endif
+    if (!GCTX.is_shared_storage_mode()) {
+      adapt_window_thread_cnt();
+    }
     dump_dag_status();
     loop_dag_net();
     {

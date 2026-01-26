@@ -130,5 +130,7 @@ bool is_valid_major_freeze_reason(const ObMajorFreezeReason &freeze_reason)
     && freeze_reason < ObMajorFreezeReason::MF_REASON_MAX;
 }
 
+OB_SERIALIZE_MEMBER(ObWindowCompactionParam, with_start_ts_, window_start_time_us_);
+
 } // end namespace rootserver
 } // end namespace oceanbase

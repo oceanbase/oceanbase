@@ -113,6 +113,26 @@ void ObProgressiveMergeMgr::mark_progressive_round_unfinish()
 {
   ATOMIC_SET(&finish_cur_round_, false);
 }
+
+bool ObProgressiveMergeMgr::check_need_progressive_merge(
+    const int64_t schema_progressive_merge_num,
+    const int64_t schema_progressive_merge_round,
+    const blocksstable::ObSSTableBasicMeta &base_meta)
+{
+  bool bret = false;
+  const int64_t progressive_merge_num = 0 == schema_progressive_merge_num
+                                      ? OB_AUTO_PROGRESSIVE_MERGE_NUM
+                                      : schema_progressive_merge_num;
+  if (schema_progressive_merge_round <= INIT_PROGRESSIVE_MERGE_ROUND) {
+    // initial state
+  } else if (base_meta.progressive_merge_round_ < schema_progressive_merge_round) {
+    bret = true;
+  } else if (base_meta.progressive_merge_round_ == schema_progressive_merge_round) {
+    bret = base_meta.progressive_merge_step_ < progressive_merge_num;
+  }
+  return bret;
+}
+
 /*
  *ObProgressiveMergeHelper
  */

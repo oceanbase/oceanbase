@@ -90,6 +90,7 @@
 #include "pl/sys_package/ob_dbms_xprofile.h"
 #include "pl/sys_package/ob_dbms_data_dict.h"
 #include "pl/sys_package/ob_dbms_python.h"
+#include "pl/sys_package/ob_dbms_daily_maintenance.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -319,6 +320,7 @@
   //start of resource manager
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_PLAN, "CREATE_PLAN_INNER", (ObPlDBMSResourceManager::create_plan))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_PLAN, "DELETE_PLAN_INNER", (ObPlDBMSResourceManager::delete_plan))
+  INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_COPY_PLAN, "COPY_PLAN_INNER", (ObPlDBMSResourceManager::copy_plan))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_CONSUMER_GROUP, "CREATE_CONSUMER_GROUP_INNER", (ObPlDBMSResourceManager::create_consumer_group))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_DELETE_CONSUMER_GROUP, "DELETE_CONSUMER_GROUP_INNER", (ObPlDBMSResourceManager::delete_consumer_group))
   INTERFACE_DEF(INTERFACE_DBMS_RESOURCE_MANAGER_CREATE_PLAN_DIRECTIVE, "CREATE_PLAN_DIRECTIVE_INNER", (ObPlDBMSResourceManager::create_plan_directive))
@@ -963,6 +965,11 @@ DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_GET_SQL, ObDB
 
 #undef DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE
   // end of dbms_hybrid_search
+
+  // start of dbms_daily_maintenance
+  INTERFACE_DEF(INTERFACE_DBMS_DAILY_MAINTENANCE_TRIGGER_WINDOW_COMPACTION, "DBMS_DAILY_MAINTENANCE_TRIGGER_WINDOW_COMPACTION", (ObDBMSDailyMaintenance::trigger_window_compaction_proc))
+  INTERFACE_DEF(INTERFACE_DBMS_DAILY_MAINTENANCE_SET_THREAD_CNT, "DBMS_DAILY_MAINTENANCE_SET_THREAD_COUNT", (ObDBMSDailyMaintenance::set_thread_count))
+  // end of dbms_daily_maintenance
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

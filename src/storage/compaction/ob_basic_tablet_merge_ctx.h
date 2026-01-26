@@ -166,6 +166,8 @@ public:
   share::SCN rec_scn_;
   ObCOStaticMergeParam co_static_param_;
   common::ObSEArray<ObMergeSSTableStatus, 64> merge_sstable_status_array_;
+  ObWindowCompactionDecisionLogInfo window_decision_log_info_;
+
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
@@ -298,6 +300,7 @@ public:
   int generate_participant_table_info(PartTableInfo &info) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len, const blocksstable::ObSSTable *&sstable) const;
   void generator_mds_filter_info(ObMergeStaticInfo &static_info) const;
+  void generator_window_decision_log_info(ObMergeStaticInfo &static_info) const;
   virtual int get_macro_seq_by_stage(const ObGetMacroSeqStage stage, int64_t &macro_start_seq) const;
   int integrate_uncommit_tx_info(ObMemUncommitTxInfo &dest_uncommit_tx_info) const;
 

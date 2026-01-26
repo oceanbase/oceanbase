@@ -17,12 +17,23 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/literals/ob_literals.h"
 #include "share/compaction/ob_compaction_time_guard.h"
+#include "share/ob_zone_merge_info.h"
 #include "storage/compaction/ob_tenant_status_cache.h"
 
 namespace oceanbase
 {
 namespace compaction
 {
+
+enum ObCompactionScheduleMode : uint8_t
+{
+  COMPACTION_NORMAL_MODE = 0, // do both schedule new round medium for leader, and schedule merge dag execute
+  COMPACTION_WINDOW_MODE = 1, // do both add tablet score into priority queue or candidate list, and schedule merge dag execute, used while medium loop in window compaction
+  COMPACTION_MAX_MODE
+};
+
+inline bool is_window_compaction_mode(const ObCompactionScheduleMode mode) { return COMPACTION_WINDOW_MODE == mode; }
+inline bool is_normal_compaction_mode(const ObCompactionScheduleMode mode) { return COMPACTION_NORMAL_MODE == mode; }
 
 struct ObScheduleStatistics
 {
@@ -75,6 +86,33 @@ struct ObScheduleTabletCnt
   int64_t wait_rs_validate_cnt_;
 };
 
+struct ObMergeInfo final // For atomic store and load
+{
+public:
+  ObMergeInfo()
+    : merge_mode_(share::ObGlobalMergeInfo::MERGE_MODE_TENANT),
+      merge_status_(share::ObZoneMergeInfo::MERGE_STATUS_IDLE),
+      merge_start_time_(0)
+  {}
+  virtual ~ObMergeInfo() { reset(); }
+  void reset()
+  {
+    merge_mode_ = share::ObGlobalMergeInfo::MERGE_MODE_TENANT;
+    merge_status_ = share::ObZoneMergeInfo::MERGE_STATUS_IDLE;
+    merge_start_time_ = 0;
+  }
+  bool is_global_during_window_compaction() const
+  {
+    return share::ObGlobalMergeInfo::MERGE_MODE_WINDOW == merge_mode_
+        && share::ObZoneMergeInfo::MERGE_STATUS_MERGING == merge_status_;
+  }
+  TO_STRING_KV(K_(merge_mode), K_(merge_status), K_(merge_start_time));
+public:
+  share::ObGlobalMergeInfo::MergeMode merge_mode_;
+  share::ObZoneMergeInfo::MergeStatus merge_status_;
+  int64_t merge_start_time_;
+};
+
 class ObBasicMergeScheduler
 {
 public:
@@ -92,12 +130,15 @@ public:
   int64_t get_frozen_version() const;
   bool is_compacting() const;
   int get_min_data_version(uint64_t &min_data_version) { return tenant_status_.get_min_data_version(min_data_version); }
+  int get_window_schema_version(int64_t &window_schema_version) { return tenant_status_.get_window_schema_version(window_schema_version); }
   int during_restore(bool &during_restore) { return tenant_status_.during_restore(during_restore); }
   virtual int schedule_merge(const int64_t broadcast_version) = 0;
   void update_merged_version(const int64_t merged_version);
+  int update_merge_info(const share::ObGlobalMergeInfo::MergeMode merge_mode, const share::ObZoneMergeInfo::MergeStatus merge_status, const int64_t merge_start_time);
   int64_t get_merged_version() const { return merged_version_; }
   bool enable_adaptive_compaction() const { return tenant_status_.enable_adaptive_compaction(); }
   bool enable_adaptive_merge_schedule() const { return tenant_status_.enable_adaptive_merge_schedule(); }
+  bool is_global_during_window_compaction() const { return merge_info_.is_global_during_window_compaction(); }
   const ObTenantStatusCache &get_tenant_status() const { return tenant_status_; }
   static const int64_t INIT_COMPACTION_SCN = 1;
 protected:
@@ -110,6 +151,7 @@ protected:
   int64_t inner_table_merged_scn_;
   int64_t merged_version_; // the merged major version of the local server, may be not accurate after reboot
   ObTenantStatusCache tenant_status_;
+  ObMergeInfo merge_info_;
   bool major_merge_status_;
   bool is_stop_;
 };

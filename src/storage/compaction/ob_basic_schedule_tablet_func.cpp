@@ -30,6 +30,7 @@ ObBasicScheduleTabletFunc::ObBasicScheduleTabletFunc(
     freeze_param_(),
     ls_could_schedule_new_round_(false),
     ls_could_schedule_merge_(false),
+    is_window_compaction_active_(false),
     loop_cnt_(loop_cnt)
 {
 }
@@ -69,13 +70,14 @@ int ObBasicScheduleTabletFunc::post_process_ls()
 
 void ObBasicScheduleTabletFunc::update_tenant_cached_status()
 {
-  const ObBasicMergeScheduler * scheduler = ObBasicMergeScheduler::get_merge_scheduler();
+  const ObTenantTabletScheduler * scheduler = MTL(ObTenantTabletScheduler *);
   if (OB_NOT_NULL(scheduler)) {
     tenant_status_snapshot_ = scheduler->get_tenant_status();
     ls_could_schedule_merge_ = scheduler->could_major_merge_start() && ls_status_.can_merge();
 
     // can only schedule new round on ls leader
     ls_could_schedule_new_round_ = ls_could_schedule_merge_ && ls_status_.is_leader_;
+    is_window_compaction_active_ = scheduler->need_do_window_compaction();
 
     if (!ls_status_.can_merge() && REACH_THREAD_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("should not schedule major merge for ls", K_(ls_status),

@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_FREEZE_OB_ZONE_MERGE_MANAGER_
 
 #include "share/ob_zone_merge_info.h"
+#include "rootserver/freeze/ob_major_freeze_util.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/scn.h"
 
@@ -56,12 +57,15 @@ public:
   int set_zone_merging(const common::ObZone &zone, const int64_t expected_epoch);
   int check_need_broadcast(const share::SCN &frozen_scn, bool &need_broadcast);
   int set_global_freeze_info(const share::SCN &frozen_scn, const int64_t expected_epoch);
+  int set_window_compaction_info(const ObWindowCompactionParam &param, const int64_t expected_epoch);
+  int finish_window_compaction(const int64_t expected_epoch);
 
   int get_global_broadcast_scn(share::SCN &global_broadcast_scn) const;
   int get_global_last_merged_scn(share::SCN &global_last_merged_scn) const;
   int get_global_merge_status(share::ObZoneMergeInfo::MergeStatus &global_merge_status) const;
   int get_global_last_merged_time(int64_t &global_last_merged_time) const;
   int get_global_merge_start_time(int64_t &global_merge_start_time) const;
+  int get_global_merge_mode(share::ObGlobalMergeInfo::MergeMode &global_merge_mode) const;
 
   virtual int generate_next_global_broadcast_scn(const int64_t expected_epoch, share::SCN &next_scn);
   virtual int try_update_global_last_merged_scn(const int64_t expected_epoch);
@@ -142,6 +146,8 @@ public:
   ZONE_MERGE_MANAGER_FUNC(set_zone_merging);
   ZONE_MERGE_MANAGER_FUNC(check_need_broadcast);
   ZONE_MERGE_MANAGER_FUNC(set_global_freeze_info);
+  ZONE_MERGE_MANAGER_FUNC(set_window_compaction_info);
+  ZONE_MERGE_MANAGER_FUNC(finish_window_compaction);
   ZONE_MERGE_MANAGER_FUNC(generate_next_global_broadcast_scn);
   ZONE_MERGE_MANAGER_FUNC(try_update_global_last_merged_scn);
   ZONE_MERGE_MANAGER_FUNC(update_global_merge_info_after_merge);

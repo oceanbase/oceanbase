@@ -427,6 +427,7 @@ public:
   virtual int post_upgrade() override { return common::OB_SUCCESS; }
   virtual int finish_upgrade() override;
 private:
+  int finish_upgrade_for_daily_maintenance_window();
   int finish_upgrade_for_grant_sys_privs();
   int grant_priv(const ObPrivSet user_priv_set,
                  const ObPrivSet grant_priv_set,

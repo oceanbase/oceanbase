@@ -79,6 +79,7 @@ const char* const DEFAULT_TABLE_STORE_FORMAT = "default_table_store_format";
 const char* const ZONE_DEPLOY_MODE = "zone_deploy_mode";
 const char* const ENABLE_LOGONLY_REPLICA = "enable_logonly_replica";
 const char* const ENABLE_GTS_STANDALONE = "enable_gts_standalone";
+const char* const COMPACTION_LOW_THREAD_SCORE = "compaction_low_thread_score";
 
 class ObServerMemoryConfig;
 

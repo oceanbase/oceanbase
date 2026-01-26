@@ -18,10 +18,12 @@ using namespace share;
 namespace compaction
 {
 ObTenantTabletSchedulerTaskMgr::ObTenantTabletSchedulerTaskMgr()
-  : merge_loop_tg_id_(-1),
+  : tenant_id_(MTL_ID()),
+    merge_loop_tg_id_(-1),
     medium_loop_tg_id_(-1),
     sstable_gc_tg_id_(-1),
     compaction_refresh_tg_id_(-1),
+    window_loop_tg_id_(-1),
     schedule_interval_(-1),
     merge_loop_task_(),
     medium_loop_task_(),
@@ -42,6 +44,9 @@ void ObTenantTabletSchedulerTaskMgr::destroy()
   DESTROY_THREAD(medium_loop_tg_id_);
   DESTROY_THREAD(sstable_gc_tg_id_);
   DESTROY_THREAD(compaction_refresh_tg_id_);
+  if (is_user_tenant(tenant_id_)) {
+    DESTROY_THREAD(window_loop_tg_id_);
+  }
   schedule_interval_ = -1;
 }
 
@@ -51,6 +56,9 @@ void ObTenantTabletSchedulerTaskMgr::stop()
   STOP_THREAD(medium_loop_tg_id_);
   STOP_THREAD(sstable_gc_tg_id_);
   STOP_THREAD(compaction_refresh_tg_id_);
+  if (is_user_tenant(tenant_id_)) {
+    STOP_THREAD(window_loop_tg_id_);
+  }
 }
 
 void ObTenantTabletSchedulerTaskMgr::wait()
@@ -59,6 +67,7 @@ void ObTenantTabletSchedulerTaskMgr::wait()
   WAIT_THREAD(medium_loop_tg_id_);
   WAIT_THREAD(sstable_gc_tg_id_);
   WAIT_THREAD(compaction_refresh_tg_id_);
+  WAIT_THREAD(window_loop_tg_id_);
 }
 
 void ObTenantTabletSchedulerTaskMgr::MergeLoopTask::runTimerTask()
@@ -154,6 +163,20 @@ void ObTenantTabletSchedulerTaskMgr::MediumCheckTask::runTimerTask()
   LOG_INFO("MediumCheckTask", K(cost_ts));
 }
 
+void ObTenantTabletSchedulerTaskMgr::WindowLoopTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  int64_t cost_ts = ObTimeUtility::fast_current_time();
+  ObCurTraceId::init(GCONF.self_addr_);
+  if (ObBasicMergeScheduler::could_start_loop_task()) {
+    if (OB_FAIL(MTL(ObTenantTabletScheduler *)->schedule_all_tablets_window())) {
+      LOG_WARN("Fail to schedule all tablets window", K(ret));
+    }
+  }
+  cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
+  LOG_INFO("WindowLoopTask", K(cost_ts));
+}
+
 int ObTenantTabletSchedulerTaskMgr::start()
 {
   int ret = OB_SUCCESS;
@@ -186,6 +209,13 @@ int ObTenantTabletSchedulerTaskMgr::start()
     LOG_WARN("Fail to schedule medium merge scan task", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(medium_loop_tg_id_, medium_check_task_, MEDIUM_CHECK_INTERVAL, repeat))) {
     LOG_WARN("Fail to schedule medium merge check task", K(ret));
+  } else if (!is_user_tenant(tenant_id_)) { // window loop is only for user tenant
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::WindowLoop, window_loop_tg_id_))) {
+    LOG_WARN("failed to create window loop thread", K(ret));
+  } else if (OB_FAIL(TG_START(window_loop_tg_id_))) {
+    LOG_WARN("failed to start window loop thread", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(window_loop_tg_id_, window_loop_task_, schedule_interval_, repeat))) {
+    LOG_WARN("Fail to schedule window loop task", K(ret));
   }
   return ret;
 }
@@ -198,6 +228,8 @@ int ObTenantTabletSchedulerTaskMgr::restart_scheduler_timer_task(
   } else if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, merge_loop_tg_id_, merge_loop_task_))) {
     LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
   } else if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, medium_loop_tg_id_, medium_loop_task_))) {
+    LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
+  } else if (is_user_tenant(tenant_id_) && OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, window_loop_tg_id_, window_loop_task_))) {
     LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
   } else {
     schedule_interval_ = merge_schedule_interval;

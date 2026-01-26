@@ -475,10 +475,8 @@ int ObCOMergeExeDag::init_merge_batch_size(const bool is_using_column_tmp_file)
   int ret = OB_SUCCESS;
   if (is_using_column_tmp_file) {
     merge_batch_size_ = 1;
-  } else if (cg_count_ < ALL_CG_IN_ONE_BATCH_CNT) {
-    merge_batch_size_ = cg_count_;
   } else {
-    const int64_t batch_cnt = cg_count_ / DEFAULT_CG_MERGE_BATCH_SIZE;
+    const int64_t batch_cnt = ObCOMajorMergePolicy::get_cg_merge_batch_cnt(cg_count_);
     merge_batch_size_ = cg_count_ / batch_cnt;
   }
   return ret;

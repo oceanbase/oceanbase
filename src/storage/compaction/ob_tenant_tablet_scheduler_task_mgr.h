@@ -32,17 +32,20 @@ struct ObTenantTabletSchedulerTaskMgr : public ObCompactionTimerTask
   DEFINE_TIMER_TASK(TabletUpdaterRefreshTask);
   DEFINE_TIMER_TASK_WITHOUT_TIMEOUT_CHECK(MediumLoopTask);
   DEFINE_TIMER_TASK_WITHOUT_TIMEOUT_CHECK(MediumCheckTask);
+  DEFINE_TIMER_TASK_WITHOUT_TIMEOUT_CHECK(WindowLoopTask);
   static const int64_t DEFAULT_COMPACTION_SCHEDULE_INTERVAL = 30 * 1000 * 1000L; // 30s
 private:
   static const int64_t SSTABLE_GC_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t INFO_POOL_RESIZE_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t TABLET_UPDATER_REFRESH_INTERVAL = 5 * 60 * 1000 * 1000L; // 5min
   static const int64_t MEDIUM_CHECK_INTERVAL = 20 * 1000 * 1000L; // 20s
+  uint64_t tenant_id_;
   // thread TG id
   int merge_loop_tg_id_;
   int medium_loop_tg_id_;
   int sstable_gc_tg_id_;
   int compaction_refresh_tg_id_;
+  int window_loop_tg_id_;
   int64_t schedule_interval_;
   MergeLoopTask merge_loop_task_;
   MediumLoopTask medium_loop_task_;
@@ -50,6 +53,7 @@ private:
   InfoPoolResizeTask info_pool_resize_task_;
   TabletUpdaterRefreshTask tablet_updater_refresh_task_;
   MediumCheckTask medium_check_task_;
+  WindowLoopTask window_loop_task_;
 };
 
 

@@ -113,6 +113,13 @@ public:
 struct ObGlobalMergeInfo
 {
 public:
+  enum MergeMode : uint8_t
+  {
+    MERGE_MODE_TENANT = 0,
+    MERGE_MODE_WINDOW = 1,
+    MERGE_MODE_MAX
+  };
+public:
   ObGlobalMergeInfo();
   void reset();
   bool is_last_merge_complete() const;
@@ -120,6 +127,8 @@ public:
   bool is_valid() const;
   bool is_merge_error() const;
   bool is_in_verifying_status() const;
+  bool is_idle_status() const;
+  bool is_window_merge_mode() const;
   ObGlobalMergeInfo &operator = (const ObGlobalMergeInfo &other) = delete;
   int assign(const ObGlobalMergeInfo &other);
   // differ from assign, only exclude 'need_update_' copy
@@ -128,11 +137,12 @@ public:
   const SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
   const SCN &global_broadcast_scn() const { return global_broadcast_scn_.get_scn(); }
   const SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
+  int64_t merge_start_time() const { return merge_start_time_.get_value(); }
 
   TO_STRING_KV(K_(tenant_id), K_(cluster), K_(frozen_scn),
     K_(global_broadcast_scn), K_(last_merged_scn), K_(is_merge_error),
     K_(merge_status), K_(error_type), K_(suspend_merging), K_(merge_start_time),
-    K_(last_merged_time));
+    K_(last_merged_time), K_(merge_mode));
 
 public:
   uint64_t tenant_id_;
@@ -148,6 +158,7 @@ public:
   ObMergeInfoItem suspend_merging_;
   ObMergeInfoItem merge_start_time_;
   ObMergeInfoItem last_merged_time_;
+  ObMergeInfoItem merge_mode_;
 };
 
 typedef common::ObSEArray<common::ObZone, DEFAULT_ZONE_COUNT> ObZoneArray;

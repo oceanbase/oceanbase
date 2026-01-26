@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_schema_history_recycler.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "src/share/ob_freeze_info_proxy.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_zone_merge_info.h"
@@ -545,54 +546,24 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
     }
     if (OB_SUCC(ret)) {
       // step 2. calc by major version
-      const int64_t MIN_RESERVED_MAJOR_SCN_NUM = 2;
-      int64_t reserved_num = MIN_RESERVED_MAJOR_SCN_NUM;
-
       if (OB_FAIL(check_inner_stat())) {
         LOG_WARN("schema history recycler is stopped", KR(ret));
       } else {
-        SCN spec_frozen_scn;
         for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
           const uint64_t tenant_id = tenant_ids.at(i);
-          ObFreezeInfoProxy freeze_info_proxy(tenant_id);
-          ObGlobalMergeInfo global_info;
-          ObArray<ObFreezeInfo> frozen_status_arr;
-          TenantIdAndSchemaVersion schema_version;
           int64_t specific_schema_version = OB_INVALID_VERSION;
-
-          if (OB_FAIL(ObGlobalMergeTableOperator::load_global_merge_info(*sql_proxy_, tenant_id, global_info))) {
-            LOG_WARN("fail to get global merge info", KR(ret), K(tenant_id));
-          } else if (!global_info.is_valid()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid global merge info", KR(ret), K(global_info));
-          } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(*sql_proxy_, global_info.last_merged_scn(),
-              frozen_status_arr))) {
-            LOG_WARN("fail to get all freeze info", KR(ret), K(global_info));
-          } else if (frozen_status_arr.count() < reserved_num + 1) {
-            // skip, so other tenant could recycle normally
-            LOG_INFO("[SCHEMA_RECYCLE] not exist enough frozen_scn to reserve", KR(ret), K(tenant_id), K(reserved_num), K(frozen_status_arr));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ObGlobalCompactionSchemaHelper::get_global_safe_recycle_schema_version(
+                              tenant_id, *sql_proxy_, *schema_service_, specific_schema_version))) {
+            LOG_WARN("fail to get safe recycle schema version by global merge info", KR(tmp_ret), K(tenant_id));
             specific_schema_version = OB_INVALID_VERSION;
             // fill OB_INVALID_VERSION, do not recycle this tenant's schema history in this round
-            if (OB_FAIL(fill_recycle_schema_versions(tenant_id, specific_schema_version, recycle_schema_versions))) {
-              LOG_WARN("fail to fill recycle schema versions", KR(ret), K(tenant_id), K(specific_schema_version));
-            }
-          } else if (FALSE_IT(spec_frozen_scn = frozen_status_arr.at(reserved_num).frozen_scn_)) {
-          } else if (OB_FAIL(freeze_info_proxy.get_freeze_schema_info(*sql_proxy_, tenant_id,
-                     spec_frozen_scn, schema_version))) {
-            LOG_WARN("fail to get freeze schema info", KR(ret), K(tenant_id), K(spec_frozen_scn));
-          } else if (!schema_version.is_valid()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("schema version is invalid", KR(ret), K(tenant_id), K(spec_frozen_scn));
-          } else {
-            specific_schema_version = schema_version.schema_version_;
-            if (OB_FAIL(fill_recycle_schema_versions(
-                tenant_id, specific_schema_version, recycle_schema_versions))) {
-              LOG_WARN("fail to fill recycle schema versions",
-                       KR(ret), K(tenant_id), K(specific_schema_version));
-            }
-            LOG_INFO("[SCHEMA_RECYCLE] get recycle schema version by major version",
-                     KR(ret), K(tenant_id), K(spec_frozen_scn), K(specific_schema_version));
           }
+          if (OB_FAIL(fill_recycle_schema_versions(tenant_id, specific_schema_version, recycle_schema_versions))) {
+            LOG_WARN("fail to fill recycle schema versions", KR(ret), K(tenant_id), K(specific_schema_version));
+          }
+          LOG_INFO("[SCHEMA_RECYCLE] get recycle schema version by major version",
+                    KR(ret), KR(tmp_ret), K(tenant_id), K(specific_schema_version));
         }
       }
     }

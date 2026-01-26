@@ -1781,13 +1781,14 @@ bool ObTenantFreezer::need_freeze_(const ObTenantFreezeCtx &ctx)
 
 bool ObTenantFreezer::is_major_freeze_turn_()
 {
-  const int64_t freeze_cnt = tenant_info_.freeze_cnt_;
-  int64_t major_compact_trigger = INT64_MAX;
+  bool need_do_major_freeze = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
-    major_compact_trigger = tenant_config->major_compact_trigger;
+    need_do_major_freeze = tenant_config->major_compact_trigger != 0
+                        && !tenant_config->enable_window_compaction
+                        && tenant_info_.freeze_cnt_ >= tenant_config->major_compact_trigger;
   }
-  return (major_compact_trigger != 0 && freeze_cnt >= major_compact_trigger);
+  return need_do_major_freeze;
 }
 
 int ObTenantFreezer::do_minor_freeze_data_(const ObTenantFreezeCtx &ctx)

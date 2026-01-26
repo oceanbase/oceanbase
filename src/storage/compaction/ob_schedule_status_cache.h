@@ -135,6 +135,7 @@ public:
     storage::ObLS &ls,
     const int64_t merge_version,
     const storage::ObTablet &tablet);
+  bool is_inited() const { return is_inited_; }
   static int check_unfinished_inc_major(
     storage::ObLS &ls,
     const int64_t schedule_scn,

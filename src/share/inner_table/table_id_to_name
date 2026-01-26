@@ -1356,6 +1356,7 @@
 # 12581: __all_virtual_external_catalog_client_pool_stat
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
+# 12586: __all_virtual_tablet_window_loop_info
 # 12587: __all_virtual_tablet_replica_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
@@ -2106,6 +2107,8 @@
 # 15538: __all_sensitive_rule  # BASE_TABLE_NAME
 # 15539: ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT
 # 15539: __all_sensitive_column  # BASE_TABLE_NAME
+# 15542: ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO
+# 15542: __all_virtual_tablet_window_loop_info  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

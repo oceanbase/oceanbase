@@ -962,6 +962,11 @@ DEF_TIME(merger_check_interval, OB_TENANT_PARAMETER, "10m", "[10s, 60m]",
          "the time interval between the schedules of the task "
          "that checks on the progress of MERGE for each zone. Range: [10s, 60m]",
          ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_window_compaction, OB_TENANT_PARAMETER, "False",
+         "specifies whether enable window compaction. "
+         "True: do window compaction daily;"
+         "False: do tenant major freeze daily",
+         ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //// transaction config
 DEF_TIME(trx_2pc_retry_interval, OB_CLUSTER_PARAMETER, "100ms", "[1ms, 5000ms]",
          "the time interval between the retries in case of failure "

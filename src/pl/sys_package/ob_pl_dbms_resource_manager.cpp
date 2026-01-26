@@ -109,6 +109,39 @@ int ObPlDBMSResourceManager::delete_plan(
   return ret;
 }
 
+int ObPlDBMSResourceManager::copy_plan(
+    sql::ObExecContext &ctx,
+    sql::ParamStore &params,
+    common::ObObj &result)
+{
+  enum {
+    SOURCE_PLAN = 0,
+    TARGET_PLAN = 1,
+    COMMENT = 2,
+    MAX_PARAM
+  };
+
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_ID;
+  UNUSED(result);
+  ObResourceManagerProxy proxy;
+  ObString source_plan;
+  ObString target_plan;
+  sql::ObSQLSessionInfo *sess = GET_MY_SESSION(ctx);
+  if (OB_ISNULL(sess) || params.count() != MAX_PARAM) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("err unexpected", K(params.count()), K(MAX_PARAM), K(ret));
+  } else if (OB_FAIL(params.at(SOURCE_PLAN).get_string(source_plan))) {
+    LOG_WARN("fail get source plan", K(ret));
+  } else if (OB_FAIL(params.at(TARGET_PLAN).get_string(target_plan))) {
+    LOG_WARN("fail get target plan", K(ret));
+  } else if (FALSE_IT(tenant_id = sess->get_effective_tenant_id())) {
+  } else if (OB_FAIL(proxy.copy_plan(tenant_id, source_plan, target_plan, params.at(COMMENT)))) {
+    LOG_WARN("fail copy plan", K(tenant_id), K(source_plan), K(target_plan), K(ret));
+  }
+  return ret;
+}
+
 int ObPlDBMSResourceManager::create_consumer_group(
     sql::ObExecContext &ctx,
     sql::ParamStore &params,

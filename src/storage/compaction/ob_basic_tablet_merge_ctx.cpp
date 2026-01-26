@@ -108,7 +108,8 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     private_transfer_epoch_(ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ),
     rec_scn_(),
     co_static_param_(),
-    merge_sstable_status_array_()
+    merge_sstable_status_array_(),
+    window_decision_log_info_()
 {
   merge_scn_.set_max();
 }
@@ -133,6 +134,7 @@ void ObStaticMergeParam::reset()
   is_delete_insert_merge_ = false;
   is_ha_compeleted_ = true;
   co_static_param_.reset();
+  window_decision_log_info_.reset();
 }
 
 bool ObStaticMergeParam::is_valid() const
@@ -1088,6 +1090,17 @@ void ObBasicTabletMergeCtx::generator_mds_filter_info(ObMergeStaticInfo &static_
   }
 }
 
+void ObBasicTabletMergeCtx::generator_window_decision_log_info(ObMergeStaticInfo &static_info) const
+{
+  if (static_info.window_decision_log_info_.is_inited_) {
+    int64_t pos = 0;
+    static_info.window_decision_log_info_.gen_info(
+        static_info.window_decision_log_info_str_,
+        ObMergeStaticInfo::WINDOW_DECISION_LOG_INFO_LENGTH,
+        pos);
+  }
+}
+
 int ObBasicTabletMergeCtx::generate_macro_id_list(char *buf, const int64_t buf_len, const ObSSTable *&sstable) const
 {
   int ret = OB_SUCCESS;
@@ -1150,6 +1163,7 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   running_info.merge_finish_time_ = common::ObTimeUtility::fast_current_time();
   (void)generate_participant_table_info(static_info.participant_table_info_);
   (void)generator_mds_filter_info(static_info);
+  (void)generator_window_decision_log_info(static_info);
 
   if (OB_NOT_NULL(sstable)) {
     (void)generate_macro_id_list(block_info.macro_id_list_, sizeof(block_info.macro_id_list_), sstable);
@@ -1182,6 +1196,9 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   }
   if (nullptr != static_param_.schema_ && static_param_.schema_->is_mv_major_refresh_table()) {
     ADD_COMMENT("mv", 1);
+  }
+  if (static_info.window_decision_log_info_.is_inited()) {
+    ADD_COMMENT("win", static_info.window_decision_log_info_str_);
   }
 
 #undef ADD_COMMENT
@@ -1653,6 +1670,9 @@ int ObBasicTabletMergeCtx::prepare_from_medium_compaction_info(const ObMediumCom
     if (!static_param_.co_static_param_.is_cs_replica_) {
       static_param_.co_static_param_.co_major_merge_type_ = medium_info_co_major_merge_type;
     }
+    if (medium_info->contain_window_decision_log_info_) {
+      static_param_.window_decision_log_info_ = medium_info->window_decision_log_info_;
+    }
     FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC(medium_info));
   }
   if (OB_FAIL(ret) || static_param_.data_version_ < ObTruncateInfoUtil::TRUNCATE_INFO_CMP_DATA_VERSION) {
@@ -1859,6 +1879,7 @@ int ObBasicTabletMergeCtx::init_sstable_merge_history()
     ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS :
     static_param_.merge_sstable_status_array_.at(0).co_major_sstable_status_;
   static_history_.co_major_merge_type_ = static_param_.co_static_param_.co_major_merge_type_;
+  static_history_.window_decision_log_info_ = static_param_.window_decision_log_info_;
   if (!static_history_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("static info is invalid", KR(ret), K_(static_history));

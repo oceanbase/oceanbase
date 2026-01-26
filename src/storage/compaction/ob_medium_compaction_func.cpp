@@ -15,6 +15,7 @@
 #include "storage/ob_partition_range_spliter.h"
 #include "storage/truncate_info/ob_mds_info_distinct_mgr.h"
 #include "storage/compaction/ob_schedule_status_cache.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 
 namespace oceanbase
@@ -27,6 +28,8 @@ namespace compaction
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_INIT_SCHEMA_CHANGED);
 ERRSIM_POINT_DEF(EN_COMPACTION_SET_MAJOR_PARALLEL_CNT);
+ERRSIM_POINT_DEF(EN_CHOOSE_USER_REQUEST_SNAPSHOT_FAILED);
+
 int64_t ObMediumCompactionScheduleFunc::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -449,6 +452,13 @@ int ObMediumCompactionScheduleFunc::choose_scn_for_user_request(
     LOG_WARN("invalid tablet_handle", K(ret), K(tablet_handle_));
   } else if (FALSE_IT(tablet = tablet_handle_.get_obj())) {
     LOG_WARN("major sstable should not be empty", K(ret), KPC(this));
+#ifdef ERRSIM
+  } else if (OB_FAIL(EN_CHOOSE_USER_REQUEST_SNAPSHOT_FAILED)) {
+    LOG_WARN("errsim EN_CHOOSE_USER_REQUEST_SNAPSHOT_FAILED, choose medium snapshot failed", K(ret));
+#endif
+  } else if (OB_UNLIKELY(tablet->get_tablet_meta().tablet_id_.is_special_merge_tablet())) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_WARN("special merge tablet, no need schedule merge", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
   } else if (latest_frozen_version > last_major_snapshot_version) {
     ret = OB_NO_NEED_MERGE;
     LOG_WARN("unfinished freeze info exist, can't schedule another medium", K(ret));
@@ -471,12 +481,40 @@ int ObMediumCompactionScheduleFunc::choose_scn_for_user_request(
     }
     if (FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(ls_, *tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
       LOG_WARN("failed to get result for major", K(ret), K(last_major_snapshot_version), K(medium_info));
-    } else if (OB_FAIL(tablet->get_newest_schema_version(schema_version))) {
-      LOG_WARN("failed to get schema version from tablet", K(ret), KPC(tablet));
+    } else if (OB_FAIL(get_valid_schema_version(*tablet, schema_version))) {
+      LOG_WARN("failed to get valid schema version from tablet", K(ret), KPC(tablet));
     } else {
       LOG_INFO("choose medium_scn for user request", K(ret), K(result), K(schema_version), K(max_sync_medium_scn), K(max_reserved_snapshot),
         "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_));
     }
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::get_valid_schema_version(
+    const ObTablet &tablet,
+    int64_t &schema_version)
+{
+  int ret = OB_SUCCESS;
+  schema_version  = 0;
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  // Some inner tables, such as sys table, lob_meta_table, lob_piece_table do not update schema version when doing dml.
+  // So their schema verison in tablet storage schema is always 0, and can only compaction by tenant major merge before.
+  // Window compaction need support this case.
+  if (OB_FAIL(tablet.get_newest_schema_version(schema_version))) {
+    LOG_WARN("failed to get schema version from tablet", K(ret), K(tablet));
+  } else if (schema_version > 0) {
+    // valid schema version
+  } else if (tablet_id.is_user_tablet() || !ObAdaptiveMergePolicy::is_window_merge_reason(merge_reason_)) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_TRACE("not format schema version, no need merge", K(ret), K(tablet_id), K(schema_version), K_(merge_reason));
+  } else if (OB_UNLIKELY(is_hardcode_schema_table(tablet_id.id()))) {
+    // for hardcode schema table, tablet_id equals to table_id
+    LOG_INFO("table is hardcode schema table, remain schema version as 0", K(ret), K(tablet_id), K(tablet_id));
+  } else if (OB_FAIL(MERGE_SCHEDULER_PTR->get_window_schema_version(schema_version))) {
+    LOG_WARN("failed to get tenant schema version for sys table", K(ret));
+  } else {
+    LOG_INFO("get table schema version for window compaction", K(ret), K(tablet_id), K(schema_version));
   }
   return ret;
 }
@@ -579,6 +617,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(bool &medium_clog_sub
     if (OB_FAIL(medium_info.init_data_version(compat_version))) {
       LOG_WARN("fail to set data version", K(ret), K(tablet_id), K(compat_version));
     } else if (ObAdaptiveMergePolicy::is_user_request_merge_reason(merge_reason_)
+            || ObAdaptiveMergePolicy::is_window_merge_reason(merge_reason_)
             || ObAdaptiveMergePolicy::is_recycle_truncate_info_merge_reason(merge_reason_)
             || ObAdaptiveMergePolicy::TOO_MANY_INC_MAJOR == merge_reason_) {
       if (OB_FAIL(choose_scn_for_user_request(max_sync_medium_scn, medium_info, result, schema_version))) {
@@ -992,7 +1031,8 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
   } else if (OB_UNLIKELY(result.handle_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table handle in result is empty", KR(ret), K(result));
-  } else if (0 == schema_version) { // not formal schema version
+  } else if (OB_UNLIKELY(0 == schema_version && ObAdaptiveMergePolicy::is_window_merge_reason(merge_reason_)
+         && !is_hardcode_schema_table(tablet_handle_.get_obj()->get_tablet_id().id()))) { // window compaction and not hardcode schema table, no need merge
     ret = OB_NO_NEED_MERGE;
     LOG_TRACE("not formal schema version", KR(ret), KPC(this), K(schema_version));
   } else if (medium_info.is_medium_compaction()) {
@@ -1027,6 +1067,8 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("Failed to fill mds filter info", K(ret), K(medium_info));
     }
+  } else if (OB_FAIL(fill_window_decision_log_info(medium_info))) {
+    LOG_WARN("failed to fill window decision info", K(ret), K(medium_info));
   } else {
     LOG_TRACE("success to prepare medium info", K(ret), K(medium_info));
   }
@@ -1590,6 +1632,18 @@ int ObMediumCompactionScheduleFunc::fill_mds_filter_info(ObMediumCompactionInfo 
       ret = OB_SUCCESS;
     }
 #endif
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::fill_window_decision_log_info(ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(window_decision_log_info_)) {
+  } else if (OB_FAIL(medium_info.window_decision_log_info_.assign(*window_decision_log_info_))) {
+    LOG_WARN("failed to assign window decision info", K(ret), KPC_(window_decision_log_info));
+  } else {
+    medium_info.contain_window_decision_log_info_ = true;
   }
   return ret;
 }

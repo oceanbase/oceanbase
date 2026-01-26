@@ -21,6 +21,13 @@ namespace rootserver
 {
 using namespace share;
 
+#define CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret) \
+  if (OB_FAIL(guard.get_ret())) { \
+    LOG_WARN("fail to get lock", KR(ret)); \
+  } else if (OB_FAIL(r_guard.get_ret())) { \
+    LOG_WARN("fail to get rw lock", KR(ret)); \
+  } else \
+
 int ObMajorFreezeService::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -182,6 +189,7 @@ int ObMajorFreezeService::launch_major_freeze(const ObMajorFreezeReason freeze_r
   } else {
     ObRecursiveMutexGuard guard(lock_);
     SpinRLockGuard r_guard(rw_lock_);
+    CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
     if (OB_ISNULL(tenant_major_freeze_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant_major_freeze is null", KR(ret), K_(tenant_id), KP_(tenant_major_freeze));
@@ -197,11 +205,56 @@ int ObMajorFreezeService::launch_major_freeze(const ObMajorFreezeReason freeze_r
   return ret;
 }
 
+int ObMajorFreezeService::launch_window_compaction(const ObWindowCompactionParam &param)
+{
+  int ret = OB_SUCCESS;
+  bool can_launch = ATOMIC_BCAS(&is_launched_, false, true);
+
+  if (!can_launch) {
+    // 'sync operation' of launch_window_compaction not finish
+    ret = OB_MAJOR_FREEZE_NOT_FINISHED;
+    LOG_WARN("previous window compaction not finish, please wait", KR(ret), K_(is_launched));
+  } else {
+    ObRecursiveMutexGuard guard(lock_);
+    SpinRLockGuard r_guard(rw_lock_);
+    CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
+    if (OB_ISNULL(tenant_major_freeze_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant_major_freeze is null", KR(ret), K_(tenant_id), KP_(tenant_major_freeze));
+    } else if (OB_FAIL(tenant_major_freeze_->launch_window_compaction(param))) {
+      // 'async operation' of launch_window_compaction not finish
+      if ((OB_MAJOR_FREEZE_NOT_FINISHED != ret) && (OB_FROZEN_INFO_ALREADY_EXIST != ret)) {
+        LOG_WARN("fail to launch_window_compaction", KR(ret), K_(tenant_id));
+      }
+    }
+  }
+  if (can_launch) {
+    ATOMIC_STORE(&is_launched_, false); // set is as false no matter its previous value.
+  }
+  return ret;
+}
+
+int ObMajorFreezeService::finish_window_compaction()
+{
+  int ret = OB_SUCCESS;
+  ObRecursiveMutexGuard guard(lock_);
+  SpinRLockGuard r_guard(rw_lock_);
+  CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
+  if (OB_ISNULL(tenant_major_freeze_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_major_freeze is null", KR(ret), KP_(tenant_major_freeze));
+  } else if (OB_FAIL(tenant_major_freeze_->finish_window_compaction())) {
+    LOG_WARN("fail to finish_window_compaction", KR(ret));
+  }
+  return ret;
+}
+
 int ObMajorFreezeService::suspend_merge()
 {
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
   int ret = OB_SUCCESS;
+  CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
   if (OB_ISNULL(tenant_major_freeze_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant_major_freeze is null", KR(ret), KP_(tenant_major_freeze));
@@ -216,6 +269,7 @@ int ObMajorFreezeService::resume_merge()
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
   int ret = OB_SUCCESS;
+  CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
   if (OB_ISNULL(tenant_major_freeze_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant_major_freeze is null", KR(ret), KP_(tenant_major_freeze));
@@ -230,6 +284,7 @@ int ObMajorFreezeService::clear_merge_error()
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
   int ret = OB_SUCCESS;
+  CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
   if (OB_ISNULL(tenant_major_freeze_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant_major_freeze is null", KR(ret));
@@ -254,6 +309,8 @@ void ObMajorFreezeService::stop()
   LOG_INFO("major_freeze_service start to stop", K_(tenant_id));
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
+  int ret = OB_SUCCESS;
+  CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
   if (OB_NOT_NULL(tenant_major_freeze_)) {
     LOG_INFO("tenant_major_freeze_ start to stop", K_(tenant_id));
     tenant_major_freeze_->stop();
@@ -267,6 +324,7 @@ void ObMajorFreezeService::wait()
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
   int ret = OB_SUCCESS;
+  CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
   if (OB_NOT_NULL(tenant_major_freeze_)) {
     LOG_INFO("tenant_major_freeze_ start to wait", K_(tenant_id));
     if (OB_FAIL(tenant_major_freeze_->wait())) {
@@ -282,6 +340,7 @@ void ObMajorFreezeService::destroy()
   ObRecursiveMutexGuard guard(lock_);
   SpinRLockGuard r_guard(rw_lock_);
   int ret = OB_SUCCESS;
+  CHECK_RMUTEX_AND_SPIN_LOCK_RET(guard, r_guard, ret)
   if (OB_NOT_NULL(tenant_major_freeze_)) {
     LOG_INFO("tenant_major_freeze_ start to destroy", K_(tenant_id));
     if (OB_FAIL(tenant_major_freeze_->destroy())) {

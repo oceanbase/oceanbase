@@ -138,11 +138,14 @@ struct ObTabletStatAnalyzer
 public:
   ObTabletStatAnalyzer();
   ~ObTabletStatAnalyzer() = default;
+  void reset();
   bool is_hot_tablet() const;
   bool is_insert_mostly() const;
   bool is_update_or_delete_mostly() const;
   bool has_frequent_slow_query() const;
-  bool has_accumnulated_delete() const;
+  bool has_accumulated_delete() const;
+  double get_read_amplification() const;
+  int64_t get_satisfied_condition_number() const;
   TO_STRING_KV(K_(tablet_stat), K_(total_tablet_stat), K_(is_small_tenant), K_(boost_factor));
 public:
   static constexpr int64_t BASE_FACTOR = 10;
@@ -413,6 +416,8 @@ public:
       common::ObIArray<ObTabletStat> &tablet_stats);
   int get_all_tablet_stats(
       common::ObIArray<ObTabletStat> &tablet_stats);
+  int get_all_tablet_analyzers(
+      common::ObIArray<ObTabletStatAnalyzer> &tablet_analyzers);
   int get_tablet_analyzer(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,

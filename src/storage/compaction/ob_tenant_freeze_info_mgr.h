@@ -164,7 +164,6 @@ private:
     int init();
     virtual void runTimerTask();
     int refresh_merge_info();
-
   private:
     bool inited_;
     bool check_tenant_status_;

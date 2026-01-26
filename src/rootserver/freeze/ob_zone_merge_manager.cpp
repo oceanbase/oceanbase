@@ -589,6 +589,7 @@ int ObZoneMergeManagerBase::set_global_freeze_info(
       LOG_WARN("fail to assign global merge info", KR(ret), K_(tenant_id));
     } else {
       tmp_global_info.frozen_scn_.set_scn(frozen_scn, true);
+      tmp_global_info.merge_mode_.set_val(ObGlobalMergeInfo::MERGE_MODE_TENANT, true); // stop window compaction when invoking tenant major freeze
       if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_,
           tmp_global_info))) {
         LOG_WARN("fail to update partial global merge info", KR(ret), K(tmp_global_info));
@@ -605,6 +606,96 @@ int ObZoneMergeManagerBase::set_global_freeze_info(
   }
 
   LOG_INFO("finish set global freeze info", KR(ret), K_(tenant_id), K(frozen_scn), K(need_broadcast));
+  return ret;
+}
+
+int ObZoneMergeManagerBase::set_window_compaction_info(
+    const ObWindowCompactionParam &param,
+    const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  const int64_t origin_merge_status = global_merge_info_.merge_status_.get_value();
+  const int64_t origin_merge_mode = global_merge_info_.merge_mode_.get_value();
+  bool has_set = false;
+  if (OB_UNLIKELY(!param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(param));
+  } else if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
+  } else if (ObZoneMergeInfo::MERGE_STATUS_IDLE != origin_merge_status) {
+    ret = OB_MAJOR_FREEZE_NOT_FINISHED;
+    LOG_WARN("cannot do window compaction now, need wait current major_freeze finish", KR(ret), K_(tenant_id), K(global_merge_info_));
+  } else if (OB_UNLIKELY(!GCONF.enable_major_freeze)) {
+    ret = OB_MAJOR_FREEZE_NOT_ALLOW;
+    LOG_WARN("major freeze is disabled, no need to set window compaction info", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
+    LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));
+  } else if (OB_FAIL(check_freeze_service_epoch(trans, expected_epoch))) {
+    LOG_WARN("fail to check freeze_service_epoch", KR(ret), K(expected_epoch));
+  } else {
+    ObGlobalMergeInfo tmp_global_info;
+    if (OB_FAIL(tmp_global_info.assign_value(global_merge_info_))) {
+      LOG_WARN("fail to assign global merge info", KR(ret), K_(tenant_id));
+    } else {
+      if (param.with_start_ts_) {
+        tmp_global_info.merge_start_time_.set_val(param.window_start_time_us_, true);
+      } else {
+        tmp_global_info.merge_start_time_.set_val(0, true); // speical window compaction mode, no need to set window start time
+      }
+      tmp_global_info.merge_mode_.set_val(ObGlobalMergeInfo::MERGE_MODE_WINDOW, true);
+      tmp_global_info.merge_status_.set_val(ObZoneMergeInfo::MERGE_STATUS_MERGING, true);
+      if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_, tmp_global_info))) {
+        LOG_WARN("fail to update partial global merge info", KR(ret), K(tmp_global_info));
+      }
+
+      handle_trans_stat(trans, ret);
+
+      if (FAILEDx(global_merge_info_.assign_value(tmp_global_info))) {
+        LOG_WARN("fail to assign global merge info", KR(ret), K(tmp_global_info));
+      } else {
+        has_set = true;
+        LOG_INFO("succ to update global merge info", K_(tenant_id), "latest global merge_info", tmp_global_info);
+        ROOTSERVICE_EVENT_ADD("window_compaction", "set_window_start_ts", K_(tenant_id), K(param));
+      }
+    }
+  }
+
+  LOG_INFO("finish set window compaction info", KR(ret), K_(tenant_id), K(has_set), K(origin_merge_status),
+           K(origin_merge_mode), K(param));
+  return ret;
+}
+
+int ObZoneMergeManagerBase::finish_window_compaction(const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
+  ObGlobalMergeInfo tmp_global_info;
+  ObMySQLTransaction trans;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
+  } else if (OB_UNLIKELY(!global_merge_info_.is_window_merge_mode() || global_merge_info_.is_idle_status())) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("window compaction is already finished", KR(ret), K_(tenant_id), K_(global_merge_info));
+  } else if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
+    LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));
+  } else if (OB_FAIL(check_freeze_service_epoch(trans, expected_epoch))) {
+    LOG_WARN("fail to check freeze_service_epoch", KR(ret), K(expected_epoch));
+  } else if (OB_FAIL(tmp_global_info.assign_value(global_merge_info_))) {
+    LOG_WARN("fail to assign global merge info", KR(ret), K_(tenant_id));
+  } else if (FALSE_IT(tmp_global_info.merge_status_.set_val(ObZoneMergeInfo::MERGE_STATUS_IDLE, true))) {
+  } else if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_,
+        tmp_global_info))) {
+      LOG_WARN("fail to update partial global merge info", KR(ret), K(tmp_global_info));
+  } else if (FALSE_IT(handle_trans_stat(trans, ret))) {
+  } else if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(global_merge_info_.assign_value(tmp_global_info))) {
+    LOG_WARN("fail to assign global merge info", KR(ret), K(tmp_global_info));
+  } else {
+    LOG_INFO("succ to update global merge info", K_(tenant_id), "latest global merge_info", tmp_global_info);
+  }
+  LOG_INFO("finish finish_window_compaction", KR(ret), K_(tenant_id), K(expected_epoch));
   return ret;
 }
 
@@ -668,6 +759,18 @@ int ObZoneMergeManagerBase::get_global_merge_start_time(int64_t &global_merge_st
   return ret;
 }
 
+int ObZoneMergeManagerBase::get_global_merge_mode(ObGlobalMergeInfo::MergeMode &global_merge_mode) const
+{
+  int ret = OB_SUCCESS;
+  SpinRLockGuard guard(lock_);
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
+  } else {
+    global_merge_mode = (ObGlobalMergeInfo::MergeMode)(global_merge_info_.merge_mode_.value_);
+  }
+  return ret;
+}
+
 int ObZoneMergeManagerBase::generate_next_global_broadcast_scn(
     const int64_t expected_epoch,
     SCN &next_scn)
@@ -719,6 +822,7 @@ int ObZoneMergeManagerBase::generate_next_global_broadcast_scn(
         LOG_INFO("next global_broadcast_scn", K_(tenant_id), K(next_scn), K(tmp_global_info));
 
         tmp_global_info.merge_status_.set_val(ObZoneMergeInfo::MERGE_STATUS_MERGING, true);
+        tmp_global_info.merge_mode_.set_val(ObGlobalMergeInfo::MERGE_MODE_TENANT, true); // stop window compaction when invoking tenant major freeze
         FREEZE_TIME_GUARD;
         if (OB_FAIL(ObGlobalMergeTableOperator::update_partial_global_merge_info(trans, tenant_id_,
             tmp_global_info))) {

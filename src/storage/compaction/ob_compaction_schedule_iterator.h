@@ -12,9 +12,13 @@
 #include "storage/ls/ob_ls_get_mod.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/literals/ob_literals.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "common/ob_tablet_id.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/compaction/ob_tenant_medium_checker.h"
+#include "storage/compaction/ob_window_compaction_utils.h"
+#include "storage/compaction/ob_schedule_tablet_func.h"
 
 namespace oceanbase
 {
@@ -129,6 +133,95 @@ protected:
   bool is_major_;
   bool report_scn_flag_;
 };
+
+template<typename ItemType>
+class ObLSSortedIterator
+{
+public:
+  template<typename Processor, typename... Args>
+  int iterate(
+      ObScheduleTabletFunc &func,
+      ObIArray<ItemType> &items,
+      Processor &processor,
+      const bool skip_follower,
+      Args&&... args);
+};
+
+class LSIDExtractor
+{
+public:
+  static int64_t get_ls_id(const ObTabletCheckInfo &item) { return item.get_ls_id().id(); }
+  static int64_t get_ls_id(const storage::ObTabletStatAnalyzer &item) { return item.tablet_stat_.ls_id_; }
+  static int64_t get_ls_id(ObTabletCompactionScore* const &item)  { return item->get_key().ls_id_.id(); }
+};
+
+class TabletIDExtractor
+{
+public:
+  static int64_t get_tablet_id(const ObTabletCheckInfo &item) { return item.get_tablet_id().id(); }
+  static int64_t get_tablet_id(const storage::ObTabletStatAnalyzer &item) { return item.tablet_stat_.tablet_id_; }
+  static int64_t get_tablet_id(ObTabletCompactionScore* const &item)  { return item->get_key().tablet_id_.id(); }
+};
+
+template<typename ItemType>
+template<typename Processor, typename... Args>
+int ObLSSortedIterator<ItemType>::iterate(
+    ObScheduleTabletFunc &func,
+    ObIArray<ItemType> &items,
+    Processor &processor,
+    const bool skip_follower,
+    Args&&... args)
+{
+  int ret = OB_SUCCESS;
+  storage::ObLSHandle ls_handle;
+  // TODO(chengkong): break loop when window compaction is stop
+  for (int64_t i = 0; i < items.count(); i++) { // ignore OB_FAIL to iterate all items
+    const ItemType &item = items.at(i);
+    const int64_t ls_id = LSIDExtractor::get_ls_id(item);
+    const int64_t tablet_id = TabletIDExtractor::get_tablet_id(item);
+    ObTabletHandle tablet_handle;
+    bool can_merge = false;
+    if (func.get_ls_status().ls_id_.id() == ls_id) {
+      // do nothing, use old ls_handle
+    } else if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(ObLSID(ls_id), ls_handle, storage::ObLSGetMod::COMPACT_MODE))) {
+      if (OB_LS_NOT_EXIST == ret) {
+        STORAGE_LOG(TRACE, "ls not exist, skip it", K(ret), K(ls_id));
+      } else {
+        STORAGE_LOG(WARN, "failed to get ls", K(ret), K(ls_id));
+      }
+    } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls handle is not valid", K(ret), K(ls_id));
+    } else if (OB_FAIL(func.switch_ls(ls_handle))) {
+      if (OB_STATE_NOT_MATCH != ret) {
+        STORAGE_LOG(WARN, "failed to switch ls", K(ret), K(ls_id));
+      } else {
+        STORAGE_LOG(WARN, "not support schedule medium for ls", K(ret), K(ls_id), K(tablet_id), K(func));
+      }
+    } else if (func.is_window_compaction_func() && !func.is_window_compaction_active()) {
+      STORAGE_LOG(INFO, "window compaction is not active, skip iterate", K(ret), K(ls_id), K(tablet_id), K(func));
+      break;
+    }
+
+    // In window compaction, candidate in ready list should be removed if it's not leader, so don't need to skip follower
+    if (OB_FAIL(ret)) {
+    } else if (!func.get_ls_status().is_leader_ && skip_follower) {
+      // not leader, can't schedule
+      STORAGE_LOG(TRACE, "not ls leader, can't schedule medium", K(ret), K(ls_id), K(tablet_id), K(func));
+    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
+                 ObTabletID(tablet_id), tablet_handle, 0 /*timeout_us*/))) {
+      STORAGE_LOG(WARN, "get tablet failed", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(func.iterate_switch_tablet(tablet_handle, can_merge))) {
+      STORAGE_LOG(WARN, "failed to switch tablet", K(ret), K(ls_id), K(tablet_id));
+    } else if (!can_merge && skip_follower) {
+    } else if (OB_FAIL(processor(func, item, tablet_handle, std::forward<Args>(args)...))) {
+      // ATTENTION:don't print item here, since it may be a pointer and be freed when process
+      STORAGE_LOG(WARN, "failed to process item", K(ret), K(ls_id), K(tablet_id));
+    }
+    (void) func.destroy_tablet_status();
+  }
+  return ret;
+}
 
 } // namespace compaction
 } // namespace oceanbase

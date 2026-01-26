@@ -20,25 +20,35 @@ class ObTabletHandle;
 }
 namespace compaction
 {
+struct ObWindowCompactionDecisionLogInfo;
 struct ObScheduleTabletFunc : public ObBasicScheduleTabletFunc
 {
   ObScheduleTabletFunc(
     const int64_t merge_version,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE,
-    const int64_t loop_cnt = 0
-    );
+    const int64_t loop_cnt = 0,
+    const ObCompactionScheduleMode schedule_mode = COMPACTION_NORMAL_MODE);
   virtual ~ObScheduleTabletFunc() {}
+  int iterate_switch_tablet(storage::ObTabletHandle &tablet_handle, bool &can_merge); // should combine with destroy_tablet_status()
   int schedule_tablet(
     storage::ObTabletHandle &tablet_handle,
     bool &tablet_merge_finish);
+  int switch_and_schedule_tablet(
+    ObTabletHandle &tablet_handle,
+    bool &tablet_merge_finish);
   int request_schedule_new_round(
     storage::ObTabletHandle &tablet_handle,
-    const bool user_request);
+    const bool user_request,
+    const bool need_load_tablet_status);
   const ObTabletStatusCache &get_tablet_status() const { return tablet_status_; }
   virtual const ObCompactionTimeGuard &get_time_guard() const override { return time_guard_; }
+  virtual const ObWindowCompactionDecisionLogInfo *get_window_decision_log_info() const { return nullptr; }
   int diagnose_switch_tablet(storage::ObLS &ls, storage::ObTablet &tablet);
+  OB_INLINE bool is_window_compaction_func() const { return schedule_mode_ == COMPACTION_WINDOW_MODE; }
+  OB_INLINE bool is_window_compaction_active() const { return is_window_compaction_active_; }
+  OB_INLINE void destroy_tablet_status() { tablet_status_.destroy(); }
   INHERIT_TO_STRING_KV("ObScheduleTabletFunc", ObBasicScheduleTabletFunc,
-    K_(merge_reason), K_(tablet_status), K_(time_guard));
+    K_(merge_reason), K_(schedule_mode), K_(is_window_compaction_active), K_(tablet_status), K_(time_guard));
 protected:
 int check_with_schedule_scn(
     const storage::ObTablet &tablet,
@@ -53,11 +63,13 @@ int schedule_merge_dag(
     const int64_t schedule_scn,
     const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason) override;
-private:
-  virtual void schedule_freeze_dag(const bool force) override;
+  int try_schedule_tablet_new_round(storage::ObTabletHandle &tablet_handle);
   int schedule_tablet_new_round(
     storage::ObTabletHandle &tablet_handle,
     const bool user_request);
+  int set_merge_reason(const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason);
+private:
+  virtual void schedule_freeze_dag(const bool force) override;
   int schedule_tablet_execute(
     storage::ObTablet &tablet);
   int get_schedule_execute_info(
@@ -65,11 +77,13 @@ private:
     int64_t &schedule_scn,
     ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type,
     ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason);
-private:
+protected:
   ObTabletStatusCache tablet_status_;
+private:
   ObCompactionScheduleTimeGuard time_guard_;
   ObSEArray<ObTabletID, 64> clear_stat_tablets_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
+  ObCompactionScheduleMode schedule_mode_;
 };
 
 } // namespace compaction

@@ -350,9 +350,6 @@ int64_t ObParallelMergeInfo::to_string(char* buf, const int64_t buf_len) const
  * */
 OB_SERIALIZE_MEMBER(ObIncMajorSSTableInfo::IncMajorInfo, start_scn_, end_scn_, data_checksum_, row_count_);
 
-// very tmp, only for pass unique_id_check
-OB_SERIALIZE_MEMBER(ObTabletCompactionScoreDynamicInfo, info_, query_cnt_, read_amplification_factor_);
-
 /*
  * ObWindowCompactionDecisionLogInfo
  * */
@@ -545,6 +542,56 @@ int64_t ObIncMajorSSTableInfo::to_string(char* buf, const int64_t buf_len) const
   return pos;
 }
 
+void ObWindowCompactionDecisionLogInfo::reset()
+{
+  info_ = 0;
+  score_ = 0;
+  base_inc_row_cnt_ = 0;
+  dynamic_info_.reset();
+}
+
+void ObWindowCompactionDecisionLogInfo::init(const ObTabletCompactionScore &candidate)
+{
+  if (OB_UNLIKELY(!candidate.is_valid())) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid candidate", K(candidate));
+  } else {
+    compat_version_ = ObTabletCompactionScoreDynamicInfo::DYNAMIC_INFO_VERSION_LATEST;
+    is_inited_ = true;
+    score_ = candidate.score_ > MAX_TABLET_SCORE
+           ? MAX_TABLET_SCORE
+           : static_cast<uint32_t>(candidate.score_);
+    base_inc_row_cnt_ = candidate.decision_info_.base_inc_row_cnt_ > MAX_INC_ROW_CNT
+                      ? MAX_INC_ROW_CNT
+                      : static_cast<uint32_t>(candidate.decision_info_.base_inc_row_cnt_);
+    dynamic_info_ = candidate.decision_info_.dynamic_info_;
+  }
+}
+
+int ObWindowCompactionDecisionLogInfo::assign(const ObWindowCompactionDecisionLogInfo &other)
+{
+  int ret = OB_SUCCESS;
+  info_ = other.info_;
+  score_ = other.score_;
+  base_inc_row_cnt_ = other.base_inc_row_cnt_;
+  if (OB_FAIL(dynamic_info_.assign(other.dynamic_info_))) {
+    LOG_WARN("failed to assign dynamic info", K(ret), K(other));
+  }
+  return ret;
+}
+
+void ObWindowCompactionDecisionLogInfo::gen_info(char* buf, const int64_t buf_len, int64_t &pos) const
+{
+  if (OB_ISNULL(buf) || pos >= buf_len || !is_inited_) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(score), K_(base_inc_row_cnt));
+    J_COMMA();
+    J_NAME("dynamic_info:");
+    dynamic_info_.gen_info(compat_version_, buf, buf_len, pos);
+    J_OBJ_END();
+  }
+}
+
 
 OB_SERIALIZE_MEMBER_SIMPLE(
     ObMediumCompactionInfoKey,
@@ -614,6 +661,9 @@ int ObMediumCompactionInfo::init(
   } else if (medium_info.contain_inc_major_info_
           && OB_FAIL(inc_major_info_.assign(allocator, medium_info.inc_major_info_))) {
     LOG_WARN("failed to init inc major info", K(ret), K(medium_info));
+  } else if (medium_info.contain_window_decision_log_info_
+          && OB_FAIL(window_decision_log_info_.assign(medium_info.window_decision_log_info_))) {
+    LOG_WARN("failed to assign window decision info", K(ret), K(medium_info));
   } else {
     info_ = medium_info.info_;
     cluster_id_ = medium_info.cluster_id_;
@@ -666,7 +716,8 @@ bool ObMediumCompactionInfo::is_valid() const
       && (MEDIUM_COMPAT_VERSION == medium_compat_version_
         || (MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version_ && last_medium_snapshot_ != 0))
       && (!contain_mds_filter_info_ || (mds_filter_info_.is_valid() && nullptr != allocator_))
-      && ((contain_inc_major_info_ && inc_major_info_.is_valid() && nullptr != allocator_) || (!contain_inc_major_info_ && !is_inc_major_compaction()));
+      && ((contain_inc_major_info_ && inc_major_info_.is_valid() && nullptr != allocator_) || (!contain_inc_major_info_ && !is_inc_major_compaction()))
+      && (!contain_window_decision_log_info_ || window_decision_log_info_.is_inited());
 }
 
 void ObMediumCompactionInfo::reset()
@@ -681,12 +732,14 @@ void ObMediumCompactionInfo::reset()
   is_skip_tenant_major_ = false;
   contain_mds_filter_info_ = false;
   contain_inc_major_info_ = false;
+  contain_window_decision_log_info_ = false;
   reserved_ = 0;
   cluster_id_ = 0;
   data_version_ = 0;
   medium_snapshot_ = 0;
   last_medium_snapshot_ = 0;
   encoding_granularity_ = 0;
+  window_decision_log_info_.reset();
   storage_schema_.reset();
   if (OB_NOT_NULL(allocator_)) {
     parallel_merge_info_.destroy(*allocator_);

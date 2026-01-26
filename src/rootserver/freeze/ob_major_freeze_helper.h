@@ -184,6 +184,31 @@ private:
   static const int64_t MAX_PROCESS_TIME_US = 10 * 1000 * 1000L;
 };
 
+class ObGlobalCompactionSchemaHelper final
+{
+public:
+  ObGlobalCompactionSchemaHelper() = default;
+  ~ObGlobalCompactionSchemaHelper() = default;
+  static int get_global_safe_recycle_schema_version(
+      const int64_t tenant_id,
+      common::ObMySQLProxy &sql_proxy,
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      int64_t &safe_recycle_schema_version);
+private:
+  static const int64_t MAX_RESERVED_SCHEMA_VERSION_US = 3L * 24L * 3600L * 1000L * 1000L; // 3 days
+private:
+  static int get_safe_recycle_schema_version_by_freeze_info(
+      const int64_t tenant_id,
+      common::ObMySQLProxy &sql_proxy,
+      const share::SCN &last_merged_scn,
+      int64_t &safe_recycle_schema_version);
+  static int get_safe_recycle_schema_version_by_timestamp(
+      const int64_t tenant_id,
+      common::ObMySQLProxy &sql_proxy,
+      int64_t &safe_recycle_schema_version);
+  DISALLOW_COPY_AND_ASSIGN(ObGlobalCompactionSchemaHelper);
+};
+
 } // namespace rootserver
 } // namespace oceanbase
 

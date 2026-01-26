@@ -18,6 +18,7 @@
 #include "lib/container/ob_array_array.h"
 #include "observer/ob_server_struct.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/compaction/ob_window_compaction_utils.h"
 #include "storage/multi_data_source/mds_key_serialize_util.h"
 #include "storage/compaction/ob_mds_filter_info.h"
 
@@ -176,43 +177,7 @@ public:
   IncMajorInfo *info_list_;
 };
 
-// very tmp, only for pass unique_id_check
-struct ObTabletCompactionScoreDynamicInfo
-{
-public:
-  ObTabletCompactionScoreDynamicInfo() {}
-  virtual ~ObTabletCompactionScoreDynamicInfo() = default;
-  TO_STRING_KV(K_(queuing_mode), K_(is_hot_tablet), K_(is_insert_mostly), K_(is_update_or_delete_mostly), K_(has_slow_query),
-               K_(has_accumulated_delete), K_(need_recycle_mds), K_(need_progressive_merge), K_(cg_merge_batch_cnt),
-               K_(query_cnt), K_(read_amplification_factor));
-  OB_UNIS_VERSION(1);
-public:
-  static constexpr uint32_t TCSDI_ONE_BIT = 1;
-  static constexpr uint32_t TCSDI_TEN_BITS = 10;
-  static constexpr uint32_t TCSDI_ONE_BYTE = 8;
-  static constexpr uint32_t TCSDI_RESERVED_BITS = 7;
-  static constexpr uint32_t DYNAMIC_INFO_VERSION = 0;
-  static constexpr uint32_t DYNAMIC_INFO_VERSION_LATEST = DYNAMIC_INFO_VERSION;
-public:
-  union {
-    uint32_t info_; // for alignment
-    struct {
-      uint32_t queuing_mode_               : TCSDI_ONE_BYTE;
-      uint32_t is_hot_tablet_              : TCSDI_ONE_BIT;
-      uint32_t is_insert_mostly_           : TCSDI_ONE_BIT;
-      uint32_t is_update_or_delete_mostly_ : TCSDI_ONE_BIT;
-      uint32_t has_slow_query_             : TCSDI_ONE_BIT;
-      uint32_t has_accumulated_delete_     : TCSDI_ONE_BIT;
-      uint32_t need_recycle_mds_           : TCSDI_ONE_BIT;
-      uint32_t need_progressive_merge_     : TCSDI_ONE_BIT;
-      uint32_t cg_merge_batch_cnt_         : TCSDI_TEN_BITS; // OceanBase support 4096 columns at most, at most 410 batch when co merge (DEFAULT_CG_MERGE_BATCH_SIZE = 10)
-      uint32_t reserved_                   : TCSDI_RESERVED_BITS;
-    };
-  };
-  uint32_t query_cnt_;
-  double read_amplification_factor_;
-};
-
+// Window compaction decision info synced via medium clog
 struct ObWindowCompactionDecisionLogInfo final
 {
 public:
@@ -223,7 +188,11 @@ public:
       dynamic_info_()
   {}
   ~ObWindowCompactionDecisionLogInfo() = default;
-  void reset() {}
+  void reset();
+  void init(const ObTabletCompactionScore &candidate);
+  bool is_inited() const { return is_inited_; }
+  int assign(const ObWindowCompactionDecisionLogInfo &other);
+  void gen_info(char* buf, const int64_t buf_len, int64_t &pos) const;
   TO_STRING_KV(K_(score), K_(base_inc_row_cnt), K_(dynamic_info), K_(is_inited), K_(compat_version));
   OB_UNIS_VERSION(1);
 public:

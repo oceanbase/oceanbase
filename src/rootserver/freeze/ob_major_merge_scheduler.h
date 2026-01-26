@@ -23,6 +23,7 @@
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "rootserver/freeze/ob_checksum_validator.h"
 #include "rootserver/freeze/ob_freeze_reentrant_thread.h"
+#include "rootserver/freeze/window/ob_window_compaction_helper.h"
 
 namespace oceanbase
 {
@@ -89,6 +90,9 @@ protected:
                        const int work_ret) override;
 
 private:
+  int check_or_update_major_merge_state(const int64_t curr_round_epoch,
+                                        const share::ObGlobalMergeInfo &global_info,
+                                        bool &need_merge);
   int do_work();
 
   int do_before_major_merge(const int64_t expected_epoch, const bool start_merge);
@@ -136,6 +140,7 @@ private:
   ObTenantAllZoneMergeStrategy merge_strategy_;
   common::ObMySQLProxy *sql_proxy_;
   ObMajorMergeProgressChecker progress_checker_;
+  ObWindowResourceCache window_resource_cache_;
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeScheduler);
 };
 

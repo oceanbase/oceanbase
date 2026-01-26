@@ -13,6 +13,12 @@ CREATE OR REPLACE PACKAGE dbms_resource_manager AUTHID CURRENT_USER
     plan    VARCHAR(65535)
   );
 
+  PROCEDURE copy_plan(
+    source_plan VARCHAR(65535),
+    target_plan VARCHAR(65535),
+    comment VARCHAR(65535) DEFAULT ''
+  );
+
   PROCEDURE create_consumer_group (
     consumer_group  VARCHAR(65535),
     comment         VARCHAR(65535) DEFAULT NULL

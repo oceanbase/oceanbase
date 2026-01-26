@@ -881,6 +881,9 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_schedule_status_cache.cpp
   compaction/ob_uncommit_tx_info.cpp
   compaction/ob_mds_filter_info.cpp
+  compaction/ob_window_loop.cpp
+  compaction/ob_window_compaction_utils.cpp
+  compaction/ob_window_schedule_tablet_func.cpp
 )
 
 ob_set_subtarget(ob_storage compaction_filter

@@ -74,6 +74,7 @@ protected:
   ObBatchFreezeTabletsParam freeze_param_;
   bool ls_could_schedule_new_round_;
   bool ls_could_schedule_merge_;  // suspend merge OR during restore inner_table
+  bool is_window_compaction_active_;
   int64_t loop_cnt_;
 };
 

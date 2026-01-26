@@ -1692,7 +1692,8 @@ const char * ObAdaptiveMergeReasonStr[] = {
   "NO_INC_DATA",
   "DURING_DDL",
   "RECYCLE_TRUNCATE_INFO",
-  "TOO_MANY_INC_MAJOR"
+  "TOO_MANY_INC_MAJOR",
+  "WINDOW_COMPACTION"
 };
 
 const char* ObAdaptiveMergePolicy::merge_reason_to_str(const int64_t merge_reason)
@@ -1736,6 +1737,11 @@ bool ObAdaptiveMergePolicy::is_skip_merge_reason(const AdaptiveMergeReason &reas
 bool ObAdaptiveMergePolicy::is_recycle_truncate_info_merge_reason(const AdaptiveMergeReason &reason)
 {
   return AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO == reason;
+}
+
+bool ObAdaptiveMergePolicy::is_window_merge_reason(const AdaptiveMergeReason &reason)
+{
+  return AdaptiveMergeReason::WINDOW_COMPACTION == reason;
 }
 
 #ifdef ERRSIM
@@ -1806,7 +1812,7 @@ int ObAdaptiveMergePolicy::get_meta_merge_tables(
     LOG_WARN("invalid args", K(ret), "merge_type", merge_type_to_str(merge_type));
   } else if (OB_FAIL(find_adaptive_merge_tables(merge_type, tablet, result))) {
     if (OB_NO_NEED_MERGE != ret) {
-      LOG_WARN("Failed to find minor merge tables", K(ret));
+      LOG_WARN("Failed to find minor merge tables", K(ret), K(param));
     }
   } else if (FALSE_IT(result.rec_scn_.set_min())) { // major sstable's rec scn is min
   } else if (OB_FAIL(result.handle_.check_continues(nullptr))) {
@@ -2015,18 +2021,10 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  bool crazy_medium_flag = false;
-  int64_t truncate_info_count = 0;
-  int64_t truncate_newest_commit_version = 0;
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-
   reason = AdaptiveMergeReason::NONE;
   ObTabletStatAnalyzer tablet_analyzer;
-  ObArenaAllocator tmp_allocator;
-  ObStorageSchema *schema_on_tablet = nullptr;
-  const ObRowkeyReadInfo *read_info = static_cast<const ObRowkeyReadInfo *>(&tablet.get_rowkey_read_info());
-  bool read_truncate_info_flag = false;
 
   if (tablet_id.is_special_merge_tablet()) {
     // do nothing
@@ -2041,27 +2039,9 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
   } else if (OB_TMP_FAIL(check_adaptive_merge_reason(tablet, tablet_analyzer, reason))) {
     LOG_WARN("failed to check adaptive merge reason", K(tmp_ret), K(ls_id), K(tablet_id));
   }
-
-  if (OB_FAIL(ret) || AdaptiveMergeReason::NONE != reason || nullptr == read_info) {
-  } else if (read_info->is_global_index_valid()) {
-    read_truncate_info_flag = read_info->is_global_index_table();
-  } else if (OB_FAIL(tablet.load_storage_schema(tmp_allocator, schema_on_tablet))) {
-    LOG_WARN("failed to load storage schema", K(ret), K(ls_id), K(tablet_id));
-  } else {
-    read_truncate_info_flag = schema_on_tablet->is_global_index_table();
-  }
-  if (OB_FAIL(ret) || !read_truncate_info_flag) {
-  } else if (OB_TMP_FAIL(tablet.get_truncate_info_newest_version(truncate_newest_commit_version, truncate_info_count))) {
-    LOG_WARN("failed to get truncate info range", KR(tmp_ret));
-  } else if (truncate_info_count > 0) {
-    reason = AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO;
-    least_medium_snapshot = truncate_newest_commit_version;
-    LOG_INFO("[TRUNCATE INFO]success to get adaptive merge reason", KR(tmp_ret), K(ls_id), K(tablet_id), K(reason), K(least_medium_snapshot));
-  }
-  if (OB_NOT_NULL(schema_on_tablet)) {
-    schema_on_tablet->~ObStorageSchema();
-    tmp_allocator.free(schema_on_tablet);
-    schema_on_tablet = nullptr;
+  if (OB_FAIL(ret) || AdaptiveMergeReason::NONE != reason) {
+  } else if (OB_TMP_FAIL(check_truncate_info_reason(tablet, reason, least_medium_snapshot))) {
+    LOG_WARN("failed to check truncate info reason", K(tmp_ret), K(ls_id), K(tablet_id));
   }
 
 #ifdef ERRSIM
@@ -2105,16 +2085,37 @@ int ObAdaptiveMergePolicy::check_tombstone_reason(
   return ret;
 }
 
-#define ADD_INC_ROW_COUNT(sstable_array)                            \
-  for (int i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) { \
-    ObSSTable *sstable = nullptr;                                   \
-    if (OB_ISNULL(sstable = sstable_array.at(i))) {                 \
-      ret = OB_ERR_UNEXPECTED;                                      \
-      LOG_WARN("sstable is null", K(ret), K(i));                    \
-    } else {                                                        \
-      inc_row_count += sstable->get_row_count();                    \
-    }                                                               \
+int ObAdaptiveMergePolicy::check_truncate_info_reason(
+    ObTablet &tablet,
+    AdaptiveMergeReason &reason,
+    int64_t &least_medium_snapshot)
+{
+  int ret = OB_SUCCESS;
+  const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  reason = AdaptiveMergeReason::NONE;
+  int64_t truncate_info_count = 0;
+  int64_t truncate_newest_commit_version = 0;
+  const ObRowkeyReadInfo *read_info = static_cast<const ObRowkeyReadInfo *>(&tablet.get_rowkey_read_info());
+  bool read_truncate_info_flag = false;
+
+  if (nullptr == read_info) {
+  } else if (read_info->is_global_index_valid()) {
+    read_truncate_info_flag = read_info->is_global_index_table();
+  } else {
+    read_truncate_info_flag = tablet.is_global_index_table();
   }
+
+  if (!read_truncate_info_flag) {
+  } else if (OB_FAIL(tablet.get_truncate_info_newest_version(truncate_newest_commit_version, truncate_info_count))) {
+    LOG_WARN("failed to get truncate info range", KR(ret));
+  } else if (truncate_info_count > 0) {
+    reason = AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO;
+    least_medium_snapshot = truncate_newest_commit_version;
+    LOG_INFO("[TRUNCATE INFO]success to get adaptive merge reason", KR(ret), K(ls_id), K(tablet_id), K(reason), K(least_medium_snapshot));
+  }
+  return ret;
+}
 
 int ObAdaptiveMergePolicy::check_incremental_table(
     const ObTablet &tablet,
@@ -2124,7 +2125,7 @@ int ObAdaptiveMergePolicy::check_incremental_table(
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   int64_t base_row_count = 0;
-  int64_t inc_row_count = 0;
+  int64_t inc_row_count = tablet.get_inc_row_cnt();
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
 
   if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
@@ -2133,30 +2134,12 @@ int ObAdaptiveMergePolicy::check_incremental_table(
     const ObTabletTableStore *table_store = table_store_wrapper.get_member();
     ObSSTable *last_major = static_cast<ObSSTable *>(table_store->get_major_sstables().get_boundary_table(true));
     base_row_count = (nullptr == last_major) ? 0 : last_major->get_row_count();
-
-    ADD_INC_ROW_COUNT(table_store->get_inc_major_sstables());
-    ADD_INC_ROW_COUNT(table_store->get_minor_sstables());
-
-    if (OB_FAIL(ret)) {
-    } else if ((inc_row_count > INC_ROW_COUNT_THRESHOLD)
+    if ((inc_row_count > INC_ROW_COUNT_THRESHOLD)
             || (base_row_count > BASE_ROW_COUNT_THRESHOLD &&
                (inc_row_count * 100 / base_row_count) > LOAD_DATA_SCENE_THRESHOLD)) {
       reason = AdaptiveMergeReason::FREQUENT_WRITE;
-    } else {
-      const ObSSTableArray &inc_major_sstables = table_store->get_inc_major_sstables();
-      int64_t unmerged_inc_major_count = 0;
-      for (int64_t idx = 0; OB_SUCC(ret) && idx < inc_major_sstables.count(); ++idx) {
-        ObSSTable *inc_major = inc_major_sstables[idx];
-        if (OB_ISNULL(inc_major) || !inc_major->is_inc_major_type_sstable()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get invalid inc major sstable", K(ret), K(idx), KPC(inc_major));
-        } else if (inc_major->get_upper_trans_version() > last_major->get_snapshot_version()) {
-          ++unmerged_inc_major_count;
-        }
-      }
-      if (unmerged_inc_major_count >= ObTabletTableStore::EMERGENCY_INC_MAJOR_TABLE_CNT) {
-        reason = AdaptiveMergeReason::TOO_MANY_INC_MAJOR;
-      }
+    } else if (tablet.get_unmerged_inc_major_count() >= ObTabletTableStore::EMERGENCY_INC_MAJOR_TABLE_CNT) {
+      reason = AdaptiveMergeReason::TOO_MANY_INC_MAJOR;
     }
   }
 
@@ -2191,7 +2174,7 @@ int ObAdaptiveMergePolicy::check_tombstone_situation(
   if (OB_UNLIKELY(!analyzer.tablet_stat_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(analyzer));
-  } else if ((analyzer.tablet_stat_.merge_cnt_ > 1 && analyzer.is_update_or_delete_mostly()) || analyzer.has_accumnulated_delete()) {
+  } else if ((analyzer.tablet_stat_.merge_cnt_ > 1 && analyzer.is_update_or_delete_mostly()) || analyzer.has_accumulated_delete()) {
     reason = AdaptiveMergeReason::TOMBSTONE_SCENE;
   }
   LOG_DEBUG("check_tombstone_situation", K(ret), K(reason), K(analyzer));

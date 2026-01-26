@@ -19,20 +19,78 @@ namespace compaction
 ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_CS_REPLICA_TO_REBUILD);
 /********************************************ObScheduleTabletFunc impl******************************************/
 
+#define DIAGNOSE_TABLET_MEDIUM_MERGE(ls_id, tablet_id) \
+  { int tmp_ret = OB_SUCCESS; \
+    if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(ls_id, tablet_id, \
+        share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE))) { \
+      LOG_WARN("failed to add diagnose tablet", KR(tmp_ret), K(ls_id), K(tablet_id)); \
+    } \
+  }
+
 ObScheduleTabletFunc::ObScheduleTabletFunc(
   const int64_t merge_version,
   const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason,
-  const int64_t loop_cnt)
+  const int64_t loop_cnt,
+  const ObCompactionScheduleMode schedule_mode)
   : ObBasicScheduleTabletFunc(merge_version, loop_cnt),
     tablet_status_(tenant_status_snapshot_),
     time_guard_(),
     clear_stat_tablets_(),
-    merge_reason_(merge_reason)
+    merge_reason_(merge_reason),
+    schedule_mode_(schedule_mode)
 {
   clear_stat_tablets_.set_attr(ObMemAttr(MTL_ID(), "BatchClearTblts"));
 }
 
+int ObScheduleTabletFunc::switch_and_schedule_tablet(
+    ObTabletHandle &tablet_handle,
+    bool &tablet_merge_finish)
+{
+  int ret = OB_SUCCESS;
+  bool unused_can_merge = false;
+  if (OB_FAIL(iterate_switch_tablet(tablet_handle, unused_can_merge))) {
+    LOG_WARN("failed to iterate switch tablet", KR(ret), K(tablet_handle));
+  } else if (OB_FAIL(schedule_tablet(tablet_handle, tablet_merge_finish))) {
+    LOG_WARN("failed to schedule tablet", KR(ret), K(tablet_handle));
+  }
+  tablet_status_.destroy();
+  return ret;
+}
+
+int ObScheduleTabletFunc::iterate_switch_tablet(
+    storage::ObTabletHandle &tablet_handle,
+    bool &can_merge)
+{
+  int ret = OB_SUCCESS;
+  const ObLSID &ls_id = ls_status_.ls_id_;
+  ObTablet *tablet = nullptr;
+  ObTabletID tablet_id;
+  can_merge = false;
+  tablet_status_.destroy();
+  if (OB_UNLIKELY(!ls_status_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid ls status", KR(ret), K_(ls_status));
+  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle));
+  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
+  } else if (FALSE_IT(tablet_id = tablet->get_tablet_id())) {
+  } else if (OB_UNLIKELY(ls_status_.ls_id_ != tablet->get_ls_id())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet and ls are not match", KR(ret), K_(ls_status), KPC(tablet));
+  } else if (OB_FAIL(tablet_status_.init_for_major(
+                 ls_status_.get_ls(), merge_version_, *tablet,
+                 ls_could_schedule_new_round_))) {
+    LOG_WARN("failed to init tablet status", KR(ret), K_(ls_status), K(tablet_id));
+    DIAGNOSE_TABLET_MEDIUM_MERGE(ls_id, tablet_id);
+  } else {
+    can_merge = tablet_status_.can_merge();
+  }
+  return ret;
+}
+
 // when call schedule_tablet, ls status have been checked
+// in window compaction, tablet_status is pre-loaded when iterate_switch_tablet, so don't need to load tablet status again
 int ObScheduleTabletFunc::schedule_tablet(
   ObTabletHandle &tablet_handle,
   bool &tablet_merge_finish)
@@ -46,26 +104,21 @@ int ObScheduleTabletFunc::schedule_tablet(
   bool need_diagnose = false;
   time_guard_.click(ObCompactionScheduleTimeGuard::GET_TABLET);
   tablet_cnt_.loop_tablet_cnt_++;
-  if (OB_UNLIKELY(!ls_status_.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid ls status", KR(ret), K_(ls_status));
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle));
+  } else if (OB_UNLIKELY(!tablet_status_.is_inited())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet status is not inited", KR(ret), K_(tablet_status));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (FALSE_IT(tablet_id = tablet->get_tablet_id())) {
-  } else if (OB_FAIL(tablet_status_.init_for_major(
-                 ls_status_.get_ls(), merge_version_, *tablet,
-                 ls_could_schedule_new_round_))) {
-    need_diagnose = true;
-    LOG_WARN("failed to init tablet status", KR(ret), K_(ls_status), K(tablet_id));
   } else {
     time_guard_.click(ObCompactionScheduleTimeGuard::INIT_TABLET_STATUS);
     if (tablet_status_.tablet_merge_finish()) {
       tablet_merge_finish = true;
       tablet_cnt_.finish_cnt_++;
     }
-    if (tablet_status_.could_schedule_new_round() && OB_TMP_FAIL(schedule_tablet_new_round(tablet_handle, false/*user_request*/))) {
+    if (tablet_status_.could_schedule_new_round() && OB_TMP_FAIL(try_schedule_tablet_new_round(tablet_handle))) {
       need_diagnose = true;
       LOG_WARN("failed to schedule tablet new round", KR(tmp_ret), K_(ls_status), K(tablet_id));
     }
@@ -80,13 +133,44 @@ int ObScheduleTabletFunc::schedule_tablet(
       LOG_DEBUG("success to schedule tablet execute", KR(tmp_ret), K(tablet_id), K_(ls_status), K(tablet_status_), K_(ls_could_schedule_merge));
     }
   }
-  if (need_diagnose
-      && OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(ls_id, tablet_id,
-                          share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE))) {
-    LOG_WARN("failed to add diagnose tablet", K(tmp_ret), K_(ls_status), K(tablet_id));
+  if (need_diagnose) {
+    DIAGNOSE_TABLET_MEDIUM_MERGE(ls_id, tablet_id);
   }
   schedule_freeze_dag(false/*force*/);
-  tablet_status_.destroy();
+  return ret;
+}
+
+int ObScheduleTabletFunc::try_schedule_tablet_new_round(
+    storage::ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id;
+  bool need_schedule_new_round = false;
+  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle));
+  } else if (FALSE_IT(tablet_id = tablet_handle.get_obj()->get_tablet_id())) {
+  } else if (is_window_compaction_func()) {
+    need_schedule_new_round = true;
+  } else if (is_window_compaction_active_) {
+    ObWindowLoop &window_loop = MTL(ObTenantTabletScheduler *)->get_window_loop();
+    if (ls_status_.is_leader_ && OB_FAIL(window_loop.process_tablet_stat(*tablet_handle.get_obj()))) {
+      if (OB_NOT_INIT == ret) {
+        // window compaction is stopped, schedule tablet as normal
+        ret = OB_SUCCESS;
+        need_schedule_new_round = true;
+      } else {
+        LOG_WARN("failed to loop tablet in medium loop", KR(ret), K(tablet_id));
+      }
+    }
+  } else {
+    need_schedule_new_round = true;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (need_schedule_new_round && OB_FAIL(schedule_tablet_new_round(tablet_handle, false/*user_request*/))) {
+    LOG_WARN("failed to schedule tablet new round", KR(ret), K_(ls_status), K(tablet_id));
+  }
   return ret;
 }
 
@@ -110,7 +194,9 @@ int ObScheduleTabletFunc::schedule_tablet_new_round(
                                         ls_status_.weak_read_ts_,
                                         *tablet_status_.medium_list(),
                                         &tablet_cnt_,
-                                        merge_reason_);
+                                        merge_reason_,
+                                        0 /*least_medium_snapshot*/,
+                                        get_window_decision_log_info());
     if (OB_FAIL(func.init_tablet_handle(tablet_handle))) {
       LOG_WARN("failed to init func with tablet_handle", K(ret), K(tablet_handle), K(func));
     } else if (OB_FAIL(func.schedule_next_medium_for_leader(tablet_status_.tablet_merge_finish() ? 0 : merge_version_, medium_clog_submitted))) {
@@ -130,9 +216,22 @@ int ObScheduleTabletFunc::schedule_tablet_new_round(
   return ret;
 }
 
+int ObScheduleTabletFunc::set_merge_reason(const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ObAdaptiveMergePolicy::is_valid_merge_reason(merge_reason))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid merge reason", K(ret), K(merge_reason));
+  } else {
+    merge_reason_ = merge_reason;
+  }
+  return ret;
+}
+
 int ObScheduleTabletFunc::request_schedule_new_round(
   ObTabletHandle &tablet_handle,
-  const bool user_request)
+  const bool user_request,
+  const bool need_load_tablet_status)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -152,7 +251,7 @@ int ObScheduleTabletFunc::request_schedule_new_round(
     LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (FALSE_IT(tablet_id = tablet->get_tablet_id())) {
-  } else if (OB_FAIL(tablet_status_.init_for_major(
+  } else if (need_load_tablet_status && OB_FAIL(tablet_status_.init_for_major(
                  ls_status_.get_ls(), merge_version_, *tablet,
                  ls_could_schedule_new_round_))) {
     LOG_WARN("failed to init tablet status", KR(ret), K_(ls_status), K(tablet_id));
@@ -178,7 +277,9 @@ int ObScheduleTabletFunc::request_schedule_new_round(
   if (OB_SUCC(ret) && schedule_flag && OB_TMP_FAIL(schedule_tablet_new_round(tablet_handle, user_request))) {
     LOG_WARN("failed to schedule tablet new round", KR(tmp_ret), K_(ls_status), K(tablet_id));
   }
-  tablet_status_.destroy();
+  if (need_load_tablet_status) {
+    tablet_status_.destroy();
+  }
   return ret;
 }
 

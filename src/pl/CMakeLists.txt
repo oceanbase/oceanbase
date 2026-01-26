@@ -76,6 +76,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_ai_service.cpp
   sys_package/ob_dbms_data_dict.cpp
   sys_package/ob_dbms_python.cpp
+  sys_package/ob_dbms_daily_maintenance.cpp
 )
 
 ob_set_subtarget(ob_pl pl_recompile

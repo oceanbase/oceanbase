@@ -127,11 +127,13 @@ ObMergeStaticInfo::ObMergeStaticInfo()
     kept_snapshot_info_(),
     participant_table_info_(),
     mds_filter_info_str_("\0"),
+    window_decision_log_info_str_("\0"),
     merge_level_(MERGE_LEVEL_MAX),
     exec_mode_(ObExecMode::EXEC_MODE_MAX),
     merge_reason_(ObAdaptiveMergePolicy::NONE),
     base_major_status_(ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS),
     co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
+    window_decision_log_info_(),
     is_full_merge_(false)
 {}
 
@@ -159,8 +161,10 @@ void ObMergeStaticInfo::reset()
   merge_reason_ = ObAdaptiveMergePolicy::NONE;
   base_major_status_ = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
   co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
+  window_decision_log_info_.reset();
   is_full_merge_ = false;
   MEMSET(mds_filter_info_str_, '\0', sizeof(mds_filter_info_str_));
+  MEMSET(window_decision_log_info_str_, '\0', sizeof(window_decision_log_info_str_));
 }
 
 void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
@@ -180,9 +184,12 @@ void ObMergeStaticInfo::shallow_copy(const ObMergeStaticInfo &other)
   merge_reason_ = other.merge_reason_;
   base_major_status_ = other.base_major_status_;
   co_major_merge_type_ = other.co_major_merge_type_;
+  window_decision_log_info_ = other.window_decision_log_info_;
   is_full_merge_ = other.is_full_merge_;
   MEMSET(mds_filter_info_str_, '\0', sizeof(mds_filter_info_str_));
   snprintf(mds_filter_info_str_, sizeof(mds_filter_info_str_), "%s", other.mds_filter_info_str_);
+  MEMSET(window_decision_log_info_str_, '\0', sizeof(window_decision_log_info_str_));
+  snprintf(window_decision_log_info_str_, sizeof(window_decision_log_info_str_), "%s", other.window_decision_log_info_str_);
 }
 
 int64_t ObMergeStaticInfo::to_string(char* buf, const int64_t buf_len) const
@@ -206,7 +213,7 @@ int64_t ObMergeStaticInfo::to_string(char* buf, const int64_t buf_len) const
       }
     }
     J_COMMA();
-    J_KV(K_(kept_snapshot_info), K_(participant_table_info), K_(mds_filter_info_str));
+    J_KV(K_(kept_snapshot_info), K_(participant_table_info), K_(mds_filter_info_str), K_(window_decision_log_info));
     J_OBJ_END();
   }
   return pos;

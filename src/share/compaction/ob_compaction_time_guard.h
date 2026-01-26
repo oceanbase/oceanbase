@@ -228,6 +228,28 @@ private:
   const static char *CompactionEventStr[];
   static const char *get_comp_event_str(const enum CompactionEvent event);
 };
+
+struct ObWindowCompactionTimeGuard : public ObCompactionTimeGuard
+{
+public:
+  ObWindowCompactionTimeGuard()
+    : ObCompactionTimeGuard(WINDOW_COMPACT_TIME_GUARD, UINT64_MAX, "[STORAGE] ")
+  {}
+  virtual ~ObWindowCompactionTimeGuard() {}
+  enum CompactionEvent : uint16_t {
+    UPDATE_ADAPTIVE_THREAD_CNT = 0,
+    LOOP_TABLET_STATS,
+    LOOP_PRIORITY_QUEUE,
+    LOOP_READY_LIST,
+    COMPACTION_EVENT_MAX
+  };
+  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
+  virtual bool need_print() const override { return false; } // 不在析构时自动打印
+private:
+  const static char *CompactionEventStr[];
+  static const char *get_comp_event_str(const enum CompactionEvent event);
+};
+
 } // namespace compaction
 } // namespace oceanbase
 

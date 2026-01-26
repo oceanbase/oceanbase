@@ -348,6 +348,7 @@ int ObTenantTabletScheduler::init()
   int ret = OB_SUCCESS;
   bool enable_adaptive_compaction = false;
   bool enable_adaptive_merge_schedule = false;
+  bool enable_window_compaction = false;
   int64_t schedule_interval = ObTenantTabletSchedulerTaskMgr::DEFAULT_COMPACTION_SCHEDULE_INTERVAL;
   int64_t schedule_batch_size = ObScheduleBatchSizeMgr::DEFAULT_TABLET_BATCH_CNT;
 
@@ -357,6 +358,7 @@ int ObTenantTabletScheduler::init()
       schedule_interval = tenant_config->ob_compaction_schedule_interval;
       enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
       enable_adaptive_merge_schedule = tenant_config->_enable_adaptive_merge_schedule;
+      enable_window_compaction = tenant_config->enable_window_compaction;
       fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
       schedule_batch_size = tenant_config->compaction_schedule_tablet_batch_cnt;
     }
@@ -383,7 +385,7 @@ int ObTenantTabletScheduler::init()
   } else if (OB_FAIL(prohibit_medium_map_.init())) {
     LOG_WARN("Fail to create prohibit medium ls id map", K(ret));
   } else {
-    IGNORE_RETURN tenant_status_.refresh_tenant_config(enable_adaptive_compaction, enable_adaptive_merge_schedule);
+    IGNORE_RETURN tenant_status_.refresh_tenant_config(enable_adaptive_compaction, enable_adaptive_merge_schedule, enable_window_compaction);
     timer_task_mgr_.set_scheduler_interval(schedule_interval);
     batch_size_mgr_.set_tablet_batch_size(schedule_batch_size);
     is_inited_ = true;
@@ -415,6 +417,7 @@ int ObTenantTabletScheduler::reload_tenant_config()
   } else {
     bool enable_adaptive_compaction = false;
     bool enable_adaptive_merge_schedule = false;
+    bool enable_window_compaction = false;
     int64_t merge_schedule_interval = ObTenantTabletSchedulerTaskMgr::DEFAULT_COMPACTION_SCHEDULE_INTERVAL;
     int64_t schedule_batch_size = ObScheduleBatchSizeMgr::DEFAULT_TABLET_BATCH_CNT;
     {
@@ -423,13 +426,15 @@ int ObTenantTabletScheduler::reload_tenant_config()
         merge_schedule_interval = tenant_config->ob_compaction_schedule_interval;
         enable_adaptive_compaction = tenant_config->_enable_adaptive_compaction;
         enable_adaptive_merge_schedule = tenant_config->_enable_adaptive_merge_schedule;
+        enable_window_compaction = tenant_config->enable_window_compaction;
         fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
         schedule_batch_size = tenant_config->compaction_schedule_tablet_batch_cnt;
       }
     } // end of ObTenantConfigGuard
     (void) tenant_status_.refresh_tenant_config(
       enable_adaptive_compaction,
-      enable_adaptive_merge_schedule);
+      enable_adaptive_merge_schedule,
+      enable_window_compaction);
 
     if (OB_FAIL(timer_task_mgr_.restart_scheduler_timer_task(merge_schedule_interval))) {
       LOG_WARN("failed to restart scheduler timer", K(ret));
@@ -1570,6 +1575,15 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
   return ret;
 }
 
+bool ObTenantTabletScheduler::need_do_window_compaction() const
+{
+  return !GCTX.is_shared_storage_mode()
+      && !tenant_status_.is_skip_window_compaction_tenant()
+      && could_major_merge_start() //
+      && !is_compacting()
+      && is_global_during_window_compaction();
+}
+
 int ObTenantTabletScheduler::schedule_all_tablets_medium()
 {
   int ret = OB_SUCCESS;
@@ -1598,6 +1612,26 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         (prohibit_medium_map_.get_transfer_flag_cnt() > 0 || prohibit_medium_map_.get_split_flag_cnt() > 0)) {
       LOG_INFO("tenant is blocking schedule medium", KR(ret), K_(prohibit_medium_map));
     }
+  }
+  return ret;
+}
+
+int ObTenantTabletScheduler::schedule_all_tablets_window()
+{
+  int ret = OB_SUCCESS;
+  bool could_start_window_compaction = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantTabletScheduler has not been inited", K(ret));
+  } else if (!tenant_status_.is_inited() && OB_FAIL(tenant_status_.init_or_refresh())) {
+    if (OB_NEED_WAIT != ret) {
+      LOG_WARN("failed to init tenant_status", KR(ret), K_(tenant_status));
+    }
+  } else if (FALSE_IT(could_start_window_compaction = need_do_window_compaction())) {
+  } else if (OB_FAIL(window_loop_.try_schedule_window_compaction(could_start_window_compaction, merge_info_.merge_start_time_))) {
+    LOG_WARN("failed to try schedule window compaction", K(ret), K_(merge_info), K(could_start_window_compaction));
+  } else {
+    LOG_INFO("finish schedule all tablets window compaction", K(ret), K_(merge_info), K(could_start_window_compaction));
   }
   return ret;
 }
@@ -1639,7 +1673,7 @@ int ObTenantTabletScheduler::user_request_schedule_medium_merge(
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
                  tablet_id, tablet_handle, 0 /*timeout_us*/))) {
       LOG_WARN("get tablet failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(func.request_schedule_new_round(tablet_handle, true/*user_request*/))) {
+    } else if (OB_FAIL(func.request_schedule_new_round(tablet_handle, true/*user_request*/, true/*need_load_tablet_status*/))) {
       LOG_WARN("failed to request schedule new round", K(ret), K(ls_id), K(tablet_id));
     }
   }
@@ -1741,7 +1775,7 @@ int ObTenantTabletScheduler::try_schedule_adaptive_merge(
         if (OB_STATE_NOT_MATCH != tmp_ret) {
           LOG_WARN("failed to switch ls", KR(tmp_ret), K(ls_id));
         }
-      } else if (OB_TMP_FAIL(func.schedule_tablet(tablet_handle, unused_tablet_merge_finish))) {
+      } else if (OB_TMP_FAIL(func.switch_and_schedule_tablet(tablet_handle, unused_tablet_merge_finish))) {
         LOG_WARN("failed to schedule tablet", KR(tmp_ret), K(ls_id), K(tablet_id));
       }
     } else if (ObAdaptiveMergePolicy::is_schedule_meta(mode)) {

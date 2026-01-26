@@ -224,12 +224,13 @@ int ObTabletStatusCache::init_for_major(
     const bool ls_could_schedule_new_round)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const ObLSID &ls_id = ls.get_ls_id();
+  const ObTabletID &tablet_id = tablet.get_tablet_id();
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), KPC(this));
   } else {
-    const ObLSID &ls_id = ls.get_ls_id();
-    const ObTabletID &tablet_id = tablet.get_tablet_id();
     if (OB_FAIL(inner_init_state(merge_version, ls, tablet))) {
       LOG_WARN("failed to init state", KR(ret), K(merge_version), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(update_tablet_report_status(ls, tablet))) {
@@ -248,6 +249,10 @@ int ObTabletStatusCache::init_for_major(
     } else {
       inner_destroy();
     }
+  }
+  if (OB_FAIL(ret) && OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(ls_id, tablet_id,
+        share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE))) {
+    LOG_WARN("failed to add diagnose tablet", K(ret), KR(tmp_ret), K(ls_id), K(tablet_id));
   }
   return ret;
 }

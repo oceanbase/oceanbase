@@ -48,6 +48,10 @@ public:
       sql::ObExecContext &ctx,
       sql::ParamStore &params,
       common::ObObj &result);
+  static int copy_plan(
+      sql::ObExecContext &ctx,
+      sql::ParamStore &params,
+      common::ObObj &result);
   static int create_consumer_group(
       sql::ObExecContext &ctx,
       sql::ParamStore &params,

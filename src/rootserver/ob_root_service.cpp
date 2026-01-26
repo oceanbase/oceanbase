@@ -52,6 +52,7 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 
 #include "rootserver/freeze/ob_major_freeze_helper.h"
+#include "rootserver/freeze/window/ob_window_compaction_helper.h" // for ObWindowCompactionHelper
 #include "share/ob_ddl_common.h" // for ObDDLUtil
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "share/restore/ob_recover_table_util.h"
@@ -9715,6 +9716,8 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_enable_gts_standalone_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), ENABLE_LOGONLY_REPLICA)) {
       ret = check_enable_logonly_replica_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), COMPACTION_LOW_THREAD_SCORE)) {
+      ret = check_compaction_low_thread_score_(*item);
     }
   }
   return ret;
@@ -9953,6 +9956,30 @@ int ObRootService::check_enable_database_sharding_none_(obrpc::ObAdminSetConfigI
       ret = OB_INVALID_ARGUMENT;
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, warn_log);
     }
+  }
+  return ret;
+}
+
+int ObRootService::check_compaction_low_thread_score_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  const int64_t value = ObConfigIntParser::get(item.value_.ptr(), is_valid);
+  const uint64_t tenant_id = item.exec_tenant_id_;
+  bool is_window_compaction_active = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (!is_valid) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(value));
+  } else if (OB_FAIL(ObWindowCompactionHelper::check_window_compaction_global_active(tenant_id, is_window_compaction_active))) {
+    LOG_WARN("fail to check window compaction global active", KR(ret), K(tenant_id));
+  } else if (is_window_compaction_active) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant is during window compaction now, "
+                                     "please use DBMS_DAILY_MAINTENANCE.SET_THREAD_COUNT(thread_count), "
+                                     "directly alter compaction_low_thread_score");
   }
   return ret;
 }

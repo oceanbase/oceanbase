@@ -287,6 +287,7 @@ public:
     DURING_DDL = 10,
     RECYCLE_TRUNCATE_INFO = 11,
     TOO_MANY_INC_MAJOR = 12,
+    WINDOW_COMPACTION = 13,
     INVALID_REASON
   };
 
@@ -309,6 +310,7 @@ public:
   static bool is_user_request_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_skip_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_recycle_truncate_info_merge_reason(const AdaptiveMergeReason &reason);
+  static bool is_window_merge_reason(const AdaptiveMergeReason &reason);
   static bool is_valid_compaction_policy(const AdaptiveCompactionPolicy &policy);
   static bool is_schedule_medium(const share::schema::ObTableModeFlag &mode);
   static bool is_schedule_meta(const share::schema::ObTableModeFlag &mode);
@@ -342,6 +344,10 @@ public:
   static int check_tombstone_reason(
       const storage::ObTablet &tablet,
       AdaptiveMergeReason &reason);
+  static int check_truncate_info_reason(
+      storage::ObTablet &tablet,
+      AdaptiveMergeReason &reason,
+      int64_t &least_medium_snapshot);
   static int find_adaptive_merge_tables(
       const ObMergeType &merge_type,
       const storage::ObTablet &tablet,
@@ -419,6 +425,10 @@ public:
   static inline bool is_build_redundent_row_store_merge(const ObCOMajorMergeType &major_merge_type)
   {
     return BUILD_REDUNDANT_ROW_STORE_MERGE == major_merge_type;
+  }
+  static int64_t get_cg_merge_batch_cnt(const int64_t column_group_cnt)
+  {
+    return (column_group_cnt < ALL_CG_IN_ONE_BATCH_CNT) ? 1 : (column_group_cnt / DEFAULT_CG_MERGE_BATCH_SIZE);
   }
   static int decide_co_major_sstable_status(
       const ObCOSSTableV2 &co_sstable,

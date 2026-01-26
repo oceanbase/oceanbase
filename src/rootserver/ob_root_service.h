@@ -1044,6 +1044,7 @@ private:
   int check_enable_database_sharding_none_(obrpc::ObAdminSetConfigItem &item);
   int check_default_table_organization_(obrpc::ObAdminSetConfigItem &item);
   int check_default_table_store_format_(obrpc::ObAdminSetConfigItem &item);
+  int check_compaction_low_thread_score_(obrpc::ObAdminSetConfigItem &item);
   int start_ddl_service_();
   int check_zone_deploy_mode_(obrpc::ObAdminSetConfigItem &item);
   int check_enable_gts_standalone_(obrpc::ObAdminSetConfigItem &item);

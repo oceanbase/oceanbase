@@ -150,6 +150,32 @@ int ObMajorMergeInfoManager::set_freeze_info(const ObMajorFreezeReason freeze_re
   return ret;
 }
 
+int ObMajorMergeInfoManager::set_window_compaction_info(
+    const ObWindowCompactionParam &param,
+    const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  ObRecursiveMutexGuard guard(lock_);
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_WARN("fail to get lock", KR(ret));
+  } else if (OB_FAIL(zone_merge_mgr_.set_window_compaction_info(param, expected_epoch))) {
+    LOG_WARN("fail to set window compaction info", KR(ret), K_(tenant_id), K(param), K(expected_epoch));
+  }
+  return ret;
+}
+
+int ObMajorMergeInfoManager::finish_window_compaction(const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  ObRecursiveMutexGuard guard(lock_);
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_WARN("fail to get lock", KR(ret));
+  } else if (OB_FAIL(zone_merge_mgr_.finish_window_compaction(expected_epoch))) {
+    LOG_WARN("fail to finish window compaction", KR(ret), K_(tenant_id), K(expected_epoch));
+  }
+  return ret;
+}
+
 // lock guarded by caller
 int ObMajorMergeInfoManager::generate_frozen_scn(
     const SCN &snapshot_gc_scn,

@@ -44,6 +44,11 @@ public:
   ObResourceManagerProxy();
   virtual ~ObResourceManagerProxy();
   int create_plan(
+      common::ObMySQLTransaction &trans,
+      uint64_t tenant_id,
+      const common::ObString &plan,
+      const common::ObObj &comment);
+  int create_plan(
       uint64_t tenant_id,
       const common::ObString &plan,
       const common::ObObj &comment);
@@ -52,6 +57,11 @@ public:
   int delete_plan(
       uint64_t tenant_id,
       const common::ObString &plan);
+  int copy_plan(
+      uint64_t tenant_id,
+      const common::ObString &source_plan,
+      const common::ObString &target_plan,
+      const common::ObObj &comment);
   int create_consumer_group(
       common::ObMySQLTransaction &trans,
       uint64_t tenant_id,
@@ -112,6 +122,12 @@ public:
       uint64_t tenant_id,
       const common::ObString &plan,
       common::ObIArray<ObPlanDirective> &directives);
+  int get_plan_directive(
+      common::ObMySQLTransaction &trans,
+      uint64_t tenant_id,
+      const common::ObString &plan,
+      const common::ObString &group,
+      ObPlanDirective &directive);
 
   // process mapping rules
   int replace_mapping_rule(
@@ -131,7 +147,8 @@ public:
     uint64_t tenant_id,
     const common::ObString &attribute,
     const common::ObString &value,
-    const common::ObString &consumer_group);
+    const common::ObString &consumer_group,
+    const bool is_window_compaction_switch = false);
   int replace_column_mapping_rule(
     common::ObMySQLTransaction &trans,
     uint64_t tenant_id,
@@ -140,6 +157,12 @@ public:
     const common::ObString &consumer_group,
     const sql::ObSQLSessionInfo &session);
   int update_resource_mapping_version(common::ObMySQLTransaction &trans, uint64_t tenant_id);
+  int get_function_mapping_info(
+      ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      ObArenaAllocator &allocator,
+      const common::ObString &function,
+      ObString &consumer_group);
   int get_all_resource_mapping_rules(
       uint64_t tenant_id,
       common::ObIArray<ObResourceMappingRule> &rules);
@@ -159,9 +182,29 @@ public:
       uint64_t tenant_id,
       const common::ObString &plan,
       common::ObIArray<ObResourceUserMappingRule> &rules);
+  int check_if_consumer_group_exist(
+      uint64_t tenant_id,
+      const common::ObString &consumer_group,
+      bool &exist);
+  int check_if_consumer_group_exist(
+      common::ObMySQLTransaction &trans,
+      uint64_t tenant_id,
+      const common::ObString &group,
+      bool &exist);
   int check_if_plan_exist(
       uint64_t tenant_id,
       const common::ObString &plan,
+      bool &exist);
+  int check_if_plan_exist(
+      common::ObMySQLTransaction &trans,
+      uint64_t tenant_id,
+      const common::ObString &plan,
+      bool &exist);
+  int check_if_plan_directive_exist(
+      common::ObMySQLTransaction &trans,
+      uint64_t tenant_id,
+      const common::ObString &plan,
+      const common::ObString &group,
       bool &exist);
   int get_resource_mapping_version(uint64_t tenant_id, int64_t &current_version);
   int get_all_resource_mapping_rules_by_column(
@@ -202,22 +245,6 @@ private:
       common::ObMySQLTransaction &trans,
       uint64_t tenant_id,
       int64_t &group_id);
-  int check_if_plan_directive_exist(
-      common::ObMySQLTransaction &trans,
-      uint64_t tenant_id,
-      const common::ObString &plan,
-      const common::ObString &group,
-      bool &exist);
-  int check_if_plan_exist(
-      common::ObMySQLTransaction &trans,
-      uint64_t tenant_id,
-      const common::ObString &plan,
-      bool &exist);
-  int check_if_consumer_group_exist(
-      common::ObMySQLTransaction &trans,
-      uint64_t tenant_id,
-      const common::ObString &group,
-      bool &exist);
   int check_if_user_exist(
       uint64_t tenant_id,
       const common::ObString &user_name,
@@ -265,6 +292,11 @@ private:
   int check_net_bandwidth_config_is_default_(
       const common::ObObj &max_net_bandwidth,
       const common::ObObj &net_bandwidth_weight);
+  int check_after_copy_plan_directives(
+      common::ObMySQLTransaction &trans,
+      uint64_t tenant_id,
+      const common::ObString &source_plan,
+      const common::ObString &target_plan);
 
 public:
   class TransGuard {

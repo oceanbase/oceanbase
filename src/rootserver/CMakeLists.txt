@@ -211,6 +211,8 @@ ob_set_subtarget(ob_rootserver freeze
   freeze/ob_major_freeze_util.cpp
   freeze/ob_major_merge_progress_util.cpp
   freeze/ob_fts_checksum_validate_util.cpp
+  freeze/window/ob_window_compaction_helper.cpp
+  freeze/window/ob_window_compaction_rpc_define.cpp
 )
 
 ob_set_subtarget(ob_rootserver restore
