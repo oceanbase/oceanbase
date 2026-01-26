@@ -89,7 +89,8 @@ public:
       K(parallelism_),
       K(create_index_arg_),
       K(is_retryable_ddl_),
-      K(use_doc_id_));
+      K(use_doc_id_),
+      K(rowkey_doc_schema_version_));
 
 public:
   void set_rowkey_doc_aux_table_id(const uint64_t id) { rowkey_doc_aux_table_id_ = id; }
@@ -185,6 +186,7 @@ private:
 private:
   int verify_children_checksum() const;
   int check_column_checksum(const ColumnChecksumInfo &a, const ColumnChecksumInfo &b) const;
+  int try_release_snapshot(ObMySQLTransaction &trans);
 
 private:
   static const int64_t OB_FTS_INDEX_BUILD_TASK_VERSION = 1;
@@ -225,6 +227,7 @@ private:
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
   bool is_retryable_ddl_;
   bool use_doc_id_;
+  int64_t rowkey_doc_schema_version_;
 };
 
 } // end namespace rootserver
