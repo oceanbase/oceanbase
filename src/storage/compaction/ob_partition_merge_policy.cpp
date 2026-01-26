@@ -702,19 +702,6 @@ int ObPartitionMergePolicy::check_need_gc_tx_data(
       }
     }
   }
-
-#ifdef ERRSIM
-  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  if (OB_FAIL(ret)) {
-  } else if (tablet_id.is_inner_tablet() || tablet_id.is_sys_tablet() || tablet_id.is_ls_inner_tablet()) {
-    // do nothing
-  } else if (result.is_gc_tx_data()) {
-  } else if (EN_MINOR_MERGE_GC_TX_DATA) {
-    ret = OB_SUCCESS;
-    result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_GC_TX_DATA, filling_tx_scn);
-    FLOG_INFO("Errsim: schedule tx scn minor merge", K(ret), K(result));
-  }
-#endif
   return ret;
 }
 

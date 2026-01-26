@@ -2986,7 +2986,7 @@ int ObDagPrioScheduler::finish_dag_(
         // do nothing
       } else {
         compaction::ObTabletMergeDag &merge_dag = static_cast<compaction::ObTabletMergeDag &>(*dag);
-        if (OB_SUCCESS != dag->get_dag_ret()) {
+        if (OB_SUCCESS != dag->get_dag_ret() && OB_NO_NEED_MERGE != dag->get_dag_ret()) {
           if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(
                 merge_dag.ls_id_, merge_dag.tablet_id_, ObIDag::get_diagnose_tablet_type(dag->get_type())))) {
             COMMON_LOG(WARN, "failed to add diagnose tablet", K(tmp_ret),
