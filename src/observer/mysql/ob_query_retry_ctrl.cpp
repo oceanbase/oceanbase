@@ -84,6 +84,7 @@ void ObRetryPolicy::sleep_before_local_retry(ObRetryParam &v,
       sleep_us = remain_us;
     }
     if (sleep_us > 0) {
+      oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
       LOG_INFO("will sleep", K(sleep_us), K(remain_us), K(base_sleep_us),
                K(retry_sleep_type), K(v.stmt_retry_times_), K(v.err_), K(timeout_timestamp));
       THIS_WORKER.sched_wait();

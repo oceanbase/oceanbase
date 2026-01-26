@@ -449,7 +449,6 @@ int ObMPStmtPrexecute::prepare_sql_with_params(ObSQLSessionInfo &session, const 
 int ObMPStmtPrexecute::resolve_sql_with_params(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
-  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   do {
     ret = OB_SUCCESS;  // reset `ret` explicitly before local retry
     SMART_VAR(ObMySQLResultSet, result, session, THIS_WORKER.get_allocator())

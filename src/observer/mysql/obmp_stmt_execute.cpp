@@ -1623,7 +1623,6 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
   ObReqTimeGuard req_timeinfo_guard;
   // 每次执行不同sql都需要更新
   ctx_.self_add_plan_ = false;
-  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
   do {
     // 每次都必须设置为OB_SCCESS, 否则可能会因为没有调用do_process()造成死循环
     ret = OB_SUCCESS;
