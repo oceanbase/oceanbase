@@ -267,8 +267,6 @@ int ObTxReadSnapshot::refresh_seq_no(const int64_t tx_seq_base)
 void ObTxReadSnapshot::convert_to_out_tx()
 {
   parts_.reset();
-  core_.tx_id_.reset();
-  core_.scn_.reset();
 }
 
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_, flag_.flag_val_);

@@ -4473,7 +4473,11 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     if (OB_SUCC(ret) && DECL_PKG != loc) {
       OZ (release_cursor_parameters(ctx, *session_info, package_id, routine_id, formal_param_idxs, cursor_param_count));
     }
-    if (OB_SUCC(ret) && session_info->enable_enhanced_cursor_validation() && cursor->is_need_check_snapshot() && cursor->is_streaming() && !cursor->is_for_update()) {
+    if (OB_SUCC(ret)
+        && cursor->is_streaming()
+        && !cursor->is_for_update()
+        && cursor->is_streaming_cursor_read_uncommitted()
+        && session_info->enable_enhanced_cursor_validation()) {
       OZ (ObPLContext::add_tx_cursor_idx_to_local_state(*session_info, package_id, routine_id, cursor_index));
       OX (cursor->set_is_in_tx_cursor(true));
       OX (cursor->set_tx_cursor_idx(package_id, routine_id, cursor_index));
@@ -4611,7 +4615,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
           LOG_WARN("transaction has been committed, for update cursor can not fetch",
                   K(cursor->get_snapshot()), K(ret));
       }
-    } else if (cursor->is_streaming()) {
+    } else if (cursor->is_streaming() && cursor->is_streaming_cursor_read_uncommitted()) {
       if(cursor->get_snapshot().is_committed()) {
         ret = OB_ERR_FETCH_OUT_SEQUENCE;
         LOG_WARN("transaction has been committed, streaming cursor can not fetch",
@@ -10359,6 +10363,7 @@ int ObSPIService::setup_cursor_snapshot_verify_(ObPLCursorInfo *cursor, ObSPIRes
   transaction::ObTxReadSnapshot &snapshot = exec_ctx.get_das_ctx().get_snapshot();
   transaction::ObTxDesc *tx = exec_ctx.get_my_session()->get_tx_desc();
   bool need_register_snapshot = false;
+  bool streaming_cursor_read_uncommitted = false;
   if (!snapshot.is_valid()) {
     need_register_snapshot = false;
   } else if (cursor->is_for_update()) {
@@ -10367,32 +10372,33 @@ int ObSPIService::setup_cursor_snapshot_verify_(ObPLCursorInfo *cursor, ObSPIRes
       LOG_ERROR("for update cursor opened but not trans id invalid", K(ret), KPC(tx), K(snapshot));
     }
     need_register_snapshot = true;
-  } else if (cursor->is_streaming() && tx && tx->is_in_tx() && !tx->is_all_parts_clean()) {
-    if (exec_ctx.get_my_session()->enable_enhanced_cursor_validation()) {
-      need_register_snapshot = false;
-      LOG_TRACE("enable cursor open check read uncommitted");
-      const DependenyTableStore &tables = spi_result->get_result_set()->get_physical_plan()->get_dependency_table();
-      ARRAY_FOREACH(tables, i) {
-        if (tables.at(i).is_base_table()) {
-          if (tx->has_modify_table((uint64_t)tables.at(i).get_object_id())) {
-            LOG_TRACE("streaming cursor read uncommitted, need register snapshot",
-                      K(tables.at(i).get_object_id()));
-            need_register_snapshot = true;
+    streaming_cursor_read_uncommitted = cursor->is_streaming();
+  } else if (tx && tx->is_in_tx() && !tx->is_all_parts_clean()) {
+    need_register_snapshot = true;
+    // optimize for streaming cursor, whether read uncommitted, if none, can fetched after commit
+    if (cursor->is_streaming()) {
+      streaming_cursor_read_uncommitted = true;
+      if (exec_ctx.get_my_session()->enable_enhanced_cursor_validation()) {
+        streaming_cursor_read_uncommitted = false;
+        LOG_TRACE("enable cursor open check read uncommitted");
+        const DependenyTableStore &tables = spi_result->get_result_set()->get_physical_plan()->get_dependency_table();
+        ARRAY_FOREACH(tables, i) {
+          if (tables.at(i).is_base_table() && tx->has_modify_table((uint64_t)tables.at(i).get_object_id())) {
+            LOG_TRACE("streaming cursor read uncommitted", "table_id", tables.at(i).get_object_id());
+            streaming_cursor_read_uncommitted = true;
             break;
           }
         }
       }
-    } else {
-      need_register_snapshot = true;
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (need_register_snapshot) {
+  if (OB_SUCC(ret) && need_register_snapshot) {
+    if (cursor->is_streaming() && !streaming_cursor_read_uncommitted) {
+      LOG_TRACE("convert snapshot to out of transaction for streaming cursor not read uncommitted", K(snapshot));
+      snapshot.convert_to_out_tx();
+    }
     OZ (cursor->set_and_register_snapshot(snapshot));
-  } else {
-    LOG_TRACE("convert to out of transaction snapshot", K(snapshot));
-    snapshot.convert_to_out_tx();
-    cursor->set_snapshot(snapshot);
+    OX (cursor->set_streaming_cursor_read_uncommitted(streaming_cursor_read_uncommitted));
   }
   LOG_TRACE("cursor setup snapshot", K(cursor->is_for_update()), K(cursor->is_streaming()),
             K(snapshot), KPC(cursor), K(need_register_snapshot));
