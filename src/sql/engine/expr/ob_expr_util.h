@@ -119,7 +119,7 @@ public:
   // e.g.:
   //   dump() need result is NLS_CHARACTERSET, but we can only generate ASCII string in code,
   //   this function is used to convert the result characterset.
-  static int set_expr_asscii_result(const ObExpr &expr,
+  static int set_expr_ascii_result(const ObExpr &expr,
                                       ObEvalCtx &ctx,
                                       ObTextStringDatumResult &out_res,
                                       const ObString &ascii, const int64_t datum_idx,

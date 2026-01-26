@@ -90,6 +90,7 @@ constexpr int ObDFMFlag::CONFLICT_GROUP_ERR[ObDFMFlag::MAX_CONFLICT_GROUP_NUMBER
 constexpr int64_t ObDFMFlag::EXPECTED_MATCHING_LENGTH[ObDFMFlag::MAX_FLAG_NUMBER];
 constexpr int64_t ObDFMFlag::ELEMENTFLAG_MAX_LEN[MAX_FLAG_NUMBER];
 
+const ObOracleTimeLimiter ObDFMLimit::YEAR_MYSQL                 = {0, 9999,   OB_ERR_INVALID_YEAR_VALUE};
 const ObOracleTimeLimiter ObDFMLimit::YEAR                       = {1, 9999,   OB_ERR_INVALID_YEAR_VALUE};
 const ObOracleTimeLimiter ObDFMLimit::MONTH                      = {1, 12,     OB_ERR_INVALID_MONTH};
 const ObOracleTimeLimiter ObDFMLimit::MONTH_DAY                  = {1, 31,     OB_ERR_DAY_OF_MONTH_RANGE};
@@ -195,7 +196,7 @@ int ObDFMUtil::match_chars_until_space(ObDFMParseCtx &ctx, ObString &result, int
   return ret;
 }
 
-int ObDFMUtil::check_int_value_length(const ObDFMParseCtx &ctx,
+OB_INLINE int ObDFMUtil::check_int_value_length(const ObDFMParseCtx &ctx,
                                       const int64_t expected_len,
                                       const int64_t real_data_len)
 {
@@ -241,21 +242,27 @@ int ObDFMUtil::match_int_value(ObDFMParseCtx &ctx,
   }
 
   int64_t date_max_len = std::min(ctx.remain_len_, expected_len);
-
-  while (OB_SUCC(ret)
-         && real_data_len < date_max_len
-         && isdigit(ctx.cur_ch_[real_data_len])) {
-    int32_t cur_digit = static_cast<int32_t>(ctx.cur_ch_[real_data_len] - '0');
-
-    if (temp_value * 10LL > INT32_MAX - cur_digit) {
-      ret = OB_OPERATE_OVERFLOW;
-      LOG_WARN("datetime part value is out of range", K(ret));
-    } else {
-      temp_value = temp_value * 10 + cur_digit;
+  if (OB_LIKELY(date_max_len < 10)) {
+    while (OB_SUCC(ret)
+          && real_data_len < date_max_len
+          && isdigit(ctx.cur_ch_[real_data_len])) {
+      temp_value = temp_value * 10 + ctx.cur_ch_[real_data_len] - '0';
       ++real_data_len;
     }
+  } else {
+    while (OB_SUCC(ret)
+          && real_data_len < date_max_len
+          && isdigit(ctx.cur_ch_[real_data_len])) {
+      int32_t cur_digit = static_cast<int32_t>(ctx.cur_ch_[real_data_len] - '0');
+      if (temp_value * 10LL > INT32_MAX - cur_digit) {
+        ret = OB_OPERATE_OVERFLOW;
+        LOG_WARN("datetime part value is out of range", K(ret));
+      } else {
+        temp_value = temp_value * 10 + cur_digit;
+        ++real_data_len;
+      }
+    }
   }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_int_value_length(ctx, expected_len, real_data_len))) {
       LOG_WARN("int value length is not equal to expected len", K(ret), K(real_data_len), K(expected_len), K(ctx));
@@ -466,10 +473,14 @@ int ObDFMUtil::check_semantic(const ObDFMElemArr &elements, ObFixedBitSet<OB_DEF
     //The following datetime format elements can be used in timestamp and interval format models,
     //but not in the original DATE format model: FF, TZD, TZH, TZM, and TZR
     if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(flag >= ObDFMFlag::FF1 && flag <= ObDFMFlag::FF
+      if (OB_UNLIKELY(lib::is_oracle_mode() && flag >= ObDFMFlag::FF1 && flag <= ObDFMFlag::FF
                       && !HAS_TYPE_ORACLE(mode))) {
         ret = OB_INVALID_DATE_FORMAT;
         LOG_WARN("oracle date type can not have fractional seconds", K(ret), K(mode), K(ObDFMFlag::PATTERN[flag]));
+      } else if (OB_UNLIKELY(lib::is_mysql_mode() && flag >= ObDFMFlag::FF7 && flag <= ObDFMFlag::FF)
+                      && !HAS_TYPE_ORACLE(mode)) {
+        ret = OB_INVALID_DATE_FORMAT;
+        LOG_WARN("mysql to_date can only have ff1-ff6", K(ret), K(mode), K(ObDFMFlag::PATTERN[flag]));
       } else if (OB_UNLIKELY(!HAS_TYPE_TIMEZONE(mode) &&
                              (ObDFMFlag::TZD == flag || ObDFMFlag::TZR ==flag
                               || ObDFMFlag::TZH == flag || ObDFMFlag::TZM == flag))) {

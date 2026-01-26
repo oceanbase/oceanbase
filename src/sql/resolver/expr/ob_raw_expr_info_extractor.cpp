@@ -614,7 +614,8 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
           || T_FUN_SYS_LOCALTIMESTAMP == expr.get_expr_type()
           || (T_FUN_SYS_SYSDATE == expr.get_expr_type() && lib::is_oracle_mode())
           || T_FUN_SYS_SYSTIMESTAMP == expr.get_expr_type()
-          || (T_FUN_SYS_UNIX_TIMESTAMP == expr.get_expr_type()
+          || ((T_FUN_SYS_UNIX_TIMESTAMP == expr.get_expr_type()
+               || T_FUN_SYS_TO_UNIX_TIMESTAMP == expr.get_expr_type())
               && 0 == expr.get_param_exprs().count())) { // check if has argument
         if (OB_FAIL(expr.add_flag(IS_CUR_TIME))) { //需要在plan执行前取系统当前时间
           LOG_WARN("failed to add flag IS_CUR_TIME", K(ret));

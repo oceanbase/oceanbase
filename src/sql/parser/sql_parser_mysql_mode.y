@@ -48,6 +48,16 @@ extern int easy_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
   } \
   malloc_non_terminal_node(explain_stmt, result->malloc_pool_, T_EXPLAIN, 5, \
                            type_node, display_node, into_table, set_statement_id, stmt);
+
+/* Macro to check if ClickHouse-specific date units are allowed */
+#define CHECK_CLICKHOUSE_MODE(result, unit_name) \
+  do { \
+    if (!(result)->clickhouse_func_exposed_) { \
+      yyerror(&yylloc, result, "Date unit '" unit_name "' is only supported in ClickHouse compatibility mode\n"); \
+      YYERROR; \
+    } \
+  } while (0)
+
 %}
 
 %destructor {destroy_tree($$);}<node>
@@ -154,6 +164,8 @@ extern int easy_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 %nonassoc NESTED
 %nonassoc PATH
 %nonassoc LOWER_THAN_BY_ACCESS_SESSION
+%nonassoc RESPECT
+%nonassoc IGNORE
 
 %token ERROR /*used internal*/
 %token PARSER_SYNTAX_ERROR /*used internal*/
@@ -272,7 +284,7 @@ END_P SET_VAR DELIMITER
 //-----------------------------non_reserved keyword begin-------------------------------------------
         ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE AI ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
-        ARBITRATION ARG_MAX ARG_MIN ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTH_TYPE AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
+        ARBITRARY ARBITRATION ARG_MAX ARG_MIN ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTH_TYPE AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
         AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ARCHIVELOG_PIECE ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
@@ -300,7 +312,7 @@ END_P SET_VAR DELIMITER
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FREQ_THRESHOLD FROZEN FILE_ID FILTER
         FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION
 
-        GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUP_CONCAT GROUPING GROUPING_ID GTS
+        GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUPCONCAT GROUP_CONCAT GROUPING GROUPING_ID GTS
         GLOBAL_NAME GLOBAL_ALIAS
 
         HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION MIXED_RETENTION HOUR HIDDEN HTTP_TIMEOUT HTTP_KEEPALIVE_TIME HYBRID HYBRID_HIST HYBRID_SEARCH HMS_CATALOG_NAME
@@ -313,7 +325,7 @@ END_P SET_VAR DELIMITER
 
         KEYWORD KEY_BLOCK_SIZE KEY_VERSION KEYTAB KRB5CONF KVCACHE KV_ATTRIBUTES
 
-        LAG LANGUAGE LAST LAST_REFRESH_SCN LAST_VALUE LATERAL LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
+        LAG LAG_IN_FRAME LANGUAGE LAST LAST_REFRESH_SCN LAST_VALUE LATERAL LEAD LEADER LEAD_IN_FRAME LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
         LISTAGG LOB_INROW_THRESHOLD LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
         LEVEL LN LOG LS LINK LOG_RESTORE_SOURCE LINE_DELIMITER LOCATIONS LICENSE
 
@@ -323,7 +335,8 @@ END_P SET_VAR DELIMITER
         MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MATCHED MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU MAX_CONCURRENCY
         MAX_FILE_SIZE MAX_TOKEN_SIZE MAX_NGRAM_SIZE LOG_DISK_SIZE MAX_NET_BANDWIDTH MAX_IOPS MEMORY_SIZE MAX_QUERIES_PER_HOUR MAX_ROWS MAX_SIZE
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MAXVALUE MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND MICRO_BLOCK_FORMAT_VERSION
-        MIGRATE MIN MIN_CPU MIN_IOPS MIN_MAX MIN_NGRAM_SIZE MIN_TOKEN_SIZE MINOR MIN_ROWS MINUS MINUTE MISMATCH MODE MODIFY MODULE MONTH MOVE MODEL
+        MIGRATE MIN MIN_CPU MIN_IOPS MIN_MAX MIN_NGRAM_SIZE MIN_TOKEN_SIZE MINOR MIN_ROWS MINUS MINUTE MISMATCH MILLISECOND MODE MODIFY MODULE MONTH MOVE MODEL
+        NANOSECOND
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MULTIVALUE MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
         MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE MY_NAME MERGE_ENGINE MAX_CLIENT_POOL_SIZE
 
@@ -357,8 +370,12 @@ END_P SET_VAR DELIMITER
         SET_TP SHARE SHARED_STORAGE_DEST SHARED_STORAGE_INFO SHUTDOWN SIGNED SIGN_NAME SIGN_REGION SIMPLE SINGLE SKIP_INDEX SKIP_INDEX_LEVEL SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SCHEMA_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
-        SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
-        STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STOPWORD_TABLE STORAGE_CACHE_POLICY STORAGE_CACHE_POLICY_EXECUTOR STRONG STSTOKEN
+        SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SQL_TSI_MILLISECOND SQL_TSI_MICROSECOND SQL_TSI_NANOSECOND
+        SECONDS MINUTES HOURS DAYS WEEKS MONTHS QUARTERS YEARS
+        MILLISECONDS MICROSECONDS NANOSECONDS
+        SS MI HH DD WK WW MM QQ YY MS NS S N H D M Q
+        SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
+        STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STDDEVSAMP STOPWORD_TABLE STORAGE_CACHE_POLICY STORAGE_CACHE_POLICY_EXECUTOR STRONG STSTOKEN
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING STRIPE_SIZE
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
@@ -372,11 +389,12 @@ END_P SET_VAR DELIMITER
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
         TRANSFER TUNNEL_ENDPOINT TENANT_STS_CREDENTIAL TABLETS TIME_UNIT TIME_ZONE TOKEN
 
-        UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_LIST UNIT_NUM UNLOCKED UNTIL
+        UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_LIST UNIT_NUM UNLOCKED UNTIL UNIQ
+
         UNUSUAL UPGRADE URL USE_BLOOM_FILTER UNKNOWN USE_FRM USER USERNAME USERPASSWORD USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED URI
 
         VALID VALUE VARIANCE VARIABLES VENDED_CREDENTAIL_ENABLED VERBOSE VERIFY VERSION VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
-        VAR_SAMP VALIDATION VECTOR VECTOR_DISTANCE MICRO_INDEX_CLUSTERED VECTOR_SIMILARITY
+        VAR_SAMP VARSAMP VALIDATION VECTOR VECTOR_DISTANCE MICRO_INDEX_CLUSTERED VECTOR_SIMILARITY
 
         WAIT WAREHOUSE WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WEAK WITH_COLUMN_GROUP WITHOUT
 
@@ -594,6 +612,7 @@ END_P SET_VAR DELIMITER
 
 %type <node> algorithm_opt lock_opt
 %type <node> vector_similarity_expr vector_similarity_metric
+%type <node> groupconcat_agg_func
 %type <node> create_sensitive_rule_stmt drop_sensitive_rule_stmt alter_sensitive_rule_stmt alter_sensitive_rule_action sensitive_rule_name sensitive_field_list sensitive_field sensitivity_protection_spec sensitivity_encryption_spec
 
 %start sql_stmt
@@ -2188,7 +2207,7 @@ ALL
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ALL);
 }
-| ANY
+| ANY %prec LOW_PRIORITY
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ANY);
 }
@@ -2260,6 +2279,12 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
 {
   ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_APPROX_COUNT_DISTINCT, 1, expr_list);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $6);
+}
+| UNIQ '(' expr_list ')' OVER new_generalized_window_clause
+{
+  ParseNode *expr_list = $3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_UNIQ, 1, expr_list);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $6);
 }
 | APPROX_COUNT_DISTINCT_SYNOPSIS '(' expr_list ')' OVER new_generalized_window_clause
@@ -2338,6 +2363,11 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_STDDEV_SAMP, 2, $3, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
 }
+| STDDEVSAMP '(' opt_all expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_STDDEVSAMP, 2, $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
+}
 | VAR_POP '(' opt_all expr ')' OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_VAR_POP, 2, $3, $4);
@@ -2348,11 +2378,20 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_VAR_SAMP, 2, $3, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
 }
+| VARSAMP '(' opt_all expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_VARSAMP, 2, $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
+}
 | GROUP_CONCAT '(' opt_distinct expr_list opt_order_by opt_separator ')' OVER new_generalized_window_clause
 {
   ParseNode *group_concat_exprs = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
+}
+| groupconcat_agg_func OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $1, $3);
 }
 | LISTAGG '(' opt_distinct expr_list opt_order_by opt_separator ')' OVER new_generalized_window_clause
 {
@@ -2412,6 +2451,18 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
 {
   $$ = $2;
   $$->type_ = T_WIN_FUN_LAG;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $4);
+}
+| LEAD_IN_FRAME win_fun_lead_lag_params OVER new_generalized_window_clause
+{
+  $$ = $2;
+  $$->type_ = T_WIN_FUN_LEAD_IN_FRAME;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $4);
+}
+| LAG_IN_FRAME win_fun_lead_lag_params OVER new_generalized_window_clause
+{
+  $$ = $2;
+  $$->type_ = T_WIN_FUN_LAG_IN_FRAME;
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $4);
 }
 | NTH_VALUE '(' expr ',' simple_expr ')' opt_from_first_or_last opt_respect_or_ignore_nulls OVER new_generalized_window_clause
@@ -2770,6 +2821,11 @@ MOD '(' expr ',' expr ')'
   ParseNode *expr_list = $3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_APPROX_COUNT_DISTINCT, 1, expr_list);
 }
+| UNIQ '(' expr_list ')'
+{
+  ParseNode *expr_list = $3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_UNIQ, 1, expr_list);
+}
 | APPROX_COUNT_DISTINCT_SYNOPSIS '(' expr_list ')'
 {
   ParseNode *expr_list = $3;
@@ -2799,9 +2855,28 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARG_MIN, 3, $3, $4, $6);
 }
+| ANY '(' expr ')' RESPECT NULLS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_RESPECT);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $3, $$);
+}
+| ANY '(' expr ')' IGNORE NULLS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_IGNORE);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $3, $$);
+}
+| ANY '(' expr ')'
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_IGNORE);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ANY, 2, $3, $$);
+}
 | AVG '(' opt_distinct_or_all expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG, 2, $3, $4);
+}
+| ARBITRARY '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARBITRARY, 1, $3);
 }
 | JSON_ARRAYAGG '(' opt_distinct_or_all expr ')'
 {
@@ -2831,6 +2906,10 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_STDDEV_SAMP, 2, $3, $4);
 }
+| STDDEVSAMP '(' opt_all expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_STDDEVSAMP, 2, $3, $4);
+}
 | VAR_POP '(' opt_all expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_VAR_POP, 2, $3, $4);
@@ -2838,6 +2917,10 @@ MOD '(' expr ',' expr ')'
 | VAR_SAMP '(' opt_all expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_VAR_SAMP, 2, $3, $4);
+}
+| VARSAMP '(' opt_all expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_VARSAMP, 2, $3, $4);
 }
 | BIT_AND '(' opt_all expr ')'
 {
@@ -2868,6 +2951,10 @@ MOD '(' expr ',' expr ')'
 {
   ParseNode *group_concat_exprs = $4;
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_GROUP_CONCAT, 4, $3, group_concat_exprs, $5, $6);
+}
+| groupconcat_agg_func %prec LOWER_OVER
+{
+  $$ = $1;
 }
 | TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ','  expr_const ')'
 {
@@ -3753,6 +3840,39 @@ COSINE
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->is_hidden_const_ = 1;
   $$->value_ = 3;
+}
+;
+
+groupconcat_agg_func:
+GROUPCONCAT '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_GROUPCONCAT, 4, NULL, NULL, NULL, $3);
+}
+| GROUPCONCAT '(' DISTINCT expr ')'
+{
+  ParseNode *distinct_or_all_node = NULL;
+  malloc_terminal_node(distinct_or_all_node, result->malloc_pool_, T_DISTINCT);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_GROUPCONCAT, 4, NULL, NULL, distinct_or_all_node, $4);
+}
+| GROUPCONCAT '(' UNIQUE expr ')'
+{
+  ParseNode *distinct_or_all_node = NULL;
+  malloc_terminal_node(distinct_or_all_node, result->malloc_pool_, T_DISTINCT);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_GROUPCONCAT, 4, NULL, NULL, distinct_or_all_node, $4);
+}
+| GROUPCONCAT '(' ALL expr ')'
+{
+  ParseNode *distinct_or_all_node = NULL;
+  malloc_terminal_node(distinct_or_all_node, result->malloc_pool_, T_ALL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_GROUPCONCAT, 4, NULL, NULL, distinct_or_all_node, $4);
+}
+| GROUPCONCAT '(' expr ')' '(' opt_distinct_or_all expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_GROUPCONCAT, 4, $3, NULL, $6, $7);
+}
+| GROUPCONCAT '(' expr ',' INTNUM ')' '(' opt_distinct_or_all expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_GROUPCONCAT, 4, $3, $5, $8, $9);
 }
 ;
 
@@ -4818,7 +4938,6 @@ VARIABLES sys_var_and_val_list
 {
   $$ = NULL;
 };
-
 
 
 /* TODO: (xiaochu.yh) refactor after requirement determined */
@@ -6578,6 +6697,14 @@ BINARY opt_string_length_i_v2
   $$->value_ = 0;
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_UINT64;
   $$->param_num_ = $2[1];
+  $$->sql_str_off_ = @1.first_column;
+}
+| BIGINT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_INT;
+  $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
 }
 | DOUBLE
@@ -25476,6 +25603,42 @@ DAY
   $$->is_date_unit_ = 1;
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
+| DAYS
+{
+  CHECK_CLICKHOUSE_MODE(result, "DAYS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_DAY;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_DAY
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_DAY");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_DAY;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| DD
+{
+  CHECK_CLICKHOUSE_MODE(result, "DD");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_DAY;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| D
+{
+  CHECK_CLICKHOUSE_MODE(result, "D");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_DAY;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
 | DAY_HOUR
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
@@ -25516,6 +25679,42 @@ DAY
   $$->is_date_unit_ = 1;
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
+| HOURS
+{
+  CHECK_CLICKHOUSE_MODE(result, "HOURS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_HOUR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_HOUR
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_HOUR");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_HOUR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| HH
+{
+  CHECK_CLICKHOUSE_MODE(result, "HH");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_HOUR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| H
+{
+  CHECK_CLICKHOUSE_MODE(result, "H");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_HOUR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
 | HOUR_MICROSECOND
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
@@ -25548,8 +25747,98 @@ DAY
   $$->is_date_unit_ = 1;
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
+| MICROSECONDS
+{
+  CHECK_CLICKHOUSE_MODE(result, "MICROSECONDS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MICROSECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_MICROSECOND
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_MICROSECOND");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MICROSECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MILLISECOND
+{
+  CHECK_CLICKHOUSE_MODE(result, "MILLISECOND");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MILLISECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MILLISECONDS
+{
+  CHECK_CLICKHOUSE_MODE(result, "MILLISECONDS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MILLISECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_MILLISECOND
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_MILLISECOND");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MILLISECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MS
+{
+  CHECK_CLICKHOUSE_MODE(result, "MS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MILLISECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
 | MINUTE
 {
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MINUTE;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MINUTES
+{
+  CHECK_CLICKHOUSE_MODE(result, "MINUTES");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MINUTE;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_MINUTE
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_MINUTE");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MINUTE;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MI
+{
+  CHECK_CLICKHOUSE_MODE(result, "MI");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MINUTE;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| N
+{
+  CHECK_CLICKHOUSE_MODE(result, "N");
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = DATE_UNIT_MINUTE;
   $$->is_hidden_const_ = 1;
@@ -25580,6 +25869,78 @@ DAY
   $$->is_date_unit_ = 1;
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
+| MONTHS
+{
+  CHECK_CLICKHOUSE_MODE(result, "MONTHS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MONTH;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_MONTH
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_MONTH");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MONTH;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| MM
+{
+  CHECK_CLICKHOUSE_MODE(result, "MM");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MONTH;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| M
+{
+  CHECK_CLICKHOUSE_MODE(result, "M");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MONTH;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| NANOSECOND
+{
+  CHECK_CLICKHOUSE_MODE(result, "NANOSECOND");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_NANOSECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| NANOSECONDS
+{
+  CHECK_CLICKHOUSE_MODE(result, "NANOSECONDS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_NANOSECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_NANOSECOND
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_NANOSECOND");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_NANOSECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| NS
+{
+  CHECK_CLICKHOUSE_MODE(result, "NS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_NANOSECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
 | QUARTER
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
@@ -25588,8 +25949,80 @@ DAY
   $$->is_date_unit_ = 1;
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
+| QUARTERS
+{
+  CHECK_CLICKHOUSE_MODE(result, "QUARTERS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_QUARTER;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_QUARTER
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_QUARTER");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_QUARTER;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| QQ
+{
+  CHECK_CLICKHOUSE_MODE(result, "QQ");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_QUARTER;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| Q
+{
+  CHECK_CLICKHOUSE_MODE(result, "Q");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_QUARTER;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
 | SECOND
 {
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_SECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SECONDS
+{
+  CHECK_CLICKHOUSE_MODE(result, "SECONDS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_SECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_SECOND
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_SECOND");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_SECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SS
+{
+  CHECK_CLICKHOUSE_MODE(result, "SS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_SECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| S
+{
+  CHECK_CLICKHOUSE_MODE(result, "S");
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = DATE_UNIT_SECOND;
   $$->is_hidden_const_ = 1;
@@ -25612,8 +26045,71 @@ DAY
   $$->is_date_unit_ = 1;
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
+| WEEKS
+{
+  CHECK_CLICKHOUSE_MODE(result, "WEEKS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_WEEK;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_WEEK
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_WEEK");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_WEEK;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| WK
+{
+  CHECK_CLICKHOUSE_MODE(result, "WK");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_WEEK;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| WW
+{
+  CHECK_CLICKHOUSE_MODE(result, "WW");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_WEEK;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
 | YEAR
 {
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_YEAR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| YEARS
+{
+  CHECK_CLICKHOUSE_MODE(result, "YEARS");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_YEAR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| SQL_TSI_YEAR
+{
+  CHECK_CLICKHOUSE_MODE(result, "SQL_TSI_YEAR");
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = DATE_UNIT_YEAR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+| YY
+{
+  CHECK_CLICKHOUSE_MODE(result, "YY");
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = DATE_UNIT_YEAR;
   $$->is_hidden_const_ = 1;
@@ -26908,6 +27404,7 @@ ACCESS_INFO
 |       APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
 |       ARCHIVELOG
 |       ARCHIVELOG_PIECE
+|       ARBITRARY
 |       ARBITRATION
 |       ARG_MAX
 |       ARG_MIN
@@ -27180,6 +27677,7 @@ ACCESS_INFO
 |       GROUPING
 |       GROUPING_ID
 |       GROUP_CONCAT
+|       GROUPCONCAT
 |       GTS
 |       HANDLER
 |       HASH
@@ -27243,12 +27741,14 @@ ACCESS_INFO
 |       KEYTAB
 |       KRB5CONF
 |       LAG
+|       LAG_IN_FRAME
 |       LATERAL %prec LOWER_PARENS
 |       LANGUAGE
 |       LAST
 |       LAST_REFRESH_SCN
 |       LAST_VALUE
 |       LEAD
+|       LEAD_IN_FRAME
 |       LEADER
 |       LEAK
 |       LEAK_MOD
@@ -27342,6 +27842,7 @@ ACCESS_INFO
 |       MINUTE
 |       MINUS
 |       MISMATCH
+|       MILLISECOND
 |       MODE
 |       MODEL
 |       MODIFY
@@ -27357,6 +27858,7 @@ ACCESS_INFO
 |       MAX_USED_PART_ID
 |       NAME
 |       NAMES
+|       NANOSECOND
 |       NATIONAL
 |       NCHAR
 |       NDB
@@ -27617,6 +28119,37 @@ ACCESS_INFO
 |       SQL_TSI_SECOND
 |       SQL_TSI_WEEK
 |       SQL_TSI_YEAR
+|       SQL_TSI_MILLISECOND
+|       SQL_TSI_MICROSECOND
+|       SQL_TSI_NANOSECOND
+|       SECONDS
+|       MINUTES
+|       HOURS
+|       DAYS
+|       WEEKS
+|       MONTHS
+|       QUARTERS
+|       YEARS
+|       MILLISECONDS
+|       MICROSECONDS
+|       NANOSECONDS
+|       SS
+|       MI
+|       HH
+|       DD
+|       WK
+|       WW
+|       MM
+|       QQ
+|       YY
+|       MS
+|       NS
+|       S
+|       N
+|       H
+|       D
+|       M
+|       Q
 |       SRID
 |       SS_LOCAL_CACHE
 |       SS_MICRO_CACHE
@@ -27636,6 +28169,7 @@ ACCESS_INFO
 |       STDDEV
 |       STDDEV_POP
 |       STDDEV_SAMP
+|       STDDEVSAMP
 |       STOP
 |       STOPWORD_TABLE
 |       STORAGE
@@ -27728,6 +28262,7 @@ ACCESS_INFO
 |       UNIT_NUM
 |       UNLOCKED
 |       UNTIL
+|       UNIQ
 |       UNUSUAL
 |       UPGRADE
 |       URI
@@ -27749,6 +28284,7 @@ ACCESS_INFO
 |       VENDED_CREDENTAIL_ENABLED
 |       VAR_POP
 |       VAR_SAMP
+|       VARSAMP
 |       VERBOSE
 |       VECTOR
 |       VECTOR_DISTANCE

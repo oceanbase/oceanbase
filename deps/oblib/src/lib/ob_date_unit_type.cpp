@@ -42,6 +42,8 @@ const char *ob_date_unit_type_str(enum ObDateUnitType type)
     "timezone_minute",
     "timezone_region",
     "timezone_abbr",
+    "millisecond",  // for ClickHouse compatibility
+    "nanosecond",   // for ClickHouse compatibility
     "unknown",
   };
   static_assert(DATE_UNIT_MAX + 1 == ARRAYSIZEOF(date_unit_type_name),
@@ -77,6 +79,8 @@ const char *ob_date_unit_type_str_upper(enum ObDateUnitType type)
     "TIMEZONE_MINUTE",
     "TIMEZONE_REGION",
     "TIMEZONE_ABBR",
+    "MILLISECOND",  // for ClickHouse compatibility
+    "NANOSECOND",   // for ClickHouse compatibility
     "UNKNOWN",
   };
   static_assert(DATE_UNIT_MAX + 1 == ARRAYSIZEOF(date_unit_type_name),
@@ -111,7 +115,9 @@ const char* ob_date_unit_type_num_str(enum ObDateUnitType type)
     "21",
     "22",
     "23",
-    "24",
+    "24",  // MILLISECOND
+    "25",  // NANOSECOND
+    "26",  // MAX
   };
   static_assert(DATE_UNIT_MAX + 1 == ARRAYSIZEOF(date_unit_type_num),
               "size of array not match enum size");

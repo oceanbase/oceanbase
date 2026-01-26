@@ -28,6 +28,12 @@ public:
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_bitneg_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum& res_datum);
+  static int calc_bitneg_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  template<typename ArgVec, typename ResVec>
+  static int vector_bitneg(VECTOR_EVAL_FUNC_ARG_DECL);
+  template<typename ArgVec, typename ResVec, bool Fixed>
+  static int vector_bitneg_int_specific(VECTOR_EVAL_FUNC_ARG_DECL);
+
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprBitNeg);

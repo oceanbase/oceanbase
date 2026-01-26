@@ -150,7 +150,6 @@ int ObExprArrayPosition::eval_array_position_batch(const ObExpr &expr,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator,
@@ -214,7 +213,6 @@ int ObExprArrayPosition::eval_array_position_vector(const ObExpr &expr,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_vec->is_null(j)) {
         is_null_res = true;
       } else {

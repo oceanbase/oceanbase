@@ -1306,33 +1306,43 @@ int ObExpandAggregateUtils::expand_regr_s_expr(ObAggFunRawExpr *aggr_expr,
   return ret;
 }
 
-bool ObExpandAggregateUtils::is_valid_aggr_type(const ObItemType aggr_type)
+bool ObExpandAggregateUtils::is_valid_aggr_type(const ObItemType aggr_type) const
 {
-  return aggr_type == T_FUN_CORR ||
-         aggr_type == T_FUN_COVAR_POP ||
-         aggr_type == T_FUN_COVAR_SAMP ||
-         aggr_type == T_FUN_VAR_POP ||
-         aggr_type == T_FUN_VAR_SAMP ||
-         aggr_type == T_FUN_REGR_SLOPE ||
-         aggr_type == T_FUN_REGR_INTERCEPT ||
-         aggr_type == T_FUN_REGR_COUNT ||
-         aggr_type == T_FUN_REGR_R2 ||
-         aggr_type == T_FUN_REGR_AVGX ||
-         aggr_type == T_FUN_REGR_AVGY ||
-         aggr_type == T_FUN_REGR_SXX ||
-         aggr_type == T_FUN_REGR_SYY ||
-         aggr_type == T_FUN_REGR_SXY ||
-         aggr_type == T_FUN_KEEP_AVG ||
-         aggr_type == T_FUN_KEEP_STDDEV ||
-         aggr_type == T_FUN_KEEP_VARIANCE ||
-         aggr_type == T_FUN_AVG ||
-         aggr_type == T_FUN_VARIANCE ||
-         aggr_type == T_FUN_STDDEV ||
-         aggr_type == T_FUN_STDDEV_POP ||
-         aggr_type == T_FUN_STDDEV_SAMP ||
-         aggr_type == T_FUN_APPROX_COUNT_DISTINCT ||
-         aggr_type == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||
-         aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG;
+  bool ret = false;
+  if (aggr_type == T_FUN_VAR_SAMP || aggr_type == T_FUN_STDDEV_SAMP) {
+    if (!lib::is_oracle_mode()
+        && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0
+        && session_info_ != nullptr ? session_info_->use_rich_format() : false) {
+      ret = false;
+    } else {
+      ret = true;
+    }
+  } else {
+    ret |= (aggr_type == T_FUN_CORR ||
+            aggr_type == T_FUN_COVAR_POP ||
+            aggr_type == T_FUN_COVAR_SAMP ||
+            aggr_type == T_FUN_VAR_POP ||
+            aggr_type == T_FUN_REGR_SLOPE ||
+            aggr_type == T_FUN_REGR_INTERCEPT ||
+            aggr_type == T_FUN_REGR_COUNT ||
+            aggr_type == T_FUN_REGR_R2 ||
+            aggr_type == T_FUN_REGR_AVGX ||
+            aggr_type == T_FUN_REGR_AVGY ||
+            aggr_type == T_FUN_REGR_SXX ||
+            aggr_type == T_FUN_REGR_SYY ||
+            aggr_type == T_FUN_REGR_SXY ||
+            aggr_type == T_FUN_KEEP_AVG ||
+            aggr_type == T_FUN_KEEP_STDDEV ||
+            aggr_type == T_FUN_KEEP_VARIANCE ||
+            aggr_type == T_FUN_AVG ||
+            aggr_type == T_FUN_VARIANCE ||
+            aggr_type == T_FUN_STDDEV ||
+            aggr_type == T_FUN_STDDEV_POP ||
+            aggr_type == T_FUN_APPROX_COUNT_DISTINCT ||
+            aggr_type == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||
+            aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG);
+  }
+  return ret;
 }
 
 bool ObExpandAggregateUtils::is_regr_expr_type(const ObItemType aggr_type)

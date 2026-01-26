@@ -28,9 +28,36 @@ public:
                             ObExpr &rt_expr) const override;
   static int calc_bitcount_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                 ObDatum& res_datum);
+
+  static int calc_bitcount_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
+  template <typename ArgVec, typename ResVec>
+  static int vector_bitcount(VECTOR_EVAL_FUNC_ARG_DECL);
+
+  template <typename ArgVec, typename ResVec, bool isFixed>
+  static int vector_bitcount_int_specific(VECTOR_EVAL_FUNC_ARG_DECL);
+
+
+
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
 	static const uint8_t char_to_num_bits[256];
+
+
+  OB_INLINE static uint64_t calc_table_look_up(uint64_t &uint_val) {
+   return static_cast<uint64_t>(
+                  char_to_num_bits[static_cast<uint8_t>(uint_val)]
+                + char_to_num_bits[static_cast<uint8_t>(uint_val >> 8)]
+                + char_to_num_bits[static_cast<uint8_t>(uint_val >> 16)]
+                + char_to_num_bits[static_cast<uint8_t>(uint_val >> 24)]
+                + char_to_num_bits[static_cast<uint8_t>(uint_val >> 32)]
+                + char_to_num_bits[static_cast<uint8_t>(uint_val >> 40)]
+                + char_to_num_bits[static_cast<uint8_t>(uint_val >> 48)]
+                + char_to_num_bits[static_cast<uint8_t>(uint_val >> 56)]);
+
+                // __m128i sum = _mm_sad_epu8(result, _mm_setzero_si128());
+  }
+
 	DISALLOW_COPY_AND_ASSIGN(ObExprBitCount);
 };
 } /* namespace sql */

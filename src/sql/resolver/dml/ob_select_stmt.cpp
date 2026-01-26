@@ -139,6 +139,7 @@ bool ObSelectStmt::has_concat_agg() const
     if (NULL != aggr) {
       // Consistent with the has_group_concat_ flag in ObAggregateProcessor.
       has = T_FUN_GROUP_CONCAT == aggr->get_expr_type() ||
+            T_FUN_CK_GROUPCONCAT == aggr->get_expr_type() ||
             T_FUN_KEEP_WM_CONCAT == aggr->get_expr_type() ||
             T_FUN_WM_CONCAT == aggr->get_expr_type() ||
             T_FUN_JSON_ARRAYAGG == aggr->get_expr_type() ||

@@ -124,6 +124,7 @@ int ObTransformSimplifyWinfunc::check_aggr_win_can_be_removed(const ObDMLStmt *s
       //case T_FUN_APPROX_COUNT_DISTINCT: // return 1 or 0 //不进行改写
       //case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS://不进行改写
     case T_FUN_GROUP_CONCAT:// return expr
+    case T_FUN_CK_GROUPCONCAT: // return expr
       // case T_FUN_GROUP_RANK:// return 1 or 2    需要考虑order desc、nulls first、多列条件，暂不改写
       // case T_FUN_GROUP_DENSE_RANK:
       // case T_FUN_GROUP_PERCENT_RANK:// return 1 or 0
@@ -291,6 +292,7 @@ int ObTransformSimplifyWinfunc::transform_aggr_win_to_common_expr(ObSelectStmt *
     case T_FUN_AVG:
     case T_FUN_SUM:
     case T_FUN_GROUP_CONCAT:
+    case T_FUN_CK_GROUPCONCAT:
     case T_FUN_MEDIAN:
     case T_FUN_KEEP_MAX:
     case T_FUN_KEEP_MIN:

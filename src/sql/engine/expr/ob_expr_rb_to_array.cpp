@@ -139,7 +139,6 @@ int ObExprRbToArray::eval_rb_to_array_vector(const ObExpr &expr,
       if (OB_FAIL(ret)){
       } else if (is_rb_null) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         if (res_format == VEC_DISCRETE) {
           if (OB_FAIL(ObArrayExprUtils::set_array_res<ObDiscreteFormat>(arr_res, expr, ctx, static_cast<ObDiscreteFormat *>(res_vec), idx))) {
@@ -151,8 +150,6 @@ int ObExprRbToArray::eval_rb_to_array_vector(const ObExpr &expr,
           }
         } else if (OB_FAIL(ObArrayExprUtils::set_array_res<ObVectorBase>(arr_res, expr, ctx, static_cast<ObVectorBase *>(res_vec), idx))) {
           LOG_WARN("set array res failed", K(ret));
-        } else {
-          eval_flags.set(idx);
         }
       }
     } //end for

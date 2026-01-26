@@ -895,7 +895,6 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
             }
           }
         }
-        eval_flags.set(i);
       }
     }
 
@@ -1112,7 +1111,6 @@ int ObExprColumnConv::column_convert_batch_fast(const ObExpr &expr,
         continue;
       }
       results[i].set_datum(vals[i]);
-      eval_flags.set(i);
     }
   }
   return ret;
@@ -1175,7 +1173,6 @@ int ObExprColumnConv::inner_calc_column_convert_vector_fast(const ObExpr &expr,
         res_vec->set_payload_shallow(i, arg_vec->get_payload(i), arg_vec->get_length(i));
       }
     }
-    eval_flags.set_all(bound.start(), bound.end());
   } else {
     for (int64_t i = bound.start(); i < bound.end(); ++i) {
       if (skip.at(i) || eval_flags.at(i)) {
@@ -1186,7 +1183,6 @@ int ObExprColumnConv::inner_calc_column_convert_vector_fast(const ObExpr &expr,
       } else {
         res_vec->set_payload_shallow(i, arg_vec->get_payload(i), arg_vec->get_length(i));
       }
-      eval_flags.set(i);
     }
   }
   return ret;
@@ -1350,7 +1346,6 @@ int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
         }
       }
     }
-    eval_flags.set(i);
   }
   return ret;
 }
@@ -1448,9 +1443,6 @@ int ObExprColumnConv::inner_loop_for_convert_vector(const ObExpr &expr,
         LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
       }
     }
-    if (!ALL_ROWS_ACTIVE) {
-      eval_flags.set(i);
-    }
     if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       // overwrite ret on diagnosis node
       if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
@@ -1461,9 +1453,6 @@ int ObExprColumnConv::inner_loop_for_convert_vector(const ObExpr &expr,
         res_vec->set_null(i);
       }
     }
-  }
-  if (OB_SUCC(ret) && ALL_ROWS_ACTIVE) {
-    eval_flags.set_all(bound.start(), bound.end());
   }
   return ret;
 }

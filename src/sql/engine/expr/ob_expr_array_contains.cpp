@@ -186,7 +186,6 @@ int ObExprArrayContains::eval_array_contains_array(const ObExpr &expr, ObEvalCtx
         if (skip.at(j) || eval_flags.at(j)) {                                                   \
           continue;                                                                             \
         }                                                                                       \
-        eval_flags.set(j);                                                                      \
         bool bret = false;                                                                      \
         TYPE val;                                                                               \
         if (src_array.at(j)->is_null()) {                                                       \
@@ -237,7 +236,6 @@ int ObExprArrayContains::eval_array_contains_array_batch(const ObExpr &expr, ObE
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       bool bret = false;
       if (src_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
@@ -297,17 +295,14 @@ int ObExprArrayContains::eval_array_contains_array_batch(const ObExpr &expr, ObE
         if (OB_FAIL(ret)) {                                                                               \
         } else if (is_null_res) {                                                                         \
           res_vec->set_null(idx);                                                                         \
-          eval_flags.set(idx);                                                                            \
         } else if (right_vec->is_null(idx)) {                                                             \
           bool contains_null = arr_obj->contain_null();                                                   \
           res_vec->set_bool(idx, contains_null);                                                          \
-          eval_flags.set(idx);                                                                            \
         } else if (FALSE_IT(val = right_vec->GET_FUNC(idx))) {                                            \
         } else if (OB_FAIL(ObArrayUtil::contains(*arr_obj, val, bret))) {                                 \
           LOG_WARN("array contains failed", K(ret));                                                      \
         } else {                                                                                          \
           res_vec->set_bool(idx, bret);                                                                   \
-          eval_flags.set(idx);                                                                            \
         }                                                                                                 \
       }                                                                                                   \
     }                                                                                                     \
@@ -355,11 +350,9 @@ int ObExprArrayContains::eval_array_contains_array_vector(const ObExpr &expr, Ob
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else if (right_vec->is_null(idx)) {
         bool contains_null = arr_obj->contain_null();
         res_vec->set_bool(idx, contains_null);
-        eval_flags.set(idx);
       } else {
         bool bret = false;
         ObString right = right_vec->get_string(idx);
@@ -369,7 +362,6 @@ int ObExprArrayContains::eval_array_contains_array_vector(const ObExpr &expr, Ob
           LOG_WARN("array contains failed", K(ret));
         } else {
           res_vec->set_bool(idx, bret);
-          eval_flags.set(idx);
         }
       }
     }

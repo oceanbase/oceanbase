@@ -37,6 +37,7 @@ template<VecValueTypeClass vec_tc, typename Vector> struct NumberRangeChecker;
 template<VecValueTypeClass vec_tc, typename Vector> struct DateRangeChecker;
 template<VecValueTypeClass vec_tc, typename Vector> struct DateTimeRangeChecker;
 template<VecValueTypeClass vec_tc, typename Vector> struct StringRangeChecker;
+template<VecValueTypeClass vec_tc, typename Vector> struct TimeRangeChecker;
 
 
 DEF_BATCH_RANGE_CHECKER(VEC_TC_DEC_INT32) {
@@ -74,6 +75,9 @@ DEF_BATCH_RANGE_CHECKER(VEC_TC_DATE) {
 }
 DEF_BATCH_RANGE_CHECKER(VEC_TC_DATETIME) {
   return DateTimeRangeChecker<VEC_TC_DATETIME, Vector>::check(CAST_CHECKER_ARG);
+}
+DEF_BATCH_RANGE_CHECKER(VEC_TC_TIME) {
+  return TimeRangeChecker<VEC_TC_TIME, Vector>::check(CAST_CHECKER_ARG);
 }
 DEF_BATCH_RANGE_CHECKER(VEC_TC_STRING) {
   return StringRangeChecker<VEC_TC_STRING, Vector>::check(CAST_CHECKER_ARG);
@@ -591,6 +595,87 @@ struct DateTimeRangeChecker
       int64_t trunc_div = power_of_10[MAX_SCALE_FOR_TEMPORAL - accuracy.get_scale()];
       int64_t trunc_mul = power_of_10[MAX_SCALE_FOR_TEMPORAL - accuracy.get_scale()];
       DatetimeValidCheck cast_fn(res_vec, accuracy, trunc_div, trunc_mul);
+      if (OB_FAIL(batch_cast_check(cast_fn, expr, res_vec, skip, bound))) {
+        SQL_LOG(WARN, "cast failed", K(ret));
+      }
+    }
+    return ret;
+  }
+
+public:
+  constexpr static const int64_t power_of_10[] =
+  {
+      1LL,
+      10LL,
+      100LL,
+      1000LL,
+      10000LL,
+      100000LL,
+      1000000LL,
+      10000000LL,
+      100000000LL,
+      1000000000LL
+    //2147483647
+  };
+};
+
+template<VecValueTypeClass vec_tc, typename Vector>
+struct TimeRangeChecker
+{
+  using ResType = RTCType<vec_tc>;
+  static int check(CAST_CHECKER_ARG_DECL)
+  {
+    int ret = OB_SUCCESS;
+    ObObjType out_type = ObMaxType;
+    ObObjType type = expr.datum_meta_.type_;
+    ObObjTypeClass type_class = ob_obj_type_class(type);
+    ObAccuracy accuracy;
+    if (OB_FAIL(get_accuracy_from_parse_node(expr, ctx, accuracy, out_type))) {
+      SQL_LOG(WARN, "get accuracy failed", K(ret));
+    } else if (OB_UNLIKELY(accuracy.get_scale() > MAX_SCALE_FOR_TEMPORAL)) {
+      ret = OB_ERR_TOO_BIG_PRECISION;
+      LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, accuracy.get_scale(), "CAST",
+          static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
+    } else {
+      class TimeValidCheck {
+      public:
+        TimeValidCheck(Vector* res_vec, ObAccuracy accuracy, int64_t trunc_div, int64_t trunc_mul)
+            : res_vec_(res_vec), accuracy_(accuracy), trunc_div_(trunc_div), trunc_mul_(trunc_mul) {}
+
+        OB_INLINE int operator() (const ObExpr &expr, int idx)
+        {
+          int ret = OB_SUCCESS;
+          ObScale scale = accuracy_.get_scale();
+          int64_t value = res_vec_->get_int(idx);
+          const uint64_t cast_mode = expr.extra_;
+          if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy_, value))) {
+            SQL_LOG(WARN, "check zero scale fail.", K(ret), K(value), K(scale));
+          } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+            if(CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false) {
+              value /= trunc_div_;
+              value *= trunc_mul_;
+            } else {
+              ObTimeConverter::round_datetime(scale, value);
+            }
+            if (ObTimeConverter::is_valid_datetime(value)) {
+              res_vec_->set_time(idx, value);
+            } else {
+              res_vec_->set_null(idx);
+            }
+          }
+          return ret;
+        }
+      private:
+        Vector *res_vec_;
+        ObAccuracy accuracy_;
+        int64_t trunc_div_;
+        int64_t trunc_mul_;
+      };
+
+      Vector *res_vec = static_cast<Vector *>(expr.get_vector(ctx));
+      int64_t trunc_div = power_of_10[MAX_SCALE_FOR_TEMPORAL - accuracy.get_scale()];
+      int64_t trunc_mul = power_of_10[MAX_SCALE_FOR_TEMPORAL - accuracy.get_scale()];
+      TimeValidCheck cast_fn(res_vec, accuracy, trunc_div, trunc_mul);
       if (OB_FAIL(batch_cast_check(cast_fn, expr, res_vec, skip, bound))) {
         SQL_LOG(WARN, "cast failed", K(ret));
       }

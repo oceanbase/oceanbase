@@ -865,6 +865,25 @@ public:
     return ret;
   }
 
+  // Iterate over string byte by byte without charset conversion
+  // func signature: int func(unsigned char byte, int64_t index)
+  template<typename foreach_byte_func>
+  static int foreach_byte(const common::ObString &str, foreach_byte_func &func)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_LIKELY(!str.empty())) {
+      const unsigned char *ptr = reinterpret_cast<const unsigned char *>(str.ptr());
+      const unsigned char *end = ptr + str.length();
+      int64_t index = 0;
+      for (; OB_SUCC(ret) && ptr < end; ++ptr, ++index) {
+        if (OB_FAIL(func(*ptr, index))) {
+          COMMON_LOG(WARN, "fail to call func", K(ret), K(*ptr), K(index));
+        }
+      }
+    }
+    return ret;
+  }
+
   static int remove_char_endspace(ObString &str,
                                   const ObCharsetInfo *charsetInfo);
 private:

@@ -37,6 +37,7 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc_weekofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_weekofyear_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
+
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
@@ -73,6 +74,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_weekday(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_weekday_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:

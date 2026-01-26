@@ -102,6 +102,9 @@ inline int ObExprToSeconds::calc_result_type1(ObExprResType &type,
 class ObExprSecToTime: public ObFuncExprOperator
 {
 public:
+  const static int64_t MAX_SECOND_INPUT_VALUE = 3020399;
+  const static int64_t MIN_SECOND_INPUT_VALUE = -3020399;
+  const static int64_t USEC_PER_SECOND = 1000000LL;
   ObExprSecToTime();
   explicit ObExprSecToTime(common::ObIAllocator &alloc);
   virtual ~ObExprSecToTime();
@@ -112,6 +115,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_sectotime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_sectotime_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSecToTime);
@@ -124,7 +128,11 @@ inline int ObExprSecToTime::calc_result_type1(ObExprResType &type,
   type.set_time();
   type.set_scale((0 <= sec.get_scale() && sec.get_scale() <= 6) ? sec.get_scale() : common::MAX_SCALE_FOR_TEMPORAL);
   //set calc type
-  sec.set_calc_type(common::ObNumberType);
+  if (ob_is_integer_type(sec.get_type())) {
+    sec.set_calc_type(common::ObIntType);
+  } else {
+    sec.set_calc_type(common::ObNumberType);
+  }
   UNUSED(type_ctx);
   return common::OB_SUCCESS;
 }

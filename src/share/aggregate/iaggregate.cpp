@@ -71,9 +71,15 @@ extern int init_arg_min_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col
                                        ObIAllocator &allocator, IAggregate *&agg);
 extern int init_arg_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                        ObIAllocator &allocator, IAggregate *&agg);
+extern int init_var_samp_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                   ObIAllocator &allocator, IAggregate *&agg);
+extern int init_stddev_samp_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                   ObIAllocator &allocator, IAggregate *&agg);
 extern int init_wm_concat_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                     ObIAllocator &allocator, IAggregate *&agg);
 extern int init_string_prefix_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                            ObIAllocator &allocator, IAggregate *&agg);
+extern int init_any_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                             ObIAllocator &allocator, IAggregate *&agg);
 #define INIT_AGGREGATE_CASE(OP_TYPE, func_name, col_id)                                            \
   case (OP_TYPE): {                                                                                \
@@ -120,14 +126,19 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_SYS_RB_OR_AGG, rb_or, i);
         INIT_AGGREGATE_CASE(T_FUN_SUM_OPNSIZE, sum_opnsize, i);
         INIT_AGGREGATE_CASE(T_FUN_GROUP_CONCAT, group_concat, i);
+        INIT_AGGREGATE_CASE(T_FUN_CK_GROUPCONCAT, group_concat, i);
         INIT_AGGREGATE_CASE(T_FUN_TOP_FRE_HIST, top_fre_hist, i);
         INIT_AGGREGATE_CASE(T_FUN_HYBRID_HIST, hybrid_hist, i);
         INIT_AGGREGATE_CASE(T_FUN_ARG_MIN, arg_min, i);
         INIT_AGGREGATE_CASE(T_FUN_ARG_MAX, arg_max, i);
+        INIT_AGGREGATE_CASE(T_FUN_VAR_SAMP, var_samp, i);
+        INIT_AGGREGATE_CASE(T_FUN_STDDEV_SAMP, stddev_samp, i);
         INIT_AGGREGATE_CASE(T_FUN_GROUP_ID, grouping, i);
         INIT_AGGREGATE_CASE(T_FUN_WM_CONCAT, wm_concat, i);
         INIT_AGGREGATE_CASE(T_FUN_KEEP_WM_CONCAT, wm_concat, i);
         INIT_AGGREGATE_CASE(T_FUN_INNER_PREFIX_MAX, string_prefix_max, i);
+        INIT_AGGREGATE_CASE(T_FUN_ANY, any, i);
+        INIT_AGGREGATE_CASE(T_FUN_ARBITRARY, any, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));
@@ -238,6 +249,8 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     // do nothing
   } else {
     switch (info.get_expr_type()) {
+    case T_FUN_ANY:
+    case T_FUN_ARBITRARY:
     case T_FUN_INNER_PREFIX_MIN:
     case T_FUN_INNER_PREFIX_MAX:
     case T_FUN_MIN:
@@ -267,7 +280,8 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
       ret_size = sizeof(int32_t);
       break;
     }
-    case T_FUN_GROUP_CONCAT: {
+    case T_FUN_GROUP_CONCAT:
+    case T_FUN_CK_GROUPCONCAT: {
       // Assign an int32_t for the string length, another int64_t to record how many rows have
       // already been processed.
       ret_size = sizeof(int32_t) + sizeof(int64_t) + sizeof(bool);
@@ -276,6 +290,11 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     case T_FUN_ARG_MAX:
     case T_FUN_ARG_MIN: {
       ret_size = arg_minmax_agg_tmp_size(info);
+    }
+    case T_FUN_VAR_SAMP:
+    case T_FUN_STDDEV_SAMP: {
+      ret_size = sizeof(double) + sizeof(uint64_t);
+      break;
     }
     default: break;
     }

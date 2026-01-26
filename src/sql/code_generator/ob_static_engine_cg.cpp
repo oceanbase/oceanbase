@@ -5749,6 +5749,7 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
     for (int64_t i = 0; i < spec.aggr_infos_.count(); ++i) {
       const ObAggrInfo &aggr_info = spec.aggr_infos_.at(i);
       if (T_FUN_GROUP_CONCAT == aggr_info.get_expr_type()
+          || T_FUN_CK_GROUPCONCAT == aggr_info.get_expr_type()
           || T_FUN_KEEP_WM_CONCAT == aggr_info.get_expr_type()
           || T_FUN_WM_CONCAT == aggr_info.get_expr_type()
           || T_FUN_JSON_ARRAYAGG == aggr_info.get_expr_type()
@@ -8168,14 +8169,16 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                                     : false;
     }
     const int64_t group_concat_param_count =
-        (is_oracle_mode()
-         && raw_expr.get_expr_type() == T_FUN_GROUP_CONCAT
-         && raw_expr.get_real_param_count() > 1)
+        (((is_oracle_mode()
+            && raw_expr.get_expr_type() == T_FUN_GROUP_CONCAT)
+          || (raw_expr.get_expr_type() == T_FUN_CK_GROUPCONCAT))
+            && raw_expr.get_real_param_count() > 1)
         ? (raw_expr.get_real_param_count() - 1)
         : raw_expr.get_real_param_count();
 
     aggr_info.expr_ = &expr;
     aggr_info.has_distinct_ = raw_expr.is_param_distinct();
+    aggr_info.has_ignore_null_ = raw_expr.is_ignore_null();
     aggr_info.group_concat_param_count_ = group_concat_param_count;
 
     if (aggr_info.has_distinct_) {
@@ -8266,6 +8269,7 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr is null ", K(ret), K(expr));
         } else if ((T_FUN_GROUP_CONCAT == raw_expr.get_expr_type() ||
+                    T_FUN_CK_GROUPCONCAT == raw_expr.get_expr_type() ||
                     T_FUN_KEEP_WM_CONCAT == raw_expr.get_expr_type() ||
                     T_FUN_WM_CONCAT == raw_expr.get_expr_type())
                    && OB_UNLIKELY(!param_raw_expr.get_result_meta().is_string_type())) {
@@ -8372,6 +8376,40 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
         } else {/*do nothing*/}
       }//order item
     }//group concat
+
+    // add groupConcat limit expr to all_param_exprs
+    if (OB_SUCC(ret) && T_FUN_CK_GROUPCONCAT == raw_expr.get_expr_type()) {
+      if (raw_expr.get_real_param_count() > group_concat_param_count) {
+        const ObRawExpr *limit_raw_expr = raw_expr.get_real_param_exprs().at(group_concat_param_count);
+        ObExpr *expr = NULL;
+        if (OB_ISNULL(limit_raw_expr) || !limit_raw_expr->is_const_expr()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("limit_raw_expr is null or not const expr", K(ret), K(limit_raw_expr));
+        } else if (OB_FAIL(generate_rt_expr(*limit_raw_expr, expr))) {
+          LOG_WARN("failed to generate_rt_expr", K(ret));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr is null ", K(ret), K(expr));
+        } else if (OB_FAIL(all_param_exprs.push_back(expr))) {
+          LOG_WARN("failed to push_back param_expr", K(ret));
+        }
+      }
+      const ObRawExpr *sep_raw_expr = raw_expr.get_separator_param_expr();
+      if (OB_SUCC(ret) && OB_NOT_NULL(sep_raw_expr)) {
+        ObExpr *expr = NULL;
+        if (OB_FAIL(generate_rt_expr(*sep_raw_expr, expr))) {
+          LOG_WARN("failed to generate_rt_expr", K(ret));
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr is null ", K(ret), K(expr));
+        } else if (OB_UNLIKELY(!expr->obj_meta_.is_string_type() || !expr->is_const_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("separator expr is not string type or not const expr", K(ret), KPC(expr));
+        } else {
+          aggr_info.separator_expr_ = expr;
+        }
+      }
+    }
 
     // The argment of grouping is index in rollup exprs (no hash rollup)
     if (OB_SUCC(ret) && OB_NOT_NULL(rollup_exprs) &&
@@ -8825,17 +8863,25 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpe
     spec.estimated_part_cnt_ = op.get_estimated_part_cnt();
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_window_exprs().count(); ++i) {
       ObWinFunRawExpr *wf_expr = op.get_window_exprs().at(i);
-      WinFuncInfo &wf_info = spec.wf_infos_.at(i);
-      if (OB_ISNULL(wf_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Get unexpected null", K(ret));
-      } else if (op.is_push_down() && op.get_window_exprs().count() != op.get_pushdown_info().count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("count of window_exprs is not equal to count of pushdowns", K(ret),
-                 K(op.get_window_exprs().count()), K(op.get_pushdown_info().count()));
-      } else if (OB_FAIL(fill_wf_info(
-                 all_expr, *wf_expr, wf_info, op.is_push_down() && op.get_pushdown_info().at(i)))) {
-        LOG_WARN("failed to generate window function info", K(ret));
+      if (!spec.use_rich_format_ &&
+        (wf_expr->get_func_type() == T_WIN_FUN_LEAD_IN_FRAME ||
+         wf_expr->get_func_type() == T_WIN_FUN_LAG_IN_FRAME)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "leadInFrame and lagInFrame with rich format disabled");
+        LOG_WARN("only can be used in vec 2.0", K(ret));
+      } else {
+        WinFuncInfo &wf_info = spec.wf_infos_.at(i);
+        if (OB_ISNULL(wf_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Get unexpected null", K(ret));
+        } else if (op.is_push_down() && op.get_window_exprs().count() != op.get_pushdown_info().count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("count of window_exprs is not equal to count of pushdowns", K(ret),
+                  K(op.get_window_exprs().count()), K(op.get_pushdown_info().count()));
+        } else if (OB_FAIL(fill_wf_info(
+                  all_expr, *wf_expr, wf_info, op.is_push_down() && op.get_pushdown_info().at(i)))) {
+          LOG_WARN("failed to generate window function info", K(ret));
+        }
       }
     }
   }

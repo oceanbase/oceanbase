@@ -33,6 +33,41 @@ public:
   GroupConcatAggregate()
   {}
 
+  virtual int init(RuntimeContext &agg_ctx, const int64_t agg_col_id, ObIAllocator &allocator) override
+  {
+    int ret = OB_SUCCESS;
+    ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
+    if (T_FUN_CK_GROUPCONCAT == aggr_info.get_expr_type()) {
+      if (OB_UNLIKELY(aggr_info.param_exprs_.count() < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param exprs count is less than 0", K(ret), K(aggr_info.param_exprs_.count()));
+      } else if (aggr_info.param_exprs_.count() > aggr_info.group_concat_param_count_) {
+        ObExpr *limit_expr = aggr_info.param_exprs_.at(aggr_info.group_concat_param_count_);
+        sql::ObEvalCtx &eval_ctx = agg_ctx.eval_ctx_;
+        int64_t mock_skip_data = 0;
+        ObBitVector *mock_skip = to_bit_vector(&mock_skip_data);
+
+        if (OB_ISNULL(limit_expr) || !limit_expr->is_const_expr() || !limit_expr->obj_meta_.is_integer_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("limit expr is null or not const expr", K(ret), K(limit_expr));
+        } else if (OB_FAIL(limit_expr->eval_vector(eval_ctx, *mock_skip, sql::EvalBound(1)))) {
+          LOG_WARN("eval limit expr failed", K(ret));
+        } else {
+          limit_ = limit_expr->get_vector(eval_ctx)->get_uint64(0);
+          if (limit_ <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("limit should be a positive number", K(ret), K(limit_));
+          }
+        }
+      } else {
+        limit_ = UINT64_MAX;
+      }
+    } else {
+      limit_ = UINT64_MAX;
+    }
+    return ret;
+  }
+
   template <typename ColumnFormat>
   int collect_group_result(RuntimeContext &agg_ctx, const ObExpr &agg_expr,
                            const int32_t agg_col_id, const char *data, const int32_t data_len)
@@ -74,11 +109,9 @@ public:
     ObIArray<ObExpr *> &param_exprs = info.param_exprs_;
 
     bool has_null = false;
+    bool need_append_sep = false;
 
     int32_t append_length = 0;
-    if (concated_rows > 0 && !buf_is_full) {
-      append_length += sep_str.length();
-    }
     for (int j = 0; j < info.group_concat_param_count_ && !buf_is_full && OB_SUCC(ret); j++) {
       if (param_exprs.at(j)->get_vector(agg_ctx.eval_ctx_)->is_null(row_num)) {
         has_null = true;
@@ -87,11 +120,18 @@ public:
       append_length += param_exprs.at(j)->get_vector(agg_ctx.eval_ctx_)->get_length(row_num);
     }
 
+    need_append_sep = concated_rows > 0 && !buf_is_full &&
+                (T_FUN_CK_GROUPCONCAT != info.get_expr_type()
+                || (T_FUN_CK_GROUPCONCAT == info.get_expr_type() && append_length != 0 && base_string.length() != 0));
+    if (need_append_sep) {
+      append_length += sep_str.length();
+    }
+
     if (has_null) {
     } else if (OB_FAIL(ensure_string_space(base_string, append_length, agg_ctx.allocator_,
                                            concat_str_max_len))) {
     } else {
-      if (concated_rows > 0 && !buf_is_full) {
+      if (need_append_sep) {
         if (OB_FAIL(append_str(info.expr_->datum_meta_.cs_type_, base_string, sep_str,
                                concated_rows, buf_is_full, concat_str_max_len))) {
           SQL_LOG(WARN, "append string failed", K(ret), K(base_string));
@@ -206,13 +246,13 @@ protected:
   inline int get_concat_str_max_len(RuntimeContext &agg_ctx, uint64_t &concat_str_max_len)
   {
     int ret = OB_SUCCESS;
-    concat_str_max_len = (lib::is_oracle_mode() ? OB_DEFAULT_GROUP_CONCAT_MAX_LEN_FOR_ORACLE :
-                                                  OB_DEFAULT_GROUP_CONCAT_MAX_LEN);
-    if (!lib::is_oracle_mode()
-        && OB_FAIL(agg_ctx.eval_ctx_.exec_ctx_.get_my_session()->get_group_concat_max_len(
-             concat_str_max_len))) {
-      SQL_LOG(WARN, "fail to get group concat max len", K(ret));
-    }
+      concat_str_max_len = (lib::is_oracle_mode() ? OB_DEFAULT_GROUP_CONCAT_MAX_LEN_FOR_ORACLE :
+                                                    OB_DEFAULT_GROUP_CONCAT_MAX_LEN);
+      if (!lib::is_oracle_mode()
+          && OB_FAIL(agg_ctx.eval_ctx_.exec_ctx_.get_my_session()->get_group_concat_max_len(
+              concat_str_max_len))) {
+        SQL_LOG(WARN, "fail to get group concat max len", K(ret));
+      }
     return ret;
   }
 
@@ -222,7 +262,7 @@ protected:
     int ret = OB_SUCCESS;
     if (aggr_info.separator_expr_ == NULL) {
       // Default sperator for not specific case.
-      if (lib::is_oracle_mode()) {
+      if (lib::is_oracle_mode() || T_FUN_CK_GROUPCONCAT == aggr_info.get_expr_type()) {
         sep_str = ObString::make_empty_string();
       } else {
         // default comma
@@ -311,6 +351,11 @@ protected:
     cur_string = ObString(buffer_size, string_len, string_ptr);
   }
 
+  inline int64_t get_concated_rows_from_cell(char *agg_cell)
+  {
+    return *reinterpret_cast<int64_t *>(agg_cell + sizeof(char **) + 2 * sizeof(int32_t));
+  }
+
   inline bool has_truncated_from_cell(char *agg_cell)
   {
     return *reinterpret_cast<bool *>(agg_cell + sizeof(char **) + 2 * sizeof(int32_t) + sizeof(int64_t));
@@ -396,9 +441,10 @@ public:
 
     bool buf_is_full = false;
     bool has_truncated = has_truncated_from_cell(agg_cell);
+    int64_t concated_rows = get_concated_rows_from_cell(agg_cell);
     uint64_t concat_str_max_len = 0;
 
-    if (has_truncated || skip.is_all_true(bound.start(), bound.end())) {
+    if (has_truncated || skip.is_all_true(bound.start(), bound.end()) || concated_rows >= limit_) {
     } else if (OB_FAIL(get_concat_str_max_len(agg_ctx, concat_str_max_len))) {
       SQL_LOG(WARN, "fail to get group concat max len", K(ret));
     } else if (OB_FAIL(get_buf_is_full_sign(agg_cell, buf_is_full, concat_str_max_len))) {
@@ -409,8 +455,7 @@ public:
 
       // If all exprs are visited, then append those not skipped rows to agg_cell.
       ObString base_string = nullptr;
-      int64_t concated_rows = 0;
-      if (FALSE_IT(get_string_from_cell(agg_cell, base_string, concated_rows))) {
+      if (FALSE_IT(get_string_from_cell(agg_cell, base_string))) {
         SQL_LOG(WARN, "get string failed", K(ret));
       } else {
         int64_t before_concat_rows = concated_rows;
@@ -418,14 +463,14 @@ public:
         if (OB_FAIL(get_sep_str(agg_ctx, aggr_info, sep_str, skip, bound))) {
           SQL_LOG(WARN, "get sep str failed", K(ret));
         }
-        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end() && !buf_is_full; i++) {
+        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end() && !buf_is_full && concated_rows < limit_; i++) {
           if (skip.at(i)) {
             continue;
           }
           ret = concat_one_row(agg_ctx, agg_col_id, i, base_string, concated_rows, buf_is_full,
                                concat_str_max_len, sep_str);
         }
-        if (OB_SUCC(ret) && concated_rows > before_concat_rows) {
+        if (OB_SUCC(ret) && concated_rows > 0) {
           NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell);
           not_nulls.set(agg_col_id);
           set_string(agg_cell, base_string, concated_rows, buf_is_full);
@@ -434,6 +479,9 @@ public:
     }
     return ret;
   }
+
+private:
+  uint64_t limit_{UINT64_MAX};
 };
 
 } // end namespace aggregate

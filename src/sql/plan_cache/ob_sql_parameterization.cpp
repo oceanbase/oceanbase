@@ -2114,7 +2114,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
     } else {
       ObString func_name(node[0]->str_len_, node[0]->str_value_);
       // UNIX_TIMESTAMP结果精度受参数控制,对于其参数化过程特殊处理。
-      if (0 == func_name.case_compare("UNIX_TIMESTAMP")) {
+      if (0 == func_name.case_compare("UNIX_TIMESTAMP") || 0 == func_name.case_compare("toUnixTimestamp")) {
         if (1 == node[1]->num_child_) {
           // EXECUTE模式但是子节点不为QUESTIONMARK 或 父节点已经判断不可参数化
           if ((is_execute_mode(ctx.mode_) && node[1]->children_[0]->type_ != T_QUESTIONMARK) || ctx.not_param_ || is_tree_not_param(tree)) {
@@ -2178,7 +2178,9 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
           SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
         }
       } else if ((0 == func_name.case_compare("str_to_date") // STR_TO_DATE(str,format)
+                  || 0 == func_name.case_compare("to_date") // TO_DATE(str,format) - Oracle DFM format should not be parameterized
                   || 0 == func_name.case_compare("date_format") //DATE_FORMAT(date,format)
+                  || 0 == func_name.case_compare("formatDateTime") //formatDateTime(date,format)
                   || 0 == func_name.case_compare("from_unixtime")//FROM_UNIXTIME(unix_timestamp), FROM_UNIXTIME(unix_timestamp,format)
                   || 0 == func_name.case_compare("round")        //ROUND(X), ROUND(X,D)
                   || 0 == func_name.case_compare("left") // the length of result should be set with the value of the second param

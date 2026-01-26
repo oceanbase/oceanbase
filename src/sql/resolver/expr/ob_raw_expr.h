@@ -3937,6 +3937,7 @@ public:
     expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
     keep_sum_precision_(false),
+    is_ignore_null_(false),
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
@@ -3952,6 +3953,7 @@ public:
     expr_in_inner_stmt_(false),
     is_need_deserialize_row_(false),
     keep_sum_precision_(false),
+    is_ignore_null_(false),
     pl_agg_udf_expr_(NULL)
   {
     set_expr_class(EXPR_AGGR);
@@ -3968,6 +3970,8 @@ public:
   bool is_param_distinct() const;
   void set_param_distinct(bool is_distinct);
   void set_separator_param_expr(ObRawExpr *separator_param_expr);
+  bool is_ignore_null() const;
+  void set_is_ignore_null(bool is_ignore_null);
   bool in_inner_stmt() const;
   void set_nested_aggr_inner_stmt(bool inner_stmt);
   int add_order_item(const OrderItem &order_item);
@@ -4046,6 +4050,7 @@ private:
   bool expr_in_inner_stmt_;
   bool is_need_deserialize_row_;// for topk histogram and hybrid histogram computation
   bool keep_sum_precision_; // wether sum aggr should increase precision
+  bool is_ignore_null_; // for any aggr
   ObRawExpr *pl_agg_udf_expr_;//for pl agg udf expr
 };
 
@@ -4095,6 +4100,10 @@ inline bool ObAggFunRawExpr::is_param_distinct() const
 {
   return distinct_;
 }
+inline bool ObAggFunRawExpr::is_ignore_null() const
+{
+  return is_ignore_null_;
+}
 inline bool ObAggFunRawExpr::in_inner_stmt() const
 {
   return expr_in_inner_stmt_;
@@ -4119,6 +4128,7 @@ inline int ObAggFunRawExpr::add_order_item(const OrderItem &order_item)
 {
   return order_items_.push_back(order_item);
 }
+inline void ObAggFunRawExpr::set_is_ignore_null(bool is_ignore_null) { is_ignore_null_ = is_ignore_null; }
 
 ////////////////////////////////////////////////////////////////
 // for normal system function, func_name_ is used to distinguish them.

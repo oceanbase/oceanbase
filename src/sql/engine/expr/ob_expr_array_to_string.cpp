@@ -182,7 +182,6 @@ int ObExprArrayToString::eval_array_to_string_batch(const ObExpr &expr, ObEvalCt
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_array.at(j)->is_null() || delimiter_array.at(j)->is_null()) {
         is_null_res = true;
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), arr_obj))) {
@@ -261,7 +260,6 @@ int ObExprArrayToString::eval_array_to_string_vector(const ObExpr &expr, ObEvalC
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         ObStringBuffer res_buf(&tmp_allocator);
         if (OB_FAIL(arr_obj->print_element(res_buf, 0, 0, true, delimiter, has_null_str, null_str))) {
@@ -278,9 +276,6 @@ int ObExprArrayToString::eval_array_to_string_vector(const ObExpr &expr, ObEvalC
           } else if (OB_FAIL(set_text_res<ObVectorBase>(res_buf, expr, ctx, static_cast<ObVectorBase *>(res_vec), idx))) {
             LOG_WARN("set array res failed", K(ret));
           }
-        }
-        if (OB_SUCC(ret)) {
-          eval_flags.set(idx);
         }
       }
     } // end for

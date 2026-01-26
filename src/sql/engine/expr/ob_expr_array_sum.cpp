@@ -173,7 +173,6 @@ int ObExprArraySum::eval_array_sum_batch(const ObExpr &expr, ObEvalCtx &ctx,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_array.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (OB_FAIL(ObArrayExprUtils::get_array_type_by_subschema_id(ctx, subschema_id, arr_type))) {
@@ -270,7 +269,6 @@ int ObExprArraySum::eval_array_sum_vector(const ObExpr &expr, ObEvalCtx &ctx,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       ObString data_str = arr_vec->get_string(j);
       if (arr_vec->is_null(j)) {
         res_vec->set_null(j);

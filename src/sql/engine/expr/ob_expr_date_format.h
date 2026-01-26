@@ -82,6 +82,8 @@ private:
   static int get_from_format_x(FORMAT_FUNC_ARG_DECL);
   static int get_from_format_V(FORMAT_FUNC_ARG_DECL);
   static int get_from_format_v(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_Q(FORMAT_FUNC_ARG_DECL);
+  static int get_from_format_G(FORMAT_FUNC_ARG_DECL);
   static int get_from_format_f(FORMAT_FUNC_ARG_DECL);
   static int get_from_format_H(FORMAT_FUNC_ARG_DECL);
   static int get_from_format_h_I(FORMAT_FUNC_ARG_DECL);

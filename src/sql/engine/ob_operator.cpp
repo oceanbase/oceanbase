@@ -980,11 +980,12 @@ int ObOperator::init_skip_vector()
     if (OB_FAIL(init_brs(&(ctx_.get_allocator()), batch_size, brs_))) {
       LOG_WARN("init brs failed", K(ret));
     } else {
-      int tmp_ret = OB_SUCCESS;
-      tmp_ret = OB_E(EventTable::EN_ENABLE_ENGINE_CHECK) tmp_ret;
-      if (OB_FAIL(tmp_ret)) {
-        need_check_brs_ = true;
-      }
+      // int tmp_ret = OB_SUCCESS;
+      // tmp_ret = OB_E(EventTable::EN_ENABLE_ENGINE_CHECK) tmp_ret;
+      // if (tmp_ret != OB_SUCCESS) {
+      //   need_check_brs_ = true;
+      // }
+      need_check_brs_ = false; // disable check brs temporarily
       if (need_check_brs_) {
         if (OB_FAIL(init_brs(&(ctx_.get_allocator()), batch_size, backup_brs_))) {
           LOG_WARN("init brs failed", K(ret));

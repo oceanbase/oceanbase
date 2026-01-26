@@ -620,7 +620,8 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
     DEFAULT_VALUE = 2,
     NUM_LEAD_LAG_PARAMS
   };
-  const bool is_lead = (T_WIN_FUN_LEAD == ctx.win_col_.wf_info_.func_type_);
+  const bool is_lead = (T_WIN_FUN_LEAD == ctx.win_col_.wf_info_.func_type_) || (T_WIN_FUN_LEAD_IN_FRAME == ctx.win_col_.wf_info_.func_type_);
+  const bool is_in_frame = (T_WIN_FUN_LEAD_IN_FRAME == ctx.win_col_.wf_info_.func_type_ || T_WIN_FUN_LAG_IN_FRAME == ctx.win_col_.wf_info_.func_type_);
   int lead_lag_offset_direction = (is_lead ? 1 : -1);
   // if not specified, the default offset is 1.
   bool is_lead_lag_offset_used = false;
@@ -702,7 +703,7 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
     const char *src = nullptr;
     int32_t src_len = 0;
     bool src_isnull = false;
-    for (int64_t i = row_idx; OB_SUCC(ret) && !found && i >= frame.head_ && i < frame.tail_;
+    for (int64_t i = row_idx; OB_SUCC(ret) && !found && (is_lead ? i < frame.tail_ : i >= frame.head_);
          i += lead_lag_offset_direction) {
       ctx.win_col_.op_.clear_evaluated_flag();
       if (OB_FAIL(
@@ -713,7 +714,7 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
       } else if (ctx.win_col_.wf_info_.is_ignore_null_
                  && params.at(0)->get_vector(eval_ctx)->is_null(0)) {
         step = (i == row_idx) ? step + 1 : step;
-      } else if (step++ == offset) {
+      } else if (step++ == offset && i < frame.tail_ && i >= frame.head_) {
         src_isnull = params.at(0)->get_vector(eval_ctx)->is_null(0);
         params.at(0)->get_vector(eval_ctx)->get_payload(0, src, src_len);
         found = true;
@@ -2441,7 +2442,8 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
 
         // Only Group Concat without distinct and order by can avoid use the whole frame
         bool group_concat_whole_frame = false;
-        if (ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_GROUP_CONCAT
+        if ((ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_GROUP_CONCAT
+                || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_CK_GROUPCONCAT)
             && (ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_distinct_
                 || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_order_by_)) {
           group_concat_whole_frame = true;

@@ -45,12 +45,87 @@ int ObExprInstr::calc_mysql_instr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   return ret;
 }
 
+template <typename haystackVec, typename needleVec, typename ResVec>
+int ObExprInstr::vector_mysql_instr(const ObExpr &expr,
+                                    ObEvalCtx &ctx,
+                                    const ObBitVector &skip,
+                                    const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  const haystackVec *haystack_vec = static_cast<const haystackVec *>(expr.args_[0]->get_vector(ctx));
+  const needleVec *needle_vec = static_cast<const needleVec *>(expr.args_[1]->get_vector(ctx));
+  bool search_in_binary = false;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObCollationType calc_cs_type = CS_TYPE_INVALID;
+  if (OB_FAIL(ObLocationExprOperator::get_calc_cs_type(expr, calc_cs_type))) {
+    LOG_WARN("get_calc_cs_type failed", K(ret));
+  } else {
+    search_in_binary = ObCharset::is_bin_sort(calc_cs_type);
+  }
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (haystack_vec->is_null(idx) ||  needle_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+      continue;
+    }
+    ObString haystack_str = haystack_vec->get_string(idx);
+    ObString current_needle = needle_vec->get_string(idx);
+    int64_t result = 0;
+    if (search_in_binary) {
+      ret = ObLocationExprOperator::calc_vector<true>(ctx, calc_cs_type, *expr.args_[1], *expr.args_[0], current_needle, haystack_str, 1, result);
+    } else {
+      ret = ObLocationExprOperator::calc_vector<false>(ctx, calc_cs_type, *expr.args_[1], *expr.args_[0], current_needle, haystack_str, 1, result);
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("calc_vector failed", K(ret));
+    } else {
+      res_vec->set_int(idx, result);
+    }
+  }
+  return ret;
+}
+
+int ObExprInstr::calc_mysql_instr_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 != expr.arg_cnt_) || OB_ISNULL(expr.args_) ||
+      OB_ISNULL(expr.args_[0]) || OB_ISNULL(expr.args_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid expr", K(ret), K(expr));
+  } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval haystack vector", K(ret));
+  } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval needle vector", K(ret));
+  } else {
+    VectorFormat haystack_format = expr.args_[0]->get_format(ctx);
+    VectorFormat needle_format = expr.args_[1]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+
+    // Dispatch based on format combinations
+    if (VEC_DISCRETE == haystack_format && VEC_DISCRETE == needle_format && VEC_FIXED == res_format) {
+      ret = vector_mysql_instr<StrDiscVec, StrDiscVec, ObFixedLengthFormat<int64_t>>(expr, ctx, skip, bound);
+    } else if (VEC_DISCRETE == haystack_format && VEC_UNIFORM == needle_format && VEC_FIXED == res_format) {
+      ret = vector_mysql_instr<StrDiscVec, StrUniVec, ObFixedLengthFormat<int64_t>>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == haystack_format && VEC_DISCRETE == needle_format && VEC_FIXED == res_format) {
+      ret = vector_mysql_instr<StrUniVec, StrDiscVec, ObFixedLengthFormat<int64_t>>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == haystack_format && VEC_UNIFORM == needle_format && VEC_FIXED == res_format) {
+      ret = vector_mysql_instr<StrUniVec, StrUniVec, ObFixedLengthFormat<int64_t>>(expr, ctx, skip, bound);
+    } else {
+      ret = vector_mysql_instr<ObVectorBase, ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+  }
+  return ret;
+}
+
 int ObExprInstr::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
                                     ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_mysql_instr_expr;
+  rt_expr.eval_vector_func_ = calc_mysql_instr_expr_vector;
   return OB_SUCCESS;
 }
 
@@ -123,7 +198,8 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
                                   const ObCollationType &calc_cs_type,
                                   int64_t &pos_int,
                                   int64_t &occ_int,
-                                  uint32_t &idx)
+                                  uint32_t &idx,
+                                  bool search_in_binary = false)
 {
   int ret = OB_SUCCESS;
   ObString haystack_data;
@@ -168,8 +244,13 @@ static int calc_oracle_instr_text(ObTextStringIter &haystack_iter,
           pos_int = 1;
         }
         for (; count < occ_int; ++count) {
-          idx = ObCharset::locate(calc_cs_type, haystack_data.ptr(), haystack_data.length(),
-                                  needle_data.ptr(), needle_data.length(), pos_int);
+          if (search_in_binary) {
+            idx = ObCharsetStringHelper::locate_optimized(calc_cs_type, haystack_data.ptr(), haystack_data.length(),
+                                                          needle_data.ptr(), needle_data.length(), pos_int);
+          } else {
+            idx = ObCharset::locate(calc_cs_type, haystack_data.ptr(), haystack_data.length(),
+                                    needle_data.ptr(), needle_data.length(), pos_int);
+          }
           if (idx <= 0) {
             break;
           } else {
@@ -461,6 +542,45 @@ int ObExprOracleInstr::slow_reverse_search(ObIAllocator &alloc,
   return ret;
 }
 
+template <typename HaystackVec, typename NeedleVec>
+int ObExprOracleInstr::calc_oracle_instr_vector_arg(const ObExpr &expr, ObEvalCtx &ctx,
+                                                    int64_t idx, bool &is_null,
+                                                    int64_t &pos_int, int64_t &occ_int,
+                                                    const ObIVector *pos_vec, const ObIVector *occ_vec)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *pos = NULL;
+  ObDatum *occ = NULL;
+  is_null = false;
+  pos_int = 1;
+  occ_int = 1;
+
+  if (OB_SUCC(ret) && !is_null && NULL != pos_vec) {
+    if (pos_vec->is_null(idx)) {
+      is_null = true;
+    } else {
+      number::ObNumber pos_nmb(pos_vec->get_number(idx));
+      if (OB_FAIL(ObExprUtil::trunc_num2int64(pos_nmb, pos_int))) {
+        LOG_WARN("trunc_num2int64 failed", K(ret));
+      } else if (INT64_MIN == pos_int) {
+        pos_int = INT64_MAX;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !is_null && NULL != occ_vec) {
+    if (occ_vec->is_null(idx)) {
+      is_null = true;
+    } else {
+      number::ObNumber occ_nmb(occ_vec->get_number(idx));
+      if (OB_FAIL(ObExprUtil::trunc_num2int64(occ_nmb, occ_int))) {
+        LOG_WARN("trunc_num2int64 failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 // haystack/needle没有直接传递ObString作为参数，因为想保证ObDatum结果的const属性
 int ObExprOracleInstr::calc_oracle_instr_arg(const ObExpr &expr, ObEvalCtx &ctx,
                                              bool &is_null,
@@ -616,6 +736,168 @@ int ObExprOracleInstr::calc_oracle_instr_expr(const ObExpr &expr, ObEvalCtx &ctx
   return ret;
 }
 
+template <typename haystackVec, typename needleVec, typename ResVec>
+int ObExprOracleInstr::vector_oracle_instr(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          const ObBitVector &skip,
+                                          const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  const haystackVec *haystack_vec = static_cast<const haystackVec *>(expr.args_[0]->get_vector(ctx));
+  const needleVec *needle_vec = static_cast<const needleVec *>(expr.args_[1]->get_vector(ctx));
+  const ObIVector *pos_vec = expr.arg_cnt_ > 2 ? static_cast<const ObIVector *>(expr.args_[2]->get_vector(ctx)) : NULL;
+  const ObIVector *occ_vec = expr.arg_cnt_ > 3 ? static_cast<const ObIVector *>(expr.args_[3]->get_vector(ctx)) : NULL;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObCollationType calc_cs_type = CS_TYPE_INVALID;
+  const ObObjType haystack_type = expr.args_[0]->datum_meta_.type_;
+  const ObObjType needle_type = expr.args_[1]->datum_meta_.type_;
+  bool haystack_has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
+  bool needle_has_lob_header = expr.args_[1]->obj_meta_.has_lob_header();
+  bool search_in_binary = false;
+  if (OB_FAIL(ObLocationExprOperator::get_calc_cs_type(expr, calc_cs_type))) {
+    LOG_WARN("get_calc_cs_type failed", K(ret));
+  } else {
+    search_in_binary = ObCharset::is_bin_sort(calc_cs_type);
+  }
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (haystack_vec->is_null(idx) || needle_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+      continue;
+    }
+    bool is_null = false;
+    int64_t pos_int = 1;
+    int64_t occ_int = 1;
+    ObString haystack_str = haystack_vec->get_string(idx);
+    ObString current_needle = needle_vec->get_string(idx);
+    ret = ObExprOracleInstr::calc_oracle_instr_vector_arg<haystackVec, needleVec>(expr, ctx,
+                                                                                  idx, is_null,
+                                                                                  pos_int, occ_int,
+                                                                                  pos_vec, occ_vec);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("calc_oracle_instr_vector_arg failed", K(ret));
+    } else if (is_null) {
+      res_vec->set_null(idx);
+    } else if (0 == haystack_str.length() || ob_is_empty_lob(haystack_type, haystack_vec, haystack_has_lob_header, idx)) {
+      number::ObNumber res_nmb;
+      ObNumStackOnceAlloc tmp_alloc;
+      if (OB_FAIL(res_nmb.from((uint64_t)(0), tmp_alloc))) {
+        LOG_WARN("get number from int failed", K(ret));
+      } else {
+        res_vec->set_number(idx, res_nmb);
+      }
+    } else {
+      if (OB_UNLIKELY(occ_int <= 0)) {
+        ret = OB_ERR_ARGUMENT_OUT_OF_RANGE;
+        LOG_USER_ERROR(OB_ERR_ARGUMENT_OUT_OF_RANGE, occ_int);
+      } else if (OB_UNLIKELY(0 == pos_int)) {
+        number::ObNumber res_nmb;
+        ObNumStackOnceAlloc tmp_alloc;
+        if (OB_FAIL(res_nmb.from(static_cast<int64_t>(0), tmp_alloc))) {
+          LOG_WARN("get number from 0 failed", K(ret));
+        } else {
+          res_vec->set_number(idx, res_nmb);
+        }
+      } else {
+        uint32_t result_idx = 0;
+        number::ObNumber res_nmb;
+        ObNumStackOnceAlloc tmp_alloc;
+        if (!ob_is_text_tc(haystack_type) && !ob_is_text_tc(needle_type)) {
+          if (pos_int > 0) {
+            for (int64_t i = 0; i < occ_int; ++i) {
+              if (search_in_binary) {
+                result_idx = ObCharsetStringHelper::locate_optimized(calc_cs_type, haystack_str.ptr(), haystack_str.length(),
+                                                                     current_needle.ptr(), current_needle.length(), pos_int);
+              } else {
+                result_idx = ObCharset::locate(calc_cs_type, haystack_str.ptr(), haystack_str.length(),
+                                               current_needle.ptr(), current_needle.length(), pos_int);
+              }
+              if (result_idx <= 0) {
+                break;
+              } else {
+                pos_int = result_idx + 1;
+              }
+            }
+          } else {
+            ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+            ObIAllocator &tmp_alloc_guard = alloc_guard.get_allocator();
+            if (OB_FAIL(ObExprOracleInstr::slow_reverse_search(tmp_alloc_guard, calc_cs_type, haystack_str,
+                                                                current_needle, pos_int, occ_int, result_idx))) {
+              LOG_WARN("slow_reverse_search failed", K(ret), K(calc_cs_type), K(haystack_str), K(current_needle),
+                       K(pos_int), K(occ_int));
+            }
+          }
+        } else { // at least one of the inputs is text tc
+          ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+          ObIAllocator &calc_alloc = alloc_guard.get_allocator();
+          ObTextStringIter haystack_iter(haystack_type, calc_cs_type, haystack_str, haystack_has_lob_header);
+          ObTextStringIter needle_iter(needle_type, calc_cs_type, current_needle, needle_has_lob_header);
+          if (OB_FAIL(calc_oracle_instr_text(haystack_iter, needle_iter,
+                                             calc_alloc, calc_cs_type, pos_int, occ_int, result_idx, search_in_binary))) {
+            LOG_WARN("calc oracle instr for text types failed", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(res_nmb.from((uint64_t)result_idx, tmp_alloc))) {
+          LOG_WARN("get number from int failed", K(ret), K(result_idx));
+        } else {
+          res_vec->set_number(idx, res_nmb);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprOracleInstr::calc_oracle_instr_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(2 > expr.arg_cnt_) || OB_UNLIKELY(4 < expr.arg_cnt_) ||
+      OB_ISNULL(expr.args_) || OB_ISNULL(expr.args_[0]) || OB_ISNULL(expr.args_[1]) ||
+      (2 < expr.arg_cnt_ && OB_ISNULL(expr.args_[2])) || (3 < expr.arg_cnt_ && OB_ISNULL(expr.args_[3]))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid expr", K(ret), K(expr));
+  } else if (OB_FAIL(expr.eval_vector_param_value_null_short_circuit(ctx, skip, bound))) {
+    LOG_WARN("failed to eval param value", K(ret));
+  } else {
+    VectorFormat haystack_format = expr.args_[0]->get_format(ctx);
+    VectorFormat needle_format = expr.args_[1]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+
+    // Dispatch based on format combinations
+    if (VEC_DISCRETE == haystack_format && VEC_DISCRETE == needle_format && VEC_DISCRETE == res_format) {
+      ret = vector_oracle_instr<StrDiscVec, StrDiscVec, NumberDiscVec>(expr, ctx, skip, bound);
+    } else if (VEC_DISCRETE == haystack_format && VEC_UNIFORM == needle_format && VEC_DISCRETE == res_format) {
+      ret = vector_oracle_instr<StrDiscVec, StrUniVec, NumberDiscVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == haystack_format && VEC_DISCRETE == needle_format && VEC_DISCRETE == res_format) {
+      ret = vector_oracle_instr<StrUniVec, StrDiscVec, NumberDiscVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == haystack_format && VEC_UNIFORM == needle_format && VEC_DISCRETE == res_format) {
+      ret = vector_oracle_instr<StrUniVec, StrUniVec, NumberDiscVec>(expr, ctx, skip, bound);
+    } else if (VEC_CONTINUOUS == haystack_format && VEC_DISCRETE == needle_format && VEC_DISCRETE == res_format) {
+      ret = vector_oracle_instr<StrContVec, StrDiscVec, NumberDiscVec>(expr, ctx, skip, bound);
+    } else if (VEC_CONTINUOUS == haystack_format && VEC_UNIFORM == needle_format && VEC_DISCRETE == res_format) {
+      ret = vector_oracle_instr<StrContVec, StrUniVec, NumberDiscVec>(expr, ctx, skip, bound);
+    } else if (VEC_DISCRETE == haystack_format && VEC_DISCRETE == needle_format && VEC_UNIFORM == res_format) {
+      ret = vector_oracle_instr<StrDiscVec, StrDiscVec, NumberUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_DISCRETE == haystack_format && VEC_UNIFORM == needle_format && VEC_UNIFORM == res_format) {
+      ret = vector_oracle_instr<StrDiscVec, StrUniVec, NumberUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == haystack_format && VEC_DISCRETE == needle_format && VEC_UNIFORM == res_format) {
+      ret = vector_oracle_instr<StrUniVec, StrDiscVec, NumberUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == haystack_format && VEC_UNIFORM == needle_format && VEC_UNIFORM == res_format) {
+      ret = vector_oracle_instr<StrUniVec, StrUniVec, NumberUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_CONTINUOUS == haystack_format && VEC_DISCRETE == needle_format && VEC_UNIFORM == res_format) {
+      ret = vector_oracle_instr<StrContVec, StrDiscVec, NumberUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_CONTINUOUS == haystack_format && VEC_UNIFORM == needle_format && VEC_UNIFORM == res_format) {
+      ret = vector_oracle_instr<StrContVec, StrUniVec, NumberUniVec>(expr, ctx, skip, bound);
+    } else {
+      ret = vector_oracle_instr<ObVectorBase, ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+  }
+  return ret;
+}
+
 int ObExprOracleInstr::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                ObExpr &rt_expr) const
 {
@@ -627,6 +909,7 @@ int ObExprOracleInstr::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_ex
     LOG_WARN("unexpected arg cnt", K(ret), K(rt_expr.arg_cnt_));
   }
   rt_expr.eval_func_ = calc_oracle_instr_expr;
+  rt_expr.eval_vector_func_ = calc_oracle_instr_expr_vector;
   return ret;
 }
 

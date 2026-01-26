@@ -68,7 +68,6 @@ int vector_date(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, con
   if (OB_LIKELY(no_skip_no_null)) {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       res_vec->set_date(idx, arg_vec->get_date(idx));
-      eval_flags.set(idx);
     }
   } else {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -76,11 +75,9 @@ int vector_date(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, con
         continue;
       } else if (arg_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
         continue;
       }
       res_vec->set_date(idx, arg_vec->get_date(idx));
-      eval_flags.set(idx);
     }
   }
   return ret;
@@ -96,18 +93,15 @@ int vector_date<DateFixedVec, DateFixedVec>(const ObExpr &expr, ObEvalCtx &ctx, 
                          && eval_flags.accumulate_bit_cnt(bound) == 0;
   if (OB_LIKELY(no_skip_no_null)) {
     res_vec->set_data(arg_vec->get_data());
-    eval_flags.set_all(bound.start(), bound.end());
   } else {
     for (int64_t idx = bound.start(); idx < bound.end() && OB_SUCC(ret); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
       } else if (arg_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
         continue;
       }
       res_vec->set_date(idx, arg_vec->get_date(idx));
-      eval_flags.set(idx);
     }
   }
   return ret;

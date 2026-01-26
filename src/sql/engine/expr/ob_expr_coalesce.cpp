@@ -171,7 +171,6 @@ int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
               LOG_WARN("failed to check datum null", K(ret), K(dv.at(idx)), K(is_udt_type));
             } else if (!v) {
               results[idx].set_datum(*dv.at(idx));
-              eval_flags.set(idx);
               my_skip.set(idx);
               skip_cnt++;
             }
@@ -187,7 +186,6 @@ int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
         batch_size,
         [&](int64_t idx) __attribute__((always_inline)) {
           results[idx].set_null();
-          eval_flags.set(idx);
           return OB_SUCCESS;
         });
     }

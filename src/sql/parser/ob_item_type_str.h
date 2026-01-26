@@ -52,6 +52,9 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_GROUP_CONCAT:
       ret = "GROUP_CONCAT";
       break;
+    case T_FUN_CK_GROUPCONCAT:
+      ret = "GROUPCONCAT";
+      break;
     case T_FUN_APPROX_COUNT_DISTINCT:
       ret = "APPROX_COUNT_DISTINCT";
       break;
@@ -81,6 +84,15 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
       break;
     case T_FUN_ARG_MIN:
       ret = "ARG_MIN";
+      break;
+    case T_FUN_CK_UNIQ:
+      ret = "UNIQ";
+      break;
+    case T_FUN_ANY:
+      ret = "ANY";
+      break;
+    case T_FUN_ARBITRARY:
+      ret = "ARBITRARY";
       break;
     default:
       break;

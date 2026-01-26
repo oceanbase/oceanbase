@@ -33,11 +33,64 @@ public:
                  const common::ObCollationType &cs_type,
                  common::ObIAllocator *allocator,
                  common::ObString &res_str);
+  OB_INLINE static void do_reverse_ascii(const char* __restrict src_begin,
+                                         const char* __restrict src_end,
+                                         char* __restrict dst_curr);
+  OB_INLINE static int do_reverse_vector(char *input_start,
+                                          int64_t input_length,
+                                          const common::ObCollationType &cs_type,
+                                          char *buf);
+  static int calc_reverse_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
+  template <typename ArgVec, typename ResVec>
+  static int vector_reverse_str(const ObExpr &expr,
+                                ObEvalCtx &ctx,
+                                const ObBitVector &skip,
+                                const EvalBound &bound);
+  template <typename ArgVec, typename ResVec>
+  static int vector_reverse_array(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const EvalBound &bound);
+
   DISALLOW_COPY_AND_ASSIGN(ObExprReverse);
 };
+
+OB_INLINE void ObExprReverse::do_reverse_ascii(const char* __restrict src_begin,
+                                               const char* __restrict src_end,
+                                               char* __restrict dst_curr) {
+  const char* __restrict src_curr = src_begin;
+  for (; src_curr < src_end; ++src_curr) {
+      --dst_curr;
+      *dst_curr = *src_curr;
+  }
+}
+
+OB_INLINE int ObExprReverse::do_reverse_vector(char *input_start,
+                                                int64_t input_length,
+                                                const common::ObCollationType &cs_type,
+                                                char *buf)
+{
+  int ret = OB_SUCCESS;
+  int64_t converted_length = 0;
+  int64_t char_begin = 0;
+  char *buf_tail = buf + input_length;
+  int64_t char_length = 0;
+  while (converted_length < input_length) {
+    if (OB_UNLIKELY((char_length = ObCharsetStringHelper::charlen_optimized(cs_type, input_start + char_begin, input_length - converted_length)) <= 0)) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("invalid data", K(ret), K(input_start + char_begin), K(input_length - converted_length), K(char_length));
+      break;
+    }
+    MEMCPY(buf_tail - char_length, input_start + char_begin, char_length);
+    buf_tail -= char_length;
+    converted_length += char_length;
+    char_begin += char_length;
+  }
+  return ret;
+}
 
 inline int ObExprReverse::calc_result_type1(ObExprResType &type,
                                             ObExprResType &type1,

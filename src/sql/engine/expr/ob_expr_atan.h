@@ -29,6 +29,16 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const;
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const override;
+  static int eval_number_atan_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int eval_double_atan_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
+private:
+  template <typename Arg0Vec, typename ResVec, bool IS_DOUBLE>
+  static int calc_one_param_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
+  template <typename Arg0Vec, typename Arg1Vec, typename ResVec>
+  static int calc_two_param_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprAtan);
 };

@@ -149,7 +149,6 @@ int ObExprArraySort::eval_array_sort_batch(const ObExpr &expr, ObEvalCtx &ctx,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      eval_flags.set(j);
       if (arr_datum.at(j)->is_null()) {
         res_datum.at(j)->set_null();
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id,

@@ -1779,6 +1779,18 @@ bool ObConfigDefaultMicroBlockFormatVersionChecker::check(const ObConfigItem &t)
   return is_valid;
 }
 
+bool ObSQLFuncExtensionChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  bool result = false;
+  if (0 == tmp_str.case_compare("")) {
+    result = true;
+  } else if (0 == tmp_str.case_compare("ClickHouse")) {
+    result = true;
+  }
+  return result;
+}
+
 bool ObConfigZoneDeployModeChecker::check(const ObConfigItem &t) const
 {
   common::ObString tmp_str(t.str());

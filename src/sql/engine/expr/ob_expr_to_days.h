@@ -29,6 +29,8 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const;
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const override;
+  static int calc_to_days_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                  const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprToDays);
 };

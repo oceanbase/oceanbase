@@ -29,6 +29,9 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const;
   static int calc_radians_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                ObDatum &res_datum);
+  template <typename ArgVec, typename ResVec>
+  static int vector_radians(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int calc_radians_vector_expr(VECTOR_EVAL_FUNC_ARG_DECL);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const override;
 private:

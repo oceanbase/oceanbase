@@ -87,11 +87,8 @@ int ObExprDecodeTraceId::calc_decode_trace_id_expr_batch(const ObExpr &expr, ObE
         continue;
       } else if (trace_id_datum_array[idx].is_null()) {
         results[idx].set_null();
-        eval_flags.set(idx);
       } else if (OB_FAIL(calc_one_row(expr, ctx, trace_id_datum_array[idx], results[idx]))) {
         LOG_WARN("calc trace_id failed", K(ret));
-      } else {
-        eval_flags.set(idx);
       }
     }
   }

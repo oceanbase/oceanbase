@@ -19,9 +19,14 @@ namespace oceanbase {
 namespace sql {
 class ObExprInetCommon {
   public :
-  static int str_to_ipv4(int len, const char *str, bool& is_ip_format_invalid, in_addr* ipv4addr);
-  static int str_to_ipv6(int len, const char *str, bool& is_ip_format_invalid, in6_addr* ipv6addr);
+  inline static int str_to_ipv4_nosimd(int len, const char *str, bool& is_ip_format_invalid, in_addr* ipv4addr);
+  inline static int str_to_ipv4(int len, const char *str, bool& is_ip_format_invalid, in_addr* ipv4addr);
+  inline static int str_to_ipv6(int len, const char *str, bool& is_ip_format_invalid, in6_addr* ipv6addr);
+  inline static int str_to_ip(int len, const char *str, bool& is_ip_format_invalid, in6_addr* ipv6addr, bool is_ipv6, bool& is_pure_ipv4);
   static int ip_to_str(ObString& ip_binary, bool& is_ip_format_invalid, ObString& ip_str);
+  static int ipv4_to_str(char* ipv4_binary_ptr, ObString& ip_str);
+  static int ipv6_to_str(char* ipv6_binary_ptr, ObString& ip_str);
+  inline static uint8_t unhex(char c);
 };
 
 class ObExprInetAton : public ObFuncExprOperator {
@@ -61,7 +66,20 @@ public:
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int calc_inet6_ntoa_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
+private:
+  // vectorization helper functions
+  static inline int inet6_ntoa_vector_inner(const ObExpr& expr,
+                                             const ObString &num_val,
+                                             ObString &ip_str,
+                                             bool& is_ip_format_invalid,
+                                             ObEvalCtx &ctx,
+                                             int64_t idx);
+
+  template <typename ArgVec, typename ResVec>
+  static int inet6_ntoa_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInet6Ntoa);
 };
@@ -73,11 +91,22 @@ public:
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_inet6_aton(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int calc_inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
   // helper func
   static int inet6_aton(const ObString& ip, bool& is_ip_format_invalid, ObString& str_result);
+
+  // vector helper functions
+  static inline int inet6_aton_vector_inner(const ObExpr &expr,
+                                             const ObString &ip_str,
+                                             ObString &str_result,
+                                             bool& is_ip_format_invalid,
+                                             int64_t idx,
+                                             ObEvalCtx &ctx);
+  template <typename ArgVec, typename ResVec>
+  static int inet6_aton_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprInet6Aton);
@@ -101,11 +130,15 @@ public:
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_ipv4(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  static int calc_is_ipv4_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 private:
   // helper func
   template <typename T>
   static int is_ipv4(T& result, const common::ObString& text);
+  template <typename ArgVec, typename ResVec>
+  static int is_ipv4_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  template <typename ResVec>
+  static inline int is_ipv4_vector_inner(const common::ObString &str_val, ResVec *res_vec, int64_t idx);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIsIpv4);
@@ -129,12 +162,21 @@ public:
   virtual ~ObExprIsIpv4Mapped();
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
+  static inline bool str_is_ipv4_mapped(struct in6_addr * num_val);
   static int calc_is_ipv4_mapped(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int calc_is_ipv4_mapped_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
 private:
   // helper func
   template <typename T>
   static void is_ipv4_mapped(T& result, const common::ObString& num_val);
+
+  // vectorization helper functions
+  template<typename ResVec>
+  static inline int is_ipv4_mapped_vector_inner(const common::ObString &num_val, ResVec *res_vec, int64_t idx);
+
+  template <typename ArgVec, typename ResVec>
+  static int is_ipv4_mapped_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIsIpv4Mapped);
@@ -158,11 +200,19 @@ public:
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_ipv4_compat(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
+  static int calc_is_ipv4_compat_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
 private:
   // helper func
   template <typename T>
   static void is_ipv4_compat(T& result, const common::ObString& num_val);
+
+  static inline bool str_is_ipv4_compat(struct in6_addr * num_val);
+  template<typename ResVec>
+  static inline int is_ipv4_compat_vector_inner(const common::ObString &num_val, ResVec *res_vec, int64_t idx);
+
+  template <typename ArgVec, typename ResVec>
+  static int is_ipv4_compat_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIsIpv4Compat);
@@ -186,11 +236,15 @@ public:
   virtual int calc_result_type1(ObExprResType& type, ObExprResType& text, common::ObExprTypeCtx& type_ctx) const;
   virtual int cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
   static int calc_is_ipv6(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum);
-
+  static int calc_is_ipv6_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 private:
   // helper func
   template <typename T>
   static int is_ipv6(T& result, const common::ObString& num_val);
+  template <typename ArgVec, typename ResVec>
+  static int is_ipv6_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  template <typename ResVec>
+  static inline int is_ipv6_vector_inner(const common::ObString &str_val, ResVec *res_vec, int64_t idx);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIsIpv6);

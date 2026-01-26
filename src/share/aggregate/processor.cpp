@@ -558,7 +558,8 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     switch (aggr_info.get_expr_type()) {
     case T_FUN_WM_CONCAT:
     case T_FUN_KEEP_WM_CONCAT:
-    case T_FUN_GROUP_CONCAT: {
+    case T_FUN_GROUP_CONCAT:
+    case T_FUN_CK_GROUPCONCAT: {
       if (aggr_info.has_order_by_) {
         agg_ctx.need_advance_collect_ = true;
         ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);

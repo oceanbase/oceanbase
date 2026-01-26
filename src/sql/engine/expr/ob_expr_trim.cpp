@@ -1055,7 +1055,6 @@ static int eval_trim_vector_inner_for_oracle_two_args(
     batch_info_guard.set_batch_idx(idx);
     if (arg_str_vec->is_null(idx) || arg_pattern_vec->is_null(idx)) {
       res_vec->set_null(idx);
-      eval_flags.set(idx);
     } else {
       if (!pattern_is_const) {
         if (!ob_is_text_tc(pattern_meta.type_)) {
@@ -1128,7 +1127,6 @@ static int eval_trim_vector_inner_for_oracle_two_args(
             LOG_WARN("text_trim2_vector failed", K(ret));
           }
         }
-        eval_flags.set(idx);
       }
     }
   }
@@ -1207,7 +1205,6 @@ static int eval_trim_vector_inner_for_others_args(
       if (arg_str_vec->is_null(idx) ||
           (false == is_default_pattern && arg_pattern_vec->is_null(idx))) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         str = arg_str_vec->get_string(idx);
         if (false == pattern_is_const && false == is_default_pattern) {
@@ -1259,7 +1256,6 @@ static int eval_trim_vector_inner_for_others_args(
             LOG_WARN("text_trim_vector failed", K(ret));
           }
         }
-        eval_flags.set(idx);
       }
     }
   }

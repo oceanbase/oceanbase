@@ -166,19 +166,20 @@ int ObExprLength::calc_mysql_length_vector_dispatch(const ObExpr &expr,
   ArgVec *arg_vec = reinterpret_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
   ResVec *res_vec = reinterpret_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool is_lob_storage = common::is_lob_storage(expr.args_[0]->datum_meta_.type_);
   for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
     if (skip.at(idx) || eval_flags.at(idx)) {
       continue;
     } else if (arg_vec->is_null(idx)) {
       res_vec->set_null(idx);
     } else {
-      const char *ptr = NULL;
-      ObLength len = 0;
-      arg_vec->get_payload(idx, ptr, len);
       int64_t res_length = 0;
-      if (!is_lob_storage(expr.args_[0]->datum_meta_.type_)) {
-        res_length = len;
+      if (!is_lob_storage) {
+        res_length = arg_vec->get_length(idx);
       } else {
+        const char *ptr = NULL;
+        ObLength len = 0;
+        arg_vec->get_payload(idx, ptr, len);
         const ObLobCommon *lob = reinterpret_cast<const ObLobCommon *>(ptr);
         if (len != 0 && !lob->is_mem_loc_ && lob->in_row_) {
           res_length = lob->get_byte_size(len);
@@ -201,7 +202,6 @@ int ObExprLength::calc_mysql_length_vector_dispatch(const ObExpr &expr,
       }
       res_vec->set_int(idx, res_length);
     }
-    eval_flags.set(idx);
   } // for end
   return ret;
 }
@@ -277,7 +277,6 @@ int ObExprLength::calc_oracle_length_vector_dispatch(const ObExpr &expr,
         }
       }
     }
-    eval_flags.set(idx);
   } // for end
   return ret;
 }

@@ -693,6 +693,12 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
       return true;
     }
   }
+  case T_FUN_CK_GROUPCONCAT: {
+    uint64_t ob_version = GET_MIN_CLUSTER_VERSION();
+    if (!has_rollup && ob_version >= CLUSTER_VERSION_4_5_1_0) {
+      return true;
+    }
+  }
   case T_FUN_TOP_FRE_HIST: {
     return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_2;
   }
@@ -702,12 +708,22 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
   case T_FUN_ARG_MAX: {
     return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0;
   }
+  case T_FUN_VAR_SAMP: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
+  }
+  case T_FUN_STDDEV_SAMP: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
+  }
   case T_FUN_ARG_MIN: {
     return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0;
   }
   case T_FUN_KEEP_WM_CONCAT:
   case T_FUN_WM_CONCAT: {
     return (!has_rollup && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0);
+  }
+  case T_FUN_ARBITRARY:
+  case T_FUN_ANY: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
   }
   default:
     return false;

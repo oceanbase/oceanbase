@@ -687,7 +687,6 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
           continue;
         } else {
           results[j].set_null();
-          eval_flags.set(j);
         }
       }
     } else if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
@@ -715,10 +714,8 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
               continue;
             } else if (datum_array[j].is_null()) {
               results[j].set_null();
-              eval_flags.set(j);
             } else {
               results[j].set_datum(datum_array[j]);
-              eval_flags.set(j);
             }
           }
         } else {
@@ -728,7 +725,6 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
               continue;
             } else if (datum_array[j].is_null()) {
               results[j].set_null();
-              eval_flags.set(j);
             } else {
               switch (input_tc) {
                 case ObDateTimeTC:
@@ -770,8 +766,6 @@ int ObExprToCharCommon::eval_oracle_to_char_batch(
                 if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, results[j], res, j,
                                                               is_ascii, src_coll_type))) {
                   LOG_WARN("set expr ascii result failed", K(ret));
-                } else {
-                  eval_flags.set(j);
                 }
               }
             }
@@ -835,7 +829,6 @@ int ObExprToCharCommon::inner_eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
         continue;
       } else {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       }
     }
   } else {
@@ -856,7 +849,6 @@ int ObExprToCharCommon::inner_eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
         } else {
           res_vec->set_string(idx, input_vec->get_string(idx));
         }
-        eval_flags.set(idx);
       }
     } else {
       ObString res;
@@ -870,7 +862,6 @@ int ObExprToCharCommon::inner_eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
           input_vec->get_payload(idx, is_null, in_ptr, in_len);
           if (is_null) {
             res_vec->set_null(idx);
-            eval_flags.set(idx);
             continue;
           }
           switch (input_tc) {
@@ -922,12 +913,10 @@ int ObExprToCharCommon::inner_eval_to_char_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
                                                  ObCharset::get_default_charset())
                                            : CS_TYPE_UTF8MB4_BIN;
             }
-            if (OB_FAIL(ObExprUtil::set_expr_asscii_result(expr, ctx, output_result,
+            if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, output_result,
                                                  res, idx, is_ascii,
                                                  src_coll_type))) {
               LOG_WARN("set expr ascii result failed", K(ret));
-            } else {
-              eval_flags.set(idx);
             }
           }
         }

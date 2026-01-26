@@ -1729,6 +1729,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
         || (T_FUN_APPROX_COUNT_DISTINCT == expr.get_expr_type() && expr.get_real_param_count() > 1)
         || (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == expr.get_expr_type() && expr.get_real_param_count() > 1)
         || T_FUN_GROUP_CONCAT == expr.get_expr_type()
+        || T_FUN_CK_GROUPCONCAT == expr.get_expr_type()
         || T_FUN_AGG_UDF == expr.get_expr_type()
         || T_FUN_GROUP_RANK == expr.get_expr_type()
         || T_FUN_GROUP_DENSE_RANK == expr.get_expr_type()
@@ -1771,6 +1772,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
           aggr_expr->set_all_param_col_count(expr.get_param_count());
           if (OB_SUCC(ret) &&
               (T_FUN_GROUP_CONCAT == expr.get_expr_type() ||
+               T_FUN_CK_GROUPCONCAT == expr.get_expr_type() ||
                T_FUN_GROUP_RANK == expr.get_expr_type() ||
                T_FUN_GROUP_DENSE_RANK == expr.get_expr_type() ||
                T_FUN_GROUP_PERCENT_RANK == expr.get_expr_type() ||

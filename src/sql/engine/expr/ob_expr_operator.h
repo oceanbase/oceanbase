@@ -42,6 +42,7 @@
 #include "lib/hash/ob_hashset.h"
 #include "lib/udt/ob_array_utils.h"
 #include "sql/session/ob_local_session_var.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 
 #define GET_EXPR_CTX(ClassType, ctx, id) static_cast<ClassType *>((ctx).get_expr_op_ctx(id))
@@ -686,6 +687,8 @@ public:
   virtual common::ObCastMode get_cast_mode() const;
   virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   static int check_first_param_not_time(const common::ObIArray<ObRawExpr *> &exprs, bool &not_time);
+  inline void set_eval_order(const bool flag) { eager_evaluation_ = flag; }
+  inline bool eager_evaluation() const { return eager_evaluation_; }
   //Extract the info of sys vars which need to be used in resolving or excuting into local_sys_vars.
   DECLARE_SET_LOCAL_SESSION_VARS;
   static int add_local_var_to_expr(share::ObSysVarClassType var_type, const ObBasicSessionInfo *session, ObLocalSessionVar &local_vars);
@@ -791,6 +794,7 @@ protected:
   bool is_valid_for_generated_col_;
   bool is_internal_for_mysql_;
   bool is_internal_for_oracle_;
+  bool eager_evaluation_;
 };
 
 class ObSQLSessionInfo;
@@ -825,7 +829,8 @@ inline ObExprOperator::ObExprOperator(common::ObIAllocator &alloc,
       extra_serialize_(0),
       is_valid_for_generated_col_(valid_for_generated_col == 1),
       is_internal_for_mysql_(is_internal_for_mysql),
-      is_internal_for_oracle_(is_internal_for_oracle)
+      is_internal_for_oracle_(is_internal_for_oracle),
+      eager_evaluation_(false)
 {
 }
 
@@ -1951,6 +1956,19 @@ private:
 class ObBitwiseExprOperator : public ObExprOperator
 {
 public:
+  enum BitOperator
+  {
+    BIT_AND,
+    BIT_OR,
+    BIT_XOR,
+    BIT_LEFT_SHIFT,
+    BIT_RIGHT_SHIFT,
+    BIT_NEG,
+    BIT_COUNT,
+    BIT_MAX,
+  };
+
+public:
   ObBitwiseExprOperator(common::ObIAllocator &alloc,
                         ObExprOperatorType type,
                         const char *name,
@@ -1989,29 +2007,50 @@ public:
   static int calc_result2_mysql(const ObExpr &expr, ObEvalCtx &ctx,
                                 ObDatum &res_datum);
 
+  template<BitOperator op>
   static int calc_bitwise_result2_mysql_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
   static int calc_bitwise_result2_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
   static void convert_tc_size(VecValueTypeClass vec_tc, int &len);
 
-protected:
-  enum BitOperator
-  {
-    BIT_AND,
-    BIT_OR,
-    BIT_XOR,
-    BIT_LEFT_SHIFT,
-    BIT_RIGHT_SHIFT,
-    BIT_NEG,
-    BIT_COUNT,
-    BIT_MAX,
-  };
 
+protected:
+
+  template<BitOperator op>
   static int dispatch_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMode cast_mode);
-  template <typename RES_VEC, typename L_VEC, typename R_VEC>
+  template <BitOperator op, typename RES_VEC, typename L_VEC, typename R_VEC>
   static int inner_calc_vector(VECTOR_EVAL_FUNC_ARG_DECL, ObCastMode cast_mode);
+  template <BitOperator op, typename RES_VEC, typename L_VEC, typename R_VEC, bool isFixed>
+  static int inner_calc_vector_int_specific(VECTOR_EVAL_FUNC_ARG_DECL);
+
+  template<BitOperator op>
+  OB_INLINE static uint64_t calc_bitwise_op(uint64_t left, uint64_t right) {
+    uint64_t res = 0;
+    if constexpr (op == ObBitwiseExprOperator::BIT_AND) {
+        res = left & right;
+    } else if constexpr (op == ObBitwiseExprOperator::BIT_OR) {
+        res = left | right;
+    } else if constexpr (op == ObBitwiseExprOperator::BIT_XOR) {
+        res = left ^ right;
+    } else if constexpr (op == ObBitwiseExprOperator::BIT_LEFT_SHIFT) {
+        res = (right < sizeof(uint64_t) * 8) ? (left << right) : 0;
+    } else if constexpr (op == ObBitwiseExprOperator::BIT_RIGHT_SHIFT) {
+        res = (right < sizeof(uint64_t) * 8) ? (left >> right) : 0;
+    }
+    return res;
+  }
+
+  // this function is checking if the type can be used to optimize the operation
+  // if the type is int/uint or decimal(p, 0) (when p <= MAX_PRECISION_DECIMAL_INT_64), it can be optimized
+  OB_INLINE static bool is_int_specific(const ObDatumMeta &datum_meta) {
+    ObObjType calc_type = datum_meta.get_type();
+    const int16_t calc_precision = datum_meta.precision_;
+    const int16_t calc_scale = datum_meta.scale_;
+    return ob_is_int_uint_tc(calc_type) || (ob_is_decimal_int_tc(calc_type) && calc_precision <= MAX_PRECISION_DECIMAL_INT_64 && calc_scale == 0);
+  }
 
   // 从datum中获取int64/uint64, 针对number需要有round/trunc操作，针对int tc会直接获取
   // int值
@@ -2172,12 +2211,25 @@ public:
   // for sql engine 3.0
   static int calc_(const ObExpr &expr, const ObExpr &sub_arg, const ObExpr &ori_arg,
                    ObEvalCtx &ctx, ObDatum &res_datum);
+  template <bool SEARCH_IN_BINARY>
+  static int calc_vector(ObEvalCtx &ctx, const ObCollationType &calc_cs_type,
+                        const ObExpr &sub_arg, const ObExpr &ori_arg,
+                        const ObString &sub_str, const ObString &ori_str,
+                        int64_t pos_int, int64_t &result);
   static int calc_location_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int calc_location_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int get_calc_cs_type(const ObExpr &expr, common::ObCollationType &calc_cs_type);
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const;
 private:
+  template <typename SubVec, typename OriVec, typename ResVec>
+  static int vector_location(const ObExpr &expr,
+                             ObEvalCtx &ctx,
+                             const ObBitVector &skip,
+                             const EvalBound &bound);
   OB_INLINE static int get_pos_int64(const common::ObObj &obj, common::ObExprCtx &expr_ctx, int64_t &out);
+  OB_INLINE static int handle_null_pos(bool is_oracle_mode, const ObExpr &expr, ObEvalCtx &ctx, bool &is_null, bool &is_zero);
+  OB_INLINE static int eval_vector_param_value_for_locate(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 };
 
 class ObExprSingleFormatCtx : public ObExprOperatorCtx
@@ -2222,12 +2274,15 @@ private:
 class ObExprFindIntCachedValue : public ObExprOperatorCtx
 {
   typedef common::hash::ObHashMap<common::ObString, uint64_t, hash::NoPthreadDefendMode> HASH_MAP_TYPE;
+  typedef common::ObArray<common::ObString> ARRAY_TYPE;
 public:
   ObExprFindIntCachedValue() {}
   virtual ~ObExprFindIntCachedValue();
   HASH_MAP_TYPE &get_hashmap() { return hash_map_; }
+  ARRAY_TYPE &get_str_array() { return str_array_; }
 private:
   HASH_MAP_TYPE hash_map_;
+  ARRAY_TYPE str_array_;
 };
 
 class ObExprTRDateFormat
@@ -2270,6 +2325,24 @@ public:
     FORMAT_MAX_TYPE
   };
 
+  // 通用的时间单位枚举（用于模板参数）
+  enum class TruncTimeUnit : int8_t {
+    MICROSECONDS = 0,
+    MILLISECONDS,
+    SECOND,
+    MINUTE,
+    HOUR,
+    DAY,
+    WEEK,           // ISO 8601 week (Monday start)
+    MONTH,
+    QUARTER,
+    YEAR,
+    DECADE,
+    CENTURY,
+    MILLENNIUM,
+    INVALID = -1
+  };
+
   static int init();
   static int calc_hash(const char *p, int64_t len, uint64_t &hash);
   static int trunc_new_obtime(common::ObTime &ob_time,
@@ -2284,6 +2357,10 @@ public:
                                         int64_t fmt_id);
   static int round_new_obtime_by_fmt_id(common::ObTime &ob_time,
                                         int64_t fmt_id);
+
+  // 模板函数：根据时间单位截断 ObTime（支持编译期特化）
+  template <TruncTimeUnit UNIT>
+  static int trunc_obtime_by_unit_template(common::ObTime &ob_time, bool is_mysql_compat_dates = false);
   inline static void get_format_id(const uint64_t fmt_hash, int64_t &fmt_id)
   {
     fmt_id = SYYYY;

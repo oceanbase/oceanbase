@@ -1226,6 +1226,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultMicroBlockFormatVersionChecker);
 };
 
+class ObSQLFuncExtensionChecker
+  : public ObConfigChecker
+{
+public:
+  ObSQLFuncExtensionChecker() {}
+  virtual ~ObSQLFuncExtensionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSQLFuncExtensionChecker);
+};
+
 class ObConfigDefaultDeltaFormatChecker : public ObConfigChecker
 {
 public:
@@ -1233,6 +1244,7 @@ public:
   virtual ~ObConfigDefaultDeltaFormatChecker() = default;
   bool check(const ObConfigItem &t) const;
   DISABLE_COPY_ASSIGN(ObConfigDefaultDeltaFormatChecker);
+
 };
 
 

@@ -631,7 +631,6 @@ int ObExprUuid2bin::uuid2bin_batch(const ObExpr &expr,
           res_datum[i].set_string(res_buf, UuidCommon::BYTE_LENGTH);
         }
       }
-      eval_flags.set(i);
     }
   }
   return ret;
@@ -725,7 +724,6 @@ int ObExprIsUuid::is_uuid_batch(const ObExpr &expr,
           res_datum[i].set_bool(is_valid);
         }
       }
-      eval_flags.set(i);
     }
   }
   return ret;
@@ -981,7 +979,6 @@ int ObExprBin2uuid::bin2uuid_batch(const ObExpr &expr,
           }
         }
       }
-      eval_flags.set(i);
     }
   }
   return ret;

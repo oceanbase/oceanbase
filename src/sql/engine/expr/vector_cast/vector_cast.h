@@ -277,6 +277,9 @@ struct VectorCasterUtil
 #define SET_RES_DATETIME(idx, value)    \
   SET_RES_OBJ(expr.extra_, datetime,ObTimeConverter::ZERO_DATETIME, value, idx)
 
+#define SET_RES_TIME(idx, value)    \
+  SET_RES_OBJ(expr.extra_, time,ObTimeConverter::ZERO_TIME, value, idx)
+
 #define EVAL_COMMON_ARG()                                                                   \
   int ret = OB_SUCCESS;                                                                     \
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);                                  \
@@ -305,6 +308,7 @@ struct VectorCasterUtil
 #include "sql/engine/expr/vector_cast/cast_to_number.ipp"
 #include "sql/engine/expr/vector_cast/cast_to_datetime.ipp"
 #include "sql/engine/expr/vector_cast/cast_to_string.ipp"
+#include "sql/engine/expr/vector_cast/cast_to_time.ipp"
 
 #undef DEF_VECTOR_IMPLICIT_CAST_FUNC
 #undef CAST_FAIL

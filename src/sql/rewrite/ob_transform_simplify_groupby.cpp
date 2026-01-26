@@ -772,7 +772,8 @@ int ObTransformSimplifyGroupby::check_can_remove_redundant_aggr(
       break;
     }
     case T_FUN_GROUP_CONCAT:
-    case T_FUN_COUNT: {
+    case T_FUN_COUNT:
+    case T_FUN_CK_GROUPCONCAT: {
       // do not rewrite group_concat and count with multiple parameters for now
       can_remove = aggr_expr.is_param_distinct() && (1 == aggr_expr.get_real_param_count());
       break;
@@ -813,7 +814,8 @@ int ObTransformSimplifyGroupby::simplify_redundant_aggr(
       case T_FUN_MIN:
       case T_FUN_MEDIAN:
       case T_FUN_SUM:
-      case T_FUN_GROUP_CONCAT: {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_CK_GROUPCONCAT: {
         // max/min/median -> expr
         // sum/group_concat(distinct expr) -> expr
         new_expr = param_expr;
@@ -918,7 +920,8 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
       } else if (T_FUN_SUM == aggr_expr->get_expr_type() ||
                  T_FUN_COUNT == aggr_expr->get_expr_type() ||
                  T_FUN_GROUP_CONCAT == aggr_expr->get_expr_type() ||
-                 T_FUNC_SYS_ARRAY_AGG == aggr_expr->get_expr_type()) {
+                 T_FUNC_SYS_ARRAY_AGG == aggr_expr->get_expr_type() ||
+                 (T_FUN_CK_GROUPCONCAT == aggr_expr->get_expr_type() && aggr_expr->get_real_param_count() == 1)) {
         // sum/count/group_concat(distinct) 要求param在做group by之前是非严格unique的
         ObSEArray<ObRawExpr *, 4> aggr_param_exprs;
         bool is_unique = false;
@@ -1336,7 +1339,8 @@ int ObTransformSimplifyGroupby::check_aggr_win_can_be_removed(const ObDMLStmt *s
       can_remove = true;
       break;
     }
-    case T_FUN_GROUP_CONCAT:{
+    case T_FUN_GROUP_CONCAT:
+    case T_FUN_CK_GROUPCONCAT: {
       if (OB_ISNULL(aggr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected func", K(ret));
@@ -1482,6 +1486,7 @@ int ObTransformSimplifyGroupby::transform_aggr_win_to_common_expr(ObSelectStmt *
     case T_FUN_AVG:
     case T_FUN_SUM:
     case T_FUN_GROUP_CONCAT:
+    case T_FUN_CK_GROUPCONCAT:
     case T_FUN_MEDIAN:
     case T_FUN_KEEP_MAX:
     case T_FUN_KEEP_MIN:

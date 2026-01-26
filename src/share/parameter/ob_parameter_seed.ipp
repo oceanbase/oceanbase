@@ -3180,6 +3180,14 @@ DEF_BOOL(ob_enable_python_udf, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(ob_enable_utl_http, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_HTTP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR_WITH_CHECKER(sql_func_extension_mode, OB_TENANT_PARAMETER, "",
+                     common::ObSQLFuncExtensionChecker,
+                     "Controls whether to enable some mainstream compatibility mode functions whose naming style is inconsistent with MySQL, such as ClickHouse."
+                     "\"\" represents the default mode, which only supports MySQL-style functions."
+                     "\"ClickHouse\" represents ClickHouse extended mode, which supports not only MySQL-style functions but also ClickHouse functions.",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(ob_enable_utl_tcp, OB_CLUSTER_PARAMETER, "False",
          "controls whether UTL_TCP is enabled",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -47,7 +47,8 @@ int ReuseAggCellMgr::init(RuntimeContext &agg_ctx)
       }
       case T_FUN_WM_CONCAT:
       case T_FUN_KEEP_WM_CONCAT:
-      case T_FUN_GROUP_CONCAT: {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_CK_GROUPCONCAT: {
         DO_INIT_CELL(T_FUN_GROUP_CONCAT);
         break;
       }
@@ -99,7 +100,8 @@ int ReuseAggCellMgr::save(RuntimeContext &agg_ctx, const char *agg_row)
       }
       case T_FUN_WM_CONCAT:
       case T_FUN_KEEP_WM_CONCAT:
-      case T_FUN_GROUP_CONCAT: {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_CK_GROUPCONCAT: {
         DO_SAVE(T_FUN_GROUP_CONCAT);
         break;
       }
@@ -154,7 +156,8 @@ int ReuseAggCellMgr::restore(RuntimeContext &agg_ctx, char *agg_row)
       }
       case T_FUN_WM_CONCAT:
       case T_FUN_KEEP_WM_CONCAT:
-      case T_FUN_GROUP_CONCAT: {
+      case T_FUN_GROUP_CONCAT:
+      case T_FUN_CK_GROUPCONCAT: {
         DO_RESTORE(T_FUN_GROUP_CONCAT);
         break;
       }

@@ -128,7 +128,6 @@ int ObExprMakeTime::eval_batch_maketime(const ObExpr &expr, ObEvalCtx &ctx,
           }
         }
       }
-      eval_flags.set(i);
     }
   }
   LOG_DEBUG("eval_batch_maketime finished: batch mode", K(batch_size));

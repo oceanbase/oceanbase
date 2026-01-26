@@ -1218,6 +1218,7 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_CUR_DATE == type_
           || T_FUN_SYS_CUR_TIME == type_
           || T_FUN_SYS_CUR_TIMESTAMP == type_
+          || T_FUN_SYS_TO_UNIX_TIMESTAMP == type_
           || T_FUN_SYS_UNIX_TIMESTAMP == type_
           || T_FUN_SYS_UTC_TIME == type_
           || T_FUN_SYS_UTC_TIMESTAMP == type_
@@ -4110,6 +4111,7 @@ int ObAggFunRawExpr::assign(const ObRawExpr &other)
         udf_meta_.assign(tmp.udf_meta_);
         is_need_deserialize_row_ = tmp.is_need_deserialize_row_;
         keep_sum_precision_ = tmp.keep_sum_precision_;
+        is_ignore_null_ = tmp.is_ignore_null_;
       }
     }
   }
@@ -4188,6 +4190,8 @@ bool ObAggFunRawExpr::inner_same_as(
       //do nothing.
     } else if (keep_sum_precision_ != a_expr->keep_sum_precision_) {
       // do nothing
+    } else if (is_ignore_null_ != a_expr->is_ignore_null_) {
+      // do nothing
     } else if (distinct_ == a_expr->is_param_distinct()) {
       if ((NULL == separator_param_expr_ && NULL == a_expr->separator_param_expr_)
           || (NULL != separator_param_expr_ && NULL != a_expr->separator_param_expr_
@@ -4253,6 +4257,7 @@ void ObAggFunRawExpr::inner_calc_hash()
   }
   expr_hash_ = common::do_hash(is_need_deserialize_row_, expr_hash_);
   expr_hash_ = common::do_hash(keep_sum_precision_, expr_hash_);
+  expr_hash_ = common::do_hash(is_ignore_null_, expr_hash_);
   if (NULL != pl_agg_udf_expr_) {
     expr_hash_ = common::do_hash(pl_agg_udf_expr_->get_expr_hash(), expr_hash_);
   }
@@ -4360,6 +4365,13 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
       } else if (OB_FAIL(get_real_param_exprs().at(0)->get_name(buf, buf_len, pos, type))) {
           LOG_WARN("fail to get_name", K(i), K(ret));
       } else {}
+    } else if (T_FUN_CK_GROUPCONCAT == get_expr_type()) {
+      if (0 == get_real_param_count() || 2 < get_real_param_count()) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("invalid number of arguments", K(ret), K(get_expr_type()));
+      } else if (OB_FAIL(get_real_param_exprs().at(0)->get_name(buf, buf_len, pos, type))) {
+        LOG_WARN("fail to get_name", K(i), K(ret));
+      } else {}
     } else {
       for (; OB_SUCC(ret) && i < get_real_param_count() - 1; ++i) {
         if (OB_ISNULL(get_real_param_exprs().at(i))) {
@@ -4390,6 +4402,7 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     }
     if (OB_SUCCESS == ret &&
         (T_FUN_GROUP_CONCAT == get_expr_type() ||
+         T_FUN_CK_GROUPCONCAT == get_expr_type() ||
          T_FUN_GROUP_RANK == get_expr_type() ||
          T_FUN_GROUP_DENSE_RANK == get_expr_type() ||
          T_FUN_GROUP_PERCENT_RANK == get_expr_type() ||
@@ -4401,6 +4414,15 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
          T_FUN_KEEP_SUM == get_expr_type() ||
          T_FUN_KEEP_COUNT == get_expr_type() ||
          T_FUN_KEEP_WM_CONCAT == get_expr_type())) {
+      if (T_FUN_CK_GROUPCONCAT == get_expr_type() && get_real_param_count() > 1) {
+        if (OB_FAIL(BUF_PRINTF(" limit("))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(get_real_param_exprs().at(1)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else {}
+      }
       if (order_items_.count() > 0) {
         if (OB_FAIL(BUF_PRINTF(" order_items("))) {
           LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -6455,7 +6477,9 @@ bool ObWinFunRawExpr::inner_same_as(const ObRawExpr &expr,
       bret = false;
     //对于lead和lag两个函数也需要检查is_ignore_null_这个字段
     } else if ((T_WIN_FUN_LAG == other_ma.get_func_type()
-        || T_WIN_FUN_LEAD == other_ma.get_func_type())
+        || T_WIN_FUN_LEAD == other_ma.get_func_type()
+        || T_WIN_FUN_LAG_IN_FRAME == other_ma.get_func_type()
+        || T_WIN_FUN_LEAD_IN_FRAME == other_ma.get_func_type())
         && other_ma.is_ignore_null_ != is_ignore_null_) {
       bret = false;
     //如果是聚集函数的窗口函数，需要比较聚集函数。
@@ -6510,7 +6534,7 @@ void ObWinFunRawExpr::inner_calc_hash()
   if (T_WIN_FUN_NTH_VALUE == get_func_type()) {
     expr_hash_ = common::do_hash(is_from_first_, expr_hash_);
     expr_hash_ = common::do_hash(is_ignore_null_, expr_hash_);
-  } else if (T_WIN_FUN_LAG == get_func_type() || T_WIN_FUN_LEAD == get_func_type()) {
+  } else if (T_WIN_FUN_LAG == get_func_type() || T_WIN_FUN_LEAD == get_func_type() || T_WIN_FUN_LEAD_IN_FRAME == get_func_type() || T_WIN_FUN_LAG_IN_FRAME == get_func_type()) {
     expr_hash_ = common::do_hash(is_ignore_null_, expr_hash_);
   } else if (agg_expr_ != NULL) {
     expr_hash_ = common::do_hash(agg_expr_->get_expr_hash(), expr_hash_);

@@ -377,7 +377,6 @@ static int eval_vector_is_null(const ObExpr &expr,
         res_vec->set_int(idx, static_cast<int64_t>(arg_null));
       }
     }
-    eval_flags.set_all(bound.start(), bound.end());
   } else {
     for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
@@ -390,7 +389,6 @@ static int eval_vector_is_null(const ObExpr &expr,
       } else {
         res_vec->set_int(idx, static_cast<int64_t>(arg_null));
       }
-      eval_flags.set(idx);
     }
   }
   return ret;
@@ -464,7 +462,6 @@ static int eval_vector_is_true(const ObExpr &expr,
         res_vec->set_int(idx, static_cast<int64_t>(arg_is_true));
       }
     }
-    eval_flags.set_all(bound.start(), bound.end());
   } else {
     for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
@@ -483,7 +480,6 @@ static int eval_vector_is_true(const ObExpr &expr,
       } else {
         res_vec->set_int(idx, static_cast<int64_t>(arg_is_true));
       }
-      eval_flags.set(idx);
     }
   }
   return ret;
@@ -674,7 +670,6 @@ int ObExprIsNot::calc_batch_is_not_null(const ObExpr &expr, ObEvalCtx &ctx,
       ObDatum &arg = expr.args_[0]->locate_expr_datum(ctx, i);
       bool v = !arg.is_null();
       results[i].set_int32(static_cast<int32_t>(v));
-      eval_flags.set(i);
     }
   }
   return ret;

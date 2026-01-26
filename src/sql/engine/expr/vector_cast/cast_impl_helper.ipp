@@ -71,18 +71,15 @@ public:
       for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = calc(expr, idx);
       }
-      eval_flags.set_all(bound.start(), bound.end());
     } else {
       for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         if (skip.at(idx) || eval_flags.at(idx)) {
           continue;
         } else if (arg_vec->is_null(idx)) {
           res_vec->set_null(idx);
-          eval_flags.set(idx);
           continue;
         }
         ret = calc(expr, idx);
-        eval_flags.set(idx);
         if (OB_FAIL(ret) && is_diagnosis) {
           // overwrite ret on diagnosis node
           if (OB_FAIL(diagnosis_manager.add_warning_info(ret, idx))) {

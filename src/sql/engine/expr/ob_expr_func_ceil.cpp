@@ -154,17 +154,14 @@ public:
       for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
         ret = eval_scalar(arg_vec, i, res_vec);
       }
-      eval_flags_.set_all(bound_.start(), bound_.end());
     } else {
       for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
         if (skip_.at(i) || eval_flags_.at(i)) {
           continue;
         } else if (OB_UNLIKELY(arg_vec->is_null(i))) {
           res_vec->set_null(i);
-          eval_flags_.set(i);
         } else {
           ret = eval_scalar(arg_vec, i, res_vec);
-          eval_flags_.set(i);
         }
       }
     }
@@ -207,17 +204,14 @@ public:
       for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
         ret = eval_scalar(arg_vec, i, res_vec);
       }
-      eval_flags_.set_all(bound_.start(), bound_.end());
     } else {
       for (int i = bound_.start(); OB_SUCC(ret) && i < bound_.end(); ++i) {
         if (OB_UNLIKELY(skip_.at(i) || eval_flags_.at(i))) {
           continue;
         } else if (OB_UNLIKELY(arg_vec->is_null(i))) {
           res_vec->set_null(i);
-          eval_flags_.set(i);
         } else {
           ret = eval_scalar(arg_vec, i, res_vec);
-          eval_flags_.set(i);
         }
       }
     }
@@ -511,7 +505,6 @@ int do_eval_batch_ceil_floor(const ObExpr &expr,
                 K(ret), K(IS_FLOOR), K(in_meta), K(out_meta), K(arg_datums.at(i)->get_int_bytes()));
         }
       }
-      eval_flag.set(i);
     }
   }
   return ret;
@@ -614,7 +607,6 @@ if (IsCheck) {                             \
     continue;                              \
   } else if (left_vec->is_null(j)) {       \
     res_vec->set_null(j);                  \
-    eval_flags.set(j);                     \
     continue;                              \
   }                                        \
 }
@@ -667,12 +659,10 @@ static int do_eval_ceil_floor_vector(const ObExpr &expr,ObEvalCtx &ctx,
           if (OB_FAIL(ret)) {
           } else if (ObNumberTC == ob_obj_type_class(res_type)) {
             res_vec->set_number(j, res_nmb);
-            eval_flags.set(j);
           } else if (ob_is_integer_type(res_type)) {
             int64_t res_int = 0;
             if (res_nmb.is_valid_int64(res_int)) {
               res_vec->set_int(j, res_int);
-              eval_flags.set(j);
             } else {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected res type", K(ret), K(res_type));

@@ -414,8 +414,169 @@ int ObExprDateSub::calc_date_sub(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   return ObExprDateAdjust::calc_date_adjust(expr, ctx, expr_datum, false /* is_add */);
 }
 
+ObExprMonthAdjust::ObExprMonthAdjust(ObIAllocator &alloc,
+                                     ObExprOperatorType type,
+                                     const char *name,
+                                     int32_t param_num,
+                                     int32_t dimension)
+    : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+{
+}
+
+int ObExprMonthAdjust::calc_months_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  const ObSQLSessionInfo *session = NULL;
+  const ObObjType res_type = expr.datum_meta_.type_;
+  const ObObjType date_type = expr.args_[0]->datum_meta_.type_;
+  ObDatum *date = NULL;
+  ObDatum *month_param = NULL;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSQLMode sql_mode = 0;
+  bool has_set_value = false;
+  if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    if (OB_FAIL(expr.args_[0]->eval(ctx, date))) {
+      LOG_WARN("eval first param value failed", K(ret));
+    } else if (date->is_null()) { // 短路计算
+      expr_datum.set_null();
+      has_set_value = true;
+    } else if (OB_FAIL(expr.args_[1]->eval(ctx, month_param))) {
+      LOG_WARN("eval second param value failed", K(ret));
+    } else if (month_param->is_null()) {
+      expr_datum.set_null();
+      has_set_value = true;
+    }
+  } else {
+    if (OB_FAIL(expr.eval_param_value(ctx, date, month_param))) {
+      LOG_WARN("eval param value failed", K(ret));
+    } else if (OB_UNLIKELY(date->is_null() || month_param->is_null())) {
+      expr_datum.set_null();
+      has_set_value = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !has_set_value) {
+    if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+      LOG_WARN("get sql mode failed", K(ret));
+    } else if (date_type == ObTimeType) {
+      expr_datum.set_null();
+    } else {
+      ObTime ori_ob_time;
+      ObTime res_ob_time;
+      bool need_check_date = ob_is_mysql_compact_dates_type(date_type);
+      ObDateSqlMode date_sql_mode;
+      ObDateSqlMode mysql_date_sql_mode;
+      date_sql_mode.init(sql_mode);
+      mysql_date_sql_mode.allow_invalid_dates_ = date_sql_mode.allow_invalid_dates_;
+
+      ObTimeConvertCtx cvrt_ctx(NULL, false);
+      int64_t months_int = 0;
+
+      const ObObjType month_type = expr.args_[1]->datum_meta_.type_;
+      if (ObIntType == month_type) {
+        months_int = month_param->get_int();
+      } else {
+        number::ObNumber months_nmb(month_param->get_number());
+        if (OB_FAIL(months_nmb.extract_valid_int64_with_trunc(months_int))) {
+          LOG_WARN("fail to extract int64 from number", K(ret), K(months_nmb));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ob_datum_to_ob_time_with_date(*date, date_type,
+                                                  expr.args_[0]->datum_meta_.scale_,
+                                                  NULL,
+                                                  ori_ob_time,
+                                                  0,
+                                                  date_sql_mode,
+                                                  expr.args_[0]->obj_meta_.has_lob_header()))) {
+          if (lib::is_oracle_mode()) {
+            LOG_WARN("fail to convert ob_time", K(ret));
+          } else {
+            expr_datum.set_null();
+            ret = OB_SUCCESS;
+            has_set_value = true;
+          }
+        } else if (need_check_date
+                   && OB_FAIL(ObTimeConverter::validate_datetime(ori_ob_time, mysql_date_sql_mode))) {
+          expr_datum.set_null();
+          has_set_value = true;
+          ret = OB_SUCCESS;
+        }
+      }
+
+      res_ob_time = ori_ob_time;
+      if (OB_SUCC(ret) && !has_set_value) {
+        if (lib::is_oracle_mode()) {
+          if (OB_FAIL(ObTimeConverter::date_add_nmonth_for_oracle(res_ob_time, months_int, true, !need_check_date))) {
+            LOG_WARN("fail to date add nmonth", K(ret));
+          }
+        } else {
+          if (OB_FAIL(ObTimeConverter::date_add_nmonth_for_mysql(res_ob_time, months_int, !need_check_date))) {
+            if (ret == OB_DATETIME_FUNCTION_OVERFLOW) {
+              expr_datum.set_null();
+              has_set_value = true;
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to date add nmonth", K(ret));
+            }
+          } else if (OB_FAIL(ObTimeConverter::validate_datetime(res_ob_time, mysql_date_sql_mode))) {
+            LOG_WARN("fail to validate datetime", K(ret), K(res_ob_time));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && !has_set_value) {
+        if (OB_FAIL(set_result_by_ob_time(res_type, cvrt_ctx, ori_ob_time, res_ob_time,
+                                          expr_datum))) {
+          LOG_WARN("fail to set result by ob_time", K(ret), K(res_ob_time));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+inline int ObExprMonthAdjust::set_result_by_ob_time(const ObObjType res_type,
+                                                    const ObTimeConvertCtx &cvrt_ctx,
+                                                    ObTime &ob_time,
+                                                    ObTime &res_ob_time,
+                                                    ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  if (ObDateTimeType == res_type) {
+    int64_t dt_val = 0;
+    if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(res_ob_time, cvrt_ctx, dt_val))) {
+      LOG_WARN("fail to convert ob_time to datetime", K(ret), K(res_ob_time));
+    } else {
+      expr_datum.set_datetime(dt_val);
+    }
+  } else if (ObMySQLDateTimeType == res_type) {
+    ObMySQLDateTime mdatetime;
+    if (OB_FAIL(ObTimeConverter::ob_time_to_mdatetime(res_ob_time, mdatetime))) {
+      LOG_WARN("fail to convert ob_time to mdatetime", K(ret), K(res_ob_time));
+    } else {
+      expr_datum.set_mysql_datetime(mdatetime);
+    }
+  } else if (ObDateType == res_type) {
+    int32_t date_val = res_ob_time.parts_[DT_DATE];
+    expr_datum.set_date(date_val);
+  } else if (ObMySQLDateType == res_type) {
+    ObMySQLDate mdate = ObTimeConverter::ob_time_to_mdate(res_ob_time);
+    expr_datum.set_mysql_date(mdate);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected result type for add_months", K(ret), K(res_type));
+  }
+
+  return ret;
+}
+
 ObExprAddMonths::ObExprAddMonths(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ADD_MONTHS, N_ADD_MONTHS, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+    : ObExprMonthAdjust(alloc, T_FUN_SYS_ADD_MONTHS, N_ADD_MONTHS, 2, NOT_ROW_DIMENSION)
 {
 }
 
@@ -425,7 +586,6 @@ int ObExprAddMonths::calc_result_type2(ObExprResType &type,
                                        common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  UNUSED(type_ctx);
   type.set_datetime();
   type.set_scale(OB_MAX_DATE_PRECISION);
   type1.set_calc_type(ObDateTimeType);
@@ -435,8 +595,8 @@ int ObExprAddMonths::calc_result_type2(ObExprResType &type,
 }
 
 int ObExprAddMonths::cg_expr(ObExprCGCtx &op_cg_ctx,
-                    const ObRawExpr &raw_expr,
-                    ObExpr &rt_expr) const
+                             const ObRawExpr &raw_expr,
+                             ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
@@ -448,44 +608,110 @@ int ObExprAddMonths::cg_expr(ObExprCGCtx &op_cg_ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children of add_months expr is null", K(ret), K(rt_expr.args_));
   } else if (OB_ISNULL(rt_expr.args_[0]) ||
-              OB_ISNULL(rt_expr.args_[1])) {
+             OB_ISNULL(rt_expr.args_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child of add_months expr is null", K(ret), K(rt_expr.args_[0]), K(rt_expr.args_[1]));
   } else {
     rt_expr.eval_func_ = ObExprAddMonths::calc_add_months;
+    const ObObjType arg_type = rt_expr.args_[0]->datum_meta_.type_;
+    const ObObjType res_type = rt_expr.datum_meta_.type_;
+    if ((ob_is_datetime_or_mysql_datetime_tc(arg_type) || ob_is_date_or_mysql_date(arg_type))
+        && (ob_is_datetime_or_mysql_datetime_tc(res_type) || ob_is_date_or_mysql_date(res_type))) {
+      rt_expr.eval_vector_func_ = ObExprAddMonths::calc_add_months_vector;
+    }
   }
   return ret;
 }
 
 int ObExprAddMonths::calc_add_months(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
-  int ret = OB_SUCCESS;
-  ObDatum *param1 = NULL;
-  ObDatum *param2 = NULL;
-  if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {
-    LOG_WARN("eval first param value failed");
-  } else if (param1->is_null()) { //短路计算
-    expr_datum.set_null();
-  } else if (OB_FAIL(expr.args_[1]->eval(ctx, param2))) {
-    LOG_WARN("eval second param value failed");
-  } else if (param2->is_null()) {
-    expr_datum.set_null();
-  } else {
-    int64_t ori_date_utc = param1->get_datetime();
-    number::ObNumber months(param2->get_number());
-    int64_t months_int = 0;
-    int64_t res_date_utc = 0;
+  return ObExprMonthAdjust::calc_months_adjust(expr, ctx, expr_datum);
+}
 
-    if (OB_FAIL(months.extract_valid_int64_with_trunc(months_int))) {
-      LOG_WARN("fail to do round", K(ret));
-    } else if (OB_FAIL(ObTimeConverter::date_add_nmonth(ori_date_utc, months_int,
-                                                        res_date_utc, true))) {
-      LOG_WARN("fail to date add nmonth", K(ret));
+int ObExprAddMonths::calc_add_months_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  return ObExprMonthAdjust::calc_months_adjust_vector(VECTOR_EVAL_FUNC_ARG_LIST);
+}
+
+ObExprMonthsAdd::ObExprMonthsAdd(ObIAllocator &alloc)
+    : ObExprMonthAdjust(alloc, T_FUN_SYS_MONTHS_ADD, N_MONTHS_ADD, 2, NOT_ROW_DIMENSION)
+{
+}
+
+int ObExprMonthsAdd::calc_result_type2(ObExprResType &type,
+                                       ObExprResType &type1,
+                                       ObExprResType &type2,
+                                       common::ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (ObNullType == type1.get_type()) {
+    type.set_null();
+  } else if (ObDateTimeType == type1.get_type() || ObTimestampType == type1.get_type()) {
+    type.set_datetime();
+    type1.set_calc_type(ObDateTimeType);
+  } else if (ObMySQLDateTimeType == type1.get_type() || ObDateType == type1.get_type() || ObMySQLDateType == type1.get_type()) {
+    type.set_type(type1.get_type());
+  } else if (ob_is_string_tc(type1.get_type()) || ob_is_int_tc(type1.get_type())) {
+    type.set_datetime();
+    type1.set_calc_type(ObVarcharType);
+    type1.set_calc_collation_utf8();
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unsupported type", K(ret), K(type1.get_type()));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "unsupported type");
+  }
+  if (OB_SUCC(ret)) {
+    ObScale scale = 0;
+    if (type1.is_datetime() || type1.is_timestamp() || type1.is_time() || type1.is_mysql_datetime()) {
+      scale = type1.get_scale();
+    } else if (type1.is_date() || type1.is_mysql_date()) {
+      scale = 0;
     } else {
-      expr_datum.set_datetime(res_date_utc);
+      scale = -1;
+    }
+    type.set_scale(scale);
+  }
+  type2.set_calc_type(ObIntType);
+  return ret;
+}
+
+int ObExprMonthsAdd::cg_expr(ObExprCGCtx &op_cg_ctx,
+                             const ObRawExpr &raw_expr,
+                             ObExpr &rt_expr) const
+{
+  UNUSED(op_cg_ctx);
+  UNUSED(raw_expr);
+  int ret = OB_SUCCESS;
+  if (rt_expr.arg_cnt_ != 2) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("add_months expr should have 2 params", K(ret), K(rt_expr.arg_cnt_));
+  } else if (OB_ISNULL(rt_expr.args_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children of add_months expr is null", K(ret), K(rt_expr.args_));
+  } else if (OB_ISNULL(rt_expr.args_[0]) ||
+             OB_ISNULL(rt_expr.args_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child of add_months expr is null", K(ret), K(rt_expr.args_[0]), K(rt_expr.args_[1]));
+  } else {
+    rt_expr.eval_func_ = ObExprMonthsAdd::calc_months_add;
+    const ObObjType arg_type = rt_expr.args_[0]->datum_meta_.type_;
+    const ObObjType res_type = rt_expr.datum_meta_.type_;
+    if ((ob_is_datetime_or_mysql_datetime_tc(arg_type) || ob_is_date_or_mysql_date(arg_type))
+        && (ob_is_datetime_or_mysql_datetime_tc(res_type) || ob_is_date_or_mysql_date(res_type))) {
+      rt_expr.eval_vector_func_ = ObExprMonthsAdd::calc_months_add_vector;
     }
   }
   return ret;
+}
+
+int ObExprMonthsAdd::calc_months_add(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  return ObExprMonthAdjust::calc_months_adjust(expr, ctx, expr_datum);
+}
+
+int ObExprMonthsAdd::calc_months_add_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  return ObExprMonthAdjust::calc_months_adjust_vector(VECTOR_EVAL_FUNC_ARG_LIST);
 }
 
 ObExprLastDay::ObExprLastDay(ObIAllocator &alloc)
@@ -674,7 +900,7 @@ int ObExprNextDay::calc_next_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   ObDatum *param2 = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {
     LOG_WARN("eval first param value failed");
-  } else if (param1->is_null()) { //短路计算
+  } else if (param1->is_null()) { // short-circuit evaluation
     expr_datum.set_null();
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, param2))) {
     LOG_WARN("eval second param value failed");
@@ -736,7 +962,6 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                unit_type_vec->is_null(idx) ||
                interval_vec->is_null(idx)) {
       res_vec->set_null(idx);
-      eval_flags.set(idx);
       continue;
     }
     DateType date = 0;
@@ -746,7 +971,6 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
       LOG_WARN("get date usec from vec failed", K(ret), K(date), K(usec), K(tz_offset));
     } else if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == date)) {
       res_vec->set_null(idx);
-      eval_flags.set(idx);
     } else {
       int64_t res_dt_val = 0;
       int64_t dt_val = date * USECS_PER_DAY + usec;
@@ -768,7 +992,6 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
                                                res_dt_val, is_add, date_sql_mode))) {
         if (OB_UNLIKELY(OB_INVALID_DATE_VALUE == ret || OB_TOO_MANY_DATETIME_PARTS == ret)) {
           res_vec->set_null(idx);
-          eval_flags.set(idx);
           if (OB_TOO_MANY_DATETIME_PARTS == ret) {
             // LOG_USER_WARN(OB_TOO_MANY_DATETIME_PARTS);
             LOG_WARN("OB_TOO_MANY_DATETIME_PARTS", K(ret));
@@ -781,18 +1004,15 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
           LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
         } else {
           res_vec->set_date(idx, d_val);
-          eval_flags.set(idx);
         }
       } else if (ObDateTimeType == res_type) {
         res_vec->set_datetime(idx, res_dt_val);
-        eval_flags.set(idx);
       } else if (ObMySQLDateType == res_type) {
         ObMySQLDate md_val = 0;
         if (OB_FAIL(ObTimeConverter::datetime_to_mdate(res_dt_val, NULL, md_val))) {
           LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
         } else {
           res_vec->set_mysql_date(idx, md_val);
-          eval_flags.set(idx);
         }
       } else if (ObMySQLDateTimeType == res_type) {
         ObMySQLDateTime mdatetime = 0;
@@ -800,7 +1020,6 @@ int vector_date_add(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
           LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
         } else {
           res_vec->set_mysql_datetime(idx, mdatetime);
-          eval_flags.set(idx);
         }
 
       } else {
@@ -935,6 +1154,234 @@ int ObExprDateSub::calc_date_sub_vector(const ObExpr &expr,
                                         const ObBitVector &skip,
                                         const EvalBound &bound) {
   return vector_date_adjust<false>(expr, ctx, skip, bound);
+}
+
+template <typename MonthsVec>
+inline int get_months_num(MonthsVec *months, int64_t idx, int64_t &months_num)
+{
+  int ret = OB_SUCCESS;
+  if constexpr (std::is_same_v<MonthsVec, NumberUniVec> || std::is_same_v<MonthsVec, NumberUniCVec>) {
+    number::ObNumber months_nmb(months->get_number(idx));
+    if (OB_FAIL(months_nmb.extract_valid_int64_with_trunc(months_num))) {
+      LOG_WARN("fail to extract int64 from number", K(ret), K(months_nmb));
+    }
+  } else {
+    months_num = months->get_int(idx);
+  }
+  return ret;
+}
+
+template <typename IN_TYPE, typename ResVec>
+inline int vector_months_adjust_inner(IN_TYPE in_val,
+                                      int64_t months_num,
+                                      ResVec *res_vec,
+                                      const bool need_check_date,
+                                      const ObDateSqlMode &mysql_date_sql_mode,
+                                      int64_t idx)
+{
+  int ret = OB_SUCCESS;
+  ObTime ori_ob_time;
+  ObTime res_ob_time;
+
+  if (OB_FAIL(ObTimeConverter::parse_ob_time<IN_TYPE>(in_val, ori_ob_time, true))) {
+    LOG_WARN("fail to parse ob_time", K(ret));
+  } else if (need_check_date && OB_FAIL(ObTimeConverter::validate_datetime(ori_ob_time, mysql_date_sql_mode))) {
+    res_vec->set_null(idx);
+    ret = OB_SUCCESS;
+  } else {
+    int64_t months = 0;
+    res_ob_time = ori_ob_time;
+    if (oceanbase::lib::is_oracle_mode()) {
+      if (OB_FAIL(ObTimeConverter::date_add_nmonth_for_oracle(res_ob_time, months_num, true, !need_check_date))) {
+        LOG_WARN("fail to date add nmonth", K(ret));
+      }
+    } else {
+      if (OB_FAIL(ObTimeConverter::date_add_nmonth_for_mysql(res_ob_time, months_num, !need_check_date))) {
+        if (ret == OB_DATETIME_FUNCTION_OVERFLOW) {
+          res_vec->set_null(idx);
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to date add nmonth", K(ret));
+        }
+      } else if (OB_FAIL(ObTimeConverter::validate_datetime(res_ob_time, mysql_date_sql_mode))) {
+        LOG_WARN("fail to validate datetime", K(ret), K(res_ob_time));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if constexpr (std::is_same_v<IN_TYPE, DateType>) {
+        int32_t d_val = res_ob_time.parts_[DT_DATE];
+        res_vec->set_date(idx, d_val);
+      } else if constexpr (std::is_same_v<IN_TYPE, DateTimeType>) {
+        int64_t dt_val = (res_ob_time.parts_[DT_DATE] - ori_ob_time.parts_[DT_DATE]) * USECS_PER_DAY + in_val;
+        res_vec->set_datetime(idx, dt_val);
+      } else if constexpr (std::is_same_v<IN_TYPE, ObMySQLDate>) {
+        ObMySQLDate md_val = ObTimeConverter::ob_time_to_mdate(res_ob_time);
+        res_vec->set_mysql_date(idx, md_val);
+      } else if constexpr (std::is_same_v<IN_TYPE, ObMySQLDateTime>) {
+        ObMySQLDateTime mdatetime = 0;
+        if (OB_FAIL(ObTimeConverter::ob_time_to_mdatetime(res_ob_time, mdatetime))) {
+          LOG_WARN("fail to convert ob_time to mdatetime", K(ret), K(res_ob_time));
+        } else {
+          res_vec->set_mysql_datetime(idx, mdatetime);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename IN_TYPE, typename ArgVec, typename MonthType, typename MonthsVec, typename ResVec>
+int vector_months_adjust(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  MonthsVec *months_vec = static_cast<MonthsVec *>(expr.args_[1]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  const ObObjType res_type = expr.datum_meta_.type_;
+  const ObObjType date_type = expr.args_[0]->datum_meta_.type_;
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObDateSqlMode date_sql_mode;
+  ObDateSqlMode mysql_date_sql_mode;
+  ObSQLMode sql_mode = 0;
+
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else {
+    date_sql_mode.init(sql_mode);
+    mysql_date_sql_mode.allow_invalid_dates_ = date_sql_mode.allow_invalid_dates_;
+  }
+
+  const ObObjType month_type = expr.args_[1]->datum_meta_.type_;
+  bool need_check_date = ob_is_mysql_compact_dates_type(date_type);
+
+  bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null() && !months_vec->has_null();
+  if (no_skip_no_null) {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (eval_flags.at(idx)) {
+        continue;
+      } else {
+        IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
+        int64_t months_num = 0;
+        if (OB_FAIL(get_months_num(months_vec, idx, months_num))) {
+          LOG_WARN("fail to get months num", K(ret));
+        } else if (OB_FAIL((vector_months_adjust_inner<IN_TYPE, ResVec>(in_val, months_num, res_vec,
+                                                                        need_check_date, mysql_date_sql_mode,
+                                                                        idx)))) {
+          LOG_WARN("vector_months_adjust_inner failed", K(ret), K(idx));
+        }
+      }
+    }
+  } else {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      } else if (arg_vec->is_null(idx) || months_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+        continue;
+      }
+      IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
+      int64_t months_num = 0;
+      if (OB_FAIL(get_months_num(months_vec, idx, months_num))) {
+        LOG_WARN("fail to get months num", K(ret));
+      } else if (OB_FAIL((vector_months_adjust_inner<IN_TYPE, ResVec>(in_val, months_num, res_vec,
+                                                                      need_check_date, mysql_date_sql_mode,
+                                                                      idx)))) {
+        LOG_WARN("vector_months_adjust_inner failed", K(ret), K(idx));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprMonthAdjust::calc_months_adjust_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode()) {
+    if (OB_FAIL(expr.eval_vector_param_value_null_short_circuit(ctx, skip, bound))) {
+      LOG_WARN("fail to eval add_months param with short circuit", K(ret));
+    }
+  } else {
+    if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("fail to eval add_months param", K(ret));
+    } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
+      LOG_WARN("fail to eval add_months param", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat months_format = expr.args_[1]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    ObObjTypeClass arg_tc = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
+    ObObjTypeClass res_tc = ob_obj_type_class(expr.datum_meta_.type_);
+    const ObObjType month_type = expr.args_[1]->datum_meta_.type_;
+#define DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, arg_type, res_type)\
+  if (ObIntType == month_type || ObUInt64Type == month_type) {\
+    if (VEC_UNIFORM == months_format) {\
+      ret = vector_months_adjust<IN_TYPE, arg_type, int64_t, IntegerUniVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    } else if (VEC_UNIFORM_CONST == months_format) {\
+      ret = vector_months_adjust<IN_TYPE, arg_type, int64_t, IntegerUniCVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    } else if (VEC_FIXED == months_format) {\
+      ret = vector_months_adjust<IN_TYPE, arg_type, int64_t, IntegerFixedVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    } else {\
+      ret = vector_months_adjust<IN_TYPE, ObVectorBase, int64_t, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    }\
+  } else {\
+    if (VEC_UNIFORM == months_format) {\
+      ret = vector_months_adjust<IN_TYPE, arg_type, number::ObNumber, NumberUniVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    } else if (VEC_UNIFORM_CONST == months_format) {\
+      ret = vector_months_adjust<IN_TYPE, arg_type, number::ObNumber, NumberUniCVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    } else {\
+      ret = vector_months_adjust<IN_TYPE, ObVectorBase, number::ObNumber, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    }\
+  }
+#define DEF_MONTHS_ADJUST_WRAP(IN_TYPE, arg_tc, res_tc)\
+  if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, UniVec), CONCAT(res_tc, FixedVec));\
+  } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, UniVec), CONCAT(res_tc, UniVec));\
+  } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM_CONST == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, UniVec), CONCAT(res_tc, UniCVec));\
+  } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, UniCVec), CONCAT(res_tc, UniVec));\
+  } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, UniCVec), CONCAT(res_tc, FixedVec));\
+  } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM_CONST == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, UniCVec), CONCAT(res_tc, UniCVec));\
+  } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, FixedVec), CONCAT(res_tc, UniVec));\
+  } else if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, FixedVec), CONCAT(res_tc, FixedVec));\
+  } else if (VEC_FIXED == arg_format && VEC_UNIFORM_CONST == res_format) {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, CONCAT(arg_tc, FixedVec), CONCAT(res_tc, UniCVec));\
+  } else {\
+    DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, ObVectorBase, ObVectorBase);\
+  }
+
+    if (ObMySQLDateTimeTC == arg_tc && ObMySQLDateTimeTC == res_tc) {
+      DEF_MONTHS_ADJUST_WRAP(ObMySQLDateTime, MySQLDateTime, MySQLDateTime)
+    } else if (ObMySQLDateTC == arg_tc && ObMySQLDateTC == res_tc) {
+      DEF_MONTHS_ADJUST_WRAP(ObMySQLDate, MySQLDate, MySQLDate)
+    } else if (ObDateTimeTC == arg_tc && ObDateTimeTC == res_tc) {
+      DEF_MONTHS_ADJUST_WRAP(DateTimeType, DateTime, DateTime)
+    } else if (ObDateTC == arg_tc && ObDateTC == res_tc) {
+      DEF_MONTHS_ADJUST_WRAP(DateType, Date, Date)
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("DATA TYPE NOT SUPPORTED", K(ret));
+    }
+#undef DEF_MONTHS_ADJUST_WRAP
+#undef DEF_MONTHS_ADJUST_VECTOR
+    if (OB_FAIL(ret)) {
+      LOG_WARN("expr calculation failed", K(ret));
+    }
+  }
+  return ret;
 }
 
 #undef CHECK_SKIP_NULL

@@ -271,7 +271,6 @@ int get_cmp_ret(const int ret)
             res_vec->set_int(i, get_cmp_ret<cmp_op>(cmp_ret));                                     \
           }                                                                                        \
         }                                                                                          \
-        if (OB_SUCC(ret)) { eval_flags.set_all(bound.batch_size()); }                              \
       } else {                                                                                     \
         for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {                        \
           if (skip.at(i) || eval_flags.at(i)) { continue; }                                        \
@@ -287,7 +286,6 @@ int get_cmp_ret(const int ret)
           if (OB_FAIL(ret)) {                                                                      \
           } else {                                                                                 \
             res_vec->set_int(i, get_cmp_ret<cmp_op>(cmp_ret));                                     \
-            eval_flags.set(i);                                                                     \
           }                                                                                        \
         }                                                                                          \
       }                                                                                            \
@@ -296,7 +294,6 @@ int get_cmp_ret(const int ret)
         if (skip.at(i) || eval_flags.at(i)) { continue; }                                          \
         if (l_vector->is_null(i) || r_vector->is_null(i)) {                                        \
           res_vec->set_null(i);                                                                    \
-          eval_flags.set(i);                                                                       \
         } else {                                                                                   \
           if (is_nested) {                                                                         \
             ret = ObNestedVectorCmpFunc::cmp(l_vector, r_vector, i, expr, ctx, cmp_ret);           \
@@ -310,7 +307,6 @@ int get_cmp_ret(const int ret)
           if (OB_FAIL(ret)) {                                                                      \
           } else {                                                                                 \
             res_vec->set_int(i, get_cmp_ret<cmp_op>(cmp_ret));                                     \
-            eval_flags.set(i);                                                                     \
           }                                                                                        \
         }                                                                                          \
       }                                                                                            \
@@ -399,14 +395,12 @@ struct EvalVectorCmpWithNull
         if (OB_LIKELY(bound.get_all_rows_active() && eval_flags.accumulate_bit_cnt(bound) == 0)) {
           res_nulls.get_nulls()->set_all(bound.start(), bound.end());
           res_nulls.set_has_null();
-          eval_flags.set_all(bound.start(), bound.end());
         } else {
           for (int i = bound.start(); i < bound.end(); i++) {
             if (skip.at(i) || eval_flags.at(i)) {
               continue;
             } else {
               res_nulls.set_null(i);
-              eval_flags.set(i);
             }
           }
         }
@@ -417,7 +411,6 @@ struct EvalVectorCmpWithNull
             continue;
           } else {
             res_vec->set_null(i);
-            eval_flags.set(i);
           }
         }
       }

@@ -44,6 +44,7 @@ inline int validate(int32_t value) const
 
 struct ObDFMLimit
 {
+static const ObOracleTimeLimiter YEAR_MYSQL;
 static const ObOracleTimeLimiter YEAR;
 static const ObOracleTimeLimiter MONTH;
 static const ObOracleTimeLimiter MONTH_DAY;

@@ -34,12 +34,23 @@ public:
                       ObExpr &rt_expr) const override;
 
   static int eval_hex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_hex_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
+  static constexpr const char HEX_CHARS_UPPER[16] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
+  static constexpr int64_t MAX_HEX_LEN_FOR_INT = sizeof(uint64_t) * 2 + 1;  // max length of hex string for integer types
   // helper func
   static int get_uint64(const common::ObObj &obj, common::ObCastCtx &cast_ctx, uint64_t &out);
   static int number_uint64(const common::number::ObNumber &num_val, uint64_t &out);
   static int decimalint_uint64(const ObDatumMeta &in_meta, const ObDatum *datum, uint64_t &out);
+  OB_INLINE static int uint64_to_hex(uint64_t val, char *buf, int &len);
+
+  template <typename ArgVec, typename ResVec, ObObjType IN_TYPE>
+  static int hex_numeric_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  template <typename ArgVec, typename ResVec>
+  static int hex_string_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprHex);
 };

@@ -188,7 +188,6 @@ int ObExprBM25::eval_batch_bm25_relevance_expr(const ObExpr &expr, ObEvalCtx &ct
           const double doc_weight = doc_token_weight(related_token_cnt, norm_len);
           const double relevance = token_weight * doc_weight;
           res_datum[i].set_double(relevance);
-          eval_flags.set(i);
           LOG_DEBUG("show bm25 parameters for current document",
               K(token_doc_cnt), K(total_doc_cnt), K(related_token_cnt), K(doc_token_cnt), K(avg_doc_token_cnt),
               K(norm_len), K(token_weight), K(doc_weight), K(relevance));

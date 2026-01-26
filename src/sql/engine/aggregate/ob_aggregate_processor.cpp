@@ -79,7 +79,8 @@ OB_DEF_SERIALIZE(ObAggrInfo)
               absent_on_null_,
               returning_type_,
               with_unique_keys_,
-              max_disuse_param_expr_
+              max_disuse_param_expr_,
+              has_ignore_null_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ENCODE(*dll_udf_);
@@ -141,7 +142,8 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
               absent_on_null_,
               returning_type_,
               with_unique_keys_,
-              max_disuse_param_expr_
+              max_disuse_param_expr_,
+              has_ignore_null_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     CK(NULL != alloc_);
@@ -227,7 +229,8 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
               absent_on_null_,
               returning_type_,
               with_unique_keys_,
-              max_disuse_param_expr_
+              max_disuse_param_expr_,
+              has_ignore_null_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ADD_LEN(*dll_udf_);
@@ -287,6 +290,7 @@ int64_t ObAggrInfo::to_string(char *buf, const int64_t buf_len) const
        K_(external_routine_resource),
        KP_(hash_rollup_info),
        KP_(grouping_set_info),
+       K_(has_ignore_null),
        K_(enable_fast_bypass)
        );
   J_OBJ_END();
@@ -322,6 +326,7 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
   returning_type_ = rhs.returning_type_;
   with_unique_keys_ = rhs.with_unique_keys_;
   max_disuse_param_expr_ = rhs.max_disuse_param_expr_;
+  has_ignore_null_ = rhs.has_ignore_null_;
   hash_rollup_info_ = nullptr;
   enable_fast_bypass_ = rhs.enable_fast_bypass_;
   if (OB_FAIL(param_exprs_.assign(rhs.param_exprs_))) {
@@ -1499,7 +1504,10 @@ int ObAggregateProcessor::init()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr node is null", K(aggr_info), K(i), K(ret));
     } else if (T_FUN_ARG_MIN == aggr_info.get_expr_type() ||
-               T_FUN_ARG_MAX == aggr_info.get_expr_type()) {
+               T_FUN_ARG_MAX == aggr_info.get_expr_type() ||
+               T_FUN_ANY     == aggr_info.get_expr_type() ||
+               T_FUN_ARBITRARY == aggr_info.get_expr_type() ||
+               T_FUN_CK_GROUPCONCAT == aggr_info.get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("this agg func not supported vec1.0", K(aggr_info.get_expr_type()));
     } else {

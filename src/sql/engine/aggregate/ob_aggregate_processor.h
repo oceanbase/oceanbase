@@ -174,6 +174,7 @@ public:
     external_routine_url_(),
     external_routine_resource_(),
     grouping_set_info_(nullptr),
+    has_ignore_null_(false),
     enable_fast_bypass_(false)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
@@ -212,6 +213,7 @@ public:
     external_routine_url_(),
     external_routine_resource_(),
     grouping_set_info_(nullptr),
+    has_ignore_null_(false),
     enable_fast_bypass_(false)
   {}
   virtual ~ObAggrInfo();
@@ -305,6 +307,7 @@ public:
   ObString external_routine_url_;
   ObString external_routine_resource_;
   GroupingSetRTInfo *grouping_set_info_;
+  bool has_ignore_null_;
   bool enable_fast_bypass_;
 };
 

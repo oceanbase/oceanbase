@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_left.h"
 #include "sql/engine/ob_exec_context.h"
+#include "lib/charset/ob_charset_string_helper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -168,6 +169,197 @@ int ObExprLeft::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_left_expr;
+  rt_expr.eval_vector_func_ = calc_left_vector;
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec, bool IsAscii, bool CanDoAsciiOptimize, bool HasNull>
+int ObExprLeft::calc_left_vector_const_inner(const ObExpr &expr,
+                                             ObEvalCtx &ctx,
+                                             const ObBitVector &skip,
+                                             const EvalBound &bound,
+                                             int64_t const_len)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = reinterpret_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = reinterpret_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
+  bool is_oracle_mode = lib::is_oracle_mode();
+
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (HasNull && arg_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+    } else {
+      ObString text = arg_vec->get_string(idx);
+      if (OB_UNLIKELY(const_len <= 0)) {
+        // Return empty string for negative length
+        if (is_oracle_mode) {
+          res_vec->set_null(idx);
+        } else {
+          res_vec->set_string(idx, text.ptr(), 0);
+        }
+      } else if (IsAscii || (CanDoAsciiOptimize && ObCharsetStringHelper::is_ascii_str(text.ptr(), text.length()))) {
+        res_vec->set_string(idx, text.ptr(), min(text.length(), const_len));
+      } else {
+        int64_t char_pos = ObCharsetStringHelper::charpos_optimized(cs_type, text.ptr(), text.length(), const_len);
+        if (char_pos < text.length()) {
+          res_vec->set_string(idx, text.ptr(), char_pos);
+        } else {
+          res_vec->set_string(idx, text);
+        }
+      }
+    }
+  } // for end
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec>
+int ObExprLeft::calc_left_vector_const(const ObExpr &expr,
+                                       ObEvalCtx &ctx,
+                                       const ObBitVector &skip,
+                                       const EvalBound &bound,
+                                       int64_t const_len)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = reinterpret_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = reinterpret_cast<ResVec *>(expr.get_vector(ctx));
+  bool is_ascii = arg_vec->is_batch_ascii();
+  bool can_do_ascii_optimize = ObCharsetStringHelper::can_do_ascii_optimize(expr.args_[0]->datum_meta_.cs_type_);
+  bool has_null = arg_vec->has_null();
+
+  if (is_ascii) {
+    if (can_do_ascii_optimize) {
+      if (has_null) {
+        ret = calc_left_vector_const_inner<ArgVec, ResVec, true, true, true>(expr, ctx, skip, bound, const_len);
+      } else {
+        ret = calc_left_vector_const_inner<ArgVec, ResVec, true, true, false>(expr, ctx, skip, bound, const_len);
+      }
+    } else {
+      if (has_null) {
+        ret = calc_left_vector_const_inner<ArgVec, ResVec, true, false, true>(expr, ctx, skip, bound, const_len);
+      } else {
+        ret = calc_left_vector_const_inner<ArgVec, ResVec, true, false, false>(expr, ctx, skip, bound, const_len);
+      }
+    }
+  } else {
+    if (can_do_ascii_optimize) {
+      if (has_null) {
+        ret = calc_left_vector_const_inner<ArgVec, ResVec, false, true, true>(expr, ctx, skip, bound, const_len);
+      } else {
+        ret = calc_left_vector_const_inner<ArgVec, ResVec, false, true, false>(expr, ctx, skip, bound, const_len);
+      }
+    } else {
+      if (has_null) {
+        ret = calc_left_vector_const_inner<ArgVec, ResVec, false, false, true>(expr, ctx, skip, bound, const_len);
+      } else {
+        ret = calc_left_vector_const_inner<ArgVec, ResVec, false, false, false>(expr, ctx, skip, bound, const_len);
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObExprLeft::calc_left_vector_non_const(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          const ObBitVector &skip,
+                                          const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ObIVector *arg_vec = reinterpret_cast<ObIVector *>(expr.args_[0]->get_vector(ctx));
+  ObIVector *num_vec = reinterpret_cast<ObIVector *>(expr.args_[1]->get_vector(ctx));
+  ObIVector *res_vec = reinterpret_cast<ObIVector *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
+  bool is_oracle_mode = lib::is_oracle_mode();
+
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    } else if (arg_vec->is_null(idx) || num_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+    } else {
+      int64_t required_num_char = 0;
+      ObString text = arg_vec->get_string(idx);
+      required_num_char = num_vec->get_int(idx);
+      ObString res_str;
+      if (OB_FAIL(calc_left(res_str, text, cs_type, required_num_char))) {
+        LOG_WARN("failed to calculate left expression", K(ret));
+      } else {
+        if (res_str.empty() && is_oracle_mode) {
+          res_vec->set_null(idx);
+        } else {
+          res_vec->set_string(idx, res_str);
+        }
+      }
+    }
+  } // for end
+  return ret;
+}
+
+int ObExprLeft::calc_left_vector(const ObExpr &expr,
+                                 ObEvalCtx &ctx,
+                                 const ObBitVector &skip,
+                                 const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.eval_vector_param_value(ctx, skip, bound))) {
+    LOG_WARN("fail to eval vector param value", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+
+    // Check if the length parameter is constant
+    if (expr.args_[1]->is_static_const_) {
+      // Constant path: extract constant value and use optimized path
+      ObIVector *num_vec = expr.args_[1]->get_vector(ctx);
+      int64_t const_len = 0;
+      if (num_vec->is_null(0)) {
+        // If constant is NULL, set all results to NULL
+        ObIVector *res_vec = expr.get_vector(ctx);
+        ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+        for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+          if (!skip.at(idx) && !eval_flags.at(idx)) {
+            res_vec->set_null(idx);
+          }
+        }
+      } else {
+        // Extract constant value from datum
+        const_len = num_vec->get_int(0);
+        if (OB_SUCC(ret)) {
+          // Dispatch based on arg and res formats for constant path
+          if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+            ret = calc_left_vector_const<ObDiscreteFormat, ObDiscreteFormat>(
+              expr, ctx, skip, bound, const_len);
+          } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+            ret = calc_left_vector_const<UniformFormat, ObDiscreteFormat>(
+              expr, ctx, skip, bound, const_len);
+          } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
+            ret = calc_left_vector_const<ObContinuousFormat, ObDiscreteFormat>(
+              expr, ctx, skip, bound, const_len);
+          } else if (VEC_DISCRETE == arg_format && VEC_CONTINUOUS == res_format) {
+            ret = calc_left_vector_const<ObDiscreteFormat, ObContinuousFormat>(
+              expr, ctx, skip, bound, const_len);
+          } else if (VEC_UNIFORM == arg_format && VEC_CONTINUOUS == res_format) {
+            ret = calc_left_vector_const<UniformFormat, ObContinuousFormat>(
+              expr, ctx, skip, bound, const_len);
+          } else if (VEC_CONTINUOUS == arg_format && VEC_CONTINUOUS == res_format) {
+            ret = calc_left_vector_const<ObContinuousFormat, ObContinuousFormat>(
+              expr, ctx, skip, bound, const_len);
+          } else {
+            ret = calc_left_vector_const<ObVectorBase, ObVectorBase>(
+              expr, ctx, skip, bound, const_len);
+          }
+        }
+      }
+    } else {
+      // Non-constant path: use generic dispatch without template specialization
+      ret = calc_left_vector_non_const(expr, ctx, skip, bound);
+    }
+  }
   return ret;
 }
 

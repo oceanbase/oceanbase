@@ -467,6 +467,31 @@ public:
   bool is_htable_;
   bool disable_shared_expr_;
 };
+struct FunctionInfo {
+  char name_[OB_MAX_FUNC_EXPR_LENGTH];
+  ObItemType type_;
+};
+
+static FunctionInfo CLICKHOUSE_EXPR_LIST[] = {
+  {"editDistance", T_FUN_SYS_EDIT_DISTANCE},
+  {"editDistanceUTF8", T_FUN_SYS_EDIT_DISTANCE_UTF8},
+  {"formatDateTime", T_FUN_SYS_FORMAT_DATE_TIME},
+  {"toUnixTimestamp", T_FUN_SYS_TO_UNIX_TIMESTAMP},
+  {"isNaN", T_FUN_CK_SYS_IS_NAN},
+};
+
+static FunctionInfo CLICKHOUSE_AGGR_LIST[] =
+{
+  {"groupConcat", T_FUN_CK_GROUPCONCAT},
+  //{"Test1", T_INVALID},
+  {"UNIQ", T_FUN_CK_UNIQ},
+  {"leadInFrame", T_WIN_FUN_LEAD_IN_FRAME},
+  {"lagInFrame", T_WIN_FUN_LAG_IN_FRAME},
+  {"ANY", T_FUN_ANY},
+  {"VARSAMP", T_FUN_CK_VARSAMP},
+  {"STDDEVSAMP", T_FUN_CK_STDDEVSAMP},
+};
+
 } // end namespace sql
 } // end namespace oceanbase
 

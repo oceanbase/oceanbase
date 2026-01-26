@@ -64,6 +64,69 @@ int ObExprDegrees::calc_degrees_expr(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
+template <typename ArgVec, typename ResVec>
+int ObExprDegrees::vector_degrees(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+  bool no_skip_no_nulls = bound.get_all_rows_active() && !arg_vec->has_null();
+
+  if (no_skip_no_nulls
+      && std::is_same_v<DoubleFixedVec, ArgVec> && std::is_same_v<DoubleFixedVec, ResVec>) {
+    DoubleFixedVec *double_arg_vec = reinterpret_cast<DoubleFixedVec *>(arg_vec);
+    DoubleFixedVec *double_res_vec = reinterpret_cast<DoubleFixedVec *>(res_vec);
+    const double *__restrict start_arg
+        = reinterpret_cast<double *>(double_arg_vec->get_data()) + bound.start();
+    double *__restrict start_res
+        = reinterpret_cast<double *>(double_res_vec->get_data()) + bound.start();
+    uint16_t length = bound.end() - bound.start();
+
+    for (uint16_t i = 0; i < length; i++) {
+      start_res[i] = start_arg[i] * degrees_ratio_;
+    }
+  } else {
+    for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      } else if (arg_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+      } else {
+        res_vec->set_double(idx, arg_vec->get_double(idx) * degrees_ratio_);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprDegrees::calc_degrees_vector_expr(const ObExpr &expr,
+                                            ObEvalCtx &ctx,
+                                            const ObBitVector &skip,
+                                            const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("eval child vector failed", K(ret), K(expr));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (arg_format == VectorFormat::VEC_FIXED && res_format == VectorFormat::VEC_FIXED) {
+      ret = vector_degrees<DoubleFixedVec, DoubleFixedVec>(expr, ctx, skip, bound);
+    } else if (arg_format == VectorFormat::VEC_UNIFORM && res_format == VectorFormat::VEC_FIXED) {
+      ret = vector_degrees<DoubleUniVec, DoubleFixedVec>(expr, ctx, skip, bound);
+    } else {
+      ret = vector_degrees<ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+  }
+  return ret;
+}
+
 int ObExprDegrees::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const
 {
@@ -76,6 +139,7 @@ int ObExprDegrees::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
     LOG_WARN("invalid arg_cnt_ or res type is invalid", K(ret), K(rt_expr));
   } else {
     rt_expr.eval_func_ = calc_degrees_expr;
+    rt_expr.eval_vector_func_ = calc_degrees_vector_expr;
   }
   return ret;
 }

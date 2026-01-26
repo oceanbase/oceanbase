@@ -14,6 +14,7 @@
 
 #include "ob_expr_from_base64.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -79,8 +80,13 @@ int ObExprFromBase64::calc_result_type1(ObExprResType &type,
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
 
-  str.set_calc_type(ObVarcharType);
-  str.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+  if (ob_is_string_type(str.get_type())) {
+    str.set_calc_type(str.get_type());
+    str.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+  } else {
+    str.set_calc_type(ObVarcharType);
+    str.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+  }
 
   int64_t mbmaxlen = 0;
   int64_t max_result_length = 0;
@@ -114,37 +120,54 @@ int ObExprFromBase64::eval_from_base64(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   ObDatum *arg = nullptr;
-
+  ObString in_raw;
+  int64_t in_raw_len;
+  const char *buf;
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (OB_UNLIKELY(arg->is_null())) {
     res.set_null();
   } else {
-    const ObString & in_raw = arg->get_string();
-    ObLength in_raw_len = in_raw.length();
-    const char *buf = in_raw.ptr();
-    if (NULL == buf) {
-      res.set_string(nullptr, 0);
-    } else {
-      char *output_buf = NULL;
-      int64_t buf_len = base64_needed_decoded_length(in_raw_len);
-      int64_t pos = 0;
-      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-      output_buf = static_cast<char*>(alloc_guard.get_allocator().alloc(buf_len));
-      if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
-                                          reinterpret_cast<uint8_t*>(output_buf),
-                                          buf_len, pos, true))) {
-        if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
-          ret = OB_SUCCESS;
-          res.set_null();
-        } else {
-          LOG_WARN("failed to decode base64", K(ret));
-        }
+    if(ob_is_text_tc(expr.args_[0]->datum_meta_.get_type())) {
+      ObLobLocatorV2 locator(arg->get_string(), expr.args_[0]->obj_meta_.has_lob_header());
+      if (OB_FAIL(locator.get_lob_data_byte_len(in_raw_len))) {
+        LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+      } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc_guard.get_allocator(), *arg,
+                        expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_raw))) {
+        LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));
       } else {
-        res.set_string(output_buf, pos);
-        if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
-          expr, ctx, res, ObString(pos, output_buf)))) {
-          LOG_WARN("set ASCII result failed", K(ret));
+        buf = in_raw.ptr();
+      }
+    } else {
+      in_raw = arg->get_string();
+      in_raw_len = in_raw.length();
+      buf = in_raw.ptr();
+    }
+    if (OB_SUCC(ret)) {
+      if (NULL == buf) {
+        res.set_string(nullptr, 0);
+      } else {
+        char *output_buf = NULL;
+        int64_t buf_len = base64_needed_decoded_length(in_raw_len);
+        int64_t pos = 0;
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        output_buf = static_cast<char*>(alloc_guard.get_allocator().alloc(buf_len));
+        if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
+                                            reinterpret_cast<uint8_t*>(output_buf),
+                                            buf_len, pos, true))) {
+          if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
+            ret = OB_SUCCESS;
+            res.set_null();
+          } else {
+            LOG_WARN("failed to decode base64", K(ret));
+          }
+        } else {
+          res.set_string(output_buf, pos);
+          if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
+            expr, ctx, res, ObString(pos, output_buf)))) {
+            LOG_WARN("set ASCII result failed", K(ret));
+          }
         }
       }
     }
@@ -158,6 +181,10 @@ int ObExprFromBase64::eval_from_base64_batch(const ObExpr &expr, ObEvalCtx &ctx,
   int ret = OB_SUCCESS;
   ObDatum *res = expr.locate_batch_datums(ctx);
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObDatum *arg = nullptr;
+  ObString in_raw;
+  int64_t in_raw_len;
+  const char *buf;
 
   if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
     LOG_WARN("eval arg failed", K(ret));
@@ -171,38 +198,174 @@ int ObExprFromBase64::eval_from_base64_batch(const ObExpr &expr, ObEvalCtx &ctx,
         continue;
       }
       batch_info_guard.set_batch_idx(j);
-      ObDatum *arg = args.at(j);
-      const ObString & in_raw = arg->get_string();
-      ObLength in_raw_len = in_raw.length();
-      const char *buf = in_raw.ptr();
-      if (arg->is_null()) {
-        res[j].set_null();
-      } else if (NULL == buf) {
-        res[j].set_string(nullptr, 0);
+      arg = args.at(j);
+      if (ob_is_text_tc(expr.args_[0]->datum_meta_.get_type())) {
+        ObLobLocatorV2 locator(arg->get_string(), expr.args_[0]->obj_meta_.has_lob_header());
+        if (OB_FAIL(locator.get_lob_data_byte_len(in_raw_len))) {
+          LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc_guard.get_allocator(), *arg,
+                          expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_raw))) {
+          LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));
+        } else {
+          buf = in_raw.ptr();
+        }
       } else {
-        char *output_buf = nullptr;
-        int64_t buf_len = base64_needed_decoded_length(in_raw_len);
-        int64_t pos = 0;
-        output_buf = static_cast<char*>(alloc_guard.get_allocator().alloc(buf_len));
-        if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
-                                            reinterpret_cast<uint8_t*>(output_buf),
-                                            buf_len, pos, true))) {
-          if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
-            ret = OB_SUCCESS;
+        in_raw = arg->get_string();
+        in_raw_len = in_raw.length();
+        buf = in_raw.ptr();
+      }
+
+      if (OB_SUCC(ret)) {
+          if (arg->is_null()) {
             res[j].set_null();
+          } else if (NULL == buf) {
+            res[j].set_string(nullptr, 0);
           } else {
-            LOG_WARN("failed to decode base64", K(ret));
+            char *output_buf = nullptr;
+            int64_t buf_len = base64_needed_decoded_length(in_raw_len);
+            int64_t pos = 0;
+            output_buf = static_cast<char*>(alloc_guard.get_allocator().alloc(buf_len));
+            if (OB_FAIL(ObBase64Encoder::decode(buf, in_raw_len,
+                                                reinterpret_cast<uint8_t*>(output_buf),
+                                                buf_len, pos, true))) {
+              if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
+                ret = OB_SUCCESS;
+                res[j].set_null();
+              } else {
+                LOG_WARN("failed to decode base64", K(ret));
+              }
+            } else {
+              res[j].set_string(output_buf, pos);
+              if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
+                expr, ctx, res[j], ObString(pos, output_buf)))) {
+                LOG_WARN("set ASCII result failed", K(ret));
+              }
+            }
+          }
+        } // end for batch
+      }
+
+  }
+  return ret;
+}
+
+int ObExprFromBase64::eval_from_base64_vector(VECTOR_EVAL_FUNC_ARG_DECL) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval frombase64 param", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    bool is_text = ob_is_text_tc(expr.args_[0]->datum_meta_.get_type());
+    if (is_text) {
+      if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+        ret = vector_from_base64<StrDiscVec, StrDiscVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
+        ret = vector_from_base64<StrContVec, StrDiscVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+        ret = vector_from_base64<StrUniVec, StrDiscVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_DISCRETE == arg_format && VEC_CONTINUOUS == res_format) {
+        ret = vector_from_base64<StrDiscVec, StrContVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_CONTINUOUS == arg_format && VEC_CONTINUOUS == res_format) {
+        ret = vector_from_base64<StrContVec, StrContVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_CONTINUOUS == res_format) {
+        ret = vector_from_base64<StrUniVec, StrContVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
+        ret = vector_from_base64<StrDiscVec, StrUniVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
+        ret = vector_from_base64<StrContVec, StrUniVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+        ret = vector_from_base64<StrUniVec, StrUniVec, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else {
+        ret = vector_from_base64<ObVectorBase, ObVectorBase, true>(VECTOR_EVAL_FUNC_ARG_LIST);
+      }
+    } else {
+      if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+        ret = vector_from_base64<StrDiscVec, StrDiscVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
+        ret = vector_from_base64<StrContVec, StrDiscVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+        ret = vector_from_base64<StrUniVec, StrDiscVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_DISCRETE == arg_format && VEC_CONTINUOUS == res_format) {
+        ret = vector_from_base64<StrDiscVec, StrContVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_CONTINUOUS == arg_format && VEC_CONTINUOUS == res_format) {
+        ret = vector_from_base64<StrContVec, StrContVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_CONTINUOUS == res_format) {
+        ret = vector_from_base64<StrUniVec, StrContVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
+        ret = vector_from_base64<StrDiscVec, StrUniVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
+        ret = vector_from_base64<StrContVec, StrUniVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+        ret = vector_from_base64<StrUniVec, StrUniVec, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      } else {
+        ret = vector_from_base64<ObVectorBase, ObVectorBase, false>(VECTOR_EVAL_FUNC_ARG_LIST);
+      }
+    }
+
+  }
+  return ret;
+}
+
+template<typename ArgVec, typename ResVec, bool isText>
+int ObExprFromBase64::vector_from_base64(VECTOR_EVAL_FUNC_ARG_DECL) {
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+  char *output_buf = nullptr;
+  ObString in_raw;
+  int64_t in_raw_len;
+  const char *buf;
+  batch_info_guard.set_batch_size(bound.batch_size());
+  for (int i = bound.start(); i < bound.end() && OB_SUCC(ret); ++i) {
+    if (OB_LIKELY(!(skip.at(i) || eval_flags.at(i)))) {
+      batch_info_guard.set_batch_idx(i);
+      if (arg_vec->is_null(i)) {
+        res_vec->set_null(i);
+      } else {
+        if constexpr (isText) {
+          ObLobLocatorV2 locator(arg_vec->get_string(i), expr.args_[0]->obj_meta_.has_lob_header());
+          if (OB_FAIL(locator.get_lob_data_byte_len(in_raw_len))) {
+            LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc_guard.get_allocator(), arg_vec,
+                            expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_raw, i))) {
+            LOG_WARN("failed to get string data", K(ret), K(expr.args_[0]->datum_meta_));
+          } else {
+            buf = in_raw.ptr();
           }
         } else {
-          res[j].set_string(output_buf, pos);
-          if (OB_FAIL(ObExprUtil::set_expr_ascii_result(
-            expr, ctx, res[j], ObString(pos, output_buf)))) {
-            LOG_WARN("set ASCII result failed", K(ret));
+          in_raw = arg_vec->get_string(i);
+          in_raw_len = in_raw.length();
+          buf = in_raw.ptr();
+        }
+        if (OB_SUCC(ret)) {
+          if (in_raw.empty()) {
+            res_vec->set_string(i, nullptr, 0);
+          } else {
+            int64_t buf_len = base64_needed_decoded_length(in_raw_len);
+            int64_t pos = 0;
+            output_buf = static_cast<char *>(alloc_guard.get_allocator().alloc(buf_len));
+            if (OB_FAIL(ObBase64Encoder::decode_with_simd(buf, in_raw_len, reinterpret_cast<uint8_t *>(output_buf), buf_len, pos, /* skip_spaces= */true))) {
+              if (OB_UNLIKELY(ret == OB_INVALID_ARGUMENT)) {
+                ret = OB_SUCCESS;
+                res_vec->set_null(i);
+              } else {
+                LOG_WARN("failed to decode base64", K(ret));
+              }
+            } else {
+              ObTextStringDatumResult res_text(expr.datum_meta_.type_, &expr, &ctx, res_vec, i);
+              res_vec->set_string(i, output_buf, pos);
+              if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, res_text, ObString(pos, output_buf), i, /* is_ascii= */true))) {
+                LOG_WARN("set expr ascii result failed", K(ret));
+              }
+            }
           }
         }
       }
-      eval_flags.set(j);
-    } // end for batch
+    }
   }
   return ret;
 }
@@ -216,6 +379,7 @@ int ObExprFromBase64::cg_expr(ObExprCGCtx &expr_cg_ctx,
   int ret = OB_SUCCESS;
   rt_expr.eval_func_ = ObExprFromBase64::eval_from_base64;
   rt_expr.eval_batch_func_ = ObExprFromBase64::eval_from_base64_batch;
+  rt_expr.eval_vector_func_ = ObExprFromBase64::eval_from_base64_vector;
   return ret;
 }
 

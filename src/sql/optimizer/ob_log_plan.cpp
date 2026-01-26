@@ -5289,6 +5289,8 @@ int ObLogPlan::check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &ag
                T_FUN_GROUPING != aggr_expr->get_expr_type() &&
                T_FUN_GROUPING_ID != aggr_expr->get_expr_type() &&
                T_FUN_GROUP_ID != aggr_expr->get_expr_type() &&
+               T_FUN_ANY != aggr_expr->get_expr_type() &&
+               T_FUN_ARBITRARY != aggr_expr->get_expr_type() &&
                T_FUN_SYS_RB_OR_AGG != aggr_expr->get_expr_type() &&
                T_FUN_SYS_RB_AND_AGG != aggr_expr->get_expr_type()) {
       can_push = false;

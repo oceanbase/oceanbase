@@ -549,12 +549,103 @@ static int rawtohex(const ObExpr &expr,
                     const common::ObString &in_str,
                     ObEvalCtx &ctx,
                     ObDatum &res_datum);
+// for scalar
 static int hex(const ObExpr &expr,
                const common::ObString &in_str,
                ObEvalCtx &ctx,
                common::ObIAllocator &calc_alloc,
                ObDatum &res_datum,
                bool upper_case = true);
+
+// for vectorization
+template <typename ResVec>
+OB_INLINE static int hex(const ObExpr &expr,
+                         const ObString &in_str,
+                         ObEvalCtx &ctx,
+                         ObIAllocator &calc_alloc,
+                         ResVec &res_vec,
+                         int64_t batch_idx,
+                         const bool need_convert_coll,
+                         const bool upper_case = true)
+{
+  int ret = OB_SUCCESS;
+  if (in_str.empty()) {
+    if (lib::is_oracle_mode()) {
+      res_vec.set_null(batch_idx);
+    } else {
+      if (OB_LIKELY(!ob_is_text_tc(expr.datum_meta_.type_))) {
+        res_vec.set_string(batch_idx, ObString(0, nullptr));
+      } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(expr, ctx, in_str, batch_idx))) {
+        SQL_ENG_LOG(WARN, "build empty lob failed", K(ret), K(in_str));
+      }
+    }
+  } else {
+    ObTextStringVectorResult<ResVec> output_result(expr.datum_meta_.type_, &expr, &ctx, &res_vec, batch_idx);
+    if (OB_FAIL(hex_inner<ResVec>(expr, in_str, calc_alloc, output_result, batch_idx,
+                                  need_convert_coll, upper_case))) {
+      SQL_ENG_LOG(WARN, "hex string failed", K(ret), K(in_str));
+    }
+  }
+  return ret;
+}
+
+private:
+template<typename ResVec>
+OB_INLINE static int hex_inner(const ObExpr &expr,
+                               const ObString &in_str,
+                               ObIAllocator &calc_alloc,
+                               ObTextStringVectorResult<ResVec> &output_result,
+                               const int64_t batch_idx,
+                               const bool need_convert_coll,
+                               const bool upper_case)
+{
+  int ret = OB_SUCCESS;
+  const int32_t hex_len = in_str.length() * 2;
+  char *hex_buf = NULL;
+
+  if (OB_ISNULL(hex_buf = static_cast<char*>(calc_alloc.alloc(hex_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SQL_ENG_LOG(WARN, "alloc hex buffer failed", K(ret), K(hex_len));
+  } else {
+    const char *HEXCHARS = upper_case ? "0123456789ABCDEF" : "0123456789abcdef";
+    int32_t pos = 0;
+    for (int32_t i = 0; i < in_str.length(); ++i) {
+      hex_buf[pos++] = HEXCHARS[in_str[i] >> 4 & 0xF];
+      hex_buf[pos++] = HEXCHARS[in_str[i] & 0xF];
+    }
+
+    ObString final_str;
+    if (OB_UNLIKELY(need_convert_coll)) {
+      ObCollationType def_cs = ObCharset::get_system_collation();
+      ObCollationType dst_cs = expr.datum_meta_.cs_type_;
+      if (OB_FAIL(ObExprUtil::convert_string_collation(
+                  ObString(hex_len, hex_buf), def_cs, final_str, dst_cs, calc_alloc))) {
+        SQL_ENG_LOG(WARN, "convert string collation failed", K(ret));
+      }
+    } else {
+      final_str.assign_ptr(hex_buf, hex_len);
+    }
+
+    if (OB_SUCC(ret)) {
+      const int32_t final_len = final_str.length();
+      if (batch_idx < 0 && OB_FAIL(output_result.init(final_len))) {
+        SQL_ENG_LOG(WARN, "init text result failed", K(ret), K(final_len));
+      } else if (batch_idx >= 0 && OB_FAIL(output_result.init_with_batch_idx(final_len, batch_idx))) {
+        SQL_ENG_LOG(WARN, "init text result failed", K(ret), K(final_len), K(batch_idx));
+      } else if (OB_FAIL(output_result.append(final_str))) {
+        SQL_ENG_LOG(WARN, "append result failed", K(ret), K(final_len));
+      } else {
+        output_result.set_result();
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(hex_buf)) {
+      calc_alloc.free(hex_buf);
+      hex_buf = NULL;
+    }
+  }
+  return ret;
+}
 };
 
 class ObDatumCast 

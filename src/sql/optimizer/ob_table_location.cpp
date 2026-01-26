@@ -5843,6 +5843,7 @@ int ObTableLocation::can_get_part_by_range_for_temporal_column(const ObRawExpr *
         }
         break;
       }
+      case T_FUN_SYS_TO_UNIX_TIMESTAMP:
       case T_FUN_SYS_UNIX_TIMESTAMP: {
         for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
           const ObRawExpr *sub_expr = part_expr->get_param_expr(i);

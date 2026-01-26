@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_EXE
 #include "ob_expr_to_days.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "share/vector/ob_vector_define.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -63,6 +64,84 @@ int calc_todays_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
   return ret;
 }
 
+template <typename ArgVec, typename ResVec>
+int vector_to_days_impl(const ObExpr &expr, ObEvalCtx &ctx,
+                        const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null()
+                         && eval_flags.accumulate_bit_cnt(bound) == 0;
+  if (OB_LIKELY(no_skip_no_null)) {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      int32_t date = arg_vec->get_date(idx);
+      int64_t day_int = date + DAYS_FROM_ZERO_TO_BASE;
+      if (day_int < 0 || ObTimeConverter::ZERO_DATE == day_int) {
+        res_vec->set_null(idx);
+      } else {
+        res_vec->set_int(idx, day_int);
+      }
+    }
+  } else {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) {
+        continue;
+      }
+      if (arg_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+      } else {
+        int32_t date = arg_vec->get_date(idx);
+        int64_t day_int = date + DAYS_FROM_ZERO_TO_BASE;
+        if (day_int < 0 || ObTimeConverter::ZERO_DATE == day_int) {
+          res_vec->set_null(idx);
+        } else {
+          res_vec->set_int(idx, day_int);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprToDays::calc_to_days_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                       const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("fail to eval to_days param", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
+      ret = vector_to_days_impl<DateFixedVec, IntegerFixedVec>(expr, ctx, skip, bound);
+    } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_to_days_impl<DateFixedVec, IntegerUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_FIXED == arg_format && VEC_UNIFORM_CONST == res_format) {
+      ret = vector_to_days_impl<DateFixedVec, IntegerUniCVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == arg_format && VEC_FIXED == res_format) {
+      ret = vector_to_days_impl<DateUniVec, IntegerFixedVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_to_days_impl<DateUniVec, IntegerUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM_CONST == res_format) {
+      ret = vector_to_days_impl<DateUniVec, IntegerUniCVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM_CONST == arg_format && VEC_FIXED == res_format) {
+      ret = vector_to_days_impl<DateUniCVec, IntegerFixedVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {
+      ret = vector_to_days_impl<DateUniCVec, IntegerUniVec>(expr, ctx, skip, bound);
+    } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM_CONST == res_format) {
+      ret = vector_to_days_impl<DateUniCVec, IntegerUniCVec>(expr, ctx, skip, bound);
+    } else {
+      ret = vector_to_days_impl<ObVectorBase, ObVectorBase>(expr, ctx, skip, bound);
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("vector to_days calculation failed", K(ret), K(arg_format), K(res_format));
+    }
+  }
+  return ret;
+}
+
 int ObExprToDays::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const
 {
@@ -79,6 +158,7 @@ int ObExprToDays::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
     LOG_WARN("param type should be date", K(ret), K(rt_expr));
   } else {
     rt_expr.eval_func_ = calc_todays_expr;
+    rt_expr.eval_vector_func_ = ObExprToDays::calc_to_days_vector;
   }
   return ret;
 }

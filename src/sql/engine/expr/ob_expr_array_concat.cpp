@@ -183,7 +183,6 @@ int ObExprArrayConcat::eval_array_concat_batch(const ObExpr &expr, ObEvalCtx &ct
     if (skip.at(j) || eval_flags.at(j)) {
       continue;
     }
-    eval_flags.set(j);
     if (ob_is_null(expr.obj_meta_.get_type())) {
       // do nothing
     } else if (OB_NOT_NULL(res_arr) && OB_FALSE_IT(res_arr->clear())) {
@@ -264,7 +263,6 @@ int ObExprArrayConcat::eval_array_concat_vector(const ObExpr &expr, ObEvalCtx &c
     if (skip.at(idx) || eval_flags.at(idx)) {
       continue;
     }
-    eval_flags.set(idx);
     if (ob_is_null(expr.obj_meta_.get_type())) {
       // do nothing
     } else if (OB_NOT_NULL(res_arr) && OB_FALSE_IT(res_arr->clear())) {

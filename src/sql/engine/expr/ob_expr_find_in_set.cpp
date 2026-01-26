@@ -102,6 +102,20 @@ int bin_collation_search(const ObString &str, const ObString &str_list,
   return ret;
 }
 
+OB_INLINE int search_cmp(const ObString &str, const ObArray<ObString> &str_list, uint64_t &res_pos)
+{
+  int ret = OB_SUCCESS;
+  res_pos = 0;
+  for (int i = 0; i < str_list.size(); ++i) {
+    bool is_equal = memequal(str.ptr(), str.length(), str_list.at(i).ptr(), str_list.at(i).length());
+    if (is_equal) {
+      res_pos = i+1;
+      break;
+    }
+  }
+  return ret;
+}
+
 int search(const ObString &str, const ObString &str_list, const ObCollationType &cs_type,
            uint64_t &res_pos)
 {
@@ -212,6 +226,7 @@ int build_hashmap(ObEvalCtx &ctx,
     ObString elem(elem_length, elem_ptr);
     OZ (gen_sortkey(cs_type, ctx.exec_ctx_.get_allocator(), elem, sort_key));
     OZ (sortkeys.push_back(sort_key));
+    OZ (cached_value.get_str_array().push_back(elem));
     if (OB_SUCC(ret)) {
       str_list_pos += elem_length + ((comma_pos >= 0) ? comma_str.length() : 0);
     }
@@ -247,8 +262,11 @@ int search_with_const_set(const ObExpr &expr,
   int ret = OB_SUCCESS;
   const char* first_ptr = str.ptr();
   int64_t first_length = str.length();
+  bool bin_search = (CS_TYPE_UTF8MB4_BIN == cs_type || CS_TYPE_UTF8MB4_0900_BIN == cs_type);
   // if first input string contains ',', return 0
-  if (ObCharset::locate(cs_type, first_ptr, first_length, ",", 1, 1) != 0) {
+  if (bin_search && memchr(str.ptr(), ',', str.length()) != nullptr) {
+    res_pos = 0;
+  } else if (!bin_search && ObCharset::locate(cs_type, first_ptr, first_length, ",", 1, 1) != 0) {
     res_pos = 0;
   } else {
     auto rt_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
@@ -262,24 +280,28 @@ int search_with_const_set(const ObExpr &expr,
       }
     }
     if (OB_SUCC(ret)) {
-      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-      common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-      ObString sort_key;
-      ObString input = str;
-      if (OB_FAIL(gen_sortkey(cs_type, temp_allocator, input, sort_key))) {
-        res_pos = 0;
-        if (OB_ERR_INCORRECT_STRING_VALUE == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("fail to get sort key", K(ret));
-        }
-      } else if (OB_FAIL(cached_value->get_hashmap().get_refactored(sort_key, res_pos))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
+      if (!bin_search || cached_value->get_hashmap().size() > ObExprFindInSet::HASH_MAP_THRESHOLD) {
+        ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+        common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+        ObString sort_key;
+        ObString input = str;
+        if (OB_FAIL(gen_sortkey(cs_type, temp_allocator, input, sort_key))) {
           res_pos = 0;
-        } else {
-          LOG_WARN("fail to get from hash map", K(ret));
+          if (OB_ERR_INCORRECT_STRING_VALUE == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to get sort key", K(ret));
+          }
+        } else if (OB_FAIL(cached_value->get_hashmap().get_refactored(sort_key, res_pos))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            res_pos = 0;
+          } else {
+            LOG_WARN("fail to get from hash map", K(ret));
+          }
         }
+      } else if (OB_FAIL(search_cmp(str, cached_value->get_str_array(), res_pos))) {
+        LOG_WARN("fail to search str in strlist", K(ret));
       }
     }
   }
@@ -353,7 +375,6 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(
         continue;
       } else if (str_vec->is_null(idx) || strlist_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         ObString str = str_vec->get_string(idx),
                  strlist = strlist_vec->get_string(idx);
@@ -363,7 +384,6 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(
                    K(expr.args_[1]->is_static_const_));
         } else {
           res_vec->set_uint(idx, res_pos);
-          eval_flags.set(idx);
         }
       }
     }
@@ -390,7 +410,6 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL)
         continue;
       } else if (str_vec->is_null(idx) || strlist_vec->is_null(idx)) {
         res_vec->set_null(idx);
-        eval_flags.set(idx);
       } else {
         ObString str = str_vec->get_string(idx), strlist = strlist_vec->get_string(idx);
         ret = search_with_const_set(expr, ctx, str, strlist, cs_type, res_pos);
@@ -398,7 +417,6 @@ int ObExprFindInSet::calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL)
           LOG_WARN("search str in str list failed", K(ret), K(expr.args_[1]->is_static_const_));
         } else {
           res_vec->set_uint(idx, res_pos);
-          eval_flags.set(idx);
         }
       }
     }

@@ -42,7 +42,7 @@ private:
 class ObExprDateAdd : public ObExprDateAdjust
 {
 public:
-  explicit  ObExprDateAdd(common::ObIAllocator &alloc);
+  explicit ObExprDateAdd(common::ObIAllocator &alloc);
   virtual ~ObExprDateAdd() {};
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
@@ -56,7 +56,7 @@ private:
 class ObExprDateSub : public ObExprDateAdjust
 {
 public:
-  explicit  ObExprDateSub(common::ObIAllocator &alloc);
+  explicit ObExprDateSub(common::ObIAllocator &alloc);
   virtual ~ObExprDateSub() {};
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
@@ -67,10 +67,30 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDateSub);
 };
 
-class ObExprAddMonths : public ObFuncExprOperator
+class ObExprMonthAdjust : public ObFuncExprOperator
 {
 public:
-  explicit ObExprAddMonths(common::ObIAllocator &alloc);
+  ObExprMonthAdjust(ObIAllocator &alloc,
+                    ObExprOperatorType type,
+                    const char *name,
+                    int32_t param_num,
+                    int32_t dimension = NOT_ROW_DIMENSION);
+  virtual ~ObExprMonthAdjust() {}
+  static int calc_months_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_months_adjust_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
+private:
+  static int set_result_by_ob_time(const ObObjType res_type,
+                                   const ObTimeConvertCtx &cvrt_ctx,
+                                   ObTime &ob_time,
+                                   ObTime &res_ob_time,
+                                   ObDatum &expr_datum);
+  DISALLOW_COPY_AND_ASSIGN(ObExprMonthAdjust);
+};
+// for oracle tenant
+class ObExprAddMonths : public ObExprMonthAdjust
+{
+public:
+  explicit ObExprAddMonths(ObIAllocator &alloc);
   virtual ~ObExprAddMonths() {}
   virtual int calc_result_type2(ObExprResType &type,
                                 ObExprResType &type1,
@@ -80,8 +100,27 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_add_months(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_add_months_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprAddMonths);
+};
+// for mysql tenant
+class ObExprMonthsAdd : public ObExprMonthAdjust
+{
+public:
+  explicit ObExprMonthsAdd(ObIAllocator &alloc);
+  virtual ~ObExprMonthsAdd() {}
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
+                      const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int calc_months_add(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int calc_months_add_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprMonthsAdd);
 };
 
 class ObExprLastDay : public ObFuncExprOperator

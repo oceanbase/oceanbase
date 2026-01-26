@@ -160,14 +160,39 @@ struct ToFloatCastImpl
         ResVec *res_vec_;
       };
 
+    // Fast path: signed type and FIXED format, direct batch conversion
+    if (!ob_is_unsigned_type(out_type) && arg_vec->get_format() == VEC_FIXED && res_vec->get_format() == VEC_FIXED) {
+      const ObFixedLengthBase *arg_fixed_vec = reinterpret_cast<const ObFixedLengthBase *>(arg_vec);
+      ObFixedLengthBase *res_fixed_vec = reinterpret_cast<ObFixedLengthBase *>(res_vec);
+      const IN_TYPE * __restrict src_data = reinterpret_cast<const IN_TYPE*>(arg_fixed_vec->get_data());
+      OUT_TYPE * __restrict dst_data = reinterpret_cast<OUT_TYPE*>(res_fixed_vec->get_data());
+
+      const int64_t start = bound.start();
+      const int64_t end = bound.end();
+
+      // Data conversion first
+      for (int64_t idx = start; idx < end; ++idx) {
+        dst_data[idx] = static_cast<OUT_TYPE>(static_cast<double>(src_data[idx]));
+      }
+
+      // Then handle null bitmap: copy if there are null bits
+      if (arg_vec->has_null()) {
+        res_fixed_vec->get_nulls()->deep_copy(*arg_fixed_vec->get_nulls(), start, end);
+        res_fixed_vec->set_has_null(true);
+      } else if (res_vec->has_null()) {
+        res_fixed_vec->get_nulls()->unset_all(start, end);
+      }
+    } else {
+      // Unsigned type or non-FIXED format, use original batch_cast logic
       IntUIntToFloatDoubleFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec);
       if (OB_FAIL(CastHelperImpl::batch_cast(cast_fn, expr, arg_vec, res_vec, eval_flags,
                                             skip, bound, is_diagnosis, diagnosis_manager))) {
         SQL_LOG(WARN, "cast failed", K(ret), K(in_type), K(out_type));
       }
     }
-    return ret;
   }
+  return ret;
+}
 
   template<typename OUT_TYPE>
   static int date_float(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)

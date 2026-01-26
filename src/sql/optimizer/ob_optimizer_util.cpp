@@ -9198,6 +9198,8 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
              T_FUN_COUNT_SUM == aggr_type ||
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == aggr_type ||
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == aggr_type ||
+             T_FUN_ANY == aggr_type ||
+             T_FUN_ARBITRARY == aggr_type ||
              T_FUN_SYS_BIT_AND == aggr_type ||
              T_FUN_SYS_BIT_OR == aggr_type ||
              T_FUN_SYS_BIT_XOR == aggr_type ||

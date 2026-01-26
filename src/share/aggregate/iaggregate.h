@@ -52,7 +52,8 @@ inline bool has_extra_info(ObAggrInfo &info)
   bool has = false;
   switch (info.get_expr_type()) {
   case T_FUN_WM_CONCAT:
-  case T_FUN_GROUP_CONCAT: {
+  case T_FUN_GROUP_CONCAT:
+  case T_FUN_CK_GROUPCONCAT: {
     if (info.has_order_by_) {
       has = true;
     } else {
@@ -1125,7 +1126,8 @@ public:
       // here.
     } else if (OB_FAIL(data_result->prepare_for_eval())) {
       SQL_LOG(WARN, "prepare fetch failed", K(ret));
-    } else if (agg_ctx.is_in_window_func() && aggr_info.get_expr_type() == T_FUN_GROUP_CONCAT) {
+    } else if (agg_ctx.is_in_window_func() && (aggr_info.get_expr_type() == T_FUN_GROUP_CONCAT
+                                               || aggr_info.get_expr_type() == T_FUN_CK_GROUPCONCAT)) {
       // Reset the output string length
       *reinterpret_cast<int32_t *>(agg_cell + sizeof(char **) + sizeof(int32_t)) = 0;
       *reinterpret_cast<int64_t *>(agg_cell + sizeof(char **) + 2 * sizeof(int32_t)) = 0;

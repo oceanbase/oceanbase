@@ -752,6 +752,7 @@ int ObWindowFunctionVecOp::init()
         case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
         case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
         case T_FUN_GROUP_CONCAT:
+        case T_FUN_CK_GROUPCONCAT:
         case T_FUN_CORR:
         case T_FUN_COVAR_POP:
         case T_FUN_COVAR_SAMP:
@@ -859,6 +860,8 @@ int ObWindowFunctionVecOp::init()
           }
           break;
         }
+        case T_WIN_FUN_LAG_IN_FRAME:
+        case T_WIN_FUN_LEAD_IN_FRAME:
         case T_WIN_FUN_LAG:
         case T_WIN_FUN_LEAD: {
           winfunc::LeadOrLag *lead_lag_expr = nullptr;

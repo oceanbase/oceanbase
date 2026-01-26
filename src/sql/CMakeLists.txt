@@ -425,6 +425,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_database.cpp
   engine/expr/ob_expr_date.cpp
   engine/expr/ob_expr_date_add.cpp
+  engine/expr/ob_expr_date_add_ck.cpp
   engine/expr/ob_expr_date_diff.cpp
   engine/expr/ob_expr_date_format.cpp
   engine/expr/ob_expr_day_of_func.cpp
@@ -436,6 +437,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_dml_event.cpp
   engine/expr/ob_expr_doc_id.cpp
   engine/expr/ob_expr_doc_length.cpp
+  engine/expr/ob_expr_edit_distance.cpp
   engine/expr/ob_expr_effective_tenant.cpp
   engine/expr/ob_expr_effective_tenant_id.cpp
   engine/expr/ob_expr_elt.cpp
@@ -932,6 +934,9 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_bucket.cpp
   engine/expr/ob_expr_void.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_prompt.cpp
+  engine/expr/ob_expr_string_searcher.cpp
+  engine/expr/ob_expr_date_trunc.cpp
+  engine/expr/ob_expr_is_nan.cpp
   engine/expr/ob_expr_collect_file_list.cpp
 )
 
