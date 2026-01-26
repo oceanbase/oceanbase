@@ -482,6 +482,13 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
   const int64_t max_micro_size = 16 * 1024; // 16KB
   // Set max_micro_blk_size_ to allow 16KB micro blocks to be written
   // This is needed after MR 261057 which added rejection logic for large micro blocks
+  // Note: We need to set both the config and the cached value because background task
+  // (MicCacheMTimer) will periodically update max_micro_blk_size_ from config.
+  // The base class SetUpTestCase sets _ss_micro_cache_max_block_size to 1, which would
+  // cause all micro blocks larger than 1 byte to be rejected.
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(run_ctx_.tenant_id_));
+  ASSERT_TRUE(tenant_config.is_valid());
+  tenant_config->_ss_micro_cache_max_block_size = 128 * 1024; // 128KB
   micro_cache->micro_meta_mgr_.max_micro_blk_size_ = 128 * 1024; // 128KB
 
   const int64_t WRITE_BLK_CNT = 300;
@@ -555,6 +562,10 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
 
   FLOG_INFO("[TEST] test micro cache full, macro cache is not full", K(second_stat), K(second_stat.get_macro_cache_max_available_size()),
       K(second_stat.get_micro_cache_max_available_size()), K(after_cache_stat.micro_stat()), KPC(micro_cache_task), K(micro_cache_task->get_comment()));
+
+  // Restore the config to original value (1) to keep consistency with other test cases
+  tenant_config->_ss_micro_cache_max_block_size = 1;
+  micro_cache->micro_meta_mgr_.max_micro_blk_size_ = 1;
   FLOG_INFO("[TEST] finish test_micro_cache_full");
 }
 }
