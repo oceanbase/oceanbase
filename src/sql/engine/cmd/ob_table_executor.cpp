@@ -116,6 +116,7 @@ int ObCreateTableExecutor::ObInsSQLPrinter::inner_print(char *buf, int64_t buf_l
       } else if (DATA_VERSION_4_3_4_0 <= data_version) {
         append_str = stmt_->get_has_append_hint() ? "append" : "";
         const ObDirectLoadHint &direct_load_hint = stmt_->get_direct_load_hint();
+        is_direct_load_ = stmt_->get_has_append_hint() || direct_load_hint.is_enable();
         if (OB_FAIL(direct_load_hint.print_direct_load_hint(direct_str, direct_str_max_len,
                                                                    direct_str_pos))) {
           LOG_WARN("fail to print direct load hint", K(ret), K(direct_load_hint));
@@ -208,7 +209,8 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
                                            const ObSQLSessionInfo *my_session,
                                            ObSchemaGetterGuard *schema_guard,
                                            const ParamStore *param_store,
-                                           ObSqlString &ins_sql) //out, 最终的查询插入语句
+                                           ObSqlString &ins_sql,
+                                           bool &is_direct_load) //out, 最终的查询插入语句
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("CreateTableExec");
@@ -248,6 +250,8 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
       LOG_WARN("failed  to print", K(ret));
     } else if (OB_FAIL(ins_sql.append(sql))){
       LOG_WARN("fail to append insert into string", K(ret));
+    } else {
+      is_direct_load = sql_printer.is_direct_load();
     }
   }
 
@@ -379,6 +383,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
     }
     uint64_t data_version = 0;
     uint64_t tenant_id = create_table_arg.schema_.get_tenant_id();
+    bool is_direct_load = false;
     if (OB_SUCC(ret)) {
       ObInnerSQLConnectionPool *pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
       if (OB_ISNULL(pool)) {
@@ -388,7 +393,8 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_WARN("init oracle sql proxy failed", K(ret));
       } else if (OB_FAIL(prepare_stmt(stmt, *my_session, create_table_name))) {
         LOG_WARN("failed to prepare stmt", K(ret));
-      } else if (OB_FAIL(prepare_ins_arg(stmt, my_session, ctx.get_sql_ctx()->schema_guard_, &plan_ctx->get_param_store(), ins_sql))) { //1, 参数准备;
+      } else if (OB_FAIL(prepare_ins_arg(stmt, my_session, ctx.get_sql_ctx()->schema_guard_,
+                                         &plan_ctx->get_param_store(), ins_sql, is_direct_load))) { //1, 参数准备;
         LOG_WARN("failed to prepare insert table arg", K(ret));
       } else if (OB_FAIL(prepare_alter_arg(stmt, my_session, create_table_name, alter_table_arg))) {
         LOG_WARN("failed to prepare alter table arg", K(ret));
@@ -502,7 +508,38 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
           bool finish = false;
           if (create_table_res.table_id_ != OB_INVALID_ID) {
-            alter_table_arg.alter_table_schema_.set_table_id(create_table_res.table_id_);
+            if (OB_UNLIKELY(is_direct_load)) {
+              // 旁路导入在执行 INSERT INTO SELECT的过程中会换表，因此alter表的table id跟create table返回的table id
+              // 不同，不能直接使用create_table_res中的table id，需要从table schema中重新获取。
+              ObSchemaGetterGuard schema_guard;
+              const ObTableSchema *table_schema =  NULL;
+              int64_t schema_version = OB_INVALID_VERSION;
+              ObRefreshSchemaStatus schema_status;
+              schema_status.tenant_id_ = tenant_id;
+              if (OB_FAIL(gctx.schema_service_->get_schema_version_in_inner_table(*sql_proxy,
+                                                                                  schema_status,
+                                                                                  schema_version))) {
+                LOG_WARN("failed to get schema version in inner table");
+              } else if (OB_FAIL(gctx.schema_service_->async_refresh_schema(tenant_id, schema_version))) {
+                LOG_WARN("failed to async refresh schema", K(ret));
+              } else if (OB_FAIL(gctx.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard, schema_version))) {
+                LOG_WARN("fail to get schema guard", K(tenant_id));
+              } else if (OB_FALSE_IT(schema_guard.set_session_id(alter_table_arg.session_id_))) {
+              } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                               alter_table_arg.alter_table_schema_.get_origin_database_name(),
+                                                               alter_table_arg.alter_table_schema_.get_origin_table_name(),
+                                                               false,
+                                                               table_schema))) {
+                LOG_WARN("fail to get table schema", K(tenant_id), K(alter_table_arg));
+              } else if (OB_ISNULL(table_schema)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get null schema", K(schema_version), K(alter_table_arg));
+              } else {
+                alter_table_arg.alter_table_schema_.set_table_id(table_schema->get_table_id());
+              }
+            } else {
+              alter_table_arg.alter_table_schema_.set_table_id(create_table_res.table_id_);
+            }
           }
           while (OB_SUCC(ret) && !finish) {
             if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
