@@ -2363,7 +2363,8 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
   }
 
   // check exprs
-  if (func_lookup_ctdef->has_doc_id_lookup()) {
+  if (OB_FAIL(ret)) {
+  } else if (func_lookup_ctdef->has_doc_id_lookup()) {
     docid_lookup_rowkey_exprs =  &static_cast<const ObDASScanCtDef *>(func_lookup_ctdef->get_doc_id_lookup_scan_ctdef())->rowkey_exprs_;
     bool find = false;
     for (int i = 0; OB_SUCC(ret) && i < docid_lookup_rowkey_exprs->count(); i++) {
