@@ -177,8 +177,7 @@ private:
                         common::ObIArray<ObLSReplicaAddr> &addrs,
                         int64_t &paxos_replica_num);
 
- int alloc_zone_ls_addr(const bool is_sys_ls,
-                        const share::ObZoneReplicaAttrSet &zone_locality,
+ int alloc_zone_ls_addr(const share::ObZoneReplicaAttrSet &zone_locality,
                         const common::ObIArray<share::ObUnit> &unit_info_array,
                         ObLSReplicaAddr &ls_replica_addr);
 #ifdef OB_BUILD_ARBITRATION

@@ -1059,7 +1059,7 @@ int ObLSCreator::construct_ls_addrs_according_to_locality_(
       ObLSReplicaAddr replica_addr;
       if (is_sys_ls && zone_locality.get_columnstore_replica_num() > 0) {
         // ignore, C-replica not applicable for sys-ls
-      } else if (OB_FAIL(alloc_zone_ls_addr(is_sys_ls, zone_locality, unit_info_array, replica_addr))) {
+      } else if (OB_FAIL(alloc_zone_ls_addr(zone_locality, unit_info_array, replica_addr))) {
         //TODO 忽略之后如何保证多数派一定存在
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to alloc zone ls addr", KR(ret), K(zone_locality), K(unit_info_array));
@@ -1182,21 +1182,28 @@ int ObLSCreator::alloc_duplicate_ls_addr_(
     LOG_WARN("fail to construct units for duplicate ls", KR(ret), K(status_info));
   } else {
     ls_addr.reset();
-    const bool is_duplicate_ls = true;
+    int64_t total_paxos_num = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < zone_locality_array.count(); ++i) {
       const share::ObZoneReplicaAttrSet &zone_locality = zone_locality_array.at(i);
-      paxos_replica_num += zone_locality.get_paxos_replica_num();
+      total_paxos_num += zone_locality.get_paxos_replica_num();
       ObLSReplicaAddr replica_addr;
       if (OB_FAIL(alloc_zone_ls_addr(
-                      is_duplicate_ls,
                       zone_locality,
                       // if unit_list is specified, just choose unit in unit_list
                       // if unit_list is not specified, choose unit among all units except gts unit
                       0 == unit_list_array.count() ? valid_unit_array : unit_list_array,
                       replica_addr))) {
-        LOG_WARN("fail to alloc zone ls addr", KR(ret), K(zone_locality), K(unit_list_array), K(valid_unit_array));
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("fail to alloc zone ls addr", KR(ret), K(zone_locality),
+                   K(unit_list_array), K(valid_unit_array), K(valid_unit_array), K(unit_list_array));
+        } else {
+          // ignore OB_ENTRY_NOT_EXIST, unit_list may not contain unit in new added zone in locality
+          ret = OB_SUCCESS;
+        }
       } else if (OB_FAIL(ls_addr.push_back(replica_addr))) {
         LOG_WARN("fail to push back", KR(ret));
+      } else if (FALSE_IT(paxos_replica_num += zone_locality.get_paxos_replica_num())) {
+        // never reach here
       } else if (OB_FAIL(compensate_zone_readonly_replica_(
                              zone_locality,
                              replica_addr,
@@ -1205,6 +1212,10 @@ int ObLSCreator::alloc_duplicate_ls_addr_(
         LOG_WARN("fail to compensate readonly replica", KR(ret),
                  K(zone_locality), K(replica_addr), K(ls_addr), K(valid_unit_array));
       }
+    }
+    if (OB_SUCC(ret) && paxos_replica_num != total_paxos_num) {
+      LOG_WARN("unit list not match with locality", K(paxos_replica_num), K(total_paxos_num),
+          K(unit_list_array), K(valid_unit_array), K(zone_locality_array));
     }
   }
   return ret;
@@ -1303,7 +1314,6 @@ int ObLSCreator::construct_units_for_duplicate_ls_(
 }
 
 int ObLSCreator::alloc_zone_ls_addr(
-    const bool is_sys_ls,
     const share::ObZoneReplicaAttrSet &zlocality,
     const common::ObIArray<share::ObUnit> &unit_info_array,
     ObLSReplicaAddr &ls_replica_addr)
