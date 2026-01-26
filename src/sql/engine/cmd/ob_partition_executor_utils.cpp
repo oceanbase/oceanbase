@@ -692,6 +692,7 @@ int ObPartitionExecutorUtils::expr_cal_and_cast(
       EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
       //cast_ctx.dest_collation_ = temp_obj.get_collation_type();
       cast_ctx.dest_collation_ = fun_collation_type;
+      cast_ctx.expect_obj_collation_ = fun_collation_type;
       ObAccuracy res_acc;
       if (ObDecimalIntType == expected_obj_type) {
         res_acc = dst_res_type.get_accuracy();
@@ -808,6 +809,7 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
       }
       //cast_ctx.dest_collation_ = temp_obj.get_collation_type();
       cast_ctx.dest_collation_ = fun_collation_type;
+      cast_ctx.expect_obj_collation_ = fun_collation_type;
       EXPR_CAST_OBJ_V2(expected_obj_type, temp_obj, out_val_ptr);
       if (OB_SUCC(ret)) {
         if (OB_ISNULL(out_val_ptr)) {
