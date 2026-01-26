@@ -626,12 +626,10 @@ int ObTabletReplayCreateHandler::record_ls_transfer_info_(
     LOG_WARN("failed to get ls restore status", K(ret), KPC(ls));
   } else if (ls_restore_status.is_before_restore_to_consistent_scn()) {
     LOG_INFO("the log stream in restore is before restore to consistent scn, no need to record transfer info", "ls_id", ls->get_ls_id(), K(ls_restore_status));
-  }else if (!tablet_transfer_info.has_transfer_table()) {
+  } else if (!tablet_transfer_info.has_transfer_table()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should have transfer table", K(ret), "ls_id", ls->get_ls_id(), K(tablet_id), K(tablet_transfer_info));
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
     bool need_init = true;
     const ObLSID ls_id = ls->get_ls_id();
     // rlock scope
