@@ -3755,8 +3755,9 @@ int ObTransService::check_for_standby(const share::ObLSID &ls_id,
   ObPartTransCtx *ctx = NULL;
   if (OB_SUCC(get_tx_ctx_for_standby_(ls_id, tx_id, ctx))) {
 
-    if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_4_1_0) {
-      /* TODO: <= CLUSTER_VERSION_4_5_0_0 */
+    if ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_6
+         && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
+        || (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_4_1_0)) {
       ObTxCommitData::TxDataState tx_data_state;
       share::SCN commit_version;
       ret = ctx->infer_standby_trx_state_v2(snapshot, 20_ms /*wait_participant_timeout_us*/,
@@ -3835,8 +3836,9 @@ int ObTransService::mds_infer_standby_trx_state(const ObLS *ls_ptr,
       ret = OB_STATE_NOT_MATCH;
       TRANS_LOG(WARN, "logonly replica has no trans service", KR(ret), KPC(tmp_ls_ptr));
     } else if (OB_SUCC(tmp_ls_ptr->get_tx_ctx(tx_id, true, ctx))) {
-    if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_4_1_0) {
-      /* TODO: <= CLUSTER_VERSION_4_5_0_0 */
+    if ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_5_6
+         && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0)
+        || (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_4_1_0)) {
         if (OB_FAIL(ctx->infer_standby_trx_state_v2(snapshot, 150_ms /*wait_participant_timeout_us*/,
                                                     false /*filter_unreadable_prepare_trx*/,
                                                     tx_data_state, commit_version))) {
