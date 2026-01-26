@@ -814,14 +814,14 @@ public:
   }
 
 protected:
-  virtual int get_skip_index_col_attr_by_schema(const bool is_major,
-                                                common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs,
-                                                ObSEArray<ObObjMeta, 16> *column_types=nullptr) const
+  virtual int get_skip_index_col_attr_by_schema(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs,
+                                                ObSEArray<ObObjMeta, 16> *column_types=nullptr,
+                                                const bool only_set_fts=false) const
   {
-    UNUSEDx(is_major, skip_idx_attrs, column_types);
+    UNUSEDx(skip_idx_attrs, column_types, only_set_fts);
     return common::OB_NOT_SUPPORTED;
   }
-  int get_delta_skip_index_adaptively(const bool is_major, common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const;
+  int get_delta_skip_index_adaptively(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const;
 
 public:
   DECLARE_PURE_VIRTUAL_TO_STRING;
@@ -2347,9 +2347,9 @@ protected:
   int add_column_group_to_hash_array(ObColumnGroupSchema *column_group,
                                      const KeyType &key,
                                      ArrayType *&array);
-  virtual int get_skip_index_col_attr_by_schema(const bool is_major,
-                                                common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs,
-                                                ObSEArray<ObObjMeta, 16> *column_types=nullptr) const;
+  virtual int get_skip_index_col_attr_by_schema(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs,
+                                                ObSEArray<ObObjMeta, 16> *column_types=nullptr,
+                                                const bool only_set_fts=false) const;
 protected:
   int add_cst_to_cst_array(ObConstraint *cst);
   int remove_cst_from_cst_array(const ObConstraint *cst);

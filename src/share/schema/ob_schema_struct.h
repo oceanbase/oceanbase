@@ -9898,9 +9898,16 @@ public:
   inline bool is_valid() const { return 0 == reserved_; }
 
   inline uint64_t get_packed_value() const { return pack_; }
-  inline void set_column_attr(const uint64_t column_attr, const bool unset_sum) { pack_ = column_attr; if (unset_sum) { sum_ = 0; } }
+  inline void set_column_attr(const uint64_t column_attr) { pack_ = column_attr; }
+  inline void set_column_fts_attr(const ObSkipIndexColumnAttr &column_attr)
+  {
+    if (column_attr.has_loose_min_max()) { set_loose_min_max(); }
+    if (column_attr.has_bm25_token_freq_param()) { set_bm25_token_freq_param(); }
+    if (column_attr.has_bm25_doc_len_param()) { set_bm25_doc_len_param(); }
+  }
   inline void set_min_max() { min_max_ = 1; }
   inline void set_sum() { sum_ = 1; }
+  inline void unset_sum() { sum_ = 0; }
   inline void set_loose_min_max() { loose_min_max_ =1; }
   inline void set_bm25_token_freq_param() { bm25_token_freq_param_ = 1; }
   inline void set_bm25_doc_len_param() { bm25_doc_len_param_ = 1; }

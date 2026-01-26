@@ -1931,9 +1931,9 @@ int ObStorageSchema::get_rowkey_column_ids(common::ObIArray<ObColDesc> &column_i
 }
 
 int ObStorageSchema::get_skip_index_col_attr_by_schema(
-    const bool is_major,
     ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_attrs,
-    ObSEArray<ObObjMeta, 16> *column_types) const
+    ObSEArray<ObObjMeta, 16> *column_types,
+    const bool only_set_fts) const
 {
   int ret = OB_SUCCESS;
   share::schema::ObSkipIndexColumnAttr skip_idx_attr;
@@ -1945,12 +1945,16 @@ int ObStorageSchema::get_skip_index_col_attr_by_schema(
     const ObObjMeta &meta_type = rowkey_array_[i].meta_type_;
     for (int64_t skip_col_id = 0; OB_SUCC(ret) && skip_col_id < skip_idx_attr_array_.count(); ++skip_col_id) {
       if (rowkey_col_idx == skip_idx_attr_array_.at(skip_col_id).col_idx_) {
-        skip_idx_attr.set_column_attr(skip_idx_attr_array_.at(skip_col_id).skip_idx_attr_.get_packed_value(), !is_major);
+        skip_idx_attr.set_column_attr(skip_idx_attr_array_.at(skip_col_id).skip_idx_attr_.get_packed_value());
         break;
       }
     }
     if (OB_SUCC(ret)) {
-      skip_idx_attrs.at(attr_idx++).set_column_attr(skip_idx_attr.get_packed_value(), !is_major);
+      if (only_set_fts) {
+        skip_idx_attrs.at(attr_idx++).set_column_fts_attr(skip_idx_attr);
+      } else {
+        skip_idx_attrs.at(attr_idx++).set_column_attr(skip_idx_attr.get_packed_value());
+      }
       if (OB_NOT_NULL(column_types) && OB_FAIL(column_types->push_back(meta_type))) {
         STORAGE_LOG(WARN, "failed to push back column type", K(ret), K(meta_type));
       }
@@ -1987,12 +1991,16 @@ int ObStorageSchema::get_skip_index_col_attr_by_schema(
       const ObObjMeta &meta_type = column_array_[i].meta_type_;
       for (int64_t skip_col_id = 0; OB_SUCC(ret) && skip_col_id < skip_idx_attr_array_.count(); ++skip_col_id) {
         if (i == skip_idx_attr_array_.at(skip_col_id).col_idx_) {
-          skip_idx_attr.set_column_attr(skip_idx_attr_array_.at(skip_col_id).skip_idx_attr_.get_packed_value(), !is_major);
+          skip_idx_attr.set_column_attr(skip_idx_attr_array_.at(skip_col_id).skip_idx_attr_.get_packed_value());
           break;
         }
       }
       if (OB_SUCC(ret)) {
-        skip_idx_attrs.at(attr_idx++).set_column_attr(skip_idx_attr.get_packed_value(), !is_major);
+        if (only_set_fts) {
+          skip_idx_attrs.at(attr_idx++).set_column_fts_attr(skip_idx_attr);
+        } else {
+          skip_idx_attrs.at(attr_idx++).set_column_attr(skip_idx_attr.get_packed_value());
+        }
         if (OB_NOT_NULL(column_types) && OB_FAIL(column_types->push_back(meta_type))) {
           STORAGE_LOG(WARN, "failed to push back column type", K(ret), K(meta_type));
         }

@@ -147,18 +147,18 @@ int ObMergeSchema::get_mulit_version_rowkey_column_ids(common::ObIArray<share::s
 }
 
 /*
- * 1. major:
- *   1.1 data_version < DATA_VERSION_4_5_1_0 : set skip_index_attr by schema
- *   1.2 data_version >= DATA_VERSION_4_5_1_0 : set trans_version and TTL, set skip_index_attr by schema
+ * Set skip_index column attributes based on sstable type and version
+ *
+ * 1. major sstable:
+ *    - Call get_skip_index_col_attr_by_schema to set all skip_index_attr (including FTS)
+ *
  * 2. delta sstable:
- *   2.1 data_version < DATA_VERSION_4_5_1_0 : no need to set any skip_index_attr
- *   2.2 data_version >= DATA_VERSION_4_5_1_0 :
- *     2.2.1 PARTIAL_UPDATE : no need to set skip_index_attr except trans_version and TTL
- *     2.2.2 DELETE_INSERT / INSERT_ONLY:
- *       2.2.2.1 skip_index_level_ == OB_SKIP_INDEX_LEVEL_BASE_ONLY : no need to set skip_index_attr except trans_version and TTL
- *       2.2.2.2 skip_index_level_ == OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE:
- *         2.2.2.2.1 row_store : set trans_version and TTL, set skip_index_attr by schema
- *         2.2.2.2.2 column_store : set trans_version and TTL, set skip_index_attr adaptively
+ *    2.1 If delta sstable skip index is supported (data_version >= DATA_VERSION_4_5_1_0 and
+ *        skip_index_level == OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE):
+ *        - column_store or adaptive strategy enabled: Call get_delta_skip_index_adaptively for adaptive setting
+ *        - row_store without adaptive strategy: Call get_skip_index_col_attr_by_schema to set all skip_index_attr
+ *    2.2 Otherwise:
+ *        - Only set FTS skip_index_attr
  */
 int ObMergeSchema::get_skip_index_col_attr(
   const bool is_major,
@@ -167,42 +167,55 @@ int ObMergeSchema::get_skip_index_col_attr(
 {
   int ret = OB_SUCCESS;
   const int64_t trans_version_col_idx = ObMultiVersionRowkeyHelpper::get_trans_version_col_store_index(get_rowkey_column_num(), true);
+  const bool need_delta_skip_index = ObMergeEngineStoreFormat::is_merge_engine_support_delta_sstable_skip_index(get_merge_engine_type()) &&
+                                     get_skip_index_level() == ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE;
+  const int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
+
+  bool need_set_fts_only = false;
+  bool need_set_adaptively = false;
+
   if (!is_valid()) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("The ObTableSchema is invalid", K(ret));
-  } else if (is_major) {  // 1. major
-    // TODO: set skip_index_attr for trans_version and TTL columns
-    if (OB_FAIL(get_skip_index_col_attr_by_schema(is_major, skip_idx_attrs))) { // set skip_index_attr by schema
-      LOG_WARN("failed to set skip index col attr by schema", K(ret));
+  } else if (!is_major) {
+    if (data_version >= DATA_VERSION_4_5_1_0 && need_delta_skip_index) {  // delta sstable skip index is supported
+      bool is_column_store = false;
+      if (OB_FAIL(get_is_column_store(is_column_store))) {
+        LOG_WARN("failed to get is_column_store", K(ret));
+      } else {
+        need_set_adaptively = (is_column_store || tmp_ret != OB_SUCCESS); // set adaptively if column store or adaptive strategy is enabled
+      }
+    } else {
+      need_set_fts_only = true; // set fts only if delta sstable skip index is not supported
     }
-  } else {  // 2. delta sstable
-    if (data_version >= DATA_VERSION_4_5_1_0) { // 2.2 data_version >= DATA_VERSION_4_5_1_0
-      skip_idx_attrs.at(trans_version_col_idx).set_min_max(); // always set skip_index_attr for trans_version
-      // TODO: set skip_index_attr for other TTL columns
-      const ObMergeEngineType merge_engine_type = get_merge_engine_type();
-      const ObSkipIndexLevel skip_index_level = get_skip_index_level();
-      if (ObMergeEngineStoreFormat::is_merge_engine_support_delta_sstable_skip_index(merge_engine_type) &&
-          skip_index_level == ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE) { // 2.2.2.2
-        bool is_column_store = false;
-        int tmp_ret = OB_E(EventTable::EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY) OB_SUCCESS;
-        if (OB_FAIL(get_is_column_store(is_column_store))) {
-          LOG_WARN("failed to get is_column_store", K(ret));
-        } else if (!is_column_store && tmp_ret == OB_SUCCESS) {  // 2.2.2.2.1 row_store : set trans_version and TTL, set skip_index_attr by schema
-          if (OB_FAIL(get_skip_index_col_attr_by_schema(is_major, skip_idx_attrs))) { // set skip_index_attr by schema
-            LOG_WARN("failed to set skip index col attr by schema", K(ret), K(skip_idx_attrs));
-          }
-        } else {  // 2.2.2.2.2 column_store : set trans_version and TTL, set skip_index_attr adaptively
-          if (OB_FAIL(get_delta_skip_index_adaptively(is_major, skip_idx_attrs))) {
-            LOG_WARN("failed to set skip index col attr adaptively", K(ret), K(skip_idx_attrs));
-          }
-        }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (need_set_adaptively) {
+      if (OB_FAIL(get_delta_skip_index_adaptively(skip_idx_attrs))) {
+        LOG_WARN("failed to set skip index col attr adaptively", K(ret), K(skip_idx_attrs));
+      }
+    } else {
+      if (OB_FAIL(get_skip_index_col_attr_by_schema(skip_idx_attrs, nullptr, need_set_fts_only))) {
+        LOG_WARN("failed to set skip index col attr by schema", K(ret), K(skip_idx_attrs));
       }
     }
   }
+
+  // special handling
+  if (OB_SUCC(ret) && !is_major) {
+    for (int64_t i = 0; i < skip_idx_attrs.count(); ++i) {
+      skip_idx_attrs.at(i).unset_sum(); // delta sstable do not support sum
+    }
+    if (data_version >= DATA_VERSION_4_5_1_0) {
+      skip_idx_attrs.at(trans_version_col_idx).set_min_max();
+    }
+  }
+
   return ret;
 }
 
-int ObMergeSchema::get_delta_skip_index_adaptively(const bool is_major, common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const
+int ObMergeSchema::get_delta_skip_index_adaptively(common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs) const
 {
   int ret = OB_SUCCESS;
   const int64_t skip_index_row_size_limit = ObSkipIndexColMeta::SKIP_INDEX_ROW_SIZE_LIMIT * SKIP_IDNEX_ROW_SIZE_LIMIT_COEFF;
@@ -212,7 +225,7 @@ int ObMergeSchema::get_delta_skip_index_adaptively(const bool is_major, common::
   const int64_t sql_sequence_col_idx = ObMultiVersionRowkeyHelpper::get_sql_sequence_col_store_index(get_rowkey_column_num(), true);
   ObSEArray<ObObjMeta, 16> column_types;
   // 1. set skip_index_attr by schema
-  if (OB_FAIL(get_skip_index_col_attr_by_schema(is_major, skip_idx_attrs, &column_types))) {  // set skip_index_attr by schema
+  if (OB_FAIL(get_skip_index_col_attr_by_schema(skip_idx_attrs, &column_types))) {  // set skip_index_attr by schema
     LOG_WARN("failed to set skip index col attr by schema", K(ret), K(skip_idx_attrs), K(column_types));
   }
   // 2. calculate schema aggregate row size, generate skip index for trans_version, find candidate columns
@@ -6729,9 +6742,9 @@ int ObTableSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> &c
 }
 
 int ObTableSchema::get_skip_index_col_attr_by_schema(
-    const bool is_major,
     common::ObIArray<ObSkipIndexColumnAttr> &skip_idx_attrs,
-    ObSEArray<ObObjMeta, 16> *column_types) const
+    ObSEArray<ObObjMeta, 16> *column_types,
+    const bool only_set_fts) const
 {
   int ret = OB_SUCCESS;
   int64_t attr_idx = 0;
@@ -6745,7 +6758,8 @@ int ObTableSchema::get_skip_index_col_attr_by_schema(
     } else if (OB_ISNULL(column_schema = get_column_schema(rowkey_column->column_id_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null column schema", K(ret), K(i), KPC(rowkey_column));
-    } else if (FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_attr(column_schema->get_skip_index_attr().get_packed_value(), !is_major))) {
+    } else if (only_set_fts && FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_fts_attr(column_schema->get_skip_index_attr()))) {
+    } else if (!only_set_fts && FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_attr(column_schema->get_skip_index_attr().get_packed_value()))) {
     } else if (OB_NOT_NULL(column_types) && OB_FAIL(column_types->push_back(column_schema->get_meta_type()))) {
       LOG_WARN("fail to push column meta type", K(ret));
     }
@@ -6769,7 +6783,8 @@ int ObTableSchema::get_skip_index_col_attr_by_schema(
       LOG_WARN("unexpected null column", K(ret), K(i));
     } else if (column_schema->is_rowkey_column() || column_schema->is_virtual_generated_column()) {
       // skip
-    } else if (FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_attr(column_schema->get_skip_index_attr().get_packed_value(), !is_major))) {
+    } else if (only_set_fts && FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_fts_attr(column_schema->get_skip_index_attr()))) {
+    } else if (!only_set_fts && FALSE_IT(skip_idx_attrs.at(attr_idx++).set_column_attr(column_schema->get_skip_index_attr().get_packed_value()))) {
     } else if (OB_NOT_NULL(column_types) && OB_FAIL(column_types->push_back(column_schema->get_meta_type()))) {
       LOG_WARN("fail to push column meta type", K(ret));
     }

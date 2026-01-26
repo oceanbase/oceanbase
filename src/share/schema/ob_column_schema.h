@@ -156,7 +156,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline void set_srid(const uint32_t srid) { srs_info_.srid_ = srid; }
   inline void set_geo_type(const common::ObGeoType geo_type) { srs_info_.geo_type_ = static_cast<uint8_t>(geo_type); }
   int set_geo_type(const int32_t type_val);
-  inline void set_skip_index_attr(const uint64_t attr_val) { skip_index_attr_.set_column_attr(attr_val, false); }
+  inline void set_skip_index_attr(const uint64_t attr_val) { skip_index_attr_.set_column_attr(attr_val); }
   inline void set_is_string_lob() { add_column_flag(STRING_LOB_COLUMN_FLAG); }
   //get methods
   inline uint64_t get_tenant_id() const { return tenant_id_; }
