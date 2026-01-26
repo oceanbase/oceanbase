@@ -91,6 +91,14 @@ int ObLobLocationUtil::is_remote(ObLobAccessParam& param, bool& is_remote, commo
         LOG_WARN("fail to get retry info", K(ret), KPC(lob_locator));
       } else {
         dst_addr = retry_info->addr_;
+        // defend cross-cluster: retry_info addr should belong to current cluster
+        bool is_exist = false;
+        if (OB_FAIL(SVR_TRACER.is_server_exist(dst_addr, is_exist))) {
+          LOG_WARN("check server exist in current cluster failed", K(ret), K(dst_addr));
+        } else if (!is_exist) {
+          ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
+          LOG_WARN("lob retry dst_addr not in current cluster", K(ret), K(dst_addr), K(self_addr), KPC(lob_locator));
+        }
       }
     } else {
       if (OB_FAIL(get_ls_leader(param, tenant_id, param.ls_id_, dst_addr))) {

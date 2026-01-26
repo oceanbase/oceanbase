@@ -5293,6 +5293,7 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
   OB_UNIS_ENCODE(client_create_time_);
   OB_UNIS_ENCODE(sys_var_in_pl_cache_str_);
   OB_UNIS_ENCODE(route_to_column_replica_);
+  OB_UNIS_ENCODE(client_attribute_capability_.capability_);
   return ret;
 }
 
@@ -5623,6 +5624,7 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
       }
     }
     OB_UNIS_DECODE(route_to_column_replica_);
+    OB_UNIS_DECODE(client_attribute_capability_.capability_);
     pos = pos_orig + len;
   }
   return ret;
@@ -5922,6 +5924,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(client_create_time_);
   OB_UNIS_ADD_LEN(sys_var_in_pl_cache_str_);
   OB_UNIS_ADD_LEN(route_to_column_replica_);
+  OB_UNIS_ADD_LEN(client_attribute_capability_.capability_);
   return len;
 }
 

@@ -1494,11 +1494,13 @@ int ObMPQuery::store_params_value_to_str(ObIAllocator &allocator,
       params_value_ = NULL;
       params_value_len_ = 0;
       break;
-    } else {
+    } else if (OB_LIKELY(!param.is_lob_storage())) {
       OZ (param.print_sql_literal(params_value_, length, pos, allocator, TZ_INFO(&session)));
-      if (i != params.count() - 1) {
-        OZ (databuff_printf(params_value_, length, pos, allocator, ","));
-      }
+    } else {
+      OZ (param.print_varchar_literal(params_value_, length, pos, allocator, TZ_INFO(&session)));
+    }
+    if (i != params.count() - 1) {
+      OZ (databuff_printf(params_value_, length, pos, allocator, ","));
     }
   }
   if (OB_FAIL(ret)) {

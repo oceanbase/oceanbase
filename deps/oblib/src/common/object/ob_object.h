@@ -2241,6 +2241,9 @@ public:
                         const ObObjPrintParams &params = ObObjPrintParams()) const;
   /// print as SQL VARCHAR literal
   int print_varchar_literal(char *buffer, int64_t length, int64_t &pos, const ObObjPrintParams &params = ObObjPrintParams()) const;
+  int print_varchar_literal(char *&buffer, int64_t &length,
+                            int64_t &pos, ObIAllocator &alloc,
+                            const ObObjPrintParams &params = ObObjPrintParams()) const;
   //used for enum and set
   int print_varchar_literal(const ObIArray<ObString> &type_infos, char *buffer, int64_t length, int64_t &pos) const;
   /// print as plain string
