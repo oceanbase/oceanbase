@@ -511,6 +511,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
   } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info, false/*is_ddl*/,
                        enable_mysql_compatible_dates))) {
     LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+  } else if (OB_FAIL(mark_special_hidden_const_node(*ctx.tree_))) {
+    LOG_WARN("fail to mark special hidden const node", K(ret));
   } else {
     ParseNode *func_name_node = NULL;
     if (T_WHERE_SCOPE == ctx.expr_scope_ && T_FUN_SYS == ctx.tree_->type_) {
@@ -970,6 +972,43 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     }
     if (is_project_list_scope) {
       ctx.is_project_list_scope_ = false;
+    }
+  }
+  return ret;
+}
+
+int ObSqlParameterization::mark_array_hidden_const_node(ParseNode *root)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(root)) {
+    root->is_hidden_const_ = 1;
+    for (int64_t i = 0; OB_SUCC(ret) && i < root->num_child_; ++i) {
+      if (OB_ISNULL(root->children_)) {
+        // do nothing
+      } else if (OB_FAIL(SMART_CALL(mark_array_hidden_const_node(root->children_[i])))) {
+        SQL_PC_LOG(WARN, "failed to mark array hidden const node", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSqlParameterization::mark_special_hidden_const_node(ParseNode &root)
+{
+  int ret = OB_SUCCESS;
+  if (T_CAST_ARGUMENT == root.type_ && T_COLLECTION == root.int16_values_[OB_NODE_CAST_TYPE_IDX]) {
+    /**
+     * CAST AS ARRAY(SMALLINT)
+     * CAST AS ARRAY(varchar(64))
+     * CAST AS ARRAY(ARRAY(INT))
+     */
+    for (int64_t i = 0; OB_SUCC(ret) && i < root.num_child_; ++i) {
+      if (OB_ISNULL(root.children_)) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_PC_LOG(WARN, "invalid argument", K(root.children_), K(ret));
+      } else if (OB_FAIL(mark_array_hidden_const_node(root.children_[i]))) {
+        SQL_PC_LOG(WARN, "failed to mark array hidden const node", K(ret));
+      }
     }
   }
   return ret;
@@ -1995,6 +2034,26 @@ int ObSqlParameterization::add_param_flag(const ParseNode *node, SqlInfo &sql_in
   return ret;
 }
 
+int ObSqlParameterization::get_cast_array_basic_type(const ParseNode *root, const ParseNode *&basic_type_node)
+{
+  int ret = OB_SUCCESS;
+  basic_type_node = nullptr;
+  if (OB_ISNULL(root)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_PC_LOG(WARN, "invalid argument", K(ret));
+  } else if (root->type_ != T_CAST_ARGUMENT && root->type_ != T_COLLECTION) {
+    basic_type_node = root;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < root->num_child_; ++i) {
+      if (OB_ISNULL(root->children_) || OB_ISNULL(root->children_[i])) {
+      } else if (OB_FAIL(SMART_CALL(get_cast_array_basic_type(root->children_[i], basic_type_node)))) {
+        SQL_PC_LOG(WARN, "failed get cast array basic type", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sql_info)
 {
   int ret = OB_SUCCESS;
@@ -2011,26 +2070,32 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
              || T_COLLATION == node->type_
              || T_NULLX_CLAUSE == node->type_ // deal null clause on json expr
              || T_WEIGHT_STRING_LEVEL_PARAM == node->type_) {
-    for (int i = 0; OB_SUCC(ret) && i < node->param_num_; ++i) {
-      if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
-        SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
-      } else if (OB_FAIL(add_varchar_charset(node, sql_info))) {
-        SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
-      }
-      if (sql_info.need_check_fp_) {
-        ObPCParseInfo p_info;
-        p_info.param_idx_ = sql_info.total_ - 1;
-        p_info.flag_ = NOT_PARAM;
-        p_info.raw_text_pos_ = node->sql_str_off_;
-        if (node->sql_str_off_ == -1) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("invalid str off", K(lbt()), K(node),
-              K(node->raw_param_idx_), K(get_type_name(node->type_)));
+    const ParseNode *basic_node = node;
+    if (T_CAST_ARGUMENT == node->type_ && T_COLLECTION == node->int16_values_[OB_NODE_CAST_TYPE_IDX]
+      && OB_FAIL(get_cast_array_basic_type(node, basic_node))) {
+      LOG_WARN("failed to get cast array basic type", K(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < basic_node->param_num_; ++i) {
+        if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
+          SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
+        } else if (OB_FAIL(add_varchar_charset(basic_node, sql_info))) {
+          SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
         }
-        if (OB_FAIL(ret)) {
+        if (sql_info.need_check_fp_) {
+          ObPCParseInfo p_info;
+          p_info.param_idx_ = sql_info.total_ - 1;
+          p_info.flag_ = NOT_PARAM;
+          p_info.raw_text_pos_ = basic_node->sql_str_off_;
+          if (basic_node->sql_str_off_ == -1) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("invalid str off", K(lbt()), K(basic_node),
+                K(basic_node->raw_param_idx_), K(get_type_name(basic_node->type_)));
+          }
+          if (OB_FAIL(ret)) {
 
-        } else if (OB_FAIL(sql_info.parse_infos_.push_back(p_info))) {
-          SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
+          } else if (OB_FAIL(sql_info.parse_infos_.push_back(p_info))) {
+            SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
+          }
         }
       }
     }

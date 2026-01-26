@@ -248,6 +248,9 @@ private:
   static int find_leftest_const_node(ParseNode &cur_node, ParseNode *&const_node);
   static bool need_fast_parser(const ObString &sql);
   static bool is_vector_index_query(const ParseNode *tree);
+  static int mark_special_hidden_const_node(ParseNode &root);
+  static int mark_array_hidden_const_node(ParseNode *root);
+  static int get_cast_array_basic_type(const ParseNode *root, const ParseNode *&basic_type_node);
 };
 
 }
