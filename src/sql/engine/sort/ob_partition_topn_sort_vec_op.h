@@ -435,19 +435,16 @@ private:
   {
     int ret = OB_SUCCESS;
     if (OB_ISNULL(buckets)) {
-      BucketArray *array_ptr = nullptr;
       void *buckets_buf = nullptr;
       if (OB_ISNULL(buckets_buf = allocator_.alloc(sizeof(BucketArray)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret));
-      } else if (FALSE_IT(array_ptr = new (buckets_buf) BucketArray(
+      } else if (FALSE_IT(buckets = new (buckets_buf) BucketArray(
                           *reinterpret_cast<common::ModulePageAllocator *>(page_allocator_)))) {
-      } else if (OB_FAIL(array_ptr->init(bucket_num))) {
-        allocator_.free(buckets_buf);
+      } else if (OB_FAIL(buckets->init(bucket_num))) {
         SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
       } else {
-        array_ptr->set_all(nullptr);
-        buckets = array_ptr;
+        buckets->set_all(nullptr);
       }
     } else {
       buckets->reuse();
