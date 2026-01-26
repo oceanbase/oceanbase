@@ -268,6 +268,7 @@ private:
       const bool allow_duplicate_sstable,
       int64_t &inc_base_snapshot_version,
       bool replace_old_row_store_major = false);
+  int try_recycle_major_tables_(common::ObArenaAllocator &allocator);
   int check_and_build_new_major_tables(
       const ObIArray<ObITable *> &tables_array,
       const bool allow_duplicate_sstable,
@@ -548,11 +549,21 @@ public:
   static const int64_t TABLE_STORE_VERSION_V3 = 0x0102;
   static const int64_t TABLE_STORE_VERSION_V4 = 0x0103; // for major_ckm_info_
   static const int64_t TABLE_STORE_VERSION_V5 = 0x0104; // for inc major sstable
+  // Threshold hierarchy: target <= emergency < trigger < max.
+  // - target: expected total after recycle
+  // - emergency: early warning before recycle triggers
+  // - trigger: start recycle when total reaches this
+  // - max: hard upper bound
   static const int64_t MAX_SSTABLE_CNT = 192;
   // limit table store memory size to one ACHUNK
   static const int64_t MAX_TABLE_STORE_MEMORY_SIZE= lib::ACHUNK_SIZE - lib::AOBJECT_META_SIZE;
-  static const int64_t EMERGENCY_SSTABLE_CNT = 48;
+  static const int64_t EMERGENCY_SSTABLE_CNT = MAX_SSTABLE_CNT * 50 / 100;
   static const int64_t EMERGENCY_INC_MAJOR_TABLE_CNT = 8;
+  // major sstable recycle constants
+  static const int64_t MAJOR_RECYCLE_TRIGGER_THRESHOLD = MAX_SSTABLE_CNT * 70 / 100;  // 134, trigger when total >= 70%
+  static const int64_t MAJOR_RECYCLE_TARGET_THRESHOLD = MAX_SSTABLE_CNT * 30 / 100;   // 57, target total after recycle
+  static const int64_t MAJOR_RECYCLE_MIN_KEEP_CNT = 8;       // minimum major count to keep
+  static const int64_t MAJOR_RECYCLE_KEEP_NEWEST_CNT = MAJOR_RECYCLE_MIN_KEEP_CNT / 2;  // always keep the newest 4 majors
 private:
   int64_t version_;
   ObSSTableArray major_tables_;

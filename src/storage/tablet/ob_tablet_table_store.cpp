@@ -32,6 +32,8 @@ using namespace transaction;
 namespace storage
 {
 ERRSIM_POINT_DEF(EN_COMPACTION_GET_RECYCLE_VERSION);
+// alter system set_tp tp_name = "EN_MAJOR_SSTABLE_RECYCLE_TRIGGER_THRESHOLD", error_code = 10, frequency = 1;
+ERRSIM_POINT_DEF(EN_MAJOR_SSTABLE_RECYCLE_TRIGGER_THRESHOLD);
 
 ObTabletTableStore::ObTabletTableStore()
   : version_(TABLE_STORE_VERSION_V5),
@@ -281,6 +283,8 @@ int ObTabletTableStore::init(
     if (OB_UNLIKELY(OB_NO_NEED_MERGE != ret)) {
       LOG_WARN("failed to build minor_tables", K(ret));
     }
+  } else if (OB_FAIL(try_recycle_major_tables_(allocator))) {
+    LOG_WARN("failed to try recycle major tables", K(ret));
   } else if (OB_FAIL(build_ddl_sstables(allocator, tablet, new_sstable, param.ddl_info_.slice_sstables_, param.ddl_info_.keep_old_ddl_sstable_, old_store))) {
     LOG_WARN("failed to add ddl minor sstable", K(ret));
   } else if (OB_FAIL(build_inc_major_ddl_sstables(allocator, tablet, param, old_store))) {
@@ -2301,6 +2305,85 @@ int ObTabletTableStore::inner_build_major_tables_(
       LOG_INFO("major tables is empty", K(major_tables));
     } else if (OB_FAIL(major_tables_.init(allocator, major_tables, start_pos))) {
       LOG_WARN("failed to init major_tables", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::try_recycle_major_tables_(ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const int64_t total_table_count = get_table_count();
+  const int64_t major_count = major_tables_.count();
+
+  int64_t trigger_threshold = MAJOR_RECYCLE_TRIGGER_THRESHOLD;
+  int64_t target_threshold = MAJOR_RECYCLE_TARGET_THRESHOLD;
+  int64_t min_keep_cnt = MAJOR_RECYCLE_MIN_KEEP_CNT;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(EN_MAJOR_SSTABLE_RECYCLE_TRIGGER_THRESHOLD)) {
+    trigger_threshold = abs(tmp_ret);
+    target_threshold = 2;  // lower target_threshold in errsim mode, but at least 2 (oldest + newest)
+    min_keep_cnt = 2;      // lower min_keep_cnt in errsim mode, but at least 2 (oldest + newest)
+    FLOG_INFO("EN_MAJOR_SSTABLE_RECYCLE_TRIGGER_THRESHOLD", K(trigger_threshold), K(target_threshold), K(min_keep_cnt));
+  }
+
+  // check if recycle is needed: total exceeds threshold and major > min_keep_cnt
+  if (total_table_count < trigger_threshold || major_count <= min_keep_cnt) {
+    // no need to recycle
+  } else {
+    // calculate target major count to bring total back to safe level
+    const int64_t other_table_count = total_table_count - major_count;
+    const int64_t keep_count = MIN(MAX(target_threshold - other_table_count, min_keep_cnt), major_count);
+
+    if (keep_count < major_count) {
+      // recycle strategy: keep oldest + sample middle + keep newest
+      // must always keep both oldest (index 0) and newest (index major_count-1)
+      ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> result_tables;
+      const int64_t keep_newest_cnt = MIN(MAJOR_RECYCLE_KEEP_NEWEST_CNT, MAX(keep_count - 1, 1));
+      const int64_t middle_keep_cnt = keep_count - 1 - keep_newest_cnt;
+
+      // 1. add oldest major (index 0) - must keep for multi-version read
+      if (OB_FAIL(result_tables.push_back(major_tables_[0]))) {
+        LOG_WARN("failed to push oldest major", K(ret));
+      }
+
+      // 2. sample middle majors evenly from [1, major_count - keep_newest_cnt)
+      if (OB_SUCC(ret) && middle_keep_cnt > 0) {
+        const int64_t middle_end = major_count - keep_newest_cnt;
+        const int64_t middle_source_cnt = middle_end - 1;  // range [1, middle_end)
+        const int64_t step = (middle_source_cnt + middle_keep_cnt - 1) / middle_keep_cnt;
+        for (int64_t pos = 1; OB_SUCC(ret) && pos < middle_end; pos += step) {
+          if (OB_FAIL(result_tables.push_back(major_tables_[pos]))) {
+            LOG_WARN("failed to push middle major", K(ret), K(pos));
+          }
+        }
+      }
+
+      // 3. add newest K majors - must keep newest for medium compaction
+      if (OB_SUCC(ret) && keep_newest_cnt > 0) {
+        for (int64_t i = major_count - keep_newest_cnt; OB_SUCC(ret) && i < major_count; ++i) {
+          if (OB_FAIL(result_tables.push_back(major_tables_[i]))) {
+            LOG_WARN("failed to push newest major", K(ret), K(i));
+          }
+        }
+      }
+
+      // rebuild major_tables_: first deep copy to temp array, then reset, then reinit
+      if (OB_SUCC(ret)) {
+        ObSSTableArray temp_array;
+        if (OB_FAIL(temp_array.init(allocator, result_tables))) {
+          LOG_WARN("failed to init temp array", K(ret));
+        } else {
+          major_tables_.reset();  // this destructs old sstables, but temp_array has deep copies
+          if (OB_FAIL(major_tables_.init(allocator, temp_array))) {
+            LOG_WARN("failed to reinit major_tables", K(ret));
+          } else {
+            LOG_INFO("recycled old major tables due to sstable count limit",
+                     K(total_table_count), K(major_count), "recycled_count", result_tables.count(),
+                     K(keep_count), K(keep_newest_cnt), K(middle_keep_cnt));
+          }
+        }
+      }
     }
   }
   return ret;
