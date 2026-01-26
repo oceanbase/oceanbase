@@ -62,13 +62,16 @@ public:
   virtual int put(ObTableCtx &ctx, const ObHCfRows &rows) override;
   virtual int del(ObTableExecCtx &ctx, const ObITableEntity &cell) override;
   virtual int scan(ObIAllocator &alloc, ObTableExecCtx &ctx, const ObTableQuery &query, ObHbaseICellIter *&iter) override;
-  int convert_normal_to_series(const ObITableEntity &cell, ObITableEntity &series_cell);
+  int convert_normal_to_series(const ObITableEntity &cell, ObITableEntity &series_cell, bool &is_inrow_series);
   int convert_normal_to_series(const ObIArray<const ObITableEntity *> &cells,
                                ObIArray<const ObITableEntity *> &series_cells,
-                               ObIArray<common::ObTabletID> &real_tablet_ids);
+                               ObIArray<common::ObTabletID> &real_tablet_ids,
+                               bool &is_inrow_series);
+  int construct_series_value(ObIAllocator &allocator, ObJsonNode &json_obj, ObObj &value_obj);
 private:
+  bool can_use_put(ObTableCtx &ctx, bool is_inrow_series);
   int save_and_adjust_range(ObHbaseSeriesCellIter *&iter, ObIAllocator &alloc);
-  int construct_series_value(ObIAllocator &allocator, ObJsonNode &json, ObObj &value_obj);
+  int construct_series_value(ObIAllocator &allocator, ObJsonNode &json, ObObj &value_obj, bool &is_inrow_series);
 
   int construct_query(ObTableExecCtx &ctx, const ObITableEntity &entity, ObTableQuery &table_query);
   int del_and_insert(common::ObIAllocator &alloc,

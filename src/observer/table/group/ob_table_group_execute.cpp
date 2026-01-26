@@ -400,10 +400,11 @@ int ObTableOpProcessor::init_table_ctx(ObTableBatchCtx &batch_ctx)
     LOG_WARN("fail to init table tb_ctx common part", K(ret),
               KPC(batch_ctx.credential_), K(group_ctx_->timeout_ts_));
   } else {
+    bool is_weak_read = batch_ctx.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
     switch (op_type) {
       case ObTableOperationType::GET: {
-        if (OB_FAIL(tb_ctx.init_get())) {
-          LOG_WARN("fail to init get tb_ctx", K(ret), K(tb_ctx));
+        if (OB_FAIL(tb_ctx.init_get(is_weak_read))) {
+          LOG_WARN("fail to init get tb_ctx", K(ret), K(tb_ctx), K(is_weak_read));
         }
         break;
       }

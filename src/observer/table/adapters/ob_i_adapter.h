@@ -29,7 +29,9 @@ class ObIHbaseAdapter
 public:
   ObIHbaseAdapter()
       : allocator_("HbaseAdapAloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
-  {}
+  {
+    lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  }
 
   virtual ~ObIHbaseAdapter() {}
   virtual int put(ObTableExecCtx &ctx, const ObITableEntity &cell) = 0;
@@ -49,7 +51,7 @@ protected:
 
 protected:
   common::ObArenaAllocator allocator_;
-
+  int64_t lob_inrow_threshold_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObIHbaseAdapter);
 };

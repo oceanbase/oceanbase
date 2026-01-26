@@ -381,7 +381,7 @@ int ObSetKvAttributeHelper::generate_schemas_()
         LOG_WARN("orig table schema is nullptr", KR(ret));
       } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_, *orig_table_schema, new_table_schema))) {
         LOG_WARN("fail to alloc schema", KR(ret));
-      } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(orig_table_schema->get_kv_attributes(), kv_attr))) {
+      } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id_, orig_table_schema->get_kv_attributes(), kv_attr))) {
         LOG_WARN("fail to parse kv attributes", KR(ret));
       } else if (OB_FAIL(check_and_modify_kv_attr_(kv_attr, is_disable))) {
         LOG_WARN("fail to check and modify kv attr", KR(ret), K(is_disable));

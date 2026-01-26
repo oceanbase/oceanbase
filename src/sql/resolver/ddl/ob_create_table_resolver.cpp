@@ -1107,9 +1107,10 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 
     if (OB_SUCC(ret)) {
       ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+      const ObSArray<obrpc::ObCreateIndexArg> &index_arg_list = create_table_stmt->get_index_arg_list();
       if (!table_schema.get_kv_attributes().empty() &&
-          OB_FAIL(ObTTLUtil::check_kv_attributes(table_schema, params_.is_htable_))) {
-        LOG_WARN("fail to check kv attributes", K(ret));
+          OB_FAIL(ObTTLUtil::check_kv_attributes(table_schema, index_arg_list, params_.is_htable_))) {
+        LOG_WARN("failed to check kv attributes", K(ret));
       }
     }
   }
@@ -4121,6 +4122,7 @@ int ObCreateTableResolver::check_building_domain_index_legal()
   }
   return ret;
 }
+
 
 int ObCreateTableResolver::resolve_primary_key_node_in_heap_table(const ParseNode *element, common::ObArray<ObColumnResolveStat> &stats,
                                                                   ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols)

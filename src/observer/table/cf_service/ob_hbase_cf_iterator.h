@@ -40,6 +40,8 @@ ObHbaseExplicitColumnTracker();
   virtual void reset() override;
   virtual bool done() const override;
   virtual int32_t get_cur_version() override;
+  int64_t get_qualifier_count() const { return columns_.count(); }
+  const ObString &get_qualifier_at(int64_t idx) const { return columns_.at(idx).first; }
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHbaseExplicitColumnTracker);
@@ -156,6 +158,12 @@ private:
   template <typename ResultType>
   int get_next_row_internal_normal(ResultType *&result);
   template <typename ResultType>
+  int get_next_row_internal_normal_with_get_optimization(ResultType *&result);
+  int modify_scan_range_for_qualifier(ObIAllocator &allocator,
+                                      ObNewRange &target_range,
+                                      const ObNewRange &orig_range,
+                                      const ObString &qualifier);
+  template <typename ResultType>
   int get_next_row_internal_timeseries(ResultType *&result);
 
   void set_hfilter(table::hfilter::Filter *hfilter);
@@ -169,6 +177,11 @@ protected:
   virtual int next_cell();
   virtual int seek_or_skip_to_next_row(const ObHTableCell &cell);
   virtual int seek_or_skip_to_next_col(const ObHTableCell &cell);
+  int check_and_apply_get_optimization(bool &applied);
+  int rescan_for_qualifier(const ObString &qualifier);
+  int rescan_for_next_qualifier_wildcard(const ObString &previous_qualifier);
+  int move_to_next_qualifier_and_rescan(bool &loop, const ObString &previous_qualifier = ObString::make_empty_string());
+  int should_enable_get_optimization(bool &bret);
   virtual bool reach_batch_limit() const;
   virtual bool reach_size_limit() const;
   int get_next_cell_hint();
@@ -228,6 +241,9 @@ private:
   ScannerContext *scanner_context_;
   ObSEArray<ObTabletID, 4> tablet_ids_;
   bool is_timeseries_table_;
+  bool enable_get_optimization_;
+  bool is_wildcard_mode_;
+  int64_t current_qualifier_idx_;
 };
 
 class ObHbaseReversedRowIterator : public ObHbaseRowIterator

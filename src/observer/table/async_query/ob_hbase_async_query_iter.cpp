@@ -48,6 +48,9 @@ namespace table
   int ObHbaseAsyncQueryIter::start(const ObTableQueryAsyncRequest &req, ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result)
   {
     int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
+      exec_ctx.get_audit_ctx()->partition_cnt_ = req.query_.get_tablet_ids().count();
+    }
     OB_TABLE_START_AUDIT(exec_ctx.get_credential(),
                          exec_ctx.get_sess_guard(),
                          exec_ctx.get_table_name(),
@@ -98,6 +101,8 @@ namespace table
     if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
       exec_ctx.get_audit_ctx()->need_audit_ = true;
     }
+    // record ob rows
+    exec_ctx.add_stat_row_count(result.get_row_count());
     OB_TABLE_END_AUDIT(ret_code, ret,
                        snapshot, exec_ctx.get_trans_param().tx_snapshot_,
                        stmt_type, StmtType::T_KV_QUERY,
@@ -159,6 +164,9 @@ namespace table
   int ObHbaseAsyncQueryIter::next(ObTableExecCtx &exec_ctx, ObTableQueryAsyncResult &result)
   {
     int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
+      exec_ctx.get_audit_ctx()->partition_cnt_ = query_.get_tablet_ids().count();
+    }
     OB_TABLE_START_AUDIT(exec_ctx.get_credential(),
                          exec_ctx.get_sess_guard(),
                          exec_ctx.get_table_name(),
@@ -187,6 +195,8 @@ namespace table
     if (OB_NOT_NULL(exec_ctx.get_audit_ctx())) {
       exec_ctx.get_audit_ctx()->need_audit_ = true;
     }
+    // record ob rows
+    exec_ctx.add_stat_row_count(result.get_row_count());
     OB_TABLE_END_AUDIT(ret_code, ret,
                        snapshot, exec_ctx.get_trans_param().tx_snapshot_,
                        stmt_type, StmtType::T_KV_QUERY,

@@ -131,6 +131,7 @@ int ObTableApiExecuteP::init_tb_ctx()
                                          get_timeout_ts()))) {
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else {
+    bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
     switch(op_type) {
       case ObTableOperationType::PUT: {
         if (OB_FAIL(tb_ctx_.init_put())) {
@@ -189,8 +190,8 @@ int ObTableApiExecuteP::init_tb_ctx()
         break;
       }
       case ObTableOperationType::GET: {
-        if (OB_FAIL(tb_ctx_.init_get())) {
-          LOG_WARN("fail to init get ctx", K(ret), K(tb_ctx_));
+        if (OB_FAIL(tb_ctx_.init_get(is_weak_read))) {
+          LOG_WARN("fail to init get ctx", K(ret), K(tb_ctx_), K(is_weak_read));
         }
         break;
       }

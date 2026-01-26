@@ -26,6 +26,7 @@ using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::table;
+using namespace oceanbase::sql::stmt;
 
 int ObHBaseModel::check_mode_defense(ObTableExecCtx &ctx)
 {
@@ -53,11 +54,23 @@ int ObHBaseModel::check_ls_op_defense(ObTableExecCtx &ctx, const ObTableLSOpRequ
   bool is_series_mode = ctx.get_schema_cache_guard().get_hbase_mode_type() == ObHbaseModeType::OB_HBASE_SERIES_TYPE;
 
   if (is_series_mode) {
-    if (req.is_hbase_put() || (!req.is_hbase_batch() && req.is_hbase_query_and_mutate())) {
+    if (req.is_hbase_put()) { // only support put and put list for timeseires table
+      // defense put TTL for timeseries table
+      const ObTableSingleOp &op = req.ls_op_->at(0).at(0);
+      if (op.get_entities().count() > 0) {
+        const ObTableSingleOpEntity &entity = op.get_entities().at(0);
+        const ObIArray<ObString> &properties_names = entity.get_properties_names();
+        if (properties_names.count() == 2 &&
+            ObHTableConstants::TTL_CNAME_STR.case_compare(properties_names.at(1)) == 0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("for timeseries table, hbase put does not support set TTL", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase put set TTL for timeseries table");
+        }
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("for timeseries hbase ls op, only put and delete is supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation type except hbase put and single delete");
+      LOG_WARN("for timeseries hbase ls op, only put is supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation type except hbase put");
     }
   }
 
@@ -79,10 +92,6 @@ int ObHBaseModel::check_mode_defense(ObTableExecCtx &ctx, const ObTableQueryRequ
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("hbase series mode is not supported batch query", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with batch query");
-    } else if (query.get_limit() > 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("hbase series mode is not supported limit query", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with limit query");
     } else if (query.get_offset() > 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("hbase series mode is not supported offset query", K(ret));
@@ -95,6 +104,10 @@ int ObHBaseModel::check_mode_defense(ObTableExecCtx &ctx, const ObTableQueryRequ
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("hbase series mode is not supported filter query", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with filter query");
+    } else if (hbase_filter.get_max_versions() != 1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("hbase series mode is not supported filter with max version", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with filter with max version");
     } else if (hbase_filter.get_max_results_per_column_family() >= 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("hbase series mode is not supported max results per column family query", K(ret));
@@ -105,10 +118,6 @@ int ObHBaseModel::check_mode_defense(ObTableExecCtx &ctx, const ObTableQueryRequ
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with row offset query");
     } else if (kv_params.is_valid() && OB_FAIL(kv_params.get_hbase_params(hbase_params))) {
       LOG_WARN("get hbase param fail", K(ret), K(kv_params));
-    } else if (hbase_params->caching_ > 0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("hbase series mode is not supported caching query", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with caching query");
     } else if (hbase_params->check_existence_only_) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("hbase series mode is not supported check existence only query", K(ret));
@@ -225,6 +234,7 @@ int ObHBaseModel::calc_tablets(ObTableExecCtx &ctx,
   int ret = OB_SUCCESS;
   bool is_user_specific_T = req.query_and_mutate_.is_user_specific_T();
   ObIArray<ObTabletID> &tablet_ids = const_cast<ObIArray<ObTabletID>&>(req.query_and_mutate_.get_query().get_tablet_ids());
+  std::unordered_set<uint64_t> tablet_set; // only used to dedupe tablet_ids and used in sql audit partition_cnt
 
   if (is_user_specific_T) {
     // do nothing, tablet is correct when T is user specified
@@ -261,6 +271,14 @@ int ObHBaseModel::calc_tablets(ObTableExecCtx &ctx,
           LOG_WARN("fail to calc tablet_id", K(ret), K(ctx), K(entity));
         } else {
           entity->set_tablet_id(mutation_tablet_id);
+          tablet_set.emplace(mutation_tablet_id.id());
+        }
+      }
+      if (OB_NOT_NULL(ctx.get_audit_ctx())) {
+        if (tablet_set.size() == 0) { // delete op
+          ctx.get_audit_ctx()->partition_cnt_ = tablet_ids.count();
+        } else {
+          ctx.get_audit_ctx()->partition_cnt_ = tablet_set.size();
         }
       }
     }
@@ -637,6 +655,8 @@ int ObHBaseModel::work(ObTableExecCtx &ctx, const ObTableQueryRequest &req, ObTa
       LOG_WARN("failed to execute sync query", K(ret), K(query));
     }
   }
+  // record ob rows
+  ctx.add_stat_row_count(res.get_row_count());
   return ret;
 }
 
@@ -990,6 +1010,8 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
             if (ret == OB_ITER_END && wide_row.rows_.count() > 0) {
               ret = OB_SUCCESS;
             }
+            // record ob rows
+            ctx.add_stat_row_count(wide_row.rows_.count());
             while (OB_SUCC(ret)) {
               if (OB_FAIL(wide_row.get_row(cell))) {
                 if (OB_ARRAY_OUT_OF_RANGE != ret) {
@@ -1188,6 +1210,8 @@ int ObHBaseModel::process_scan_group(ObTableExecCtx &ctx,
     } else if (OB_FAIL(aggregate_scan_result(ctx, *iter, single_op_result))) {
       LOG_WARN("failed to aggregate scan result", K(ret), KP(queries.at(i)), KP(iter));
     } else {
+      // record ob rows
+      ctx.add_stat_row_count(single_op_result.get_affected_rows());
       int tablet_idx = group.ops_.at(i).tablet_idx_;
       int single_op_idx = group.ops_.at(i).op_idx_;
       res.at(tablet_idx).at(single_op_idx) = single_op_result;

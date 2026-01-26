@@ -208,6 +208,7 @@ public:
     column_cnt_ = 0;
     rowkey_cnt_ = 0;
     auto_inc_cache_size_ = 0;
+    lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
   }
   virtual ~ObKvSchemaCacheObj();
   int cons_table_info(const ObTableSchema *table_schema);
@@ -237,6 +238,7 @@ public:
   OB_INLINE int64_t get_auto_inc_cache_size() { return auto_inc_cache_size_; }
   OB_INLINE ObHbaseModeType get_hbase_mode_type() { return hbase_mode_type_; }
   OB_INLINE void set_is_heap_table(bool is_heap_table) { flags_.is_heap_table_ = is_heap_table; }
+  OB_INLINE int64_t get_lob_inrow_threshold() { return lob_inrow_threshold_; }
 private:
   int build_index_map();
 private:
@@ -258,6 +260,7 @@ private:
   int64_t auto_inc_cache_size_;
   ObKVAttr kv_attributes_;
   ObHbaseModeType hbase_mode_type_;
+  int64_t lob_inrow_threshold_;
 };
 
 class ObKvSchemaCacheGuard
@@ -331,6 +334,10 @@ public:
   OB_INLINE ObHbaseModeType get_hbase_mode_type()
   {
     return static_cast<ObKvSchemaCacheObj *>(cache_guard_.get_cache_obj())->get_hbase_mode_type();
+  }
+  OB_INLINE int64_t get_lob_inrow_threshold()
+  {
+    return static_cast<ObKvSchemaCacheObj *>(cache_guard_.get_cache_obj())->get_lob_inrow_threshold();
   }
 private:
   bool is_init_;

@@ -71,6 +71,7 @@ int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
     set_is_partitioned_table(table_schema->is_partitioned_table());
     set_is_secondary_part(table_schema->get_part_level() == PARTITION_LEVEL_TWO);
     set_is_heap_table(!table_schema->is_table_with_pk());
+    lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
     if (OB_FAIL(ObHTableUtils::get_mode_type(*table_schema, hbase_mode_type_))) {
       LOG_WARN("fail to get mode type", K(ret));
     } else if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
@@ -100,8 +101,8 @@ int ObKvSchemaCacheObj::cons_index_info(ObSchemaGetterGuard *schema_guard,
                                         common::ObTableID table_id)
 {
   int ret = OB_SUCCESS;
-  int64_t index_cnt = OB_MAX_INDEX_PER_TABLE;
-  uint64_t tids[OB_MAX_INDEX_PER_TABLE];
+  int64_t index_cnt = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
+  uint64_t tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
   if (OB_ISNULL(schema_guard) || !schema_guard->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema guard is NULL or not inited", K(ret));

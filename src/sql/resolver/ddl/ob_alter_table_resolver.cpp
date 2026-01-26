@@ -1519,12 +1519,19 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         } else if (OB_ISNULL(tbl_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema is NULL", K(ret));
-        } else if (!tbl_schema->get_kv_attributes().empty() &&
-            OB_FAIL(ObTTLUtil::check_kv_attributes(tbl_schema->get_kv_attributes(),
-                                                   *tbl_schema,
-                                                   PARTITION_LEVEL_TWO))) {
-          LOG_WARN("fail to check kv attributes", K(ret));
+        } else if (OB_FAIL(table::ObHTableUtils::check_ddl_alter_partition(*tbl_schema, table_schema_->get_tenant_id()))) {
+          LOG_WARN("fail to check ddl alter partition", K(ret));
         }
+      }
+    } else if (OB_SUCC(ret) && has_add_column) { // alter timeseries hbase table add column is not supported
+      const ObTableSchema *tbl_schema = nullptr;
+      if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret));
+      } else if (OB_ISNULL(tbl_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is NULL", K(ret));
+      } else if (OB_FAIL(table::ObHTableUtils::check_ddl_add_column(*tbl_schema, table_schema_->get_tenant_id()))) {
+        LOG_WARN("fail to check ddl add column", K(ret));
       }
     }
     } // end for heap_vars_2.
@@ -2974,6 +2981,23 @@ int ObAlterTableResolver::resolve_drop_index(const ParseNode &node)
           }
           if (OB_SUCC(ret)) {
             drop_index_arg->is_oracle_tmp_table_v2_index_table_ = index_table_schema->is_oracle_tmp_table_v2_index_table();
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObString kv_attributes = table_schema_->get_kv_attributes();
+          if (!kv_attributes.empty()) {
+            ObKVAttr kv_attr;
+            uint64_t tenant_id = session_info_->get_effective_tenant_id();
+            if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id, kv_attributes, kv_attr))) {
+              LOG_WARN("failed to parse kv attributes", K(ret));
+            } else if (!ObTTLUtil::is_default_scan_index(kv_attr.ttl_scan_index_) &&
+                       ObTTLUtil::is_index_name_match(tenant_id,
+                                                      table_schema_->get_name_case_mode(),
+                                                      kv_attr.ttl_scan_index_, drop_index_name)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("drop index when kv_atrributes has specified it is not supported", K(ret), K(drop_index_name), K(kv_attr));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop index when kv_atrributes has specified it");
+            }
           }
         }
         if (OB_SUCC(ret)) {

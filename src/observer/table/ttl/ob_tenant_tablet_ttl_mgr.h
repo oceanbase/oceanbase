@@ -32,7 +32,9 @@ namespace table
 struct ObTTLTaskCtx
 {
 public :
-  ObTTLTaskCtx() : rowkey_cp_allcoator_(ObMemAttr(MTL_ID(), "TTLTaskCtx")),
+  static const int64_t TTL_TASK_MAX_FAILURE_TIMES = 3;
+public :
+  ObTTLTaskCtx() : cp_allcoator_(ObMemAttr(MTL_ID(), "TTLTaskCtx")),
                    task_info_(),
                    task_status_(common::ObTTLTaskStatus::OB_TTL_TASK_INVALID),
                    ttl_para_(),
@@ -41,19 +43,19 @@ public :
                    failure_times_(0),
                    is_dirty_(false),
                    need_refresh_(true),
-                   in_queue_(false) {}
+                   in_queue_(false),
+                   need_update_start_time_(true) {}
   bool is_valid()
   {
     return task_info_.is_valid() && ttl_para_.is_valid();
   }
 
-  int deep_copy_rowkey(const ObString &rowkey);
-
+  int deep_copy_task_info_string_fields(const ObString &rowkey, const ObString &scan_index);
   TO_STRING_KV(K_(task_info), K_(task_status), K_(ttl_para), K_(task_start_time), K_(last_modify_time),
-               K_(failure_times), K_(is_dirty), K_(need_refresh), K_(in_queue));
+               K_(failure_times), K_(is_dirty), K_(need_refresh), K_(in_queue), K_(need_update_start_time));
 
 public:
-  common::ObArenaAllocator  rowkey_cp_allcoator_; // for rowkey copy in ObTTLTaskInfo
+  common::ObArenaAllocator  cp_allcoator_; // for deep copy in ObTTLTaskInfo
   ObTTLTaskInfo    task_info_;
   common::ObTTLTaskStatus task_status_;
   table::ObTTLTaskParam   ttl_para_;
@@ -67,6 +69,7 @@ public:
   bool                    need_refresh_; // should refresh task from task table
   common::ObSpinLock      lock_; // lock for update
   bool                    in_queue_; // whether in dag queue or not
+  bool                    need_update_start_time_; // whether need update task start time
 };
 
 class ObTabletTTLScheduler;
@@ -270,7 +273,7 @@ protected:
   OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); }
 protected:
   void mark_ttl_ctx_dirty(ObTTLTenantInfo& tenant_info, ObTTLTaskCtx& ctx);
-  int deep_copy_task(ObTTLTaskCtx* ctx, table::ObTTLTaskInfo& task_info, const table::ObTTLTaskParam &task_param, bool with_rowkey_copy = true);
+  int deep_copy_task(ObTTLTaskCtx* ctx, table::ObTTLTaskInfo& task_info, const table::ObTTLTaskParam &task_param, bool with_deep_copy = true);
   int try_schedule_remaining_tasks(const ObTTLTaskCtx *current_ctx);
 
 protected:

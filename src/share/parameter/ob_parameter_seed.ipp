@@ -2312,6 +2312,9 @@ DEF_BOOL(enable_hbase_rowkey_ttl, OB_TENANT_PARAMETER, "False",
 DEF_INT(ttl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of ttl thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(kv_ttl_delete_max_ops, OB_TENANT_PARAMETER, "0", "[0,)",
+        "limit the maximum throughtput of delete operations for KV TTL task, used to rate limit TTL tasks. The default value is 0, indicating no limit.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(vector_index_optimization_concurrency, OB_TENANT_PARAMETER, "2", "[1,256]",
         "the vector index async task parallelism. Range: [1,256] in integer. Especially, 2 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
