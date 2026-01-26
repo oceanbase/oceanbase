@@ -922,6 +922,8 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
   } else if (OB_FAIL(oracle_sql_proxy.init(sql_proxy->get_pool()))) {
     LOG_WARN("init oracle sql proxy failed", K(ret));
   } else if (TMP_TABLE_ORA_SESS == table_type || TMP_TABLE_ORA_TRX == table_type) {
+    // atomic delete from oracle temporary table
+    common::ObMySQLTransaction trans;
     ObIArray<uint64_t> &table_ids = table_type == share::schema::TMP_TABLE_ORA_TRX ?
           get_gtt_trans_scope_ids() : get_gtt_session_scope_ids();
     const int64_t unique_id = table_type == share::schema::TMP_TABLE_ORA_TRX ?
@@ -936,6 +938,9 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
       }
     }
     LOG_INFO("delete temp table", K(table_type), K(table_ids), K(unique_id));
+    if (FAILEDx(trans.start(sql_proxy, tenant_id))) {
+      LOG_WARN("failed to begin transaction", K(ret), K(tenant_id));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_ids.at(i), table_schema))) {
         LOG_WARN("fail to get table schema", K(ret));
@@ -965,7 +970,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
         if (OB_FAIL(ret) || need_skip) {
           // do nothing
         } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *table_schema, sequence, get_sessid_for_table(),
-                                                     is_tmp_table_v2_index_table))) {
+                                                     is_tmp_table_v2_index_table, trans))) {
           LOG_WARN("failed to delete from oracle temporary table", K(ret), K(*table_schema), K(sequence), K(get_sessid_for_table()));
         }
       } else if (((TMP_TABLE_ORA_SESS == table_type && table_schema->is_oracle_tmp_table())
@@ -1022,6 +1027,15 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
         }
       }
     }
+
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      bool is_commit = (OB_SUCCESS == ret);
+      if (OB_TMP_FAIL(trans.end(is_commit))) {
+        LOG_WARN("failed to end transaction", KR(ret), KR(tmp_ret));
+        ret = is_commit ? tmp_ret : ret;
+      }
+    }
   }
   return ret;
 }
@@ -1031,13 +1045,17 @@ int ObSQLSessionInfo::delete_from_oracle_temp_table_v2(
     const share::schema::ObTableSchema &table_schema,
     const int64_t sequence,
     const uint64_t session_id,
-    const bool is_index_table)
+    const bool is_index_table,
+    common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   ObSessionTabletInfoKey info_key(table_schema.get_table_id(), sequence, session_id);
   ObSessionTabletInfo session_tablet_info;
-  if (OB_FAIL(gtt_tablet_info_map_.get_session_tablet(info_key, session_tablet_info))) {
+  if (false == trans.is_started()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transaction is not started", K(ret));
+  } else if (OB_FAIL(gtt_tablet_info_map_.get_session_tablet(info_key, session_tablet_info))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get session tablet", K(ret), K(info_key));
     } else {
@@ -1047,7 +1065,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_table_v2(
   } else if (OB_FAIL(gtt_tablet_info_map_.remove_session_tablet(table_schema.get_table_id()))) {
     LOG_WARN("failed to remove session tablet", K(ret));
   } else {
-    storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id, session_tablet_info);
+    storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id, session_tablet_info, trans);
     if (OB_FAIL(tablet_delete_helper.do_work())) {
       LOG_WARN("failed to delete session tablet", K(ret));
     } else {
@@ -1066,7 +1084,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_table_v2(
         } else if (OB_ISNULL(index_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index table schema is null", K(ret), K(simple_index_infos.at(i).table_id_));
-        } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *index_schema, sequence, session_id, true))) {
+        } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *index_schema, sequence, session_id, true, trans))) {
           LOG_WARN("failed to delete from oracle temporary table", K(ret));
         }
       }
@@ -1085,9 +1103,9 @@ int ObSQLSessionInfo::delete_from_oracle_temp_table_v2(
         } else if (OB_ISNULL(aux_lob_piece_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("aux lob piece table schema is null", K(ret), K(aux_lob_piece_tid));
-        } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *aux_lob_meta_schema, sequence, session_id, true))) {
+        } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *aux_lob_meta_schema, sequence, session_id, true, trans))) {
           LOG_WARN("failed to delete from oracle temporary table", K(ret));
-        } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *aux_lob_piece_schema, sequence, session_id, true))) {
+        } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *aux_lob_piece_schema, sequence, session_id, true, trans))) {
           LOG_WARN("failed to delete from oracle temporary table", K(ret));
         }
       }

@@ -247,7 +247,8 @@ private:
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &table_schema,
       const int64_t sequence,
-      const uint64_t session_id);
+      const uint64_t session_id,
+      common::ObMySQLTransaction &trans);
 
 };
 
