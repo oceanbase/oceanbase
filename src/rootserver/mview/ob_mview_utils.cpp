@@ -495,22 +495,6 @@ int ObMViewUtils::get_mlog_column_list_str(const ObIArray<ObString> &mlog_column
   return ret;
 }
 
-// Helper function to check if a column is a hidden column
-bool ObMViewUtils::is_hidden_column(const ObString &column_name)
-{
-  // Check for __MV_DEP_COL_0$$ pattern
-  bool is_hidden = false;
-  if (column_name.prefix_match("__MV_DEP_COL_") && column_name.suffix_match("$$")) {
-    is_hidden = true;
-  }
-  // Check for OB_HIDDEN_PK_INCREMENT_COLUMN_NAME
-  if (0 == column_name.case_compare(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
-    is_hidden = true;
-  }
-
-  return is_hidden;
-}
-
 int ObMViewUtils::extract_columns_from_schema(const ObTableSchema &container_table_schema,
                                               const bool is_oracle_mode,
                                               ObSqlString &column_list_str,

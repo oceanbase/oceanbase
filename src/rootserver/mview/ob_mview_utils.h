@@ -108,7 +108,6 @@ public:
                                          const bool is_oracle_mode,
                                          ObSqlString &column_list_str,
                                          ObIAllocator &allocator);
-  static bool is_hidden_column(const ObString &column_name);
 };
 
 class ObMViewAutoMlogEventInfo
