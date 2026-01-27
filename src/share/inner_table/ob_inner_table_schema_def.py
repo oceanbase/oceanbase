@@ -8706,6 +8706,7 @@ def_table_schema(
 # 582: __all_sync_standby_status
 # 583: __all_routine_load_job
 # 584: __all_ss_gc_reserved_snapshot
+# 585: __all_table_archive_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
