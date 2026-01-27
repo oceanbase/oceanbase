@@ -108,6 +108,7 @@ OB_DEF_SERIALIZE(ObAggrInfo)
     OB_UNIS_ENCODE(*grouping_set_info_);
   }
   OB_UNIS_ENCODE(enable_fast_bypass_);
+  OB_UNIS_ENCODE(is_statistic_agg_);
   return ret;
 }
 
@@ -195,6 +196,7 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
     }
   }
   OB_UNIS_DECODE(enable_fast_bypass_);
+  OB_UNIS_DECODE(is_statistic_agg_);
   return ret;
 }
 
@@ -255,6 +257,7 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
     OB_UNIS_ADD_LEN(*grouping_set_info_);
   }
   OB_UNIS_ADD_LEN(enable_fast_bypass_);
+  OB_UNIS_ADD_LEN(is_statistic_agg_);
   return len;
 }
 
@@ -291,7 +294,8 @@ int64_t ObAggrInfo::to_string(char *buf, const int64_t buf_len) const
        KP_(hash_rollup_info),
        KP_(grouping_set_info),
        K_(has_ignore_null),
-       K_(enable_fast_bypass)
+       K_(enable_fast_bypass),
+       K_(is_statistic_agg)
        );
   J_OBJ_END();
   return pos;
@@ -329,6 +333,7 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
   has_ignore_null_ = rhs.has_ignore_null_;
   hash_rollup_info_ = nullptr;
   enable_fast_bypass_ = rhs.enable_fast_bypass_;
+  is_statistic_agg_ = rhs.is_statistic_agg_;
   if (OB_FAIL(param_exprs_.assign(rhs.param_exprs_))) {
     LOG_WARN("fail to assign param exprs", K(ret));
   } else if (OB_FAIL(distinct_collations_.assign(rhs.distinct_collations_))) {
@@ -3444,6 +3449,10 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain sum_opnsize");
       break;
     }
+    case T_FUN_SYS_COUNT_INROW: {
+      rollup_cell.add_row_count(aggr_cell.get_row_count());
+      break;
+    }
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown aggr function type", K(aggr_fun));
@@ -3858,6 +3867,31 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
       }
       break;
     }
+    case T_FUN_SYS_COUNT_INROW: {
+      if (OB_UNLIKELY(stored_row.cnt_ != 1) ||
+          OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(stored_row), K(ret));
+      } else {
+        bool b_is_lob_storage = is_lob_storage(param_exprs->at(0)->datum_meta_.type_);
+        bool has_lob_header = param_exprs->at(0)->obj_meta_.has_lob_header();
+        const ObDatum *datum =  &stored_row.cells()[0];
+        if (datum->is_null()) {
+          // do nothing
+        } else if (!b_is_lob_storage) {
+          aggr_cell.inc_row_count();
+        } else { // text tc only
+          ObLobLocatorV2 loc(datum->get_string(), has_lob_header);
+          if (loc.is_valid() && !loc.has_inrow_data()) {
+            // do nothing
+          } else {
+            aggr_cell.inc_row_count();
+          }
+        }
+      }
+      break;
+    }
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown aggr function type", K(aggr_fun), K(ret));
@@ -4115,6 +4149,38 @@ int ObAggregateProcessor::process_aggr_batch_result(
             aggr_cell.set_tiny_num_int(new_size);
             aggr_cell.set_tiny_num_used();
           }
+        }
+      }
+      break;
+    }
+    case T_FUN_SYS_COUNT_INROW: {
+      if (OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(ret), KPC(param_exprs));
+      } else {
+        ObDatumVector aggr_input_datums = param_exprs->at(0)->locate_expr_datumvector(eval_ctx_);
+        int64_t count = 0;
+        bool b_is_lob_storage = is_lob_storage(param_exprs->at(0)->datum_meta_.type_);
+        bool has_lob_header = param_exprs->at(0)->obj_meta_.has_lob_header();
+        for (uint16_t it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
+          uint64_t nth_row = selector.get_batch_index(it);
+          const ObDatum *datum = aggr_input_datums.at(nth_row);
+          if (datum->is_null()) {
+            // do nothing
+          }else if (!b_is_lob_storage) {
+            count++;
+          } else { // text tc only
+            ObLobLocatorV2 loc(datum->get_string(), has_lob_header);
+            if (loc.is_valid() && !loc.has_inrow_data()) {
+              // do nothing
+            } else {
+              count++;
+            }
+          }
+        }
+        if (count > 0) {
+          aggr_cell.add_row_count(count);
         }
       }
       break;
@@ -4426,6 +4492,39 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       }
       break;
     }
+    case T_FUN_SYS_COUNT_INROW: {
+      if (OB_UNLIKELY(stored_row.cnt_ != 1) ||
+          OB_ISNULL(param_exprs) ||
+          OB_UNLIKELY(param_exprs->count() != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("curr_row_results count is not 1", K(stored_row), K(ret));
+      } else {
+        bool b_is_lob_storage = is_lob_storage(param_exprs->at(0)->datum_meta_.type_);
+        bool has_lob_header = param_exprs->at(0)->obj_meta_.has_lob_header();
+        const ObDatum *datum =  &stored_row.cells()[0];
+        if (datum->is_null()) {
+          // do nothing
+        } else if (!b_is_lob_storage) {
+          if (!removal_info_.is_inv_aggr_) {
+            aggr_cell.inc_row_count();
+          } else {
+            aggr_cell.dec_row_count();
+          }
+        } else { // text tc only
+          ObLobLocatorV2 loc(datum->get_string(), has_lob_header);
+          if (loc.is_valid() && !loc.has_inrow_data()) {
+            // do nothing
+          } else {
+            if (!removal_info_.is_inv_aggr_) {
+              aggr_cell.inc_row_count();
+            } else {
+              aggr_cell.dec_row_count();
+            }
+          }
+        }
+      }
+      break;
+    }
     default:
       LOG_WARN("unknown aggr function type", K(aggr_fun), K(ret));
       break;
@@ -4503,6 +4602,7 @@ int ObAggregateProcessor::collect_aggr_result(
   bool has_lob_header = aggr_info.expr_->obj_meta_.has_lob_header();
   const ObItemType aggr_fun = aggr_info.get_expr_type();
   switch (aggr_fun) {
+    case T_FUN_SYS_COUNT_INROW:
     case T_FUN_COUNT: {
       if (lib::is_mysql_mode()) {
         result.set_int(aggr_cell.get_row_count());

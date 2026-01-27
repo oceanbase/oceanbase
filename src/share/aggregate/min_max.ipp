@@ -897,19 +897,20 @@ inline int init_min_max_agg(RuntimeContext &agg_ctx, const int64_t agg_col_id,
 #define INIT_AGGREGATE_CASE(vec_tc)                                                                \
   case (vec_tc): {                                                                                 \
     ret = init_agg_func<MinMaxAggregate<vec_tc, T_FUN_MIN == func_type>>(                          \
-      agg_ctx, agg_col_id, aggr_info.has_distinct_, allocator, agg);                               \
+      agg_ctx, agg_col_id, aggr_info.has_distinct_, allocator, agg, false, is_statistic_agg);      \
     if (OB_FAIL(ret)) { SQL_LOG(WARN, "init aggregate failed", K(ret)); }                          \
   } break
 #define INIT_ARG_MIN_MAX_AGGREGATE_CASE(vec_tc)                                                     \
   case (vec_tc): {                                                                                  \
     ret = init_agg_func<ArgMinMaxAggregate<vec_tc, T_FUN_ARG_MIN == func_type>>(                    \
-        agg_ctx, agg_col_id, aggr_info.has_distinct_, allocator, agg);                              \
+        agg_ctx, agg_col_id, aggr_info.has_distinct_, allocator, agg, false, is_statistic_agg);     \
   } break
 
   int ret = OB_SUCCESS;
   agg = nullptr;
 
   ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
+  bool is_statistic_agg = aggr_info.is_statistic_agg_;
   if (OB_ISNULL(aggr_info.expr_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "invalid null expr", K(ret));

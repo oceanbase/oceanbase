@@ -9206,10 +9206,12 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
              T_FUN_SUM_OPNSIZE == aggr_type ||
              T_FUN_SYS_RB_OR_AGG == aggr_type ||
              T_FUN_SYS_RB_AND_AGG == aggr_type ||
-             T_FUN_SYS_RB_BUILD_AGG == aggr_type) {
+             T_FUN_SYS_RB_BUILD_AGG == aggr_type ||
+             T_FUN_SYS_COUNT_INROW == aggr_type) {
     /* MAX(a) -> MAX(MAX(a)), MIN(a) -> MIN(MIN(a)) SUM(a) -> SUM(SUM(a)) */
     ObItemType pullup_aggr_type = aggr_type;
-    if (T_FUN_COUNT == pullup_aggr_type || T_FUN_SUM_OPNSIZE == pullup_aggr_type) {
+    if (T_FUN_COUNT == pullup_aggr_type || T_FUN_SUM_OPNSIZE == pullup_aggr_type ||
+        T_FUN_SYS_COUNT_INROW == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_COUNT_SUM;
     } else if (T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE;
@@ -11011,7 +11013,8 @@ int ObOptimizerUtil::check_aggr_can_pre_aggregate(const ObAggFunRawExpr *aggr,
              T_FUN_SYS_BIT_AND == aggr->get_expr_type() ||
              T_FUN_SYS_BIT_OR == aggr->get_expr_type() ||
              T_FUN_SYS_BIT_XOR == aggr->get_expr_type() ||
-             T_FUN_SUM_OPNSIZE == aggr->get_expr_type()) {
+             T_FUN_SUM_OPNSIZE == aggr->get_expr_type() ||
+             T_FUN_SYS_COUNT_INROW == aggr->get_expr_type()) {
     can_pre_aggr = true;
   }
   return ret;

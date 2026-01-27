@@ -1253,6 +1253,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis_merge");
     case T_FUN_SUM_OPNSIZE:
       SET_SYMBOL_IF_EMPTY("sum_opnsize");
+    case T_FUN_SYS_COUNT_INROW:
+      SET_SYMBOL_IF_EMPTY("sys_count_inrow");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||

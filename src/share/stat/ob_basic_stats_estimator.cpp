@@ -141,7 +141,8 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
         OB_FAIL(add_stat_item(ObStatNumNull(col_param, src_tab_stat, src_col_stats.at(i)))) ||
         OB_FAIL(add_stat_item(ObStatNumDistinct(col_param, src_col_stats.at(i), param.need_approx_ndv_))) ||
         OB_FAIL(add_stat_item(ObStatAvgLen(col_param, src_col_stats.at(i)))) ||
-        OB_FAIL(add_stat_item(ObStatLlcBitmap(col_param, src_col_stats.at(i))))) {
+        OB_FAIL(add_stat_item(ObStatLlcBitmap(col_param, src_col_stats.at(i)))) ||
+        OB_FAIL(add_stat_item(ObStatLobInrowCount(col_param, src_col_stats.at(i))))) {
       LOG_WARN("failed to add statistic item", K(ret));
     } else {/*do nothing*/}
   }

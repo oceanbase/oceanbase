@@ -673,12 +673,13 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         ObGlobalNdvEval ndv_eval;
         ObGlobalAvglenEval avglen_eval;
         ObGlobalColumnStat tmp_stat;
+        ObGlobalLobInrowCountEval lob_inrow_count_eval;
         ObSEArray<ObHistogram, 4> all_part_histograms;
         int64_t sample_size = 0;
         int64_t total_row_cnt = 0;
         int64_t max_bucket_num = param.column_params_.at(i).bucket_num_;
         ObNdvScaleAlgo ndv_scale_algo = param.column_params_.at(i).ndv_scale_algo_;
-
+        bool is_lob_column = param.column_params_.at(i).is_string_column() || param.column_params_.at(i).is_text_column();
         for (int64_t j = 0; OB_SUCC(ret) && j < part_cnt; ++j) {
           ObOptColumnStat *opt_col_stat = NULL;
           ObOptStat &cur_part_stat = part_opt_stats.at(j);
@@ -718,12 +719,17 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
             tmp_stat.add_cg_blk_cnt(opt_col_stat->get_cg_macro_blk_cnt(),
                                     opt_col_stat->get_cg_micro_blk_cnt());
             tmp_stat.add_cg_skip_rate(opt_col_stat->get_cg_skip_rate(), opt_col_stat->get_cg_micro_blk_cnt());
+            if (is_lob_column) {
+              lob_inrow_count_eval.add(opt_col_stat->get_lob_inrow_count());
+            }
           }
         }
         if (OB_SUCC(ret)) {
           int64_t num_distinct = 0;
           if (ndv_eval.get() != 0) {
-            if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
+            if (is_lob_column) {
+              num_distinct = ObOptSelectivity::scale_distinct(not_null_eval.get(), lob_inrow_count_eval.get(), ndv_eval.get());
+            } else if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
               num_distinct = std::min(not_null_eval.get(), total_row_cnt);
             } else {
               num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
@@ -743,6 +749,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           col_stat->set_collation_type(param.column_params_.at(i).cs_type_);
           col_stat->set_cg_micro_blk_cnt(tmp_stat.cg_micro_blk_cnt_);
           col_stat->set_cg_macro_blk_cnt(tmp_stat.cg_macro_blk_cnt_);
+          col_stat->set_lob_inrow_count(lob_inrow_count_eval.get());
           if (tmp_stat.cg_micro_blk_cnt_ != 0 &&
               tmp_stat.cg_skip_rate_ != 0) {
             col_stat->set_cg_skip_rate(tmp_stat.cg_skip_rate_/((double)tmp_stat.cg_micro_blk_cnt_));

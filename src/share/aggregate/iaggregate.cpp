@@ -139,6 +139,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_INNER_PREFIX_MAX, string_prefix_max, i);
         INIT_AGGREGATE_CASE(T_FUN_ANY, any, i);
         INIT_AGGREGATE_CASE(T_FUN_ARBITRARY, any, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_COUNT_INROW, count, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));

@@ -1578,6 +1578,7 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
   const uint64_t aggregate_output_count = pushdown_aggr_exprs.count();
   const ObIArray<ObRawExpr*> &group_by_columns = op.get_pushdown_groupby_columns();
   const uint64_t group_by_column_count = group_by_columns.count();
+  bool has_dbms_stats_hint = cg_.opt_ctx_->get_global_hint().has_dbms_stats_hint();
   if ((!cg_ctx.is_func_lookup_ && op.is_text_retrieval_scan()) || // text retrieval scan on fulltext index
       cg_ctx.is_es_match_ ||
      (cg_ctx.is_func_lookup_ && !cg_ctx.is_rowkey_doc_scan_in_func_lookup()) || // func lookup on fulltext index (exclude the rowkey_doc scan in func lookup)
@@ -1633,6 +1634,8 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
       } else {
         ObSEArray<ObRawExpr*, 1> column_exprs;
         ObAggrParamProperty param_prop;
+        param_prop.is_text_stat_aggr_ = has_dbms_stats_hint &&
+                                    is_lob_storage(param_expr->get_data_type());
         if (OB_FAIL(ObRawExprUtils::extract_column_exprs(param_expr, column_exprs))) {
           LOG_WARN("fail to extract column expr", K(ret));
         } else if (OB_UNLIKELY(column_exprs.count() != 1)) {
@@ -1647,6 +1650,10 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
         } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(param_expr, col_expr, param_prop.is_null_prop_))) {
           LOG_WARN("fail to get aggr param null porpagate", K(ret), KPC(param_expr), KPC(col_expr));
         } else {
+          if (aggr_expr->get_expr_type() == T_FUN_SYS_COUNT_INROW &&
+              is_lob_storage(param_expr->get_data_type())) {
+            param_prop.is_null_prop_ = false;
+          }
           OZ(scan_ctdef.aggregate_column_ids_.push_back(col_expr->get_column_id()));
           OZ(scan_ctdef.aggregate_param_props_.push_back(param_prop));
         }

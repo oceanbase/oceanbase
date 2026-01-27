@@ -573,7 +573,8 @@ int ObTransformDBlink::check_link_expr_valid(ObRawExpr *expr, bool &is_valid)
              T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == expr->get_expr_type() ||
              T_FUN_SYS_ESTIMATE_NDV == expr->get_expr_type() ||
              T_OP_GET_USER_VAR == expr->get_expr_type() ||
-             T_FUN_SUM_OPNSIZE == expr->get_expr_type()) {
+             T_FUN_SUM_OPNSIZE == expr->get_expr_type() ||
+             T_FUN_SYS_COUNT_INROW == expr->get_expr_type()) {
     // special function is invalid
   } else if (expr->get_result_type().is_ext()) {
     // special type is invalid

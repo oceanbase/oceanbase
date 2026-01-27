@@ -58,6 +58,9 @@ bool ObColumnStatParam::is_valid_opt_col_type(const ObObjType type, bool is_onli
       type_class == ColumnTypeClass::ObMySQLDateTC ||
       type_class == ColumnTypeClass::ObMySQLDateTimeTC) {
     ret = true;
+  } else if (is_online_stat && lib::is_mysql_mode() && type == ObMediumTextType) {
+    // for string type
+    ret = true;
   }
   return ret;
 }

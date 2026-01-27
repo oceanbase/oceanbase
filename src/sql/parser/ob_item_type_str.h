@@ -94,6 +94,9 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_ARBITRARY:
       ret = "ARBITRARY";
       break;
+    case T_FUN_SYS_COUNT_INROW:
+      ret = "SYS_COUNT_INROW";
+      break;
     default:
       break;
   }

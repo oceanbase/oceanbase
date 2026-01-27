@@ -3823,7 +3823,11 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       }
       if (lib::is_mysql_mode() &&
           col->get_meta_type().get_type_class() == ColumnTypeClass::ObTextTC) {
-        col_param.set_is_text_column();
+        if (col->is_string_lob() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0) {
+          col_param.set_is_string_column();
+        } else {
+          col_param.set_is_text_column();
+        }
       }
       if (OB_SUCC(ret) && OB_FAIL(column_params.push_back(col_param))) {
         LOG_WARN("failed to push back column param", K(ret));

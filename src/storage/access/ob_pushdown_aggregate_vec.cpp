@@ -1644,6 +1644,7 @@ int ObPDAggVecFactory::alloc_cell(
       INIT_AGG_CELL(T_FUN_SYS_RB_BUILD_AGG, Rb, PD_RB_BUILD)
       INIT_AGG_CELL(T_FUN_SYS_RB_AND_AGG, Rb, PD_RB_AND)
       INIT_AGG_CELL(T_FUN_SYS_RB_OR_AGG, Rb, PD_RB_OR)
+      INIT_AGG_CELL(T_FUN_SYS_COUNT_INROW, Count, false)
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Not supported aggregate type", K(ret), K(type));

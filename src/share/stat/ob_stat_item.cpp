@@ -488,6 +488,21 @@ int ObStatItem::cast_int(const ObObj &obj, int64_t &ret_value)
   return ret;
 }
 
+int ObStatLobInrowCount::decode(ObObj &obj, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  int64_t lob_inrow_count = 0;
+  if (OB_ISNULL(col_stat_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column stat is null", K(ret), K(col_stat_));
+  } else if (OB_FAIL(cast_int(obj, lob_inrow_count))) {
+    LOG_WARN("failed to get int value", K(ret));
+  } else {
+    col_stat_->set_lob_inrow_count(lob_inrow_count);
+  }
+  return ret;
+}
+
 void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic,
                            int64_t scnt, int64_t mcnt)
 {

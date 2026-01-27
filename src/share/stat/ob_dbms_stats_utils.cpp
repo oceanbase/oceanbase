@@ -809,11 +809,27 @@ int ObDbmsStatsUtils::merge_col_stats(const ObTableStatParam &param,
     // after merge, we need to re-calc ndv from llc
     bool is_valid = false;
     ObOptColumnStat *col_stat = NULL;
+    const ObColumnStatParam *col_param = NULL;
+    bool find_col_param = false;
     if (OB_ISNULL(col_stat = it->second)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null pointer", K(ret));
+    } else if (OB_FAIL(find_column_param_by_column_id(param.column_params_,
+                                                      col_stat->get_column_id(),
+                                                      find_col_param,
+                                                      col_param))) {
+      LOG_WARN("failed to find column param", K(ret));
     } else if (is_part_id_valid(param, col_stat->get_partition_id())) {
       col_stat->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(col_stat->get_llc_bitmap()));
+      if (find_col_param && OB_NOT_NULL(col_param) &&
+          (col_param->is_text_column() || col_param->is_string_column()) &&
+          col_stat->get_lob_inrow_count() > 0 &&
+          col_stat->get_lob_inrow_count() != col_stat->get_num_not_null()) {
+
+        col_stat->set_num_distinct(ObOptSelectivity::scale_distinct(col_stat->get_num_not_null(),
+                                                                    col_stat->get_lob_inrow_count(),
+                                                                    col_stat->get_num_distinct()));
+      }
       if (OB_UNLIKELY(col_stat->get_num_distinct() < 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", KPC(col_stat), K(old_col_stats), K(ret));
@@ -2232,6 +2248,23 @@ int ObDbmsStatsUtils::set_trx_lock_timeout(sqlclient::ObISQLConnection *conn,
     LOG_WARN("failed to set trx lock timeout", K(ret), K(trx_lock_timeout));
   } else {
     need_restore = true;
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::find_column_param_by_column_id(const ObIArray<ObColumnStatParam> &column_params,
+                                                     const uint64_t column_id,
+                                                     bool &find_it,
+                                                     const ObColumnStatParam *&column_param)
+{
+  int ret = OB_SUCCESS;
+  find_it = false;
+  column_param = NULL;
+  for (int64_t i = 0; !find_it && i < column_params.count(); ++i) {
+    if (column_params.at(i).column_id_ == column_id) {
+      find_it = true;
+      column_param = &column_params.at(i);
+    }
   }
   return ret;
 }

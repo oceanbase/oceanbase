@@ -29,13 +29,15 @@ int init_hybrid_hist_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id
   int ret = OB_SUCCESS;
   ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
   ObDatumMeta &param_meta = aggr_info.param_exprs_.at(0)->datum_meta_;
+  bool is_statistic_agg = aggr_info.is_statistic_agg_;
   bool has_distinct = aggr_info.has_distinct_;
   if (OB_FAIL(init_agg_func<HybridHist>(agg_ctx,
                                         agg_col_id,
                                         has_distinct,
                                         allocator,
                                         agg,
-                                        true))) {
+                                        true,
+                                        is_statistic_agg))) {
     SQL_LOG(WARN, "failed init agg func", K(ret));
   }
   return ret;

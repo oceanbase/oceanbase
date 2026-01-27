@@ -289,6 +289,10 @@ public:
                                  ObCharsetType result_charset_type,
                                  ObCollationType collation_type);
 
+  static int find_column_param_by_column_id(const ObIArray<ObColumnStatParam> &column_params,
+                                            const uint64_t column_id,
+                                            bool &find_it,
+                                            const ObColumnStatParam *&column_param);
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

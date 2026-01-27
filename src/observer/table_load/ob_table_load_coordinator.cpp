@@ -1377,6 +1377,9 @@ int ObTableLoadCoordinator::build_table_stat_param(ObTableStatParam &param, ObIA
     ObColumnStatParam col_param;
     col_param.column_id_ = col_desc.col_id_;
     col_param.cs_type_ = col_desc.col_type_.get_collation_type();
+    if (is_lob_storage(col_desc.col_type_.get_type())) {
+      col_param.set_is_text_column();
+    }
     if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == col_param.column_id_) {
       // skip hidden pk
     } else if (OB_FAIL(param.column_params_.push_back(col_param))) {

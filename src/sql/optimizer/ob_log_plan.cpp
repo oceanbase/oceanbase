@@ -5203,7 +5203,8 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
                aggr_expr->get_expr_type() != T_FUN_SYS_RB_BUILD_AGG &&
                aggr_expr->get_expr_type() != T_FUN_SYS_RB_AND_AGG &&
                aggr_expr->get_expr_type() != T_FUN_SYS_RB_OR_AGG &&
-               aggr_expr->get_expr_type() != T_FUN_GROUPING_ID) {
+               aggr_expr->get_expr_type() != T_FUN_GROUPING_ID &&
+               aggr_expr->get_expr_type() != T_FUN_SYS_COUNT_INROW) {
       // three stage with rollup, only hash rollup is allowed
       // grouping_id can be safely pushdown
       can_push = false;
@@ -5292,7 +5293,8 @@ int ObLogPlan::check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &ag
                T_FUN_ANY != aggr_expr->get_expr_type() &&
                T_FUN_ARBITRARY != aggr_expr->get_expr_type() &&
                T_FUN_SYS_RB_OR_AGG != aggr_expr->get_expr_type() &&
-               T_FUN_SYS_RB_AND_AGG != aggr_expr->get_expr_type()) {
+               T_FUN_SYS_RB_AND_AGG != aggr_expr->get_expr_type() &&
+               T_FUN_SYS_COUNT_INROW != aggr_expr->get_expr_type()) {
       can_push = false;
     } else if (T_FUN_GROUPING == aggr_expr->get_expr_type()
                || T_FUN_GROUPING_ID == aggr_expr->get_expr_type()) {
@@ -16970,7 +16972,8 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
                 && T_FUN_SYS_RB_AND_AGG != cur_aggr->get_expr_type()
                 && T_FUN_SYS_RB_OR_AGG != cur_aggr->get_expr_type()
                 && T_FUN_SYS_RB_BUILD_AGG != cur_aggr->get_expr_type()
-                && T_FUN_COUNT_SUM != cur_aggr->get_expr_type()) {
+                && T_FUN_COUNT_SUM != cur_aggr->get_expr_type()
+                && T_FUN_SYS_COUNT_INROW != cur_aggr->get_expr_type()) {
       can_push = false;
     } else if ((T_FUN_SYS_RB_BUILD_AGG == cur_aggr->get_expr_type() && (!enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0))
       || (T_FUN_COUNT_SUM == cur_aggr->get_expr_type() && (!enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0))) {
@@ -16979,6 +16982,9 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
     } else if ((T_FUN_SYS_RB_AND_AGG == cur_aggr->get_expr_type() || T_FUN_SYS_RB_AND_AGG == cur_aggr->get_expr_type()) &&
                 (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_3)) {
       // if vector 2.0 is not enable  can not storage pushdown for rb agg
+      can_push = false;
+    } else if (T_FUN_SYS_COUNT_INROW == cur_aggr->get_expr_type() && !enable_rich_vector_format) {
+      // if rich vector format is not enable, can not storage pushdown for sys_count_inrow
       can_push = false;
     } else if (1 < cur_aggr->get_real_param_count()) {
       can_push = false;

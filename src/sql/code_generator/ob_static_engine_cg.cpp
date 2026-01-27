@@ -8514,6 +8514,21 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
         LOG_DEBUG("finish fill_aggr_info", K(raw_expr), K(expr), K(aggr_info), K(all_param_exprs));
       }
     }
+
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(opt_ctx_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null optimizer context", K(ret));
+      } else if (aggr_info.param_exprs_.count() <= 0) {
+        aggr_info.is_statistic_agg_ = false;
+      } else if (!is_lob_storage(aggr_info.param_exprs_.at(0)->datum_meta_.type_)) {
+        aggr_info.is_statistic_agg_ = false;
+      } else if (opt_ctx_->get_global_hint().has_dbms_stats_hint()) {
+        aggr_info.is_statistic_agg_ = true;
+      } else {
+        aggr_info.is_statistic_agg_ = false;
+      }
+    }
   }
   return ret;
 }

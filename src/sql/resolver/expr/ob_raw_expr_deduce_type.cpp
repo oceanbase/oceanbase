@@ -1631,7 +1631,8 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       case T_FUN_COUNT_SUM:
       case T_FUN_APPROX_COUNT_DISTINCT:
       case T_FUN_KEEP_COUNT:
-      case T_FUN_SUM_OPNSIZE: {
+      case T_FUN_SUM_OPNSIZE:
+      case T_FUN_SYS_COUNT_INROW: {
         if (lib::is_oracle_mode()) {
           result_type.set_number();
           result_type.set_scale(0);
@@ -2468,6 +2469,7 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                && T_FUN_TOP_FRE_HIST != expr.get_expr_type()
                && T_FUN_HYBRID_HIST != expr.get_expr_type()
                && T_FUN_SUM_OPNSIZE != expr.get_expr_type()
+               && T_FUN_SYS_COUNT_INROW != expr.get_expr_type()
                && 1 != get_expr_output_column(*param_expr)) {
       ret = OB_ERR_INVALID_COLUMN_NUM;
       LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_NUM, (int64_t)1);
