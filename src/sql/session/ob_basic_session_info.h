@@ -2931,6 +2931,7 @@ private:
   bool is_first_gen_pl_cache_str_; // whether is first time t o generate sys_var_in_pl_cache_str_
   common::ObString sys_var_in_pl_cache_str_;
   common::ObSEArray<int64_t, 8> influence_pl_cache_var_indexs_;
+  bool global_rich_vector_configured_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
