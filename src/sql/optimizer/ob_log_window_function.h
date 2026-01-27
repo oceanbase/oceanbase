@@ -33,6 +33,7 @@ namespace sql
         algo_(WinDistAlgo::WIN_DIST_INVALID),
         use_hash_sort_(false),
         use_topn_sort_(false),
+        use_streaming_(false),
         single_part_parallel_(false),
         range_dist_parallel_(false),
         role_type_(WindowFunctionRoleType::NORMAL),
@@ -125,6 +126,12 @@ namespace sql
     virtual int compute_property() override;
     virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
     virtual int compute_op_parallel_and_server_info() override;
+
+    // determine if the window function operator can execute in streaming mode in compile time
+    // based on the window functions definition
+    int determine_use_streaming();
+    bool get_use_streaming() const { return use_streaming_; }
+
   private:
     ObSqlArray<ObWinFunRawExpr *> win_exprs_;
 
@@ -132,6 +139,9 @@ namespace sql
     WinDistAlgo algo_;
     bool use_hash_sort_;
     bool use_topn_sort_;
+
+    // if true, use streaming window
+    bool use_streaming_;
 
     // Single partition (no partition by) window function parallel process, need the PX COORD
     // to collect the partial result and broadcast the final result to each worker.

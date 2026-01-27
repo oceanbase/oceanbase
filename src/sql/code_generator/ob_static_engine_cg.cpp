@@ -8927,6 +8927,7 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionVec
   if (OB_FAIL(generate_spec(op, static_cast<ObWindowFunctionSpec &>(spec), in_root_job))) {
     LOG_WARN("generate window function spec failed", K(ret));
   } else {
+    spec.use_streaming_ = op.get_use_streaming();
     NullSafeRowCmpFunc null_first_cmp = nullptr, null_last_cmp = nullptr;
     for (int i = 0; OB_SUCC(ret) && i < spec.wf_infos_.count(); i++) {
       WinFuncInfo &wf_info = spec.wf_infos_.at(i);

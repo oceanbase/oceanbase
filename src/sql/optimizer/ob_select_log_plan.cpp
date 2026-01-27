@@ -2026,6 +2026,25 @@ int ObSelectLogPlan::allocate_window_function_as_top(const WinDistAlgo dist_algo
       LOG_WARN("failed to compute property", K(ret));
     } else {
       top = window_function;
+      // read hint & config to determine if the window function operator can execute in streaming mode in compile time
+      bool has_streaming_param = false;
+      bool hint_enable_streaming = false;
+      const ObGlobalHint &global_hint = get_optimizer_context().get_global_hint();
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      bool config_enable_streaming =
+          tenant_config->_enable_window_function_streaming_process;
+      if (!config_enable_streaming) {
+        LOG_TRACE("won't support streaming window because of config");
+      } else if (OB_FAIL(global_hint.opt_params_
+                      .enable_window_function_streaming_process_param(
+                          hint_enable_streaming, has_streaming_param))) {
+        LOG_WARN("failed to get sql streaming window param", K(ret));
+      } else if (has_streaming_param && !hint_enable_streaming) {
+        LOG_TRACE("won't support streaming window because of hint");
+      } else if (OB_FAIL(window_function->determine_use_streaming())) {
+        LOG_WARN("failed to determine if the window function operator can execute in streaming mode", K(ret));
+      }
+      LOG_TRACE("determine use streaming", K(ret), K(config_enable_streaming), K(has_streaming_param), K(hint_enable_streaming), K(window_function->get_use_streaming()));
     }
   }
   return ret;

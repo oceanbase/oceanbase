@@ -185,6 +185,8 @@ ob_set_subtarget(ob_sql engine
   engine/window_function/row_store.cpp
   engine/window_function/win_expr.cpp
   engine/window_function/row_store.cpp
+  engine/window_function/streaming_window_processor.cpp
+  engine/window_function/partition_by_comparator.cpp
   engine/expand/ob_expand_vec_op.cpp
   engine/subquery/ob_subplan_filter_vec_op.cpp
 )

@@ -901,6 +901,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_SPF_BATCH_RESCAN:
     case NLJ_BATCHING_ENABLED:
     case ENABLE_PX_ORDERED_COORD:
+    case ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS:
     case ENABLE_TOPN_RUNTIME_FILTER:
     case DISABLE_GTT_SESSION_ISOLATION:
     case ENABLE_PARTIAL_GROUP_BY_PUSHDOWN:
@@ -1221,6 +1222,12 @@ int ObOptParamHint::get_hash_rollup_param(ObObj &val, bool &has_param) const
     }
   }
   return ret;
+}
+
+int ObOptParamHint::enable_window_function_streaming_process_param(bool &enabled, bool &has_param) const
+{
+  int ret = OB_SUCCESS;
+  return get_bool_opt_param(ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS, enabled, has_param);
 }
 
 int ObOptParamHint::get_enum_opt_param(const OptParamType param_type, int64_t &val) const

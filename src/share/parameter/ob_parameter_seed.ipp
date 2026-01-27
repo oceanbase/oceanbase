@@ -3271,6 +3271,11 @@ DEF_INT(_ivf_max_scan_vectors, OB_TENANT_PARAMETER, "100000",
 DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "1000000", "[1,)",
         "max number of entries accessed in a single partition for external table, including directories and files.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_window_function_streaming_process, OB_TENANT_PARAMETER, "True",
+        "Enable window function streaming computation.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(_tablet_replica_info_cache_expire_time, OB_CLUSTER_PARAMETER, "10m", "[0, 1d]",
         "the expire time for tablet replica info cache, from 0 to 1day, "
         "with default 10minutes. Range: [0, 1d]",

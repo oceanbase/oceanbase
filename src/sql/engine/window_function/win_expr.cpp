@@ -22,6 +22,90 @@ namespace sql
 namespace winfunc
 {
 
+char* WinExprEvalCtx::reserved_per_partition_buf(int32_t len)
+{
+  return (char*)win_col_.per_partition_allocator_.alloc(len);
+}
+
+static int64_t REUSE_PER_BATCH_ALLOCATOR_THRESHOLD = 128;
+void WinExprEvalCtx::reset_per_batch_allocator()
+{
+  // avoid constantly reset
+  if (per_batch_allocator_.used() > REUSE_PER_BATCH_ALLOCATOR_THRESHOLD) {
+    LOG_TRACE("reset per batch allocator", K(per_batch_allocator_));
+    per_batch_allocator_.reuse();
+  }
+}
+
+char* StreamingWinExprEvalCtx::reserved_per_partition_buf(int32_t len)
+{
+  return (char*)win_col_.per_partition_allocator_.alloc(len);
+}
+
+namespace {
+  // if allocate memory failed, log the allocator stat for both per-partition and per-batch allocator
+  template<typename CTX>
+  inline void log_allocator_stat(CTX &ctx, int ret)
+  {
+    LOG_WARN("allocator stat", K(ctx.win_col_.per_partition_allocator_), K(ctx.per_batch_allocator_));
+  }
+}
+
+// called by StreamingWindowProcessor::on_batch_start() before reset allocator and last_row
+int StreamingWinExprEvalCtx::on_batch_start_with_last_row(StreamingWinExprEvalCtx &ctx, const ObCompactRow *last_row, const ObBatchRows& brs) {
+  int ret = OB_SUCCESS;
+  ObItemType func_type = ctx.win_col_.wf_info_.func_type_;
+  IWinExpr *wf_expr = ctx.win_col_.wf_expr_;
+  if (func_type == T_WIN_FUN_RANK) {
+    if (OB_FAIL(static_cast<winfunc::RankLikeExpr<T_WIN_FUN_RANK> *>(wf_expr)->on_batch_start_with_last_row(ctx, last_row, brs))) {
+      LOG_WARN("compare with last row in previous batch failed", K(ret));
+    }
+  } else if (func_type == T_WIN_FUN_DENSE_RANK) {
+    if (OB_FAIL(static_cast<winfunc::RankLikeExpr<T_WIN_FUN_DENSE_RANK> *>(wf_expr)->on_batch_start_with_last_row(ctx, last_row, brs))) {
+      LOG_WARN("compare with last row in previous batch failed", K(ret));
+    }
+  }
+
+  ObExpr *expr = ctx.win_col_.wf_info_.expr_;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ctx.win_col_.on_batch_start(brs.size_, *brs.skip_))) {
+    LOG_WARN("reset for partition failed", K(ret));
+  } else if (OB_FAIL(expr->init_vector_for_write(
+                 ctx.eval_ctx_, expr->get_default_res_format(), brs.size_))) {
+    LOG_WARN("init vector for write failed", K(ret));
+  } else if (wf_expr->is_aggregate_expr()) {
+    if (OB_FAIL(static_cast<winfunc::AggrExpr *>(wf_expr)->streaming_on_batch_start(
+                ctx))) {
+      LOG_WARN("streaming on batch start failed", K(ret));
+    }
+  } else if (func_type == T_WIN_FUN_RANK || func_type == T_WIN_FUN_DENSE_RANK) {
+    if (OB_FAIL(winfunc::rank_like_expr::init_res_with_relative_rank(
+            ctx.win_col_, ctx.eval_ctx_, brs))) {
+      LOG_WARN("init res with relative rank failed", K(ret));
+    }
+  } else if (func_type == T_WIN_FUN_NTH_VALUE) {
+    // evaluate the first param
+    ObExpr *param_expr = ctx.win_col_.wf_info_.param_exprs_.at(0);
+    if (OB_FAIL(param_expr->eval_vector(ctx.eval_ctx_, brs))) {
+      LOG_WARN("eval vector failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int StreamingWinExprEvalCtx::on_batch_end(StreamingWinExprEvalCtx &ctx, int64_t last_row_index) {
+  int ret = OB_SUCCESS;
+  IWinExpr *wf_expr = ctx.win_col_.wf_expr_;
+  if (wf_expr->is_aggregate_expr()) {
+    if (OB_FAIL(static_cast<winfunc::AggrExpr *>(wf_expr)->on_batch_end(ctx, last_row_index))) {
+      LOG_WARN("on batch end failed", K(ret), K(last_row_index));
+    }
+  }
+
+  return ret;
+}
+
 template<VecValueTypeClass vec_tc>
 struct int_trunc
 {
@@ -163,15 +247,15 @@ int NonAggrWinExpr::eval_param_int_value(ObExpr *param, ObEvalCtx &ctx, const bo
 #define SET_NON_AGG_DATAS(fmt)                                                                     \
   do {                                                                                             \
     fmt *data = static_cast<fmt *>(non_agg_expr->get_vector(eval_ctx));                            \
-    int32_t offset = 0, step = ctx.win_col_.non_aggr_reserved_row_size();                          \
-    for (int i = 0; OB_SUCC(ret) && i < batch_size; i++, offset += step) {                         \
+    int32_t step = win_col.non_aggr_reserved_row_size(), offset = row_start * step;           \
+    for (int i = row_start; OB_SUCC(ret) && i < row_end; i++, offset += step) {                    \
       if (skip.at(i)) { continue; }                                                                \
       guard.set_batch_idx(i);                                                                      \
-      char *res_row = ctx.win_col_.non_aggr_results_ + offset;                                     \
-      if (!ctx.win_col_.null_nonaggr_results_->at(i)) {                                            \
+      char *res_row = win_col.non_aggr_results_ + offset;                                     \
+      if (!win_col.null_nonaggr_results_->at(i)) {                                            \
         if (is_fixed_len_data) {                                                                   \
           payload = res_row;                                                                       \
-          len = ctx.win_col_.non_aggr_reserved_row_size();                                         \
+          len = win_col.non_aggr_reserved_row_size();                                         \
           data->set_payload(i, payload, len);                                                      \
         } else if (vec_tc == VEC_TC_NUMBER) {                                                      \
           data->set_number(i, *reinterpret_cast<const number::ObCompactNumber *>(res_row));        \
@@ -198,19 +282,19 @@ int NonAggrWinExpr::eval_param_int_value(ObExpr *param, ObEvalCtx &ctx, const bo
     SET_NON_AGG_DATAS(ObFixedLengthFormat<RTCType<vec_tc>>);                                       \
   } break
 
-int NonAggrWinExpr::collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
-                                         const int64_t row_end, const ObBitVector &skip)
+int NonAggrWinExpr::collect_part_results(sql::WinFuncColExpr& win_col, const int64_t row_start,
+                                         const int64_t row_end, const ObBitVector &skip, bool set_evaluated_projected)
 {
   int ret = OB_SUCCESS;
-  ObExpr *non_agg_expr = ctx.win_col_.wf_info_.expr_;
+  ObExpr *non_agg_expr = win_col.wf_info_.expr_;
   int64_t batch_size = row_end - row_start;
-  ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
+  ObEvalCtx &eval_ctx = win_col.op_.get_eval_ctx();
   VectorFormat fmt = non_agg_expr->get_format(eval_ctx);
   VecValueTypeClass vec_tc = non_agg_expr->get_vec_value_tc();
   bool is_fixed_len_data = is_fixed_length_vec(vec_tc);
   const char *payload = nullptr;
   ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx);
-  guard.set_batch_size(batch_size);
+  guard.set_batch_size(row_end);
   int32_t len = 0;
   switch (fmt) {
   case common::VEC_UNIFORM: {
@@ -238,7 +322,7 @@ int NonAggrWinExpr::collect_part_results(WinExprEvalCtx &ctx, const int64_t row_
   }
   if (OB_FAIL(ret)) {
     LOG_WARN("collect part results failed", K(ret));
-  } else {
+  } else if (set_evaluated_projected) {
     non_agg_expr->set_evaluated_projected(eval_ctx);
   }
   return ret;
@@ -322,10 +406,12 @@ int Ntile::generate_extra()
   return ret;
 }
 
-static int memcpy_results(WinExprEvalCtx &ctx, VecValueTypeClass res_tc, char *res_buf,
-                            const char *src, int32_t len)
+template<typename CTX>
+static int memcpy_results_from_param0(CTX &ctx, char *res_buf, const char *src, int32_t len)
 {
   int ret = OB_SUCCESS;
+  const ObIArray<ObExpr *> &params = ctx.win_col_.wf_info_.param_exprs_;
+  VecValueTypeClass res_tc = params.at(0)->get_vec_value_tc();
   char *data_buf = nullptr;
   int32_t data_len = len;
   ObExpr *win_expr = ctx.win_col_.wf_info_.expr_;
@@ -334,20 +420,24 @@ static int memcpy_results(WinExprEvalCtx &ctx, VecValueTypeClass res_tc, char *r
   } else if (OB_UNLIKELY(len == 0)) {
     *reinterpret_cast<int64_t *>(res_buf) = 0;
     *reinterpret_cast<int32_t *>(res_buf + sizeof(char *)) = len;
-  } else if (OB_ISNULL(data_buf = ctx.reserved_buf(len))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
   } else {
-    MEMCPY(data_buf, src, len);
-    *reinterpret_cast<int64_t *>(res_buf) = reinterpret_cast<int64_t>(data_buf);
-    *reinterpret_cast<int32_t *>(res_buf + sizeof(char *)) = len;
+    if (OB_ISNULL(data_buf = ctx.reserved_per_partition_buf(len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+      log_allocator_stat(ctx, ret);
+    } else {
+      MEMCPY(data_buf, src, len);
+      *reinterpret_cast<int64_t *>(res_buf) =
+          reinterpret_cast<int64_t>(data_buf);
+      *reinterpret_cast<int32_t *>(res_buf + sizeof(char *)) = len;
+    }
   }
   return ret;
 }
 
 void NthValue::destroy()
 {
-  LOG_TRACE("nth value fisrt/last reuse metrics: ", K(reuse_count_), K(store_count_), K(last_result_capacity_));
+  LOG_TRACE("nth value first/last reuse metrics: ", K(reuse_count_), K(store_count_), K(last_result_capacity_));
 }
 
 int NthValue::may_reuse_last_result(
@@ -382,9 +472,6 @@ int NthValue::may_reuse_last_result(
   }
   // 2. try to peek if (last_frame, current_frame) are all nulls
   if (!may_store || !last_result_is_valid_) {
-  } else if (end_idx - start_idx > ctx.win_col_.op_.get_spec().max_batch_size_) {
-    ret = OB_UNEXPECT_INTERNAL_ERROR;
-    LOG_WARN("unexpected window", K(ret), K(end_idx), K(start_idx), K(frame), K(last_frame_), K(last_result_is_valid_));
   } else if (end_idx == start_idx) {
     // same frame as the last
     may_reused = true;
@@ -401,20 +488,24 @@ int NthValue::may_reuse_last_result(
     }
     if (OB_FAIL(ctx.input_rows_.is_all_null(param_index_, start_idx, end_idx, may_reused))) {
       LOG_WARN("failed to check if rows all nulls", K(ret));
+    } else if (may_reused) {
+      // update last frame
+      last_frame_ = frame;
     }
   }
   return ret;
 }
 
-int NthValue::store_result_for_reuse(WinExprEvalCtx &ctx, const char *src,
-                                     int32_t len, const Frame &frame) {
+template<typename CTX>
+int NthValue::store_result_for_reuse(CTX &ctx, const char *src,
+                                     int32_t len, const Frame *frame) {
   int ret = OB_SUCCESS;
   // 1. alloc for last_result
-  if (last_result_ == nullptr || last_result_capacity_ < len) {
-    last_result_ = ctx.reserved_buf(len);
-    if (OB_ISNULL(last_result_)) {
+  if (len > 0 && (last_result_ == nullptr || last_result_capacity_ < len)) {
+    if (OB_ISNULL(last_result_ = ctx.reserved_per_partition_buf(len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
+      LOG_WARN("allocate memory failed", K(ret), K(len));
+      log_allocator_stat(ctx, ret);
     } else {
       LOG_TRACE("allocated temp memory", K(len));
       last_result_capacity_ = len;
@@ -424,7 +515,10 @@ int NthValue::store_result_for_reuse(WinExprEvalCtx &ctx, const char *src,
   if (OB_SUCC(ret)) {
     last_result_is_valid_ = true;
     last_result_is_null_ = false;
-    last_frame_ = frame;
+    if (!OB_ISNULL(frame)) {
+      // only store frame for non-streaming mode
+      last_frame_ = *frame;
+    }
     last_result_size_ = len;
     MEMCPY(last_result_, src, len);
     store_count_ += 1;
@@ -432,10 +526,13 @@ int NthValue::store_result_for_reuse(WinExprEvalCtx &ctx, const char *src,
   return ret;
 }
 
-void NthValue::store_null_for_reuse(const Frame &frame) {
+void NthValue::store_null_for_reuse(const Frame* frame) {
   last_result_is_valid_ = true;
   last_result_is_null_ = true;
-  last_frame_ = frame;
+  if (!OB_ISNULL(frame)) {
+    // only store frame for non-streaming mode
+    last_frame_ = *frame;
+  }
 }
 
 int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx, char *res, bool &is_null)
@@ -497,8 +594,7 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
       if (last_result_is_null_) {
         is_null = true;
       } else {
-        ret = memcpy_results(ctx, params.at(0)->get_vec_value_tc(), res, last_result_,
-                             last_result_size_);
+        ret = memcpy_results_from_param0(ctx, res, last_result_, last_result_size_);
       }
     } else {
       bool is_ignore_null = ctx.win_col_.wf_info_.is_ignore_null_;
@@ -521,7 +617,6 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
         MEMSET(op.get_batch_ctx().bound_eval_skip_, 0, ObBitVector::BYTES_PER_WORD * word_cnt);
         int64_t step = (is_from_first ? 1 : -1);
         EvalBound bound(batch_size, true);
-        VecValueTypeClass res_tc = params.at(0)->get_vec_value_tc();
         VectorFormat param_fmt = VEC_INVALID;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ctx.input_rows_.attach_rows(op.get_all_expr(), input_row_meta,
@@ -542,9 +637,9 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
               if (param_nulls->is_null(idx)) {
                 is_null = true;
               } else {
-                ret = memcpy_results(ctx, res_tc, res, data->get_payload(idx), data->get_length(idx));
+                ret = memcpy_results_from_param0(ctx, res, data->get_payload(idx), data->get_length(idx));
                 if (OB_SUCC(ret) && may_store) {
-                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), frame);
+                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), &frame);
                 }
               }
             }
@@ -558,9 +653,9 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
               if (data->is_null(idx)) {
                 is_null = true;
               } else {
-                ret = memcpy_results(ctx, res_tc, res, data->get_payload(idx), data->get_length(idx));
+                ret = memcpy_results_from_param0(ctx, res, data->get_payload(idx), data->get_length(idx));
                 if (OB_SUCC(ret) && may_store) {
-                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), frame);
+                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), &frame);
                 }
               }
             }
@@ -574,9 +669,9 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
               if (data->is_null(idx)) {
                 is_null = true;
               } else {
-                ret = memcpy_results(ctx, res_tc, res, data->get_payload(idx), data->get_length(idx));
+                ret = memcpy_results_from_param0(ctx, res, data->get_payload(idx), data->get_length(idx));
                 if (OB_SUCC(ret) && may_store) {
-                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), frame);
+                  ret = store_result_for_reuse(ctx, data->get_payload(idx), data->get_length(idx), &frame);
                 }
               }
             }
@@ -592,7 +687,7 @@ int NthValue::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
       if (!is_calc_nth) {
         is_null = true;
         if (OB_SUCC(ret) && may_store) {
-          store_null_for_reuse(frame);
+          store_null_for_reuse(&frame);
         }
       }
     }
@@ -607,6 +702,253 @@ int NthValue::generate_extra()
   last_result_ = nullptr;
   last_result_capacity_ = 0;
   return ret;
+}
+
+namespace {
+bool is_unbounded_preceding_and_current_row(const WinFuncColExpr &w) {
+  return w.wf_info_.win_type_ == WINDOW_ROWS &&
+         (w.wf_info_.upper_.is_unbounded_ && w.wf_info_.upper_.is_preceding_ &&
+          w.wf_info_.upper_.between_value_expr_ == nullptr) &&
+         (!w.wf_info_.lower_.is_unbounded_ &&
+          w.wf_info_.lower_.between_value_expr_ == nullptr);
+}
+
+bool is_current_and_unbounded_following_row(const WinFuncColExpr &w) {
+  return w.wf_info_.win_type_ == WINDOW_ROWS &&
+         (!w.wf_info_.upper_.is_unbounded_ &&
+          w.wf_info_.upper_.between_value_expr_ == nullptr) &&
+         (w.wf_info_.lower_.is_unbounded_ && !w.wf_info_.lower_.is_preceding_ &&
+          w.wf_info_.lower_.between_value_expr_ == nullptr);
+}
+} // namespace
+
+int NthValue::set_streaming_mode(const WinFuncColExpr &win_col_expr, ObEvalCtx &eval_ctx) {
+  int ret = OB_SUCCESS;
+  const WinFuncInfo &wf_info = win_col_expr.wf_info_;
+  bool is_ignore_nulls = wf_info.is_ignore_null_;
+  bool is_first_value = wf_info.func_type_ == T_WIN_FUN_FIRST_VALUE;
+
+  // 1. check nth_value n==1
+  if (wf_info.func_type_ == T_WIN_FUN_NTH_VALUE) {
+    if (wf_info.param_exprs_.count() != 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid number of params", K(ret), K(wf_info.param_exprs_.count()));
+    } else {
+      winfunc::NonAggrWinExpr::ParamStatus param_status;
+      ObExpr* expr = wf_info.param_exprs_.at(1);
+      if (lib::is_oracle_mode() && !expr->is_const_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("nth_value n is not a const expr", K(ret), K(*expr));
+      } else if (OB_FAIL(winfunc::NonAggrWinExpr::eval_param_int_value(
+                     expr, eval_ctx, lib::is_mysql_mode(), false,
+                     param_status))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("eval param int value failed", K(ret));
+      } else if (param_status.is_null_ || param_status.int_val_ != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("nth_value n is not 1", K(ret), K(param_status.is_null_), K(param_status.int_val_));
+      } else { // n == 1
+        is_first_value = wf_info.is_from_first_;
+      }
+    }
+  }
+
+  // 2. check frame
+  if (OB_FAIL(ret)) {
+    // nth_value where n != 1
+  } else {
+    // first_value(respect nulls) over (current, unbounded)
+    // ==> last_value(respect nulls) over (unbounded, current)
+    if (is_current_and_unbounded_following_row(win_col_expr)) {
+      if (is_first_value && !is_ignore_nulls) {
+        is_first_value = false;
+      } else {
+        LOG_WARN("invalid frame", K(ret), K(win_col_expr.wf_info_));
+        ret = OB_ERR_UNEXPECTED;
+      }
+    } else if (!is_unbounded_preceding_and_current_row(win_col_expr)) {
+      LOG_WARN("invalid frame", K(ret), K(win_col_expr.wf_info_));
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
+
+  // 3. set streaming function callback
+  if (OB_SUCC(ret)) {
+    // set streaming function callback
+    if (is_first_value) {
+      if (is_ignore_nulls) {
+        streaming_func_ = &NthValue::streaming_func<true, true>;
+      } else {
+        streaming_func_ = &NthValue::streaming_func<true, false>;
+      }
+    } else {
+      if (is_ignore_nulls) {
+        streaming_func_ = &NthValue::streaming_func<false, true>;
+      } else {
+        streaming_func_ = &NthValue::streaming_func<false, false>;
+      }
+    }
+  }
+
+  return ret;
+}
+
+template <bool is_first, bool is_ignore_nulls>
+int NthValue::streaming_func(StreamingWinExprEvalCtx &ctx,
+                                          const int64_t start_idx,
+                                          const int64_t end_idx,
+                                          const ObBatchRows &child_brs) {
+
+  if (child_brs.all_rows_active_) {
+    return compute_nth_value_streaming<is_first, is_ignore_nulls, false>(
+      ctx, start_idx, end_idx, child_brs);
+  } else {
+    return compute_nth_value_streaming<is_first, is_ignore_nulls, true>(
+        ctx, start_idx, end_idx, child_brs);
+  }
+}
+
+template <bool is_first, bool is_ignore_nulls, bool not_all_rows_active>
+int NthValue::compute_nth_value_streaming(StreamingWinExprEvalCtx &ctx,
+                                const int64_t start_idx, const int64_t end_idx,
+                                const ObBatchRows &child_brs) {
+  int ret = OB_SUCCESS;
+  int32_t non_aggr_row_size = ctx.win_col_.non_aggr_reserved_row_size();
+  char *res = ctx.win_col_.non_aggr_results_ + non_aggr_row_size * start_idx;
+  MEMSET(res, 0, non_aggr_row_size * (end_idx - start_idx));
+
+  ObIVector *vector0 = ctx.win_col_.wf_info_.param_exprs_.at(0)->get_vector(ctx.eval_ctx_);
+  ObEvalCtx::BatchInfoScopeGuard guard(ctx.eval_ctx_);
+
+  for (int i = start_idx; OB_SUCC(ret) && i < end_idx;
+       i++, res += non_aggr_row_size) {
+    guard.set_batch_idx(i);
+    if constexpr (not_all_rows_active) {
+      if (child_brs.skip_->at(i)) {
+        continue;
+      }
+    }
+
+    if constexpr (is_first) {
+      if constexpr (is_ignore_nulls) {
+        /**
+         * first_value(ignore nulls) over (current, unbounded):
+         *  always return the first non-null row(cached in last_result_), that
+         * is to say: return last result if valid, otherwise return current
+         * row and cache current row if not null
+         */
+        if (OB_LIKELY(last_result_is_valid_)) {
+          if (last_result_is_null_) {
+            // should not go here
+            ret = OB_UNEXPECT_INTERNAL_ERROR;
+            LOG_WARN("last result is valid but is null", K(ret));
+          } else if (OB_FAIL(memcpy_results_from_param0(ctx, res, last_result_,
+                                                        last_result_size_))) {
+            LOG_WARN("copy results failed", K(ret));
+          }
+          reuse_count_ += 1;
+        } else {
+          if (vector0->is_null(i)) {
+            ctx.win_col_.null_nonaggr_results_->set(i);
+          } else {
+            if (OB_FAIL(memcpy_results_from_param0(
+                    ctx, res, vector0->get_payload(i),
+                    vector0->get_length(i)))) {
+              LOG_WARN("copy results failed", K(ret), K(i));
+            } else if (OB_FAIL(store_result_for_reuse(
+                           ctx, vector0->get_payload(i), vector0->get_length(i),
+                           nullptr))) {
+              LOG_WARN("store result failed", K(ret), K(i));
+            }
+          }
+        }
+        // end first_value(ignore nulls) over (current, unbounded)
+      } else {
+        /**
+         * first_value(respect nulls) over (unbounded, current):
+         *  always return the first row(cached in last_result_)
+         */
+        if (last_result_is_valid_) {
+          if (last_result_is_null_) {
+            ctx.win_col_.null_nonaggr_results_->set(i);
+          } else if (OB_FAIL(memcpy_results_from_param0(ctx, res, last_result_,
+                                                        last_result_size_))) {
+            LOG_WARN("copy results failed", K(ret));
+          }
+          reuse_count_ += 1;
+        } else {
+          if (vector0->is_null(i)) {
+            ctx.win_col_.null_nonaggr_results_->set(i);
+            store_null_for_reuse(nullptr);
+          } else if (OB_FAIL(memcpy_results_from_param0(
+                         ctx, res, vector0->get_payload(i),
+                         vector0->get_length(i)))) {
+            LOG_WARN("copy results failed", K(ret));
+          } else if (OB_FAIL(store_result_for_reuse(
+                         ctx, vector0->get_payload(i), vector0->get_length(i),
+                         nullptr))) {
+            LOG_WARN("store result failed", K(ret));
+          }
+        }
+      } // end first_value(respect nulls) over (unbounded, current)
+    } else {
+      if constexpr (is_ignore_nulls) {
+        /**
+         * last_value(ignore nulls) over (current, unbounded):
+         *  always return the last non-null row(cached in last_result_), that is
+         * to say: return last result if current row is null otherwise return
+         * current row and cache it
+         */
+        if (vector0->is_null(i)) {
+          if (last_result_is_valid_) {
+            if (last_result_is_null_) {
+              // should not go here
+              ret = OB_UNEXPECT_INTERNAL_ERROR;
+              LOG_WARN("last result is valid but is null", K(ret));
+            } else if (OB_FAIL(memcpy_results_from_param0(
+                           ctx, res, last_result_, last_result_size_))) {
+              LOG_WARN("copy results failed", K(ret));
+            }
+            reuse_count_ += 1;
+          } else {
+            ctx.win_col_.null_nonaggr_results_->set(i);
+          }
+        } else {
+          if (OB_FAIL(memcpy_results_from_param0(
+                  ctx, res, vector0->get_payload(i),
+                  vector0->get_length(i)))) {
+            LOG_WARN("copy results failed", K(ret), K(i));
+          } else if (OB_FAIL(store_result_for_reuse(
+                         ctx, vector0->get_payload(i),
+                         vector0->get_length(i), nullptr))) {
+            LOG_WARN("store result failed", K(ret), K(i));
+          }
+        }
+        // end last_value(ignore null)
+      } else {
+        /**
+         * last_value(respect nulls) over (unbounded, current):
+         *  just copy the parameter expr(maybe we can rewrite it in the future)
+         */
+        if (vector0->is_null(i)) {
+          ctx.win_col_.null_nonaggr_results_->set(i);
+        } else if(OB_FAIL(memcpy_results_from_param0(ctx, res,
+                                           vector0->get_payload(i),
+                                           vector0->get_length(i)))) {
+          LOG_WARN("copy results failed", K(ret));
+        }
+      } // end last_value(respect nulls)
+    }
+  } // for i in start_idx to end_idx
+  return ret;
+}
+
+int NthValue::process_rows_streaming(StreamingWinExprEvalCtx &ctx,
+                                           const int64_t prev_row_idx,
+                                           const int64_t start_idx,
+                                           const int64_t end_idx,
+                                           const ObBatchRows &child_brs) {
+  return (this->*streaming_func_)(ctx, start_idx, end_idx, child_brs);
 }
 
 int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
@@ -661,9 +1003,10 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
         if (OB_UNLIKELY(len == 0)) {
           default_val_len = len;
           default_val = nullptr;
-        } else if (OB_ISNULL(default_val = (char *)ctx.allocator_.alloc(len))) {
+        } else if (OB_ISNULL(default_val = ctx.reserved_per_partition_buf(len))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret));
+          log_allocator_stat(ctx, ret);
         } else {
           MEMCPY(default_val, payload, len);
           default_val_len = len;
@@ -720,11 +1063,10 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
         found = true;
       }
     }
-    VecValueTypeClass res_tc = params.at(0)->get_vec_value_tc();
     if (OB_SUCC(ret)) {
       if (!found) {
         if (has_default_val) {
-          if (OB_FAIL(memcpy_results(ctx, res_tc, res, default_val, default_val_len))) {
+          if (OB_FAIL(memcpy_results_from_param0(ctx, res, default_val, default_val_len))) {
             LOG_WARN("copy results failed", K(ret));
           }
         } else {
@@ -732,7 +1074,7 @@ int LeadOrLag::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
         }
       } else if (src_isnull) {
         is_null = true;
-      } else if (OB_FAIL(memcpy_results(ctx, res_tc, res, src, src_len))) {
+      } else if (OB_FAIL(memcpy_results_from_param0(ctx, res, src, src_len))) {
         LOG_WARN("copy results failed", K(ret));
       }
     }
@@ -747,7 +1089,7 @@ int CumeDist::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
   int64_t same_idx = row_idx;
   ObIArray<ObExpr *> &all_exprs = ctx.win_col_.op_.get_all_expr();
   ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
-  LastCompactRow ref_row(ctx.allocator_);
+  LastCompactRow ref_row(ctx.per_batch_allocator_);
   const ObCompactRow *iter_row = nullptr;
   if (OB_FAIL(ref_row.init_row_meta(all_exprs, 0, true))) {
     LOG_WARN("init row meta failed", K(ret));
@@ -822,11 +1164,9 @@ int CumeDist::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
   return ret;
 }
 
-int RowNumber::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
-                              char *res, bool &is_null)
-{
+namespace {
+int write_nmb(const int64_t row_nmb, char *res) {
   int ret = OB_SUCCESS;
-  int64_t row_nmb = row_idx - frame.head_ + 1;
   if (lib::is_oracle_mode()) {
     number::ObNumber res_nmb;
     ObNumStackOnceAlloc tmp_alloc;
@@ -843,6 +1183,344 @@ int RowNumber::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int
   return ret;
 }
 
+// warning: virtual function call overhead
+int get_vec_first_payload_unsafe(StreamingWinExprEvalCtx &ctx, const ObBatchRows& brs, const int64_t field_idx, const char* &data, int32_t &len, bool &is_null) {
+  int ret = OB_SUCCESS;
+
+  if (ctx.input_exprs_.count() <= field_idx) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid input expr", K(ret), K(field_idx));
+  } else if (OB_ISNULL(ctx.input_exprs_.at(field_idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid input expr", K(ret), K(field_idx));
+  } else {
+    // find first valid row
+    int first_row_idx = -1;
+    for (int j = 0; j < brs.size_; j++) {
+      if (brs.skip_->at(j)) {
+        continue;
+      }
+      first_row_idx = j;
+      break;
+    }
+    if (first_row_idx == -1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("first row idx is not found", K(ret), K(brs));
+    } else {
+      // if there are two window function of the same order by expression
+      // the second one may need to evaluated
+      // e.g.
+      // select
+      // rank() over (partition by a order by b + 1),
+      // rank() over (partition by a order by b) from table;
+      ObExpr *expr = ctx.input_exprs_.at(field_idx);
+      if (OB_FAIL(expr->eval_vector(ctx.eval_ctx_, brs))) {
+        LOG_WARN("eval vector failed", K(ret), K(*expr));
+      } else {
+        ObIVector *vector = expr->get_vector(ctx.eval_ctx_);
+        if (OB_ISNULL(vector)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid input expr", K(ret), K(field_idx));
+        } else {
+          vector->get_payload(first_row_idx, is_null, data, len);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+} // namespace
+
+
+// called by StreamingWindowProcessor::on_batch_start() before reset allocator
+template<ObItemType rank_op>
+int RankLikeExpr<rank_op>::on_batch_start_with_last_row(StreamingWinExprEvalCtx &ctx, const ObCompactRow *last_row, const ObBatchRows& brs) {
+  int ret = OB_SUCCESS;
+  relative_rank_of_prev_row_ = 0;
+  if (ctx.win_col_.wf_info_.sort_collations_.count() == 0) {
+    // avoid unnecessary comparison, always return 1
+    rank_of_prev_row_ = 1;
+  } else if(last_row == nullptr) {
+    // this is the first row of the partition as well as the first row of the current batch
+    first_row_equal_to_last_row_in_previous_batch_ = false;
+  } else {
+    first_row_equal_to_last_row_in_previous_batch_ = true;
+    int cmp_ret = 0;
+    ObSortCollations &sort_collations = ctx.win_col_.wf_info_.sort_collations_;
+    ObSortFuncs &sort_cmp_funcs = ctx.win_col_.wf_info_.sort_cmp_funcs_;
+    ObIArray<ObExpr *> &sort_exprs = ctx.win_col_.wf_info_.sort_exprs_;
+    const char *l_data = nullptr, *r_data = nullptr;
+    int32_t l_len = 0, r_len = 0;
+    bool l_isnull = false, r_isnull = false;
+    const RowMeta &input_row_meta = ctx.win_col_.op_.get_input_row_meta();
+    for (int i = 0; OB_SUCC(ret) && cmp_ret == 0 && i < sort_collations.count(); i++) {
+      int64_t field_idx = sort_collations.at(i).field_idx_;
+      ObExpr *expr = sort_exprs.at(i);
+      ObObjMeta &obj_meta = expr->obj_meta_;
+      sql::NullSafeRowCmpFunc cmp_fn = sort_cmp_funcs.at(i).row_cmp_func_;
+      l_isnull = last_row->is_null(field_idx);
+      if (!l_isnull) {
+        last_row->get_cell_payload(input_row_meta, field_idx, l_data, l_len);
+      }
+      if (OB_FAIL(get_vec_first_payload_unsafe(ctx, brs, field_idx, r_data,
+                                               r_len, r_isnull))) {
+        LOG_WARN("get currentpayload failed", K(ret));
+      } else if (OB_FAIL(cmp_fn(obj_meta, obj_meta, l_data, l_len, l_isnull,
+                                r_data, r_len, r_isnull, cmp_ret))) {
+        LOG_WARN("compare failed", K(ret));
+      } else if (cmp_ret != 0) {
+        first_row_equal_to_last_row_in_previous_batch_ = false;
+      }
+    }
+  }
+  return ret;
+}
+
+namespace rank_like_expr {
+namespace {
+
+// how to calculate the relative rank?
+// step 1: initial the result with 0
+// step 2: loop through each columns from row 1
+//    if it's equal to the last row
+//       if the result is 0, then copy the last result;
+//       else replace with max(current result, last result)
+//    else, replace with the current row number
+
+template <typename ColumnFmt, bool not_all_rows_active>
+int update_relative_rank_of_column(ObEvalCtx &eval_ctx, const ObExpr& expr, const ObBatchRows& brs, char* res_start, int32_t res_size, sql::NullSafeRowCmpFunc cmp_fn) {
+  int ret = OB_SUCCESS;
+  const char *prev_data = nullptr, *cur_data = nullptr;
+  int32_t prev_len = 0, cur_len = 0;
+  int32_t prev = -1;
+  int cmp_ret = -1;
+  bool prev_is_null = false, cur_is_null = false;
+  ColumnFmt *column = static_cast<ColumnFmt *>(expr.get_vector(eval_ctx));
+  for (int i = 0; i < brs.size_; i++) {
+    if constexpr (not_all_rows_active) {
+      if (brs.skip_->at(i)) {
+        continue;
+      }
+    }
+    int32_t *res_ptr = reinterpret_cast<int32_t *>(res_start + i * res_size);
+    column->get_payload(i, cur_is_null, cur_data, cur_len);
+    if (prev != -1 && OB_FAIL(cmp_fn(expr.obj_meta_, expr.obj_meta_, prev_data, prev_len,
+                       prev_is_null, cur_data, cur_len, cur_is_null,
+                       cmp_ret))) {
+      LOG_WARN("null first cmp failed", K(ret));
+    } else if (cmp_ret == 0) {
+      if (*res_ptr == 0) {
+        *res_ptr = prev;
+      } else {
+        *res_ptr = *res_ptr > prev ? *res_ptr : prev;
+      }
+    } else {
+      // not the same
+      *res_ptr = i;
+      prev = i;
+
+      prev_data = cur_data;
+      prev_len = cur_len;
+      prev_is_null = cur_is_null;
+    }
+  }
+  return ret;
+}
+
+} // namespace
+
+// called by StreamingWindowProcessor::on_batch_start()
+// this function is used to initialize the result with the relative rank
+// for example, we have two sort keys, we will write the relative rank to the result
+// sortkey1, sortkey2 -> relative rank(int32)
+// row1: (aa, hh) -> 0
+// row2: (aa, mm) -> 1
+// row3: (cc, mm) -> 2
+// row4: (cc, mm) -> 2
+// row4: (cc, nn) -> 4
+// row5: (cd, oo) -> 5
+// how to calculate the relative rank?
+// step 1: initial the result with 0
+// step 2: loop through each columns from row 1
+//    if it's equal to the last row
+//       if the result is 0, then copy the last result;
+//       else replace with max(current result, last result)
+//    else, replace with the current row number
+int init_res_with_relative_rank(const WinFuncColExpr &win_col, ObEvalCtx &eval_ctx, const ObBatchRows& brs) {
+  int ret = OB_SUCCESS;
+  if (win_col.wf_info_.sort_collations_.count() == 0) {
+    // do nothing, always return 1
+  } else {
+    // step 1. initial the result with 0(int32)
+    // Note: non_aggr_row_size may larger than 4 bytes
+    int32_t non_aggr_row_size = win_col.non_aggr_reserved_row_size();
+    char *non_aggr_res_ptr = win_col.non_aggr_results_;
+    for (int i = 0; i < brs.size_; i++) {
+      char *res = non_aggr_res_ptr + i * non_aggr_row_size;
+      *reinterpret_cast<int32_t *>(res) = 0;
+    }
+    // step 2. loop through each columns, if it's equal to the last row and the
+    // result is 0, then copy the last result; if it's not equal, replace with
+    // the current row number
+    for (int i = 0; OB_SUCC(ret) && i < win_col.wf_info_.sort_collations_.count(); i++) {
+      ObExpr *expr = win_col.wf_info_.sort_exprs_.at(i);
+      if (expr->eval_vector(eval_ctx, brs) != OB_SUCCESS) {
+        LOG_WARN("eval sort expr failed", K(ret), K(i), K(*expr));
+      }
+      sql::NullSafeRowCmpFunc cmp_fn =
+          win_col.wf_info_.sort_cmp_funcs_.at(i).row_cmp_func_;
+      VectorFormat fmt = expr->get_format(eval_ctx);
+      switch (fmt) {
+      case VEC_FIXED: {
+        VecValueTypeClass vec_tc = expr->get_vec_value_tc();
+#define MAP_FIXED_COL_CASE(vec_tc)                                             \
+  case (vec_tc): {                                                             \
+    if (brs.all_rows_active_) {                                                \
+      ret =                                                                    \
+          update_relative_rank_of_column<ObFixedLengthFormat<RTCType<vec_tc>>, \
+                                         false>(eval_ctx, *expr, brs,          \
+                                                non_aggr_res_ptr,              \
+                                                non_aggr_row_size, cmp_fn);    \
+    } else {                                                                   \
+      ret =                                                                    \
+          update_relative_rank_of_column<ObFixedLengthFormat<RTCType<vec_tc>>, \
+                                         true>(eval_ctx, *expr, brs,           \
+                                               non_aggr_res_ptr,               \
+                                               non_aggr_row_size, cmp_fn);     \
+    }                                                                          \
+  } break
+
+        switch (vec_tc) {
+          LST_DO_CODE(MAP_FIXED_COL_CASE, FIXED_VEC_LIST);
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected vector type class", K(ret), K(vec_tc));
+        }
+        }
+#undef MAP_FIXED_COL_CASE
+        break;
+      } // case VEC_FIXED
+      case VEC_UNIFORM: {
+        if (brs.all_rows_active_) {
+          ret = update_relative_rank_of_column<ObUniformFormat<false>, false>(
+              eval_ctx, *expr, brs, non_aggr_res_ptr, non_aggr_row_size,
+              cmp_fn);
+        } else {
+          ret = update_relative_rank_of_column<ObUniformFormat<false>, true>(
+              eval_ctx, *expr, brs, non_aggr_res_ptr, non_aggr_row_size,
+              cmp_fn);
+        }
+        break;
+      }
+      case VEC_UNIFORM_CONST: {
+        if (brs.all_rows_active_) {
+          ret = update_relative_rank_of_column<ObUniformFormat<true>, false>(
+              eval_ctx, *expr, brs, non_aggr_res_ptr, non_aggr_row_size,
+              cmp_fn);
+        } else {
+          ret = update_relative_rank_of_column<ObUniformFormat<true>, true>(
+              eval_ctx, *expr, brs, non_aggr_res_ptr, non_aggr_row_size,
+              cmp_fn);
+        }
+        break;
+      }
+      case VEC_DISCRETE: {
+        if (brs.all_rows_active_) {
+          ret = update_relative_rank_of_column<ObDiscreteFormat, false>(
+              eval_ctx, *expr, brs, non_aggr_res_ptr, non_aggr_row_size,
+              cmp_fn);
+        } else {
+          ret = update_relative_rank_of_column<ObDiscreteFormat, true>(
+              eval_ctx, *expr, brs, non_aggr_res_ptr, non_aggr_row_size,
+              cmp_fn);
+        }
+        break;
+      }
+      case VEC_CONTINUOUS: {
+        if (brs.all_rows_active_) {
+          ret = update_relative_rank_of_column<ObContinuousFormat, false>(
+              eval_ctx, *expr, brs, non_aggr_res_ptr, non_aggr_row_size,
+              cmp_fn);
+        } else {
+          ret = update_relative_rank_of_column<ObContinuousFormat, true>(
+              eval_ctx, *expr, brs, non_aggr_res_ptr, non_aggr_row_size,
+              cmp_fn);
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected format", K(ret), K(fmt));
+      }
+      }
+    } // for i in sort_collations
+  }
+  return ret;
+}
+} // namespace rank_like_expr
+
+template<ObItemType rank_op>
+int RankLikeExpr<rank_op>::process_next_row_streaming(StreamingWinExprEvalCtx &ctx,
+  const int64_t prev_row_idx, const int64_t row_idx, char *res) {
+  int ret = OB_SUCCESS;
+  // if there's no sort key, always return 1
+  if (ctx.win_col_.wf_info_.sort_collations_.count() == 0) {
+    if (OB_FAIL(write_nmb(1, res))) {
+      LOG_WARN("write nmb failed", K(ret));
+    }
+  } else {
+    int32_t *res32 = reinterpret_cast<int32_t *>(res);
+    int32_t relative_rank = *res32;
+    int cmp_ret = 0;
+    bool equal_with_prev_row = (prev_row_idx == -1) ? first_row_equal_to_last_row_in_previous_batch_ : (relative_rank == relative_rank_of_prev_row_);
+    if (equal_with_prev_row) {
+      num_rows_equal_with_prev_row_ += 1;
+    } else {
+      if (rank_op == T_WIN_FUN_RANK) {
+        rank_of_prev_row_ += num_rows_equal_with_prev_row_;
+      } else if (rank_op == T_WIN_FUN_DENSE_RANK) {
+        rank_of_prev_row_ += 1;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected rank op", K(ret), K(rank_op));
+      }
+      relative_rank_of_prev_row_ = relative_rank;
+      num_rows_equal_with_prev_row_ = 1;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(write_nmb(rank_of_prev_row_, res))) {
+        LOG_WARN("write nmb failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int RowNumber::process_window(WinExprEvalCtx &, const Frame &frame, const int64_t row_idx,
+                              char *res, bool &is_null)
+{
+  int ret = OB_SUCCESS;
+  row_nmb_ = row_idx - frame.head_ + 1;
+  if (OB_FAIL(write_nmb(row_nmb_, res))) {
+    LOG_WARN("write row nmb failed", K(ret));
+  }
+  return ret;
+}
+int RowNumber::process_next_row_streaming(StreamingWinExprEvalCtx &,
+                                          const int64_t,
+                                          const int64_t,
+                                          char *res) {
+  int ret = OB_SUCCESS;
+  row_nmb_ += 1;
+  if (OB_FAIL(write_nmb(row_nmb_, res))) {
+    LOG_WARN("write row nmb failed", K(ret));
+  }
+  return ret;
+}
+
+
 int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int64_t row_idx,
                              char *agg_row, bool &is_null)
 {
@@ -858,7 +1536,6 @@ int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
   ObBatchRows tmp_brs;
   aggregate::RemovalInfo &removal_info = ctx.win_col_.agg_ctx_->removal_info_;
   LOG_DEBUG("aggregate expr process window", K(frame), K(removal_info), K(row_start));
-  char *res_buf = nullptr;
   int total_calc_size = 0, pushdown_skip_cnt = 0;
   while (OB_SUCC(ret) && total_size > 0) {
     op.clear_evaluated_flag();
@@ -891,6 +1568,7 @@ int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
       total_size -= batch_size;
       row_start += batch_size;
     }
+    char *res_buf = nullptr;
     // if result is variable-length type, address stored in agg_row maybe invalid after `attach_rows`
     // thus we copy results into res_buf and store corresponding address instread.
     bool is_res_not_null = ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(agg_row).at(0);
@@ -901,10 +1579,11 @@ int AggrExpr::process_window(WinExprEvalCtx &ctx, const Frame &frame, const int6
       int32_t val_len = ctx.win_col_.agg_ctx_->row_meta().get_cell_len(0, agg_row);
       const char *val = reinterpret_cast<const char *>(addr_val);
       if (val != res_buf && val_len > 0) { // new value
-        res_buf = ctx.reserved_buf(val_len);
+        res_buf = ctx.reserved_per_batch_buf(val_len);
         if (OB_ISNULL(res_buf)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret));
+          log_allocator_stat(ctx, ret);
         } else {
           MEMCPY(res_buf, val, val_len);
           addr_val = reinterpret_cast<int64_t>(res_buf);
@@ -1051,7 +1730,7 @@ int AggrExpr::accum_process_window(WinExprEvalCtx &ctx, const Frame &cur_frame,
     LOG_WARN("unexpected idx", K(ret), K(cur_idx));
   } else {
     char *prev_row = (cur_idx == 0 ? last_aggr_row_ : ctx.win_col_.aggr_rows_[cur_idx - 1]);
-    if (OB_FAIL(copy_aggr_row(ctx, prev_row, agg_row))) {
+    if (OB_FAIL(AggrExpr::copy_aggr_row(ctx, prev_row, agg_row))) {
       LOG_WARN("copy aggr row failed", K(ret));
     }
   }
@@ -1079,6 +1758,63 @@ int AggrExpr::accum_process_window(WinExprEvalCtx &ctx, const Frame &cur_frame,
   return ret;
 }
 
+int AggrExpr::streaming_on_batch_start(StreamingWinExprEvalCtx &eval_ctx) {
+  int ret = OB_SUCCESS;
+  // evaluate the aggregate parameters for the current batch
+  if (OB_FAIL(aggr_processor_->eval_aggr_param_batch(eval_ctx.input_brs_))) {
+    LOG_WARN("eval aggregate params failed", K(ret));
+  }
+  return ret;
+}
+
+// always use per-partition allocator
+// copy last aggr row to allocated_buf_
+template<typename CTX>
+int AggrExpr::on_batch_end(CTX &ctx, int64_t prev_calc_idx) {
+  int ret = OB_SUCCESS;
+  int32_t row_size = ctx.win_col_.agg_ctx_->row_meta().row_size_;
+  void *tmp_buf = nullptr;
+  if (last_aggr_row_ != nullptr) {
+    ret = copy_aggr_row<CTX, false>(ctx, ctx.win_col_.aggr_rows_[prev_calc_idx], last_aggr_row_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("copy aggr row failed", K(ret));
+    }
+  } else {
+    if (OB_ISNULL(tmp_buf = ctx.reserved_per_partition_buf(row_size))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+      log_allocator_stat(ctx, ret);
+    } else {
+      ret = copy_aggr_row<CTX, false>(ctx, ctx.win_col_.aggr_rows_[prev_calc_idx], (char *)tmp_buf);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("copy aggr row failed", K(ret));
+      } else {
+        last_aggr_row_ = (char *)tmp_buf;
+      }
+    }
+  }
+  return ret;
+}
+
+int AggrExpr::process_next_row_streaming(StreamingWinExprEvalCtx &ctx,
+                                         const int64_t prev_row_idx, const int64_t row_idx, char *res) {
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
+  char *prev_row = (prev_row_idx == -1) ? last_aggr_row_ : (ctx.win_col_.aggr_rows_[prev_row_idx]);
+  if (prev_row != nullptr && OB_FAIL(copy_aggr_row(ctx, prev_row, res))) {
+    LOG_WARN("copy aggr row failed", K(ret));
+  } else if (OB_FAIL(aggr_processor_->add_batch_rows(
+    0, 1, res, ctx.input_brs_, (uint16_t)row_idx, row_idx + 1))) {
+    LOG_WARN("add batch rows failed", K(ret));
+  } else {
+    // count()/sum()
+    if (aggregate::agg_res_not_null(ctx.win_col_.wf_info_.func_type_)) {
+      ctx.win_col_.agg_ctx_->row_meta().locate_notnulls_bitmap(res).set(0);
+    }
+  }
+  return ret;
+}
+
 void AggrExpr::destroy()
 {
   if (aggr_processor_ != nullptr) {
@@ -1087,17 +1823,18 @@ void AggrExpr::destroy()
   }
 }
 
-int AggrExpr::collect_part_results(WinExprEvalCtx &ctx, const int64_t row_start,
-                                   const int64_t row_end, const ObBitVector &skip)
+int AggrExpr::collect_part_results(sql::WinFuncColExpr& win_col, const int64_t row_start,
+                                   const int64_t row_end, const ObBitVector &skip, bool set_evaluated_projected)
 {
   int ret = OB_SUCCESS;
   aggregate::IAggregate *iagg = aggr_processor_->get_aggregates().at(0);
-  aggregate::RuntimeContext &agg_ctx = *ctx.win_col_.agg_ctx_;
+  aggregate::RuntimeContext &agg_ctx = *win_col.agg_ctx_;
   int64_t batch_size = row_end - row_start;
   int32_t output_size = 0;
-  if (OB_FAIL(iagg->collect_batch_group_results(agg_ctx, 0, 0, 0, batch_size, output_size, &skip))) {
+  bool need_init_vector = row_start == 0;
+  if (OB_FAIL(iagg->collect_batch_group_results(agg_ctx, 0, row_start, row_start, batch_size, output_size, &skip, need_init_vector))) {
     LOG_WARN("collect batch group results failed", K(ret));
-  } else {
+  } else if (set_evaluated_projected) {
     agg_ctx.aggr_infos_.at(0).expr_->set_evaluated_projected(agg_ctx.eval_ctx_);
   }
   return ret;
@@ -2291,7 +3028,6 @@ int WinExprWrapper<Derived>::update_frame(WinExprEvalCtx &ctx, const Frame &prev
     Frame::prune_frame(part_frame, new_frame);
     if (static_cast<Derived *>(this)->is_aggregate_expr()) {
       bool can_inv = (ctx.win_col_.wf_info_.remove_type_ != common::REMOVE_INVALID);
-      aggregate::Processor *processor  = reinterpret_cast<AggrExpr *>(this)->aggr_processor_;
       if (prev_frame.is_valid()
           && !Frame::need_restart_aggr(can_inv, prev_frame, new_frame,
                                        ctx.win_col_.agg_ctx_->removal_info_,
@@ -2319,7 +3055,8 @@ inline constexpr bool is_var_len_agg_cell(VecValueTypeClass vec_tc)
          || vec_tc == VEC_TC_EXTEND;
 }
 
-static int arg_minmax_copy_aggr_row(WinExprEvalCtx &ctx, const char *src_row, char *dst_row)
+template<typename CTX, bool use_per_batch_allocator = false>
+static int arg_minmax_copy_aggr_row(CTX& ctx, const char *src_row, char *dst_row)
 {
   int ret = OB_SUCCESS;
   // get cmp col is var len
@@ -2359,10 +3096,16 @@ static int arg_minmax_copy_aggr_row(WinExprEvalCtx &ctx, const char *src_row, ch
   if (OB_LIKELY(is_not_null && cell_len > 0)) {
     // need alloc output_cap, not cell_len, because cell_len here is the length of the payload,
     // while output_cap is the capacity of the output buffer
-    void *tmp_buf = ctx.reserved_buf(output_cap);
+    void *tmp_buf = nullptr;
+    if constexpr (use_per_batch_allocator) {
+      tmp_buf = ctx.reserved_per_batch_buf(output_cap);
+    } else {
+      tmp_buf = ctx.reserved_per_partition_buf(output_cap);
+    }
     if (OB_ISNULL(tmp_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
+      log_allocator_stat(ctx, ret);
     } else {
       MEMCPY(tmp_buf, payload, cell_len);
       payload_addr = reinterpret_cast<int64_t>(tmp_buf);
@@ -2373,15 +3116,16 @@ static int arg_minmax_copy_aggr_row(WinExprEvalCtx &ctx, const char *src_row, ch
   return ret;
 }
 
-template<typename Derived>
-int WinExprWrapper<Derived>::copy_aggr_row(WinExprEvalCtx &ctx, const char *src_row, char *dst_row)
+template<typename CTX, bool use_per_batch_allocator>
+int AggrExpr::copy_aggr_row(CTX &ctx, const char *src_row, char *dst_row)
 {
   int ret = OB_SUCCESS;
   aggregate::RuntimeContext *agg_ctx = ctx.win_col_.agg_ctx_;
   MEMCPY(dst_row, src_row, ctx.win_col_.agg_ctx_->row_meta().row_size_);
   if (T_FUN_ARG_MAX == ctx.win_col_.wf_info_.func_type_ ||
       T_FUN_ARG_MIN == ctx.win_col_.wf_info_.func_type_) {
-    if (OB_FAIL(arg_minmax_copy_aggr_row(ctx, src_row, dst_row))) {
+    ret = arg_minmax_copy_aggr_row<CTX, use_per_batch_allocator>(ctx, src_row, dst_row);
+    if (OB_FAIL(ret)) {
       LOG_WARN("argmin/max copy aggr row failed", K(ret));
     }
   } else if (!agg_ctx->row_meta().is_var_len(0)) {// do nothing
@@ -2393,10 +3137,16 @@ int WinExprWrapper<Derived>::copy_aggr_row(WinExprEvalCtx &ctx, const char *src_
     bool is_not_null = agg_ctx->row_meta().locate_notnulls_bitmap(dst_row).at(0);
 
     if (OB_LIKELY(is_not_null && cell_len > 0)) {
-      void *tmp_buf = ctx.reserved_buf(cell_len);
+      void *tmp_buf = nullptr;
+      if constexpr (use_per_batch_allocator) {
+        tmp_buf = ctx.reserved_per_batch_buf(cell_len);
+      } else {
+        tmp_buf = ctx.reserved_per_partition_buf(cell_len);
+      }
       if (OB_ISNULL(tmp_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
+        log_allocator_stat(ctx, ret);
       } else {
         MEMCPY(tmp_buf, payload, cell_len);
         payload_addr = reinterpret_cast<int64_t>(tmp_buf);
@@ -2423,6 +3173,7 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
     } else if (OB_UNLIKELY(skip.accumulate_bit_cnt(row_end - row_start) == row_end - row_start)) {
       // do nothing
     } else {
+      ctx.reset_per_batch_allocator();
       Frame prev_frame, cur_frame;
       bool whole_frame = true, valid_frame = true;
       ObEvalCtx::BatchInfoScopeGuard guard(ctx.win_col_.op_.get_eval_ctx());
@@ -2441,14 +3192,7 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
         int prev_calc_idx = -1;
 
         // Only Group Concat without distinct and order by can avoid use the whole frame
-        bool group_concat_whole_frame = false;
-        if ((ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_GROUP_CONCAT
-                || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_CK_GROUPCONCAT)
-            && (ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_distinct_
-                || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_order_by_)) {
-          group_concat_whole_frame = true;
-        }
-
+        bool group_concat_whole_frame = ctx.win_col_.group_concat_whole_frame();
         for (int64_t row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
           int64_t batch_idx = row_idx - row_start;
           if (skip.at(batch_idx)) {
@@ -2469,7 +3213,7 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
             // just copy aggr row
             char *copied_row = (prev_calc_idx == -1 ? agg_expr->last_aggr_row_ :
                                                       ctx.win_col_.aggr_rows_[prev_calc_idx]);
-            if (OB_FAIL(copy_aggr_row(ctx, copied_row, agg_row))) {
+            if (OB_FAIL(AggrExpr::copy_aggr_row(ctx, copied_row, agg_row))) {
               LOG_WARN("copy aggr row failed", K(ret));
             }
           } else if (whole_frame || group_concat_whole_frame) {
@@ -2492,30 +3236,16 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
           if (row_end < part_end) {
             agg_expr->last_removal_info_ = ctx.win_col_.agg_ctx_->removal_info_;
           }
-          int32_t row_size = ctx.win_col_.agg_ctx_->row_meta().row_size_;
-          void *tmp_buf = nullptr;
-          if (agg_expr->last_aggr_row_ != nullptr) {
-            if (OB_FAIL(copy_aggr_row(ctx, ctx.win_col_.aggr_rows_[prev_calc_idx], agg_expr->last_aggr_row_))) {
-              LOG_WARN("copy aggr row failed", K(ret));
-            }
-          } else if (OB_ISNULL(tmp_buf = ctx.reserved_buf(row_size))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("allocate memory failed", K(ret));
-          } else if (OB_FAIL(copy_aggr_row(ctx, ctx.win_col_.aggr_rows_[prev_calc_idx], (char *)tmp_buf))) {
-            LOG_WARN("copy aggr row failed", K(ret));
-          } else {
-            agg_expr->last_aggr_row_ = (char *)tmp_buf;
+          // use per-partition allocator
+          if (OB_FAIL(agg_expr->on_batch_end(ctx, prev_calc_idx))) {
+            LOG_WARN("on batch end failed", K(ret));
           }
         }
       } else {
         void *extra = nullptr;
         int32_t non_aggr_row_size = ctx.win_col_.non_aggr_reserved_row_size();
         bool is_null = false;
-        if (OB_FAIL(static_cast<Derived *>(this)->generate_extra())) {
-          LOG_WARN("generate extra data failed", K(ret));
-        } else {
-          MEMSET(ctx.win_col_.non_aggr_results_, 0, non_aggr_row_size * (row_end - row_start));
-        }
+        MEMSET(ctx.win_col_.non_aggr_results_, 0, non_aggr_row_size * (row_end - row_start));
         for (int64_t row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
           int64_t batch_idx = row_idx - row_start;
           if (skip.at(batch_idx)) {
@@ -2544,12 +3274,82 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
         ObExpr *wf_expr = ctx.win_col_.wf_info_.expr_;
         ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(static_cast<Derived *>(this)->collect_part_results(ctx, row_start,
-                                                                              row_end, skip))) {
+        } else if (OB_FAIL(static_cast<Derived *>(this)->collect_part_results(ctx.win_col_, 0, row_end - row_start,
+                                                                              skip, true))) {
           LOG_WARN("collect partition results failed", K(ret));
         }
       }
     }
+  return ret;
+}
+
+namespace {
+template <bool not_all_rows_active, typename Derived>
+OB_INLINE int
+compute_single_wf_values(winfunc::StreamingWinExprEvalCtx &ctx,
+                         Derived *wf_expr,
+                         const int64_t prev_start_idx,
+                         const int64_t start_idx,
+                         const int64_t end_idx, const ObBatchRows &child_brs) {
+  int ret = OB_SUCCESS;
+  WinFuncColExpr& win_col = ctx.win_col_;
+  ObEvalCtx::BatchInfoScopeGuard guard(ctx.eval_ctx_);
+  guard.set_batch_size(child_brs.size_);
+  if (wf_expr->is_aggregate_expr()) {
+    AggrExpr *agg_expr = reinterpret_cast<AggrExpr *>(wf_expr);
+    int64_t prev_row_idx = prev_start_idx;
+    for (int i = start_idx; OB_SUCC(ret) && i < end_idx; i++) {
+      if constexpr (not_all_rows_active) {
+        if (child_brs.skip_->at(i)) {
+          continue;
+        }
+      }
+      guard.set_batch_idx(i);
+      aggregate::AggrRowPtr agg_row = ctx.win_col_.aggr_rows_[i];
+      if (OB_FAIL(agg_expr->process_next_row_streaming(ctx, prev_row_idx, i, agg_row))) {
+        LOG_WARN("compute wf value failed", K(ret), K(i));
+      }
+      prev_row_idx = i;
+    }
+  } else {
+    int32_t non_aggr_row_size = win_col.non_aggr_reserved_row_size();
+    char *non_aggr_res_ptr = win_col.non_aggr_results_ + non_aggr_row_size * start_idx;
+    int64_t prev_row_idx = prev_start_idx;
+    for (int i = start_idx; OB_SUCC(ret) && i < end_idx; i++, non_aggr_res_ptr += non_aggr_row_size) {
+      if constexpr (not_all_rows_active) {
+        if (child_brs.skip_->at(i)) {
+          continue;
+        }
+      }
+      guard.set_batch_idx(i);
+      if (OB_FAIL(wf_expr->process_next_row_streaming(ctx, prev_row_idx, i, non_aggr_res_ptr))) {
+        LOG_WARN("compute wf value failed", K(ret), K(i));
+      }
+      prev_row_idx = i;
+    }
+  }
+  return ret;
+}
+} // namespace
+
+template <typename Derived>
+int WinExprWrapper<Derived>::process_rows_streaming(
+    StreamingWinExprEvalCtx &eval_ctx,
+    const int64_t prev_row_idx,
+    const int64_t start_idx, const int64_t end_idx,
+    const ObBatchRows &child_brs) {
+  int ret = OB_SUCCESS;
+  if (child_brs.all_rows_active_) {
+    // more likely to be all rows active
+    ret = compute_single_wf_values<false, Derived>(
+      eval_ctx, static_cast<Derived *>(this), prev_row_idx, start_idx, end_idx, child_brs);
+  } else {
+    ret = compute_single_wf_values<true, Derived>(
+      eval_ctx, static_cast<Derived *>(this), prev_row_idx, start_idx, end_idx, child_brs);
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("compute wf values failed", K(ret));
+  }
   return ret;
 }
 
@@ -2572,47 +3372,6 @@ ObObjType RankLikeExpr_process_window_helper(WinExprEvalCtx &ctx)
 {
   return ctx.win_col_.wf_info_.expr_->datum_meta_.type_;
 }
-
-template <typename ColumnFmt>
-int AggrExpr::set_payload(WinExprEvalCtx &ctx, ColumnFmt *columns, const int64_t idx,
-                          const char *payload, int32_t len)
-{
-  int ret = OB_SUCCESS;
-  ObExpr *res_expr = ctx.win_col_.wf_info_.expr_;
-  VecValueTypeClass vec_tc = res_expr->get_vec_value_tc();
-  ObEvalCtx &eval_ctx = ctx.win_col_.op_.get_eval_ctx();
-  const ObWindowFunctionVecSpec &spec = static_cast<const ObWindowFunctionVecSpec &>(ctx.win_col_.op_.get_spec());
-  // guard used for `get_str_res_mem`
-  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx);
-  guard.set_batch_idx(idx);
-  // count function in consolidator is T_FUN_COUNT, not T_FUN_COUNT_SUM!!!
-  bool is_count_sum = (T_FUN_COUNT == ctx.win_col_.wf_info_.func_type_ && spec.is_consolidator());
-  if (T_FUN_COUNT != ctx.win_col_.wf_info_.func_type_ || is_count_sum || lib::is_mysql_mode()) {
-    if (is_fixed_length_vec(vec_tc)) {
-      columns->set_payload(idx, payload, len);
-    } else if (vec_tc == VEC_TC_NUMBER) {
-      columns->set_number(idx, *reinterpret_cast<const number::ObCompactNumber *>(payload));
-    } else {
-      char *res_buf = res_expr->get_str_res_mem(eval_ctx, len);
-      if (OB_ISNULL(res_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory failed", K(ret));
-      } else {
-        MEMCPY(res_buf, payload, len);
-        columns->set_payload_shallow(idx, res_buf, len);
-      }
-    }
-  } else {
-    number::ObNumber res_nmb;
-    if (OB_FAIL(res_nmb.from(*reinterpret_cast<const int64_t *>(payload), ctx.allocator_))) {
-      LOG_WARN("cast to number failed", K(ret));
-    } else {
-      columns->set_number(idx, res_nmb);
-    }
-  }
-  return ret;
-}
-
 } // end winfunc
 } // end sql
 } // end oceanbase

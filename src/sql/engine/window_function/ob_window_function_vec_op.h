@@ -21,16 +21,20 @@
 #include "sql/engine/window_function/ob_window_function_op.h"
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
 #include "sql/engine/basic/ob_hp_infras_vec_mgr.h"
+#include "sql/engine/window_function/streaming_window_processor.h"
+#include "sql/engine/window_function/partition_by_comparator.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-namespace winfunc
-{
-  template<typename T>
-  class WinExprWrapper;
-} // end winfunc
+
+namespace winfunc {
+template <typename T> class WinExprWrapper;
+struct WinFuncPartitionByInfo;
+class PartitionByComparator;
+
+} // namespace winfunc
 
 class ObWindowFunctionVecOp;
 class SPWinFuncPXWholeMsg;
@@ -45,7 +49,7 @@ public:
   static const int64_t RD_MIN_BATCH_SIZE = 4;
 public:
   ObWindowFunctionVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type) :
-    ObWindowFunctionSpec(alloc, type)
+    ObWindowFunctionSpec(alloc, type), use_streaming_(false)
   {}
 
   virtual int register_to_datahub(ObExecContext &ctx) const override;
@@ -83,17 +87,20 @@ private:
                          const WinFuncInfo &wf_info, LastCompactRow &first_row_patch,
                          LastCompactRow &last_row_patch) const;
   DISALLOW_COPY_AND_ASSIGN(ObWindowFunctionVecSpec);
+  public:
+    bool use_streaming_;
 };
 
 class WinFuncColExpr : public common::ObDLinkBase<WinFuncColExpr>
 {
 public:
-  WinFuncColExpr(WinFuncInfo &wf_info, ObWindowFunctionVecOp &op, const int64_t wf_idx) :
+  WinFuncColExpr(WinFuncInfo &wf_info, ObWindowFunctionVecOp &op, const int64_t wf_idx, const int64_t tenant_id) :
     wf_info_(wf_info), op_(op), wf_idx_(wf_idx), part_first_row_idx_(-1), wf_expr_(nullptr),
-    res_(nullptr), pby_row_mapped_idxes_(nullptr), reordered_pby_row_idx_(nullptr), wf_res_row_meta_(),
+    res_(nullptr), pby_info_(), wf_res_row_meta_(),
     res_rows_(nullptr), agg_ctx_(nullptr), aggr_rows_(nullptr), non_aggr_results_(nullptr),
-    null_nonaggr_results_(nullptr)
-  {}
+    null_nonaggr_results_(nullptr),
+    per_partition_allocator_(ObModIds::OB_SQL_WINDOW_LOCAL, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id,
+               ObCtxIds::WORK_AREA) {}
   void destroy() { reset(); }
   void reset();
   void reset_for_scan();
@@ -103,18 +110,25 @@ public:
   int init_non_aggregate_ctx();
   int init_res_rows(const int64_t tenant_id);
   int32_t non_aggr_reserved_row_size() const;
-  // need reset agg_ctx.allocator_
-  int reset_for_partition(const int64_t batch_size, const ObBitVector &skip);
+
+  int init_streaming_function();
+  bool group_concat_whole_frame() const;
+
+  // need reset last_aggr_row_ & per_partition_allocator_
+  int on_partition_start();
+
+  // need reset agg_ctx.
+  int on_batch_start(const int64_t batch_size, const ObBitVector &skip);
   WinFuncInfo &wf_info_;
   ObWindowFunctionVecOp &op_;
   int64_t wf_idx_;
+  // record the first row index of the partition in input store
   int64_t part_first_row_idx_;
   // LastCompactRow pby_row_;
   winfunc::IWinExpr *wf_expr_;
   // results of window function
   winfunc::RowStores *res_;
-  int32_t *pby_row_mapped_idxes_;
-  int32_t *reordered_pby_row_idx_;
+  winfunc::WinFuncPartitionByInfo pby_info_;
   RowMeta wf_res_row_meta_;
   const ObCompactRow **res_rows_; // tmp results rows pointers
   // only valid for aggregate functions
@@ -123,8 +137,11 @@ public:
   // only valid for non-aggregate functions
   char *non_aggr_results_;
   ObBitVector *null_nonaggr_results_;
-
   TO_STRING_KV(K_(wf_info), K_(wf_idx), K_(part_first_row_idx));
+
+  // used for tmp memory allocating during partition process.
+  // reset in on_partition_start()
+  common::ObArenaAllocator per_partition_allocator_;
 };
 
 // copy from ObWindowFunctionOpInput
@@ -230,10 +247,7 @@ public:
       participator_whole_msg_array_(),
       pby_hash_values_sets_(),
       input_row_meta_(),
-      max_pby_col_cnt_(0),
-      pby_row_mapped_idx_arr_(nullptr),
-      last_row_idx_arr_(nullptr),
-      all_part_exprs_(),
+      pby_comparator_(),
       batch_ctx_(),
       sp_merged_row_(nullptr),
       all_wf_res_row_meta_(nullptr),
@@ -243,7 +257,9 @@ public:
       global_mem_limit_version_(0),
       amm_periodic_cnt_(0),
       store_it_age_(),
-      hp_infras_mgr_(MTL_ID())
+      hp_infras_mgr_(MTL_ID()),
+      streaming_window_mode_(StreamingWindowMode::DISABLED),
+      streaming_window_processor_(nullptr)
   {}
 
   virtual ~ObWindowFunctionVecOp() { destroy(); }
@@ -266,18 +282,9 @@ public:
 
   static bool all_supported_winfuncs(const ObIArray<ObWinFunRawExpr *> &win_exprs);
 private:
-  struct cell_info
-  {
-    bool is_null_;
-    int32_t len_;
-    const char *payload_;
-    cell_info(bool is_null, int32_t len, const char *payload) :
-      is_null_(is_null), len_(len), payload_(payload)
-    {}
-    cell_info(): is_null_(true), len_(0), payload_(nullptr) {}
-    TO_STRING_KV(K_(is_null), K_(len), KP_(payload));
-  };
   int init();
+
+  int init_streaming_window_processor();
 
   int create_stores(const int64_t tenant_id);
 
@@ -296,16 +303,6 @@ private:
 
   int get_next_batch_from_child(int64_t batch_size, const ObBatchRows *&child_brs);
 
-  int mapping_pby_row_to_idx_arr(const ObBatchRows &child_brs, const ObCompactRow *last_row);
-  template <typename ColumnFormat>
-  int mapping_pby_col_to_idx_arr(int32_t col_id, const ObExpr &part_expr, const ObBatchRows &brs,
-                                 const cell_info *last_part_res);
-  int eval_prev_part_exprs(const ObCompactRow *last_row, ObIAllocator &alloc,
-                           const ObExprPtrIArray &part_exprs,
-                           common::ObIArray<cell_info> &last_part_infos);
-
-  OB_INLINE int save_pby_row_for_wf(WinFuncColExpr *end_wf, const int64_t batch_idx);
-
   int detect_and_report_aggr_status(const ObBatchRows &child_brs, const int64_t start_idx,
                                     const int64_t end_idx);
 
@@ -313,7 +310,12 @@ private:
 
   int partial_next_batch(const int64_t max_row_cnt);
 
-  int do_partial_next_batch(const int64_t max_row_cnt, bool &do_output);
+  int do_partial_streaming_next_batch(const int64_t max_row_cnt);
+
+  // consume remaining rows in streaming window processor that belong to the second partition and so forth
+  int consume_remaining_rows_in_streaming_window_processor(const ObBatchRows* child_brs, int64_t num_rows_in_first_partition);
+
+  int do_partial_non_streaming_next_batch(const int64_t max_row_cnt, bool &do_output);
 
   int coordinate();
 
@@ -336,10 +338,6 @@ private:
   int process_child_batch(const int64_t batch_idx, const ObBatchRows *kchild_brs,
                           int64_t &check_times);
 
-  int check_same_partition(WinFuncColExpr &wf_col, bool &same);
-
-  int find_same_partition_of_wf(WinFuncColExpr *&end_wf);
-
   int detect_nullres_or_pushdown_rows(WinFuncColExpr &wf, ObBitVector &nullres_skip,
                                       ObBitVector &pushdown_skip, ObBitVector &wf_skip);
 
@@ -351,8 +349,6 @@ private:
                          WinFuncColExpr &wf_col, int64_t &outputed_cnt);
 
   int attach_rows_to_output(const ObCompactRow **rows, int64_t row_cnt);
-
-  int attach_row_to_output(const ObCompactRow *row);
 
   int output_wf_rows(WinFuncColExpr &wf, const ObCompactRow **stored_rows);
 
@@ -529,11 +525,9 @@ private:
 
   // row meta for input row
   RowMeta input_row_meta_;
+
   // used for mapping pby rows to idx array
-  int64_t max_pby_col_cnt_;
-  int32_t *pby_row_mapped_idx_arr_;
-  int32_t *last_row_idx_arr_;
-  ObSEArray<ObExpr *, 8> all_part_exprs_;
+  winfunc::PartitionByComparator pby_comparator_;
 
   OpBatchCtx batch_ctx_;
 
@@ -553,6 +547,16 @@ private:
 
   ObTempBlockStore::IterationAge store_it_age_;
   ObHashPartInfrasVecMgr hp_infras_mgr_;
+
+  enum class StreamingWindowMode {
+    DISABLED,
+    // if it's range distribution, we will use streaming window processor for the second partition and so forth
+    // so during the first partition, we will use non-streaming window processor, and set mode to ENABLED
+    ENABLED,
+    IN_USE,
+  };
+  StreamingWindowMode streaming_window_mode_;
+  StreamingWindowProcessor* streaming_window_processor_;
 };
 
 } // end sql

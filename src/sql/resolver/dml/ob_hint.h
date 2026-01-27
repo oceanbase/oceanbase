@@ -242,6 +242,7 @@ struct ObOptParamHint
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
     DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
+    DEF(ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS,)  \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
     DEF(ENABLE_MERGE_INTO,)                         \
     DEF(JOIN_ORDER_ENUM_THRESHOLD,)                 \
@@ -270,6 +271,7 @@ struct ObOptParamHint
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   int get_disable_op_rich_format_flags(int64_t &disable_op_flags) const;
+  int enable_window_function_streaming_process_param(bool &enabled, bool &has_opt_param) const;
 
   template<typename T>
   using GET_PARAM_FUNC = int (ObOptParamHint::*)(const OptParamType, T&) const;
