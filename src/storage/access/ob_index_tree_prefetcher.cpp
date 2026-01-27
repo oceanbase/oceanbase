@@ -1343,6 +1343,9 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
           ObSampleFilterExecutor *sample_executor = sstable_->is_major_sstable() ?
               static_cast<ObSampleFilterExecutor *>(access_ctx_->get_sample_executor()) : nullptr;
           bool can_agg = false;
+          const bool use_vectorize = iter_param_->vectorized_enabled_ &&
+                                     OB_NOT_NULL(access_ctx_->block_row_store_) &&
+                                     access_ctx_->block_row_store_->is_empty();
           if (access_ctx_->micro_block_handle_mgr_.reach_hold_limit()
               && micro_data_prefetch_idx_ > cur_micro_data_fetch_idx_ + 1) {
             LOG_DEBUG("micro block handle mgr has reach hold limit, stop prefetch", K(prefetch_depth),
@@ -1367,7 +1370,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
           } else if (nullptr != sstable_index_filter
                       && can_index_filter_skip(block_info, sample_executor)
                       && OB_FAIL(sstable_index_filter->check_range(iter_param_->read_info_,
-                                  block_info, *(access_ctx_->allocator_), iter_param_->vectorized_enabled_))) {
+                                  block_info, *(access_ctx_->allocator_), use_vectorize))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
           } else if (block_info.can_skip_fetch()) {
             update_table_store_stat(access_ctx_->table_store_stat_, block_info);
@@ -1902,6 +1905,9 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
       ObSampleFilterExecutor *sample_executor = prefetcher.sstable_->is_major_sstable() ?
           static_cast<ObSampleFilterExecutor *>(prefetcher.access_ctx_->get_sample_executor()) : nullptr;
       bool can_agg = false;
+      const bool use_vectorize = prefetcher.iter_param_->vectorized_enabled_ &&
+                                 OB_NOT_NULL(prefetcher.access_ctx_->block_row_store_) &&
+                                 prefetcher.access_ctx_->block_row_store_->is_empty();
       if (OB_FAIL(parent.get_next_index_row(index_info, prefetcher))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next", K(ret), KPC(this));
@@ -1919,7 +1925,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
                   && prefetcher.can_index_filter_skip(index_info, sample_executor)
                   && OB_FAIL(sstable_index_filter->check_range(prefetcher.iter_param_->read_info_, index_info,
                                                                 *(prefetcher.access_ctx_->allocator_),
-                                                                prefetcher.iter_param_->vectorized_enabled_))) {
+                                                                use_vectorize))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
       } else if (index_info.can_skip_fetch()) {
         prefetcher.update_table_store_stat(prefetcher.access_ctx_->table_store_stat_, index_info);
