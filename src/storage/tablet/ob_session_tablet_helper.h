@@ -110,11 +110,24 @@ public:
     const ObSessionTabletInfo &tablet_info)
     : tenant_id_(tenant_id),
       tablet_info_(tablet_info),
-      trans_(),
-      allocator_("SessTabDelH")
+      trans_(nullptr),
+      allocator_("SessTabDelH"),
+      is_independent_trans_(true)
+  {}
+  ObSessionTabletDeleteHelper(
+    const uint64_t tenant_id,
+    const ObSessionTabletInfo &tablet_info,
+    common::ObMySQLTransaction &trans)
+    : tenant_id_(tenant_id),
+      tablet_info_(tablet_info),
+      trans_(&trans),
+      allocator_("SessTabDelH"),
+      is_independent_trans_(false),
+      timeout_us_(MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */))
   {}
   ~ObSessionTabletDeleteHelper() = default;
   int do_work();
+  void set_timeout_us(int64_t timeout_us) { timeout_us_ = timeout_us; }
   TO_STRING_KV(K_(tenant_id), K_(tablet_info));
 private:
   int delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version);
@@ -127,8 +140,12 @@ private:
   uint64_t tenant_id_;
   // The ls_id of the tablet may change after migration, but the ls_id in the tablet_info_ does not get updated.
   ObSessionTabletInfo tablet_info_;
-  common::ObMySQLTransaction trans_;
+  common::ObMySQLTransaction *trans_;
   common::ObArenaAllocator allocator_;
+  // If is_independent_trans_ is true, it means that the transaction is started by the ObSessionTabletDeleteHelper itself.
+  // Additionally, to ensure atomic deletion of multiple temporary table tablets, a shared transaction must be provided.
+  bool is_independent_trans_;
+  int64_t timeout_us_;
 };
 
 class ObSessionTabletGCHelper final
@@ -149,12 +166,19 @@ public:
     const ObString &db_name,
     const ObString &table_name,
     const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
+  static const int64_t MAX_GC_COUNT = 200;
+  static const int64_t NUM_OF_TABLET_GROUP = 4;
+  static const int64_t TABLET_GROUP_SIZE = 16;
   TO_STRING_KV(K_(tenant_id));
 private:
   static int is_table_has_active_session(
     const uint64_t tenant_id,
     const uint64_t table_id,
     bool &has_active_session);
+  // Group session tablet infos by session_id and sequence
+  static int group_by_session_and_seq(
+    const ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete,
+    ObIArray<common::ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE>> &session_tablet_infos_for_delete_grouped/* out */);
   uint64_t tenant_id_;
 };
 

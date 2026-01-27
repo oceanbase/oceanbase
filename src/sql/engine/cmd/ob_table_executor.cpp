@@ -2565,15 +2565,26 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       const uint64_t session_id = my_session->get_sessid_for_table();
       share::schema::ObSchemaGetterGuard schema_guard;
       const share::schema::ObTableSchema *table_schema = nullptr;
-      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      common::ObMySQLTransaction trans;
+      if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+        LOG_WARN("failed to begin transaction", K(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table is not exist", K(ret), K(tenant_id), K(table_id));
-      } else if (OB_FAIL(truncate_oracle_temp_table_v2(*my_session, schema_guard, *table_schema, sequence, session_id))) {
+      } else if (OB_FAIL(truncate_oracle_temp_table_v2(*my_session, schema_guard, *table_schema, sequence, session_id, trans))) {
         LOG_WARN("failed to truncate oracle temp table", K(ret), K(tenant_id), K(table_id), K(sequence), K(session_id));
+      }
+      if (trans.is_started()) {
+        int tmp_ret = OB_SUCCESS;
+        bool is_commit = (OB_SUCCESS == ret);
+        if (OB_TMP_FAIL(trans.end(is_commit))) {
+          LOG_WARN("failed to end transaction", KR(ret), KR(tmp_ret));
+          ret = is_commit ? tmp_ret : ret;
+        }
       }
     } else {
       ObSqlString sql;
@@ -2618,14 +2629,18 @@ int ObTruncateTableExecutor::truncate_oracle_temp_table_v2(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const share::schema::ObTableSchema &table_schema,
     const int64_t sequence,
-    const uint64_t session_id)
+    const uint64_t session_id,
+    common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const bool is_data_table = !table_schema.is_oracle_tmp_table_v2_index_table();
   ObSessionTabletInfoKey info_key(table_schema.get_table_id(), sequence, session_id);
   ObSessionTabletInfo session_tablet_info;
-  if (OB_FAIL(my_session.get_gtt_tablet_info_map().get_session_tablet(info_key, session_tablet_info))) {
+  if (false == trans.is_started()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transaction is not started", K(ret));
+  } else if (OB_FAIL(my_session.get_gtt_tablet_info_map().get_session_tablet(info_key, session_tablet_info))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("failed to get session tablet", K(ret));
     } else {
@@ -2635,7 +2650,7 @@ int ObTruncateTableExecutor::truncate_oracle_temp_table_v2(
   } else if (OB_FAIL(my_session.get_gtt_tablet_info_map().remove_session_tablet(table_schema.get_table_id()))) {
     LOG_WARN("failed to remove session tablet", K(ret));
   } else {
-    storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id, session_tablet_info);
+    storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id, session_tablet_info, trans);
     if (OB_FAIL(tablet_delete_helper.do_work())) {
       LOG_WARN("failed to delete session tablet", K(ret));
     } else {
@@ -2654,7 +2669,7 @@ int ObTruncateTableExecutor::truncate_oracle_temp_table_v2(
         } else if (OB_ISNULL(index_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index table schema is null", K(ret), K(simple_index_infos.at(i).table_id_));
-        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *index_schema, sequence, session_id))) {
+        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *index_schema, sequence, session_id, trans))) {
           LOG_WARN("failed to truncate oracle temp table", K(ret));
         }
       }
@@ -2673,9 +2688,9 @@ int ObTruncateTableExecutor::truncate_oracle_temp_table_v2(
         } else if (OB_ISNULL(aux_lob_piece_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("aux lob piece table schema is null", K(ret), K(aux_lob_piece_tid));
-        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *aux_lob_meta_schema, sequence, session_id))) {
+        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *aux_lob_meta_schema, sequence, session_id, trans))) {
           LOG_WARN("failed to truncate oracle temp table", K(ret), K(aux_lob_meta_tid));
-        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *aux_lob_piece_schema, sequence, session_id))) {
+        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *aux_lob_piece_schema, sequence, session_id, trans))) {
           LOG_WARN("failed to truncate oracle temp table", K(ret), K(aux_lob_piece_tid));
         }
       }

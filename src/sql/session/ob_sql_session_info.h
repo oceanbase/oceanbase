@@ -1021,7 +1021,8 @@ public:
       const share::schema::ObTableSchema &table_schema,
       const int64_t sequence,
       const uint64_t session_id,
-      const bool is_index_table);
+      const bool is_index_table,
+      common::ObMySQLTransaction &trans);
 
   //To generate an unique key for Oracle Global Temporary Table
   int64_t get_gtt_session_scope_unique_id() const { return gtt_session_scope_unique_id_; }
