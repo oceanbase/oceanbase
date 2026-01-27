@@ -79,7 +79,7 @@ public:
     // the array `out_param_id_` wouldn't be too long, so linear search is just ok
     int64_t idx = OB_INVALID_INDEX;
     for (int64_t j = 0; j < out_param_id_.count(); ++j) {
-      if (out_param_id_.at(j) == i) {
+      if (out_param_id_.at(j) == question_mark_idx_.at(i)) {
         idx = j;
         break;
       }
