@@ -1635,12 +1635,13 @@ int ObPartitionMultiRangeSpliter::do_task_split_algorithm(
       if (OB_FAIL(helper.construct_and_push_range(
               start_key, end_key, flag, for_compaction, one_task_ranges))) {
         LOG_WARN("Fail to construct store range", KR(ret));
-      } else if (OB_FAIL(multi_range_split_array.push_back(one_task_ranges))) {
+      } else if (!one_task_ranges.empty() && OB_FAIL(multi_range_split_array.push_back(one_task_ranges))) {
+        // if there are lots of multi-version same rowkey, the one_task_ranges may be empty
         LOG_WARN("Fail to push back one task ranges", KR(ret));
       } else {
         total_row_count -= curr_task_rows_sum;
 
-        pushed_task_count++;
+        pushed_task_count++; // only used for calculate avg_row_count, don't care about the actual task count
         one_task_ranges.reset();
         curr_task_rows_sum = 0;
         start_key = end_key;
