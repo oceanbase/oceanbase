@@ -487,7 +487,7 @@ int ObMViewRefreshHelper::get_dep_mviews_from_dep_info(
       LOG_INFO("table schema is null, maybe dep container tale not exist",
                 K(ret), K(tenant_id), K(dep_info.p_type_));
     } else if (table_schema->is_materialized_view() &&
-               OB_FAIL(dep_mview_ids.push_back(dep_info.p_type_))) {
+               OB_FAIL(dep_mview_ids.push_back(dep_info.p_obj_))) {
       LOG_WARN("fail to push back dep mview id", K(ret));
     }
   }
