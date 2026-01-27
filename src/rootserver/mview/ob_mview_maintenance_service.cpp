@@ -983,7 +983,9 @@ int ObMViewMaintenanceService::GetMinMVMdsSnapshotFunctor::
       }
     }
   }
-  scn_ = scn;
+  if (scn.is_valid() && (!scn_.is_valid() || scn < scn_)) {
+    scn_ = scn;
+  }
   return ret;
 }
 
