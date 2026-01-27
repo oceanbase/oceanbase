@@ -1288,6 +1288,7 @@ int ObAccessPathEstimation::do_storage_estimation(ObOptimizerContext &ctx,
       LOG_WARN("OPT:[REMOTE STORAGE EST FAILED]", K(ret));
     }
   }
+  LOG_INFO("OPT:[STORAGE ESTIMATION RESULT]", K(ret), K(result));
   return ret;
 }
 
