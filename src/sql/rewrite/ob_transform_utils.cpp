@@ -2610,6 +2610,18 @@ int ObTransformUtils::is_general_expr_not_null(ObNotNullContext &ctx,
     if (OB_FAIL(check_list.push_back(expr->get_param_expr(1)))) {
       LOG_WARN("failed to append check list", K(ret));
     }
+  } else if (T_FUN_SYS_IFNULL == expr->get_expr_type()) {
+    bool param_is_not_null = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_not_null && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(is_expr_not_null(ctx,
+                                              expr->get_param_expr(i),
+                                              param_is_not_null,
+                                              param_constraint)))) {
+        LOG_WARN("failed to check ifnull param not null", K(ret));
+      } else if (param_is_not_null) {
+        is_not_null = true;
+      }
+    }
   } else if (T_OP_CASE == expr->get_expr_type() ||
              T_OP_ARG_CASE == expr->get_expr_type()) {
     const ObCaseOpRawExpr *case_expr = static_cast<const ObCaseOpRawExpr*>(expr);
