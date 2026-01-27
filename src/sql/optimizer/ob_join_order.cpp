@@ -1209,6 +1209,7 @@ int ObJoinOrder::check_has_exec_stage_param(const ObQueryRangeProvider &query_ra
   int ret = OB_SUCCESS;
   has_exec_stage_param = false;
   const ObIArray<ObRawExpr*> &range_exprs = query_range.get_range_exprs();
+  const ObIArray<ObRawExpr*> &ss_range_exprs = query_range.get_ss_range_exprs();
   for (int64_t i = 0; OB_SUCC(ret) && !has_exec_stage_param && i < range_exprs.count(); ++i) {
     ObRawExpr *expr = range_exprs.at(i);
     if (OB_ISNULL(expr)) {
@@ -1218,6 +1219,15 @@ int ObJoinOrder::check_has_exec_stage_param(const ObQueryRangeProvider &query_ra
                // since CNT_FAKE_CONST_UDF is temporarily used in range converter,
                // we combine CNT_STATE_FUNC and CNT_PL_UDF to simulate the same meaning outside.
                (expr->has_flag(CNT_STATE_FUNC) && expr->has_flag(CNT_PL_UDF))) {
+      has_exec_stage_param = true;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has_exec_stage_param && i < ss_range_exprs.count(); ++i) {
+    ObRawExpr *expr = ss_range_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
       has_exec_stage_param = true;
     }
   }
