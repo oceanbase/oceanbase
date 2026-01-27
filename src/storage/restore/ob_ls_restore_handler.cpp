@@ -35,6 +35,7 @@ ObLSRestoreHandler::ObLSRestoreHandler()
     is_stop_(false),
     is_online_(false),
     rebuild_seq_(0),
+    mtx_(common::ObLatchIds::OB_LS_RESTORE_HANDLER_LOCK),
     result_mgr_(),
     ls_(nullptr),
     ls_restore_arg_(),
@@ -3213,7 +3214,7 @@ int ObLSRestoreWaitRestoreMajorDataState::report_restore_stat_()
 
 
 ObLSRestoreResultMgr::ObLSRestoreResultMgr()
-  : mtx_(),
+  : mtx_(common::ObLatchIds::OB_LS_RESTORE_RESULT_MGR_LOCK),
     result_(OB_SUCCESS),
     retry_cnt_(0),
     last_err_ts_(0),

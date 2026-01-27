@@ -1808,6 +1808,7 @@ public:
     //             K(ret));
     return ret;
   }
+  int64_t &get_curr_request_id() { return curr_request_id_; }
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   void set_affected_rows_is_changed(int64_t affected_rows);
@@ -2099,6 +2100,7 @@ private:
   void *external_resource_schema_cache_;
   bool has_ccl_rule_;
   int64_t last_update_ccl_cnt_time_;
+  int64_t curr_request_id_;  // mark current request id in sql audit
 
   private:
   pl::ObUtlHttp* ob_utl_http_info_ = NULL;

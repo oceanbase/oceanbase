@@ -504,7 +504,12 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
   // commit finished, cleanup
   if (commit_fin) {
     if (tx.finish_ts_ <= 0) { // maybe aborted early
-      tx.finish_ts_ = ObClockGenerator::getClock();
+      if (OB_UNLIKELY(common::EventTable::EN_COMMIT_TIME_DELAY_US)) {
+        const int delay_time_us = -common::EventTable::EN_COMMIT_TIME_DELAY_US;
+        TRANS_LOG(INFO, "simulate commit delay", K(delay_time_us));
+        ob_usleep(delay_time_us);
+      }
+      tx.finish_ts_ = ObTimeUtility::current_time();
     }
     /*
      * store_release ObTxDesc::{commit_out_, state_}
@@ -3410,7 +3415,7 @@ int ObTransService::handle_sub_prepare_result_(ObTxDesc &tx,
   // commit finished, cleanup
   if (commit_fin) {
     if (tx.finish_ts_ <= 0) { // maybe aborted early
-      tx.finish_ts_ = ObClockGenerator::getClock();
+      tx.finish_ts_ = ObTimeUtility::current_time();
     }
     tx.commit_out_ = commit_out;
     if (tx.commit_task_.is_registered()) {

@@ -139,6 +139,7 @@ ObDedupQueue::ObDedupQueue() : is_inited_(false),
                                bucket_allocator_(&allocator_),
                                gc_queue_head_(NULL),
                                gc_queue_tail_(NULL),
+                               gc_queue_sync_(common::ObLatchIds::OB_DEDUP_QUEUE_MUTEX),
                                thread_name_(nullptr)
 {
 }

@@ -225,7 +225,7 @@ private:
 
 class ObTenantQueryRespTimeCollector {
 public:
-  ObTenantQueryRespTimeCollector(): multi_collector_(),rwlock_(),flush_config_version_(0),multi_ways_count_(64), is_inited_(false) {};
+  ObTenantQueryRespTimeCollector(): multi_collector_(),rwlock_(common::ObLatchIds::OB_TENANT_QUERY_RESP_TIME_COLLECTOR_RWLOCK),flush_config_version_(0),multi_ways_count_(64), is_inited_(false) {};
   ~ObTenantQueryRespTimeCollector() {};
   int init();
   void destroy();

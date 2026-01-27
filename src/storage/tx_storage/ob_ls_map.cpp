@@ -154,7 +154,7 @@ int ObLSMap::init(const int64_t tenant_id, ObIAllocator *ls_allocator)
     LOG_WARN("Fail to allocate memory, ", K(ret), LITERAL_K(BUCKETS_CNT));
   } else {
     for (int64_t i = 0 ; i < BUCKETS_CNT; ++i) {
-      new(buckets_lock_ + i) common::ObQSyncLock();
+      new(buckets_lock_ + i) common::ObQSyncLock(common::ObLatchIds::OB_LS_MAP_LOCK);
       if (OB_FAIL((buckets_lock_ + i)->init(mem_attr))) {
         LOG_WARN("buckets_lock_ init fail", K(ret), K(tenant_id));
         for (int64_t j = 0 ; j <= i; ++j) {

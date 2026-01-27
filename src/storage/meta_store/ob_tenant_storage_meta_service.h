@@ -208,7 +208,7 @@ private:
   class WaitGCTabletArray final
   {
   public:
-    WaitGCTabletArray() : lock_(), wait_gc_tablet_arr_() {}
+    WaitGCTabletArray() : lock_(common::ObLatchIds::WAIT_GC_TABLET_ARRAY_MUTEX), wait_gc_tablet_arr_() {}
     ~WaitGCTabletArray() = default;
     TO_STRING_KV(K_(wait_gc_tablet_arr));
   public:

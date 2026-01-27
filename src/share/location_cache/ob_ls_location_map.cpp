@@ -38,7 +38,7 @@ int ObLSLocationMap::init()
     LOG_WARN("Fail to allocate ObLSLocation memory, ", KR(ret), LITERAL_K(BUCKETS_CNT));
   } else {
     for (int64_t i = 0 ; i < BUCKETS_CNT; ++i) {
-      new(buckets_lock_ + i) common::ObQSyncLock();
+      new(buckets_lock_ + i) common::ObQSyncLock(common::ObLatchIds::OB_LS_LOCATION_MAP_BUCKETS_LOCK);
       if (OB_FAIL((buckets_lock_ + i)->init(mem_attr))) {
         LOG_WARN("buckets_lock_ init fail", K(ret), K(OB_SERVER_TENANT_ID));
         for (int64_t j = 0 ; j <= i; ++j) {

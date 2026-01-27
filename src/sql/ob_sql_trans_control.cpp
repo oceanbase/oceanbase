@@ -668,6 +668,8 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
       if (OB_FAIL(txs->commit_tx(*tx_ptr, expire_ts, &trace_info))) {
         LOG_WARN("sync commit tx fail", K(ret), K(expire_ts), KPC(tx_ptr));
       }
+      ObAuditRecordData &audit_record = session->get_raw_audit_record();
+      audit_record.exec_timestamp_.commit_t_ = tx_ptr->get_trans_commit_time();
     }
   }
 

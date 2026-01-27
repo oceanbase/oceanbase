@@ -24,7 +24,7 @@ int ObTableGroupOpFactory::alloc(ObTableGroupType op_type, ObITableOp *&op)
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid op type", K(ret), K(op_type));
   } else {
-    ObLockGuard<ObSpinLock> guard(locks_[op_type]);
+    ObLockGuard<ObSpinLock> guard(*get_lock(op_type));
     op = nullptr;
     op = free_list_[op_type].remove_first();
     if (OB_ISNULL(op)) {
@@ -43,7 +43,7 @@ void ObTableGroupOpFactory::free(ObITableOp *op)
     ObTableGroupType op_type = op->type();
     if (op_type > 0 && op_type < ObTableGroupType::TYPE_MAX) {
       op->reset();
-      ObLockGuard<ObSpinLock> guard(locks_[op_type]);
+      ObLockGuard<ObSpinLock> guard(*get_lock(op_type));
       used_list_[op_type].remove(op);
       free_list_[op_type].add_last(op);
     } else {
@@ -66,7 +66,7 @@ void ObTableGroupOpFactory::free_and_reuse(ObTableGroupType type)
 void ObTableGroupOpFactory::free_all()
 {
   for (int64_t i = 0; i < ObTableGroupType::TYPE_MAX; i++) {
-    ObLockGuard<ObSpinLock> guard(locks_[i]);
+    ObLockGuard<ObSpinLock> guard(*get_lock(i));
     ObITableOp *op = nullptr;
     const ObTableGroupType type = static_cast<ObTableGroupType>(i);
     while(nullptr != (op = used_list_[type].remove_first())) {

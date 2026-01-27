@@ -62,10 +62,10 @@ int ObBaseLogWriter::init(
     LOG_STDERR("Fail to allocate memory, max_buffer_item_cnt=%lu.\n", log_cfg.max_buffer_item_cnt_);
   } else if (0 != pthread_mutex_init(&thread_mutex_, NULL)) {
     ret = OB_ERR_SYS;
-  } else if (OB_ISNULL(log_write_cond_ = OB_NEW(SimpleCond, attr))) {
+  } else if (OB_ISNULL(log_write_cond_ = OB_NEW(SimpleCond, attr, common::ObWaitEventIds::BASE_LOG_WRITER_WRITE_COND_WAIT))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_STDERR("Fail to allocate memory, max_buffer_item_cnt=%lu.\n", log_cfg.max_buffer_item_cnt_);
-  } else if (OB_ISNULL(log_flush_cond_ = OB_NEW(SimpleCond, attr))) {
+  } else if (OB_ISNULL(log_flush_cond_ = OB_NEW(SimpleCond, attr, common::ObWaitEventIds::BASE_LOG_WRITER_FLUSH_COND_WAIT))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_STDERR("Fail to allocate memory, max_buffer_item_cnt=%lu.\n", log_cfg.max_buffer_item_cnt_);
   } else {

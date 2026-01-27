@@ -3896,7 +3896,7 @@ int ObTabletDirectLoadSliceGroup::init(const int64_t task_cnt)
       LOG_WARN("init io allocator failed", K(ret));
     } else if (OB_FAIL(batch_slice_map_.create(task_cnt, attr, attr))) {
       LOG_WARN("fail to create map", K(ret), K(task_cnt));
-    } else if (OB_FAIL(bucket_lock_.init(task_cnt))) {
+    } else if (OB_FAIL(bucket_lock_.init(task_cnt, common::ObLatchIds::OB_CO_SLICE_WRITER_BUCKET_LOCK))) {
       LOG_WARN("failed to init bucket lock", K(ret));
     } else {
       is_inited_ = true;

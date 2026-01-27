@@ -47,7 +47,7 @@ ObTmpFileWriteCache::ObTmpFileWriteCache()
     idle_cond_(),
     metrics_(),
     bucket_lock_(),
-    resize_lock_(),
+    resize_lock_(common::ObLatchIds::OB_TMP_FILE_WRITE_CACHE_RESIZE_LOCK),
     pages_(),
     page_map_(),
     page_allocator_(),
@@ -87,7 +87,7 @@ int ObTmpFileWriteCache::init(ObTmpFileBlockManager *tmp_file_block_manager)
                      lib::ObMallocAllocator::get_instance(), OB_MALLOC_NORMAL_BLOCK_SIZE,
                      ObMemAttr(MTL_ID(), "TmpFileSwapJ", ObCtxIds::DEFAULT_CTX_ID)))) {
     LOG_WARN("fail to init swap job allocator", KR(ret));
-  } else if (OB_FAIL(bucket_lock_.init(BUCKET_CNT))) {
+  } else if (OB_FAIL(bucket_lock_.init(BUCKET_CNT, ObLatchIds::TMP_FILE_WRITE_CACHE_BUCKET_LOCK))) {
     LOG_WARN("fail to init bucket lock", KR(ret));
   } else if (OB_FAIL(pages_.init())) {
     LOG_WARN("fail to init pages array", KR(ret));

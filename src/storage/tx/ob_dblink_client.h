@@ -54,7 +54,7 @@ typedef ObSEArray<common::ObFixedLengthString<128>, SavePointArraySize> SavePoin
 class ObDBLinkClient
 {
 public:
-  explicit ObDBLinkClient() : lock_(), is_inited_(false), index_(0), xid_(),
+  explicit ObDBLinkClient() : lock_(common::ObLatchIds::OB_DB_LINK_CLIENT_LOCK), is_inited_(false), index_(0), xid_(),
       state_(ObDBLinkClientState::IDLE),
       dblink_type_(common::sqlclient::DblinkDriverProto::DBLINK_UNKNOWN), dblink_conn_(NULL),
       impl_(NULL), tx_timeout_us_(-1),

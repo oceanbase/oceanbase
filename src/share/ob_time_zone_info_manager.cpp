@@ -25,7 +25,7 @@ namespace common
 
 ObTZInfoMap ObTimeZoneInfoManager::shared_tz_info_map_;
 int64_t ObTimeZoneInfoManager::loaded_tz_info_count_ = 0;
-SpinRWLock ObTimeZoneInfoManager::sys_rwlock_;
+SpinRWLock ObTimeZoneInfoManager::sys_rwlock_(common::ObLatchIds::OB_TIME_ZONE_INFO_MANAGER_SPIN_RW_LOCK);
 const char *ObTimeZoneInfoManager::FETCH_TZ_INFO_SQL =
     "SELECT * "
     "FROM ("

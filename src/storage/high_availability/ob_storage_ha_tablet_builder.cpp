@@ -1512,7 +1512,7 @@ int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::get_tablet_meta(cons
 /******************ObStorageHATableInfoMgr*********************/
 ObStorageHATableInfoMgr::ObStorageHATableInfoMgr()
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_STORAGE_HA_TABLET_BUILDER_LOCK),
     table_info_mgr_map_()
 {
 }

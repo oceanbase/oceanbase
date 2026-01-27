@@ -18,7 +18,7 @@ namespace logservice
 
 ObLogFlashbackService::ObLogFlashbackService() :
     is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_LOG_FLASHBACK_SERVICE_LOCK),
     self_(),
     location_adapter_(nullptr),
     rpc_proxy_(nullptr),

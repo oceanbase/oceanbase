@@ -45,7 +45,7 @@ public:
     FLUSH_NODE = 1
   };
 public:
-  ObTmpFileBlockHandleList() : type_(INVALID), lock_(), list_() {}
+  ObTmpFileBlockHandleList() : type_(INVALID), lock_(common::ObLatchIds::OB_TMP_FILE_BLOCK_HANDLE_LIST_LOCK), list_() {}
   ~ObTmpFileBlockHandleList() { destroy(); }
   void destroy();
   int init(ListType type);

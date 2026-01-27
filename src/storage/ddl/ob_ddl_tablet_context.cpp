@@ -218,7 +218,7 @@ int ObDDLSlice::get_remain_block(const int64_t cg_idx, ObRemainCgBlock &remain_b
 
 ObDDLTabletContext::ObDDLTabletContext()
   : is_inited_(false), arena_(ObMemAttr(MTL_ID(), "ddl_tblt_ctx")),
-    slice_count_(0), table_slice_offset_(0), scan_task_(nullptr),
+    slice_count_(0), table_slice_offset_(0), scan_task_(nullptr), mutex_(common::ObLatchIds::DDL_TABLET_CONTEXT_LOCK),
     last_lob_id_(0), last_autoinc_val_(0), bucket_count_(0),
     macro_meta_store_mgr_(nullptr), vector_index_ctx_(nullptr)
 {
@@ -279,7 +279,7 @@ int ObDDLTabletContext::init(
       LOG_WARN("allocate memory for macro meta manager failed", K(ret));
     } else if (OB_FAIL(slice_map_.create(bucket_count_, ObMemAttr(MTL_ID(), "tblt_slice_map")))) {
       LOG_WARN("create slice map failed", K(ret), K(bucket_count_));
-    } else if (OB_FAIL(bucket_lock_.init(bucket_count_))) {
+    } else if (OB_FAIL(bucket_lock_.init(bucket_count_, common::ObLatchIds::DDL_TABLET_CONTEXT_BUCKET_LOCK))) {
       LOG_WARN("init bucket lock failed", K(ret), K(bucket_count_));
     } else {
       ObLSHandle ls_handle;

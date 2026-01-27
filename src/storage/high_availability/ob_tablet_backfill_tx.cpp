@@ -35,7 +35,7 @@ ObBackfillTXCtx::ObBackfillTXCtx()
   : task_id_(),
     ls_id_(),
     backfill_scn_(SCN::min_scn()),
-    lock_(),
+    lock_(common::ObLatchIds::OB_TABLET_BACKFILL_TX_LOCK),
     tablet_info_index_(0),
     tablet_info_array_()
 {

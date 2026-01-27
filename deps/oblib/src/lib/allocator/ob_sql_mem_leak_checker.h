@@ -24,7 +24,7 @@ class ObSqlMemoryLeakChecker
 {
 public:
   ObSqlMemoryLeakChecker()
-    : lock_(), dlist_()
+    : lock_(common::ObLatchIds::OB_SQL_MEM_LEAK_CHECKER_LOCK), dlist_()
   {}
   static ObSqlMemoryLeakChecker &get_instance();
   void add(lib::ObMemVersionNode &node);

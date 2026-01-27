@@ -47,6 +47,7 @@ public:
       dist_algo_(VIDA_MAX),
       ivf_build_mem_ctx_(ivf_build_mem_ctx),
       norm_info_(nullptr),
+      lock_(common::ObLatchIds::OB_KMEANS_CTX_LOCK),
       sample_vectors_()
   {}
 
@@ -187,7 +188,8 @@ class ObElkanKmeansAlgo : public ObKmeansAlgo
 {
 public:
   ObElkanKmeansAlgo(ObIvfMemContext &ivf_build_mem_ctx)
-    : ObKmeansAlgo(ivf_build_mem_ctx)
+    : ObKmeansAlgo(ivf_build_mem_ctx),
+      assign_lock_(common::ObLatchIds::OB_ELKAN_KMEANS_ALGO_ASSIGN_LOCK)
   {}
   virtual ~ObElkanKmeansAlgo() {
     destroy();
@@ -343,6 +345,7 @@ public:
     tenant_id_(tenant_id),
     ref_cnt_(0),
     allocator_(allocator),
+    lock_(common::ObLatchIds::OB_IVF_BUILD_HELPER_LOCK),
     param_(),
     first_ret_code_(OB_SUCCESS),
     ivf_build_mem_ctx_(nullptr)
@@ -737,7 +740,7 @@ private:
 class ObKmeansBuildTaskHandler : public lib::TGTaskHandler
 {
 public:
-  ObKmeansBuildTaskHandler() : is_inited_(false), tg_id_(INVALID_TG_ID), task_ref_cnt_(0), max_thread_cnt_(0), lock_() {};
+  ObKmeansBuildTaskHandler() : is_inited_(false), tg_id_(INVALID_TG_ID), task_ref_cnt_(0), max_thread_cnt_(0), lock_(common::ObLatchIds::OB_KMEANS_BUILD_TASK_HANDLER_LOCK) {};
   virtual ~ObKmeansBuildTaskHandler() = default;
   int init(int tg_id);
   int start();

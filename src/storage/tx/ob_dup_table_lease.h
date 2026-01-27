@@ -45,7 +45,7 @@ public:
   TO_STRING_KV(K(leader_lease_map_.size()), K(follower_lease_info_));
 
 public:
-  ObDupTableLSLeaseMgr() : lease_diag_info_log_buf_(nullptr) { reset(); }
+  ObDupTableLSLeaseMgr() : lease_lock_(common::ObLatchIds::OB_DUP_TABLE_LEASE_LOCK), lease_diag_info_log_buf_(nullptr) { reset(); }
   ~ObDupTableLSLeaseMgr() { destroy(); }
 
   int init(ObDupTableLSHandler *dup_ls_handle);

@@ -158,7 +158,7 @@ void test_tmp_file_deletion_impl(const int64_t file_cnt, bool test_scan_gc)
   ObArray<int64_t> file_ids;
   int64_t test_start_time = ObTimeUtility::fast_current_time();
   int64_t completed_count = 0;
-  ObSpinLock lock;
+  ObSpinLock lock(common::ObLatchIds::TEST_LATCH_LOCK);
   const int64_t THREAD_COUNT = 16;
   std::vector<std::thread> threads;
   int64_t files_per_thread = file_cnt / THREAD_COUNT;

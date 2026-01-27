@@ -499,7 +499,7 @@ public:
 class RollbackMaskSet
 {
 public:
-  RollbackMaskSet() : rollback_parts_(NULL) {}
+  RollbackMaskSet() : lock_(common::ObLatchIds::OB_ROLLBACK_MASK_SET_LOCK), rollback_parts_(NULL) {}
   int init(share::ObCommonID tx_msg_id, ObTxRollbackParts &parts) {
     ObSpinLockGuard guard(lock_);
     tx_msg_id_ = tx_msg_id;
@@ -996,6 +996,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   DISABLE_COPY_ASSIGN(ObTxDesc);
   bool is_all_parts_clean() const;
   bool is_all_parts_without_valid_write() const;
+  int64_t get_trans_commit_time() const { return finish_ts_ - commit_ts_; }
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
@@ -1034,7 +1035,7 @@ public:
   public:
     ObTxDescAlloc(): alloc_cnt_(0)
 #ifdef ENABLE_DEBUG_LOG
-                   , lk_()
+                   , lk_(common::ObLatchIds::OB_TX_DESC_ALLOC_LOCK)
                    , list_()
 #endif
    {}

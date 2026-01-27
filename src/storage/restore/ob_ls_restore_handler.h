@@ -41,7 +41,8 @@ public:
       unfinished_tablet_cnt_(0),
       total_bytes_(0),
       unfinished_bytes_(0),
-      last_report_ts_(0) {}
+      last_report_ts_(0),
+      mtx_(common::ObLatchIds::OB_LS_RESTORE_STAT_MUTEX) {}
 
   int init(const share::ObLSRestoreJobPersistKey &ls_key);
   int set_total_tablet_cnt(const int64_t cnt);

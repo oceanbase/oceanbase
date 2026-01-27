@@ -55,6 +55,7 @@ ObLogService::ObLogService() :
   restore_service_(),
   flashback_service_(),
   monitor_(),
+  update_palf_opts_lock_(common::ObLatchIds::OB_LOG_SERVICE_SPIN_LOCK),
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   shared_gc_(),
   configured_log_disk_size_(0),

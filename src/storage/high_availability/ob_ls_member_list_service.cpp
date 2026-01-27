@@ -24,7 +24,7 @@ namespace storage
 ObLSMemberListService::ObLSMemberListService()
   : is_inited_(false),
     ls_(NULL),
-    transfer_scn_iter_lock_(),
+    transfer_scn_iter_lock_(common::ObLatchIds::LS_MEMBER_LIST_SERVICE_LOCK),
     log_handler_(NULL)
 {
 }

@@ -19,7 +19,7 @@ namespace oceanbase
 namespace logservice
 {
 ObLSRouterValue::ObLSRouterValue() :
-    lock_(),
+    lock_(common::ObLatchIds::LS_ROUTER_VALUE_LOCK),
     ls_svr_list_(),
     blacklist_()
 {

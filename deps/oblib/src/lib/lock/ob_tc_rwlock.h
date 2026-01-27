@@ -17,12 +17,10 @@
 #include "lib/lock/ob_latch.h"
 #include "lib/time/ob_time_utility.h"
 
-#define USE_TCRWLOCK 1
 namespace oceanbase
 {
 namespace common
 {
-#if USE_TCRWLOCK
 
 class LWaitCond
 {
@@ -138,8 +136,9 @@ public:
     TCRWLock &lock_;
   };
 
-  TCRWLock(const uint32_t latch_id=ObLatchIds::DEFAULT_SPIN_RWLOCK, TCRef &tcref=get_global_tcref())
+  TCRWLock(const uint32_t latch_id, TCRef &tcref=get_global_tcref())
     : latch_(), latch_id_(latch_id), tcref_(tcref), write_id_(0), read_ref_(0) {}
+  // Note: latch_id is required, no default value allowed
   void set_latch_id(const uint32_t latch_id) { latch_id_ = latch_id; }
   int rdlock(const int64_t abs_timeout_us = INT64_MAX)
   {
@@ -355,120 +354,6 @@ private:
 };
 
 typedef TCRWLock RWLock;
-#else
-class RWLock
-{
-public:
-  [[nodiscard]]  struct RLockGuard
-  {
-    explicit RLockGuard(RWLock& lock): lock_(lock) { lock_.rdlock(); }
-    ~RLockGuard() { lock_.rdunlock(); }
-    RWLock& lock_;
-  };
-  struct RLockGuardWithTimeout
-  {
-    [[nodiscard]]  explicit RLockGuardWithTimeout(RWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
-    {
-      if (OB_FAIL(lock_.rdlock(abs_timeout_us))) {
-        need_unlock_ = false;
-        COMMON_LOG(WARN, "RLockGuardWithTimeout failed", K(ret), K(abs_timeout_us));
-      } else {
-        need_unlock_ = true;
-      }
-    }
-    ~RLockGuardWithTimeout()
-    {
-      if (need_unlock_) {
-        lock_.rdunlock();
-      }
-    }
-    RWLock &lock_;
-    bool need_unlock_;
-  };
-
-  struct WLockGuard
-  {
-    [[nodiscard]] explicit WLockGuard(RWLock& lock): lock_(lock) { lock_.wrlock(); }
-    ~WLockGuard() { lock_.wrunlock(); }
-    RWLock& lock_;
-  };
-  struct WLockGuardWithTimeout
-  {
-    [[nodiscard]] explicit WLockGuardWithTimeout(RWLock &lock, const int64_t abs_timeout_us, int &ret): lock_(lock), need_unlock_(true)
-    {
-      if (OB_FAIL(lock_.wrlock(abs_timeout_us))) {
-        need_unlock_ = false;
-        COMMON_LOG(WARN, "WLockGuardWithTimeout failed", K(ret), K(abs_timeout_us));
-      } else {
-        need_unlock_ = true;
-      }
-    }
-    ~WLockGuardWithTimeout()
-    {
-      if (need_unlock_) {
-        lock_.wrunlock();
-      }
-    }
-    RWLock &lock_;
-    bool need_unlock_;
-  };
-  struct WLockGuardWithRetry
-  {
-    [[nodiscard]] explicit WLockGuardWithRetry(RWLock &lock, const int64_t abs_timeout_us) : lock_(lock)
-    {
-      lock_.wrlock_with_retry(abs_timeout_us);
-    }
-    ~WLockGuardWithRetry() { lock_.wrunlock(); }
-    RWLock &lock_;
-  };
-
-  explicit RWLock(const uint32_t latch_id): latch_(), latch_id_(latch_id) {}
-  ~RWLock() {}
-  void set_latch_id(const uint32_t latch_id) { latch_id_ = latch_id; }
-  int rdlock(const int64_t abs_timeout_us = INT64_MAX)
-  {
-    return latch_.rdlock(latch_id_, abs_timeout_us);
-  }
-  inline bool try_rdlock()
-  {
-    return latch_.try_rdlock(latch_id_) == OB_SUCCESS;
-  }
-  inline int rdunlock()
-  {
-    return latch_.unlock();
-  }
-  inline int wrlock(const int64_t abs_timeout_us = INT64_MAX)
-  {
-    return latch_.wrlock(latch_id_, abs_timeout_us);
-  }
-  inline int wrlock_with_retry(const int64_t abs_timeout_us)
-  {
-    int ret = OB_SUCCESS;
-    bool locked = false;
-    const int64_t WRLOCK_FAILED_SLEEP_US = 1 * 1000; // 1ms
-    while (!locked) {
-      if (OB_FAIL(wrlock(abs_timeout_us))) {
-        COMMON_LOG(WARN, "wrlock_with_retry failed", K(ret), K(abs_timeout_us));
-        ob_usleep(WRLOCK_FAILED_SLEEP_US);
-      } else {
-        locked = true;
-      }
-    }
-    return ret;
-  }
-  inline int wrunlock()
-  {
-    return latch_.unlock();
-  }
-  inline bool try_wrlock()
-  {
-    return OB_LIKELY(latch_.try_wrlock(latch_id_) == OB_SUCCESS);
-  }
-private:
-  ObLatch latch_;
-  uint32_t latch_id_;
-};
-#endif
 }; // end namespace common
 }; // end namespace oceanbase
 

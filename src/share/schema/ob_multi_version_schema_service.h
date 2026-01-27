@@ -113,7 +113,8 @@ class ObSchemaGetterController
 {
 public:
   ObSchemaGetterController()
-    : inited_(false) {}
+    : inited_(false),
+      lock_(common::ObLatchIds::OB_SCHEMA_GETTER_LOCK) {}
   ~ObSchemaGetterController() {}
   int init(share::schema::ObMultiVersionSchemaService *schema_service);
   int get_schema(const ObSchemaMgr *mgr,

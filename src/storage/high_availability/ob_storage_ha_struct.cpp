@@ -2351,7 +2351,7 @@ int ObBackfillTabletsTableMgr::ObTabletTableMgr::get_restore_status(
 
 ObBackfillTabletsTableMgr::ObBackfillTabletsTableMgr()
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_STORAGE_HA_STRUCT_LOCK),
     map_(),
     local_rebuild_seq_(0),
     transfer_start_scn_()

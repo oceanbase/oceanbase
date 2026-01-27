@@ -84,7 +84,7 @@ inline int64_t ObClockGenerator::getRealClock()
 inline void ObClockGenerator::msleep(const int64_t ms)
 {
   if (ms > 0) {
-    obutil::ObMonitor<obutil::Mutex> monitor_;
+    obutil::ObMonitor<obutil::Mutex> monitor_(common::ObLatchIds::CLOCK_GENERATOR_WAIT);
     (void)monitor_.timed_wait(obutil::ObSysTime(ms * 1000));
   }
 }
@@ -92,7 +92,7 @@ inline void ObClockGenerator::msleep(const int64_t ms)
 inline void ObClockGenerator::usleep(const int64_t us)
 {
   if (us > 0) {
-    obutil::ObMonitor<obutil::Mutex> monitor_;
+    obutil::ObMonitor<obutil::Mutex> monitor_(common::ObLatchIds::CLOCK_GENERATOR_WAIT);
     ObBKGDSessInActiveGuard inactive_guard;
     (void)monitor_.timed_wait(obutil::ObSysTime(us));
   }

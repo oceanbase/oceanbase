@@ -97,7 +97,6 @@ public:
         exec_timestamp.single_process_ts_ = process.get_single_process_timestamp();
         exec_timestamp.process_executor_ts_ = process.get_exec_start_timestamp();
         exec_timestamp.executor_end_ts_ = process.get_exec_end_timestamp();
-
         if (is_first) {
           /* packet 遇见的事件顺序：
            * send -> receive -> enter_queue -> run -> before_process -> single_process -> executor_start -> executor_end

@@ -24,7 +24,7 @@ namespace share
 
 class ObWorkloadRepositoryContext {
 public:
-  ObWorkloadRepositoryContext(): is_inited_(false), ash_snapshot_mutex_(), sqlstat_snapshot_mutex_() {}
+  ObWorkloadRepositoryContext(): is_inited_(false), ash_snapshot_mutex_(common::ObLatchIds::WR_SERVICE_MUTEX), sqlstat_snapshot_mutex_(common::ObLatchIds::WR_SERVICE_MUTEX) {}
   static int mtl_init(ObWorkloadRepositoryContext* &ptr);
   void destroy();
   int try_lock_ash_snapshot_ahead();

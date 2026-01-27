@@ -75,12 +75,13 @@ private:
 public:
   ObLockMemCtx(memtable::ObMemtableCtx &host) :
       host_(host),
+      list_rwlock_(common::ObLatchIds::OB_MEM_CTX_TABLE_LOCK_LIST_RWLOCK),
       lock_list_(),
       is_killed_(false),
       max_durable_scn_(),
       memtable_handle_(),
       priority_list_(),
-      add_lock_latch_() {}
+      add_lock_latch_(common::ObLatchIds::OB_MEM_CTX_TABLE_LOCK_ADD_LOCK_LATCH) {}
   ObLockMemCtx() = delete;
   ~ObLockMemCtx() { reset(); }
   int init(ObLSTxCtxMgr *ls_tx_ctx_mgr);

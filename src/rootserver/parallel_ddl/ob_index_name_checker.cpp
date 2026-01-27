@@ -267,7 +267,7 @@ int ObIndexNameCache::try_load_cache_()
 }
 
 ObIndexNameChecker::ObIndexNameChecker()
-  : rwlock_(),
+  : rwlock_(common::ObLatchIds::OB_INDEX_NAME_CHECKER_RW_LOCK),
     allocator_(ObMemAttr(OB_SYS_TENANT_ID, "IndNameCache", ObCtxIds::SCHEMA_SERVICE)),
     index_name_cache_map_(),
     sql_proxy_(NULL),

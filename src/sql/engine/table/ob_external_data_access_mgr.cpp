@@ -197,7 +197,7 @@ int ObExternalAccessFileInfo::set_access_info(
 /***************** FileMapKey ****************/
 ObExternalDataAccessMgr::FileMapKey::FileMapKey() :
   page_size_(0), url_(), content_digest_(), modify_time_(-1), allocator_(nullptr)
-{}
+  {}
 
 ObExternalDataAccessMgr::FileMapKey::~FileMapKey() {
   reset();
@@ -336,7 +336,7 @@ int ObExternalDataAccessMgr::init()
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num))) {
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, common::ObLatchIds::FILE_MAP_KEY_BUCKET_LOCK))) {
     LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(fd_map_.create(bucket_num, "ExDAMFDMap", "ExDAMFDMap", MTL_ID()))) {
     LOG_WARN("fail to initialize ExDAMfd map", K(ret), K(bucket_num));

@@ -34,6 +34,7 @@ ObTableLoadManager::ObTableLoadManager(const uint64_t tenant_id)
     table_ctx_alloc_(ObMemAttr(tenant_id, "TLD_TblCtxVal")),
     client_task_alloc_(ObMemAttr(tenant_id, "TLD_CliTaskVal")),
     client_task_brief_alloc_(ObMemAttr(tenant_id, "TLD_CTBriefVal")),
+    gc_list_lock_(common::ObLatchIds::OB_TABLE_LOAD_MANAGER_GC_LIST_LOCK),
     is_inited_(false)
 {
 }

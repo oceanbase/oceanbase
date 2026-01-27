@@ -75,7 +75,7 @@ class ObSessionTmpTableCleaner
 const int64_t DEFAULT_SCHEDULE_INTERVAL = 10L * 60L * 1000L * 1000L;//10m
 public:
   ObSessionTmpTableCleaner() : tenant_id_(OB_INVALID_TENANT_ID), inited_(false), stopped_(false), schema_service_(nullptr),
-                               attr_(MTL_ID(), "TmpTableClean"), lock_(), tenant_sessions_(),
+                               attr_(MTL_ID(), "TmpTableClean"), lock_(common::ObLatchIds::TMP_TABLE_CLEANER_LOCK), tenant_sessions_(),
                                clean_tg_id_(OB_INVALID_INDEX), normal_table_clean_(*this), standalone_table_clean_(*this),
                                schedule_interval_(DEFAULT_SCHEDULE_INTERVAL), dynamic_schedule_(*this) {}
   virtual ~ObSessionTmpTableCleaner();

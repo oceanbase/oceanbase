@@ -1162,7 +1162,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_int(record.data_.insert_update_or_replace_duplicate_row_count_);
         } break;
         case COMMIT_TIME: {
-          cells[cell_idx].set_int(0);
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.commit_t_);
         } break;
         case TX_TABLE_READ_CNT: {
           cells[cell_idx].set_int(record.data_.exec_record_.tx_table_read_cnt_);

@@ -79,7 +79,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCachedCatalogSchemaMgr);
   static constexpr int64_t LOAD_CACHE_LOCK_CNT = 16;
   static const int64_t LOCK_TIMEOUT = 2 * 1000000L;
-  common::ObSpinLock fill_cache_locks_[LOAD_CACHE_LOCK_CNT];
+  class SpinLockWrapper
+  {
+  public:
+    SpinLockWrapper()
+      : lock_(oceanbase::common::ObLatchIds::OB_CACHED_CATALOG_SCHEMA_MGR_LOCK)
+    {}
+    ~SpinLockWrapper() = default;
+    common::ObSpinLock &get_lock() { return lock_; }
+  private:
+    common::ObSpinLock lock_;
+    DISALLOW_COPY_AND_ASSIGN(SpinLockWrapper);
+  };
+
+  common::ObSpinLock* get_lock(int64_t index) {
+    return &fill_cache_locks_[index].get_lock();
+  }
+
+  SpinLockWrapper fill_cache_locks_[LOAD_CACHE_LOCK_CNT];
   common::ObKVCache<ObLakeTableMetadataCacheKey, ObLakeTableMetadataCacheValue> lake_metadata_cache_;
 };
 

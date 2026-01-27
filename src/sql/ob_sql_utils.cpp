@@ -37,6 +37,7 @@
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
+#include "observer/ob_server.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
 using namespace oceanbase::obmysql;
@@ -4993,7 +4994,7 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
       if (OB_FAIL(req_manager->record_request(audit_record,
                                               session.enable_query_response_time_stats(),
                                               session.get_tenant_query_record_size_limit(),
-                                              is_sensitive))) {
+                                              is_sensitive, &session.get_curr_request_id()))) {
         if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
           LOG_DEBUG("cannot allocate mem for record", K(ret));
           ret = OB_SUCCESS;
@@ -5012,6 +5013,36 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
   return ret;
 }
 
+void ObSQLUtils::fixup_commit_time(ObSQLSessionInfo &session)
+{
+  if (common::EventTable::EN_SQL_AUDIT_NOASYNC_COMMIT_TIME) {
+  } else if (GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit()) {
+    ObMySQLRequestManager *req_manager = session.get_request_manager();
+    if (OB_ISNULL(req_manager)) {
+      // failed to get request manager, maybe tenant has been dropped, NOT NEED TO record;
+    } else {
+      const transaction::ObTxDesc *tx_ptr = session.get_tx_desc();
+      if (OB_NOT_NULL(tx_ptr)) {
+        int64_t tx_commit_t = tx_ptr->get_trans_commit_time();
+        if (session.get_curr_request_id() > 0 && tx_commit_t > 0) {
+          void *rec = NULL;
+          common::ObDlQueue::DlRef ref;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(req_manager->get(session.get_curr_request_id(), rec, &ref))) {
+            LOG_INFO("audit record evicted when fixup commit time", K(tmp_ret));
+          } else if (NULL != rec) {
+            ObMySQLRequestRecord *record = static_cast<ObMySQLRequestRecord*> (rec);
+            record->data_.exec_timestamp_.commit_t_ = tx_commit_t;  // fixup async commit time
+            record->data_.exec_timestamp_.elapsed_t_ += tx_commit_t;  // adding async commit time to elapsed_time
+            if (ref.is_not_null()) {
+              req_manager->revert(&ref);
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 bool ObSQLUtils::is_oracle_empty_string(const ObObjParam &param)
 {

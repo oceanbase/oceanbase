@@ -33,7 +33,7 @@ const int64_t slot_per_th = 2048;
 class LogDummyData : public palf::FixedSlidingWindowSlot
 {
 public:
-  LogDummyData(): can_remove(false),log_id(-1), get_cnt_(0) {}
+  LogDummyData(): can_remove(false), log_id(-1), get_cnt_(0), lock_(common::ObLatchIds::OB_FIXED_SLIDING_WINDOW_SLOT_LOCK) {}
   ~LogDummyData() {}
   bool can_be_slid()
   {

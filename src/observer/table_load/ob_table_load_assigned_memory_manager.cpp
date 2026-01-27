@@ -36,6 +36,7 @@ ObTableLoadAssignedMemoryManager::ObTableLoadAssignedMemoryManager()
   : avail_sort_memory_(0),
     avail_memory_(0),
     chunk_count_(0),
+    mutex_(common::ObLatchIds::OB_TABLE_LOAD_ASSIGNED_MEMORY_MANAGER_MUTEX),
     is_inited_(false)
 {
 }

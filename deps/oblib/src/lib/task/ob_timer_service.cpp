@@ -169,11 +169,13 @@ ObTimerService::ObTimerService(uint64_t tenant_id /* = OB_SERVER_TENANT_ID */)
   : is_never_started_(true),
     is_stopped_(true),
     tenant_id_(tenant_id),
+    monitor_(common::ObLatchIds::OB_TIMER_SERVICE_MUTEX),
     token_alloc_(),
     priority_task_queue_(64L, nullptr, ObMemAttr(tenant_id_, "ts_queue")),
     running_task_set_(64L, nullptr, ObMemAttr(tenant_id_, "ts_run_set")),
     uncanceled_task_set_(64L, nullptr, ObMemAttr(tenant_id_, "ts_cancel_set")),
-    worker_thread_pool_(*this)
+    worker_thread_pool_(*this),
+    mutex_(common::ObLatchIds::OB_TIMER_SERVICE_MUTEX)
 {
   token_alloc_.set_attr(ObMemAttr(tenant_id, "ts_token"));
 }

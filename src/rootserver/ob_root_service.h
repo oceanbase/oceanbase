@@ -120,7 +120,7 @@ namespace rootserver
 class ObRsStatus
 {
 public:
-  ObRsStatus() : rs_status_(share::status::INIT) {}
+  ObRsStatus() : lock_(common::ObLatchIds::OB_RS_STATUS_LOCK), rs_status_(share::status::INIT) {}
   virtual ~ObRsStatus() {}
   int set_rs_status(const share::status::ObRootServiceStatus status);
   share::status::ObRootServiceStatus get_rs_status() const;

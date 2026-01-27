@@ -84,7 +84,7 @@ ObTenantFreezeInfoMgr::ObTenantFreezeInfoMgr()
     update_reserved_snapshot_task_(*this),
     freeze_info_mgr_(),
     snapshots_(),
-    lock_(),
+    lock_(common::ObLatchIds::OB_TENANT_FREEZE_INFO_MGR_LOCK),
     cur_idx_(0),
     last_change_ts_(0),
     tenant_id_(OB_INVALID_ID),

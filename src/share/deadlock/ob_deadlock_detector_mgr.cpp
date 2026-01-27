@@ -561,7 +561,7 @@ class LimitRecordBuffer
   static_assert(POW_OF_2<=20,
                 "slots defined more than 2^20=1048576, be sure you want so many slots");
 public:
-  LimitRecordBuffer() : begin_(0), end_(0) {}
+  LimitRecordBuffer() : begin_(0), end_(0), lock_(common::ObLatchIds::LIMIT_RECORD_BUFFER_SPIN_LOCK) {}
   int check_and_push(const T &element) {
     int ret = OB_SUCCESS;
     ObSpinLockGuard guard(lock_);

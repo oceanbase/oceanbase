@@ -33,6 +33,7 @@ LogIOWorker::LogIOWorker()
       purge_throttling_task_submitted_seq_(0),
       purge_throttling_task_handled_seq_(0),
       need_ignoring_throttling_(false),
+      lock_(common::ObLatchIds::OB_LOG_IO_WORKER_LOCK),
       wait_cost_stat_("[PALF STAT IO TASK IN QUEUE TIME]", PALF_STAT_PRINT_INTERVAL_US),
       is_inited_(false)
 {

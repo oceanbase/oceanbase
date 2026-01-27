@@ -1576,7 +1576,7 @@ struct ObDDLMergeBucketLock
 {
 public:
   static int mtl_init(ObDDLMergeBucketLock *&ddl_merge_bucket_lock);
-  ObDDLMergeBucketLock(): hash_set_(), mutex_(), is_inited_(false)
+  ObDDLMergeBucketLock(): hash_set_(), mutex_(common::ObLatchIds::DDL_MERGE_BUCKET_LOCK_MUTEX), is_inited_(false)
   {}
   ~ObDDLMergeBucketLock()
   {}

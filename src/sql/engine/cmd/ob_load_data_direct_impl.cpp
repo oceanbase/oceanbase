@@ -146,7 +146,8 @@ const char *ObLoadDataDirectImpl::Logger::log_file_column_names =
 const char *ObLoadDataDirectImpl::Logger::log_file_row_fmt = "%.*s\t%ld\t%d\t%s\t\n";
 
 ObLoadDataDirectImpl::Logger::Logger()
-  : is_oracle_mode_(false),
+  : mutex_(common::ObLatchIds::LOAD_DATA_DIRECT_MUTEX),
+    is_oracle_mode_(false),
     buf_(nullptr),
     is_create_log_succ_(false),
     err_cnt_(0),
@@ -1857,6 +1858,7 @@ ObLoadDataDirectImpl::BackupLoadExecutor::BackupLoadExecutor()
     worker_count_(0),
     partition_count_(0),
     subpart_count_(0),
+    mutex_(common::ObLatchIds::LOAD_DATA_DIRECT_MUTEX),
     next_partition_idx_(0),
     next_subpart_idx_(0),
     total_line_count_(0),

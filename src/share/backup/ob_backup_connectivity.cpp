@@ -1899,7 +1899,7 @@ void ObBackupDestIOPermissionMgr::ObRefreshIOPermissionTask::runTimerTask()
 
 ObBackupDestIOPermissionMgr::ObBackupDestIOPermissionMgr()
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::OB_BACKUP_DEST_IO_PERMISSION_MGR_LOCK),
     tenant_id_(OB_INVALID_ID),
     dest_io_permission_map_(),
     last_refresh_time_(0),

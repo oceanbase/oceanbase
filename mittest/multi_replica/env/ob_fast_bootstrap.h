@@ -186,7 +186,7 @@ namespace share
 {
 namespace schema
 {
-common::SpinRWLock lock_for_schema_version;
+common::SpinRWLock lock_for_schema_version(common::ObLatchIds::TEST_LATCH_LOCK);
 int ObSchemaServiceSQLImpl::gen_new_schema_version(
     uint64_t tenant_id,
     int64_t refreshed_schema_version,

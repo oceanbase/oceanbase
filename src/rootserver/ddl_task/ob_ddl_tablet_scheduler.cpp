@@ -31,7 +31,8 @@ using namespace oceanbase::sql;
 
 ObDDLTabletScheduler::ObDDLTabletScheduler()
   : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID), ref_data_table_id_(OB_INVALID_ID),
-    task_id_(OB_INVALID_ID), parallelism_(0), snapshot_version_(0), root_service_(nullptr)
+    task_id_(OB_INVALID_ID), parallelism_(0), snapshot_version_(0),
+    lock_(common::ObLatchIds::OB_DDL_TABLET_SCHEDULER_LOCK), root_service_(nullptr)
 {
 
 }

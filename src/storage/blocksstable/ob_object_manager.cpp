@@ -63,10 +63,10 @@ ObObjectManager::ObObjectManager()
   : is_inited_(false),
     is_shared_storage_(false),
     macro_object_size_(0),
-    lock_(),
+    lock_(common::ObLatchIds::OB_OBJECT_MANAGER_LOCK),
     super_block_(),
     super_block_buf_holder_(),
-    resize_file_lock_()
+    resize_file_lock_(common::ObLatchIds::OB_OBJECT_MANAGER_RESIZE_FILE_LOCK)
 {
 }
 

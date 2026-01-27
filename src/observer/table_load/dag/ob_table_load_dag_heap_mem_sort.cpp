@@ -37,7 +37,7 @@ using namespace storage;
  */
 
 ObTableLoadHeapMemSorter::ObTableLoadHeapMemSorter()
-  : dag_(nullptr), op_(nullptr), next_source_idx_(0), is_closed_(false), is_inited_(false)
+  : dag_(nullptr), op_(nullptr), next_source_idx_(0), mutex_(common::ObLatchIds::OB_TABLE_LOAD_HEAP_MEM_SORTER_MUTEX), is_closed_(false), is_inited_(false)
 {
 }
 

@@ -43,7 +43,7 @@ FetchLogSRpc::FetchLogSRpc() :
     resp_(),
     rcode_(),
     cb_(*this),
-    cond_(),
+    cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
     rpc_done_(false)
 {
 }

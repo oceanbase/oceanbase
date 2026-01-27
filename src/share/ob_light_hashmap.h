@@ -101,6 +101,11 @@ template<typename Key, typename Value, typename AllocHandle, typename LockType, 
 class ObLightHashMap
 {
  typedef common::ObSEArray<Value *, 32> ValueArray;
+ struct LockWrapper {
+   LockType lock_;
+   LockWrapper() : lock_(common::ObLatchIds::OB_LIGHT_HASHMAP_LOCK) {}
+ };
+
 public:
   ObLightHashMap() : is_inited_(false), total_cnt_(0) { OB_ASSERT(BUCKETS_CNT > 0); }
   ~ObLightHashMap() { destroy(); }
@@ -114,7 +119,7 @@ public:
       Value *next = nullptr;
       for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
         {
-          BucketWLockGuard guard(locks_[i % LOCKS_CNT], get_itid());
+          BucketWLockGuard guard(locks_[i % LOCKS_CNT].lock_, get_itid());
 
           curr = buckets_[i].next_;
           while (OB_NOT_NULL(curr)) {
@@ -129,7 +134,7 @@ public:
         buckets_[i].reset();
       }
       for (int64_t i = 0; i < LOCKS_CNT; ++i) {
-        locks_[i].destroy();
+        locks_[i].lock_.destroy();
       }
       total_cnt_ = 0;
       is_inited_ = false;
@@ -148,10 +153,10 @@ public:
     } else {
       // init lock
       for (int64_t i = 0 ; OB_SUCC(ret) && i < LOCKS_CNT; ++i) {
-        if (OB_FAIL(locks_[i].init(mem_attr))) {
+        if (OB_FAIL(locks_[i].lock_.init(mem_attr))) {
           TRANS_LOG(WARN, "ObLightHashMap locks init fail", K(ret));
           for (int64_t j = 0 ; j <= i; ++j) {
-            locks_[j].destroy();
+            locks_[j].lock_.destroy();
           }
         }
       }
@@ -176,7 +181,7 @@ public:
       SHARE_LOG(WARN, "invalid argument", K(key), KP(value));
     } else {
       int64_t pos = key.hash() % BUCKETS_CNT;
-      BucketWLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
+      BucketWLockGuard guard(locks_[pos % LOCKS_CNT].lock_, get_itid());
       Value *curr = buckets_[pos].next_;
 
       while (OB_NOT_NULL(curr)) {
@@ -219,7 +224,7 @@ public:
       SHARE_LOG(ERROR, "invalid argument", K(key), KP(value));
     } else {
       int64_t pos = key.hash() % BUCKETS_CNT;
-      BucketWLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
+      BucketWLockGuard guard(locks_[pos % LOCKS_CNT].lock_, get_itid());
       if (buckets_[pos].next_ != value && (NULL == value->prev_ && NULL == value->next_)) {
         // do nothing
       } else {
@@ -264,7 +269,7 @@ public:
       Value *tmp_value = NULL;
       int64_t pos = key.hash() % BUCKETS_CNT;
 
-      BucketRLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
+      BucketRLockGuard guard(locks_[pos % LOCKS_CNT].lock_, get_itid());
 
       tmp_value = buckets_[pos].next_;
       while (OB_NOT_NULL(tmp_value)) {
@@ -344,7 +349,7 @@ public:
         const int64_t cnt = array.count();
         for (int64_t i = 0; i < cnt; ++i) {
           if (fn(array.at(i))) {
-            BucketWLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
+            BucketWLockGuard guard(locks_[pos % LOCKS_CNT].lock_, get_itid());
             if (buckets_[pos].next_ != array.at(i) && (NULL == array.at(i)->prev_ && NULL == array.at(i)->next_)) {
               // do nothing
             } else {
@@ -369,7 +374,7 @@ public:
   {
     int ret = common::OB_SUCCESS;
     // read lock
-    BucketRLockGuard guard(locks_[bucket_pos % LOCKS_CNT], get_itid());
+    BucketRLockGuard guard(locks_[bucket_pos % LOCKS_CNT].lock_, get_itid());
     Value *val = buckets_[bucket_pos].next_;
 
     while (OB_SUCC(ret) && OB_NOT_NULL(val)) {
@@ -513,7 +518,7 @@ private:
   // sizeof(QsyncLock) = 4K;
   bool is_inited_;
   ObLightHashHeader buckets_[BUCKETS_CNT];
-  LockType locks_[LOCKS_CNT];
+  LockWrapper locks_[LOCKS_CNT];
   int64_t total_cnt_;
 #ifdef ENABLE_DEBUG_LOG
 public:

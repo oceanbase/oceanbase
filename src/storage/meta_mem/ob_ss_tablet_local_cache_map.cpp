@@ -39,7 +39,7 @@ int ObSSTabletLocalCacheMap::init(const int64_t bucket_num, const uint64_t tenan
     LOG_WARN("invalid argument", K(ret), K(bucket_num), K(tenant_id));
   } else if (OB_FAIL(ss_tablet_map_.create(bucket_num, "MocSSTabletM", "MocSSTabletM", tenant_id))) {
     LOG_WARN("fail to initialize external tablet cnt map");
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::DEFAULT_BUCKET_LOCK, ObMemAttr(tenant_id, "ExTabletMapLk")))) {
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::SS_TABLET_LOCAL_CACHE_MAP_LOCK, ObMemAttr(tenant_id, "ExTabletMapLk")))) {
     LOG_WARN("fail to init bucket lock", K(ret), K(bucket_num));
   } else {
     is_inited_ = true;

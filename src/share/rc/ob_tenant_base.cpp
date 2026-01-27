@@ -110,6 +110,7 @@ ObTenantBase::ObTenantBase(const uint64_t id, const int64_t epoch, bool enable_t
     enable_tenant_ctx_check_(enable_tenant_ctx_check),
     thread_count_(0),
     mini_mode_(false),
+    thread_list_lock_(common::ObLatchIds::OB_TENANT_THREAD_LIST_LOCK),
     marked_prepare_gc_ts_(0)
 {
   MEMSET(group_cpu_time_us_, 0, sizeof(group_cpu_time_us_));

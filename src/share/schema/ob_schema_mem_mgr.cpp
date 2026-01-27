@@ -48,7 +48,8 @@ namespace schema
 ObSchemaMemMgr::ObSchemaMemMgr()
   : pos_(0),
     is_inited_(false),
-    tenant_id_(OB_INVALID_TENANT_ID)
+    tenant_id_(OB_INVALID_TENANT_ID),
+    schema_mem_rwlock_(common::ObLatchIds::OB_SCHEMA_MEM_MGR_SPIN_RW_LOCK)
 {
 }
 

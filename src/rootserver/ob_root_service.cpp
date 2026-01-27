@@ -614,7 +614,7 @@ ObRootService::ObRootService()
     addr_agent_(NULL), root_inspection_(),
     upgrade_executor_(),
     upgrade_storage_format_executor_(), create_inner_schema_executor_(),
-    bootstrap_lock_(), broadcast_rs_list_lock_(ObLatchIds::RS_BROADCAST_LOCK),
+    bootstrap_lock_(), broadcast_rs_list_lock_(common::ObLatchIds::OB_ROOT_SERVICE_BROADCAST_RS_LIST_LOCK),
     task_queue_(),
     inspect_task_queue_(),
     restart_task_(*this),

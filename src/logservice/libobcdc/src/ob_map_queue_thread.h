@@ -368,7 +368,7 @@ ObMapQueueThread<MAX_THREAD_NUM>::ThreadConf::ThreadConf() :
     host_(NULL),
     thread_index_(0),
     queue_(),
-    cond_()
+    cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT)
 {}
 
 template <int MAX_THREAD_NUM>

@@ -503,7 +503,7 @@ private:
 
 TestIndexTreeStress::TestIndexTreeStress()
   : tenant_id_(0), thread_cnt_(0), row_count_(0), allocator_(), row_generate_(NULL), data_store_desc_(NULL), start_seq_(NULL),
-    lob_iter_(NULL), index_writer_(NULL), sstable_builder_(NULL), lock_(), tenant_base_(500)
+    lob_iter_(NULL), index_writer_(NULL), sstable_builder_(NULL), lock_(common::ObLatchIds::TEST_LATCH_LOCK), tenant_base_(500)
 {
 }
 

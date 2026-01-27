@@ -78,7 +78,7 @@ ObTransferHandler::ObTransferHandler()
     related_info_(),
     task_info_(),
     diagnose_result_msg_(share::ObStorageHACostItemName::MAX_NAME),
-    transfer_handler_lock_(),
+    transfer_handler_lock_(common::ObLatchIds::OB_TRANSFER_HANDLER_LOCK),
     transfer_handler_enabled_(true),
     ctx_(),
     cond_()

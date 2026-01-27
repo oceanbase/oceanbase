@@ -66,7 +66,7 @@ int ObTmpFileWriteCacheFreePageList::init()
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(lock_.init(MAX_FREE_LIST_NUM))) {
+  } else if (OB_FAIL(lock_.init(MAX_FREE_LIST_NUM, common::ObLatchIds::TMP_FILE_WRITE_CACHE_FREE_PAGE_LIST_LOCK))) {
     LOG_WARN("failed to init lock", K(ret));
   } else {
     for (int32_t i = 0; i < MAX_FREE_LIST_NUM; ++i) {

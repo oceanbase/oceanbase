@@ -34,7 +34,7 @@ using namespace storage;
  */
 
 ObTableLoadDagPreSortWriteChannel::ObTableLoadDagPreSortWriteChannel()
-  : op_(nullptr), finish_add_closed_chunk_(false), no_more_closed_chunk_(false)
+  : op_(nullptr), acquire_chunk_mutex_(common::ObLatchIds::OB_TABLE_LOAD_ACQUIRE_CHUNK_MUTEX), closed_chunk_mutex_(common::ObLatchIds::OB_TABLE_LOAD_CLOSED_CHUNK_MUTEX), finish_add_closed_chunk_(false), no_more_closed_chunk_(false)
 {
   chunk_nodes_.set_tenant_id(MTL_ID());
   closed_chunks_.set_tenant_id(MTL_ID());

@@ -74,7 +74,7 @@ namespace share
   } while (OB_TMP_FAIL(tmp_ret) && run_time++ < server_prover_.get_server_count());
 
 
-ObLogRestoreMySQLProvider::ObLogRestoreMySQLProvider() : server_list_(), lock_() {}
+ObLogRestoreMySQLProvider::ObLogRestoreMySQLProvider() : server_list_(), lock_(common::ObLatchIds::OB_LOG_RESTORE_MYSQL_PROVIDER_LOCK) {}
 
 ObLogRestoreMySQLProvider::~ObLogRestoreMySQLProvider()
 {

@@ -95,7 +95,7 @@ private:
 class ObPxTargetCond
 {
 public:
-  ObPxTargetCond() {}
+  ObPxTargetCond() : monitor_(common::ObLatchIds::PX_TARGET_COND_WAIT) {}
   ~ObPxTargetCond() {}
 public:
   // wait when no resource available

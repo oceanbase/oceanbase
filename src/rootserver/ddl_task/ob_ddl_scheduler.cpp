@@ -44,7 +44,7 @@ namespace rootserver
 {
 
 ObDDLTaskQueue::ObDDLTaskQueue()
-  : task_list_(), task_map_(), lock_(), stop_(true), is_inited_(false)
+  : task_list_(), task_map_(), lock_(common::ObLatchIds::OB_DDL_TASK_QUEUE_LOCK), stop_(true), is_inited_(false)
 {
 }
 
@@ -434,7 +434,7 @@ int ObDDLTaskHeartBeatMananger::init()
     LOG_WARN("ObManagerRegisterHeartBeatTask inited twice", K(ret));
   } else if (OB_FAIL(register_task_time_.create(BUCKET_LOCK_BUCKET_CNT, "register_task", "register_task"))) {
     LOG_WARN("failed to create register_task_time map", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(BUCKET_LOCK_BUCKET_CNT))) {
+  } else if (OB_FAIL(bucket_lock_.init(BUCKET_LOCK_BUCKET_CNT, common::ObLatchIds::DDL_TASK_HEART_BEAT_MGR_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else {
     is_inited_ = true;

@@ -48,7 +48,7 @@ ObTabletTableStore::ObTabletTableStore()
     ddl_mem_sstables_(),
     inc_major_ddl_mem_sstables_(),
     major_ckm_info_(),
-    memtables_lock_(),
+    memtables_lock_(common::ObLatchIds::OB_TABLET_TABLE_STORE_MEMTABLES_LOCK),
     is_ready_for_read_(false),
     is_inited_(false)
 {

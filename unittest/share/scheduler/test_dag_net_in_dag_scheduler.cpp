@@ -1053,7 +1053,8 @@ class ObGenerateNextDagCtx
 {
 public:
   ObGenerateNextDagCtx()
-    : index_(0)
+    : lock_(common::ObLatchIds::OB_GENERATE_NEXT_DAG_CTX_LOCK),
+      index_(0)
   {
   }
 

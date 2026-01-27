@@ -44,6 +44,7 @@ ObTableLoadParallelCompactTabletCtx::ObTableLoadParallelCompactTabletCtx()
     merge_sstable_count_(0),
     range_count_(0),
     range_sstable_count_(0),
+    mutex_(common::ObLatchIds::OB_TABLE_LOAD_PARALLEL_COMPACT_TABLET_CTX_MUTEX),
     range_allocator_("TLD_ParalMerge")
 {
   allocator_.set_tenant_id(MTL_ID());
@@ -496,6 +497,7 @@ ObTableLoadParallelTableCompactor::ObTableLoadParallelTableCompactor()
     op_(nullptr),
     thread_count_(0),
     allocator_("TLD_ParalMerge"),
+    mutex_(common::ObLatchIds::TABLE_LOAD_PARALLEL_TABLE_COMPACTOR_MUTEX),
     has_error_(false),
     is_stop_(false),
     is_inited_(false)

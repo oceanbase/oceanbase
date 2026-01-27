@@ -25,8 +25,8 @@ static const int64_t SLEEP_SLICE = 100;
 class AtomicOperator
 {
 public:
-  AtomicOperator() : v_(0) {}
-  AtomicOperator(int64_t v) : v_(v) {}
+  AtomicOperator() : lock_(common::ObLatchIds::OB_TEST_DAG_COMMON_ATOMIC_OPERATOR_MUTEX), v_(0) {}
+  AtomicOperator(int64_t v) : lock_(common::ObLatchIds::OB_TEST_DAG_COMMON_ATOMIC_OPERATOR_MUTEX), v_(v) {}
   void inc()
   {
     lib::ObMutexGuard guard(lock_);

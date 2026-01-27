@@ -35,7 +35,7 @@ using namespace table;
  */
 
 ObTableLoadPKMemSorter::ObTableLoadPKMemSorter()
-  : store_ctx_(nullptr), dag_(nullptr), op_(nullptr), is_closed_(false), is_inited_(false)
+  : store_ctx_(nullptr), dag_(nullptr), op_(nullptr), mutex_(common::ObLatchIds::OB_TABLE_LOAD_PK_MEM_SORTER_MUTEX), is_closed_(false), is_inited_(false)
 {
 }
 

@@ -223,7 +223,7 @@ ObMapQueueThreadPool::ThreadConf::ThreadConf() :
     host_(NULL),
     thread_index_(0),
     queue_(),
-    cond_()
+    cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::MAP_QUEUE_THREAD_COND_WAIT)
 {}
 
 ObMapQueueThreadPool::ThreadConf::~ThreadConf()

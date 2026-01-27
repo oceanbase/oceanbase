@@ -2161,7 +2161,7 @@ int ObBackupLSLogFileTask::report_progress_()
 ObBackupLSLogFinishTask::ObBackupLSLogFinishTask()
   : ObITask(ObITask::ObITaskType::TASK_TYPE_BACKUP_LS_LOG_FINISH),
     is_inited_(false),
-    mutex_(),
+    mutex_(common::ObLatchIds::BACKUP_LS_LOG_FINISH_TASK_MUTEX),
     idx_(),
     ctx_(NULL),
     file_list_()

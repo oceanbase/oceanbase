@@ -102,7 +102,7 @@ public:
       build_ctx_(nullptr),
       build_ctx_allocator_(nullptr),
       meta_handler_(nullptr),
-      build_ctx_mutex_() {};
+      build_ctx_mutex_(common::ObLatchIds::OB_LS_SNAPSHOT_BUILD_CTX_MUTEX) {};
 
   ~ObLSSnapshot() { reset(); };
 
@@ -177,6 +177,7 @@ private:
     ObLSSnapshotBuildCtx () : build_status_(BUILDING),
                               rebuild_seq_start_(-1),
                               rebuild_seq_end_(-1),
+                              ls_meta_package_mutex_(common::ObLatchIds::OB_LS_SNAPSHOT_BUILD_CTX_META_PACKAGE_MUTEX),
                               ls_meta_package_(),
                               end_interval_scn_() {}
 

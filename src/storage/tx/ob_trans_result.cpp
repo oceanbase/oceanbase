@@ -83,7 +83,7 @@ void ObTransCond::notify(const int result)
 void ObTransCond::usleep(const int64_t us)
 {
   if (us > 0) {
-    ObMonitor<Mutex> monitor;
+    ObMonitor<Mutex> monitor(common::ObLatchIds::TRANS_RESULT_COND_WAIT);
     THIS_WORKER.sched_wait();
     (void)monitor.timed_wait(ObSysTime(us));
     THIS_WORKER.sched_run();

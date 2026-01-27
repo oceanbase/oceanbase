@@ -30,7 +30,7 @@ ObTabletReplicaInfoCacheMgr::ObTabletReplicaInfoCacheMgr()
   : is_inited_(false),
     tenant_id_(OB_INVALID_ID),
     cache_(),
-    lock_(),
+    lock_(common::ObLatchIds::TABLET_REPLICA_INFO_CACHE_LOCK),
     status_(UNAVAILABLE),
     ref_cnt_(0),
     last_build_time_(0)

@@ -58,6 +58,7 @@ ObMajorMergeScheduler::ObMajorMergeScheduler(const uint64_t tenant_id)
     is_primary_service_(true),
     fail_count_(0),
     first_check_merge_us_(0),
+    epoch_update_lock_(common::ObLatchIds::OB_MAJOR_MERGE_SCHEDULER_MUTEX),
     idling_(stop_),
     merge_info_mgr_(nullptr),
     config_(nullptr),

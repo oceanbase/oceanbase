@@ -218,7 +218,7 @@ public:
       dest_tablet_ids_(),
       replica_build_ctxs_(),
       min_split_start_scn_(),
-      lock_()
+      lock_(common::ObLatchIds::OB_DDL_SINGLE_REPLICA_EXECUTOR_LOCK)
   {}
   ~ObDDLReplicaBuildExecutor() = default;
   int build(const ObDDLReplicaBuildExecutorParam &param);

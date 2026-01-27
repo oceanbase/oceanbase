@@ -66,7 +66,7 @@ struct ObArchivePersistValue : public ArchiveProValue
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard  RLockGuard;
   typedef common::SpinWLockGuard  WLockGuard;
-  ObArchivePersistValue() : info_(), last_update_ts_(OB_INVALID_TIMESTAMP), speed_(0) {}
+  ObArchivePersistValue() : info_(), last_update_ts_(OB_INVALID_TIMESTAMP), speed_(0), rwlock_(common::ObLatchIds::OB_ARCHIVE_PERSIST_VALUE_RWLOCK) {}
 
   void get(bool &is_madatory, int64_t &speed, ObLSArchivePersistInfo &info);
   int set(const bool is_madatory, const ObLSArchivePersistInfo &info);

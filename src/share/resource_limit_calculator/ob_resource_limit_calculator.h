@@ -104,7 +104,7 @@ class ObResourceLimitCalculator
   using RLockGuard = common::SpinRLockGuard;
   using WLockGuard = common::SpinWLockGuard;
 public:
-  ObResourceLimitCalculator() : is_inited_(false) { }
+  ObResourceLimitCalculator() : is_inited_(false), lock_(common::ObLatchIds::OB_RESOURCE_LIMIT_CALCULATOR_LOCK) { }
   ~ObResourceLimitCalculator() { destroy(); }
   static int mtl_init(ObResourceLimitCalculator *&calculator);
   int init();

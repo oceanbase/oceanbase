@@ -148,7 +148,8 @@ void ObMySQLRequestManager::destroy()
 int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
                                           const bool enable_query_response_time_stats,
                                           const int64_t query_record_size_limit,
-                                          bool is_sensitive)
+                                          bool is_sensitive,
+                                          int64_t *request_id)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -253,16 +254,23 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
 
       //push into queue
       if (OB_SUCC(ret)) {
+        // We cannot use record->data_.request_id_ becase the memory is unreliable.
+        // Once it got pushed, it can be immediately evicted.
+        int64_t assigned_request_id = 0;
         if (is_sensitive) {
           free(record);
           record = NULL;
-        } else if (OB_FAIL(queue_.push(record, record->data_.request_id_))) {
+        } else if (OB_FAIL(queue_.push(record, record->data_.request_id_, assigned_request_id))) {
           //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
           if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
             SERVER_LOG(WARN, "push into queue failed", K(ret));
           }
           free(record);
           record = NULL;
+        } else {
+          if (OB_NOT_NULL(request_id)) {
+            *request_id = assigned_request_id;
+          }
         }
       }
     }

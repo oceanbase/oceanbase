@@ -45,6 +45,7 @@ ObTableLoadMemCompactCtx::ObTableLoadMemCompactCtx()
     compact_chunk_cnt_(0),
     range_cnt_(0),
     round_ctx_cnt_(0),
+    mutex_(common::ObLatchIds::OB_TABLE_LOAD_MEM_COMPACT_CTX_MUTEX),
     is_inited_(false)
 {
   enc_params_.set_tenant_id(MTL_ID());
@@ -187,7 +188,7 @@ int ObTableLoadMemCompactCtx::add_result_table(const ObDirectLoadTableHandle &ta
  */
 
 ObTableLoadMemCompactRoundCtx::ObTableLoadMemCompactRoundCtx(ObTableLoadMemCompactCtx *ctx)
-  : ctx_(ctx), is_inited_(false)
+  : ctx_(ctx), mutex_(common::ObLatchIds::OB_TABLE_LOAD_MEM_COMPACT_ROUND_CTX_MUTEX), is_inited_(false)
 {
   chunks_.set_tenant_id(MTL_ID());
   ranges_.set_tenant_id(MTL_ID());

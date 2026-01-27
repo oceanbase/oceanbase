@@ -77,7 +77,8 @@ int ObIntervalTableCacheKey::deep_copy(char *buf,
 }
 
 
-ObAddIntervalPartitionController::ObAddIntervalPartitionController() : inited_(false)
+ObAddIntervalPartitionController::ObAddIntervalPartitionController() : inited_(false),
+    interval_partition_lock_(common::ObLatchIds::OB_ADD_INTERVAL_PARTITION_CONTROLLER_SPIN_LOCK)
 {
 }
 

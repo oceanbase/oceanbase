@@ -102,7 +102,7 @@ int ObBackupOtherBlockIdIterator::get_next_id(blocksstable::MacroBlockId &macro_
 
 ObBackupOtherBlocksMgr::ObBackupOtherBlocksMgr()
   : is_inited_(false),
-    mutex_(),
+    mutex_(common::ObLatchIds::BACKUP_OTHER_BLOCKS_MGR_MUTEX),
     tenant_id_(OB_INVALID_ID),
     tablet_id_(),
     table_key_(),

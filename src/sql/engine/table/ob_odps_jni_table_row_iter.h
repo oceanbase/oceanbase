@@ -492,7 +492,8 @@ public:
         init_parallel_(0),
         need_commit_(true),
         write_arena_alloc_("IntoOdps", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-        session_holder_ptr_(nullptr)
+        session_holder_ptr_(nullptr),
+        lock_(common::ObLatchIds::OB_ODPS_PARTITION_JNI_UPLOADER_MGR_LOCK)
   {}
 
   ~ObOdpsPartitionJNIUploaderMgr()

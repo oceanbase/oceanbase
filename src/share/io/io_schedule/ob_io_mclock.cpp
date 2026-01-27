@@ -169,6 +169,7 @@ int64_t ObMClock::get_proportion_ts() const
 ObTenantIOClock::ObTenantIOClock()
   : is_inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
+    group_clocks_lock_(common::ObLatchIds::OB_TENANT_IO_CLOCK_DRW_LOCK),
     group_clocks_(),
     io_usage_(nullptr)
 {

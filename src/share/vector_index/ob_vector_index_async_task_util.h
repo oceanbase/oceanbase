@@ -225,6 +225,7 @@ public:
         task_status_(),
         sys_task_id_(),
         in_thread_pool_(false),
+        lock_(common::ObLatchIds::OB_VEC_INDEX_ASYNC_TASK_CTX_LOCK),
         allocator_(ObMemAttr(MTL_ID(), "VecIdxTaskCtx")), // set after init
         extra_data_(),
         is_new_task_(false)

@@ -40,7 +40,7 @@ int ObTabletIDSet::init(const uint64_t bucket_lock_bucket_cnt, const uint64_t te
     LOG_WARN("init twice", K(ret), K_(is_inited));
   } else if (OB_FAIL(id_set_.create(bucket_num, "TabletIDSetBkt", "TabletIDSetNode", tenant_id))) {
     LOG_WARN("fail to create tablet id set", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::TABLET_BUCKET_LOCK,
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::TABLET_ID_SET_BUCKET_LOCK,
       "TabletIDSetBkt", tenant_id))) {
     LOG_WARN("fail to init bucket lock", K(ret), K(bucket_num));
   } else {

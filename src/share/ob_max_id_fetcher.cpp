@@ -87,7 +87,7 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_used_ai_model_endpoint_id", "max used ai model endpoint id"}
 };
 
-lib::ObMutex ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
+ObMaxIdFetcher::ObMaxIdFetcherMutexWrapper ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
 
 ObMaxIdFetcher::ObMaxIdFetcher(ObMySQLProxy &proxy)
   : proxy_(proxy),
@@ -186,6 +186,7 @@ int ObMaxIdFetcher::fetch_new_max_ids(const uint64_t tenant_id, ObMaxIdType max_
     uint64_t &id, uint64_t size)
 {
   int ret = OB_SUCCESS;
+
   uint64_t max_id = OB_INVALID_ID;
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -199,7 +200,7 @@ int ObMaxIdFetcher::fetch_new_max_ids(const uint64_t tenant_id, ObMaxIdType max_
   } else {
     // ignore error from cache
     LOG_INFO("failed to fetch max id from cache, fetch from inner table instead", KR(ret));
-    lib::ObMutexGuard guard(mutex_bucket_[tenant_id % MAX_TENANT_MUTEX_BUCKET_CNT]);
+    lib::ObMutexGuard guard(mutex_bucket_[tenant_id % MAX_TENANT_MUTEX_BUCKET_CNT].mutex_);
     if (OB_FAIL(guard.get_ret())) {
       LOG_WARN("fail to lock", K(ret), K(tenant_id));
     } else if (OB_FAIL(fetch_new_max_id(tenant_id, max_id_type, max_id, UINT64_MAX, size))) {

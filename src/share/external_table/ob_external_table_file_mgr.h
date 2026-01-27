@@ -640,7 +640,25 @@ private:
                                    ObExternalTableFiles &file_list);
 
 private:
-  common::ObSpinLock fill_cache_locks_[LOAD_CACHE_LOCK_CNT];
+  class SpinLockWrapper
+  {
+  public:
+    SpinLockWrapper()
+      : lock_(common::ObLatchIds::OB_EXTERNAL_TABLE_FILE_MGR_FILL_CACHE_LOCK)
+    {}
+    ~SpinLockWrapper() = default;
+    common::ObSpinLock &get_lock() { return lock_; }
+  private:
+    common::ObSpinLock lock_;
+    DISALLOW_COPY_AND_ASSIGN(SpinLockWrapper);
+  };
+
+  common::ObSpinLock* get_lock(int64_t index) {
+    return &fill_cache_locks_[index].get_lock();
+  }
+
+private:
+  SpinLockWrapper fill_cache_locks_[LOAD_CACHE_LOCK_CNT];
   common::ObKVCache<ObExternalTableFilesKey, ObExternalTableFiles> kv_cache_;
   common::ObKVCache<ObExternalTableFileListKey, ObExternalTableFiles> external_file_list_cache_;
   common::ObKVCache<ObExternalTablePartitionsKey, ObExternalTablePartitions> external_partitions_cache_;

@@ -26,6 +26,7 @@ class ObLockGuard
 {
 public:
   [[nodiscard]] explicit ObLockGuard(LockT &lock);
+  [[nodiscard]] explicit ObLockGuard(LockT &lock, const int64_t latch_id);
   ~ObLockGuard();
   inline int get_ret() const { return ret_; }
 private:
@@ -47,6 +48,17 @@ inline ObLockGuard<LockT>::ObLockGuard(LockT &lock)
     : lock_(lock),
       ret_(common::OB_SUCCESS)
 {
+  if (OB_UNLIKELY(common::OB_SUCCESS != (ret_ = lock_.lock()))) {
+    COMMON_LOG_RET(ERROR, ret_, "Fail to lock, ", K_(ret));
+  }
+}
+
+template <typename LockT>
+inline ObLockGuard<LockT>::ObLockGuard(LockT &lock, const int64_t latch_id)
+    : lock_(lock),
+      ret_(common::OB_SUCCESS)
+{
+  lock_.set_latch_id(latch_id);
   if (OB_UNLIKELY(common::OB_SUCCESS != (ret_ = lock_.lock()))) {
     COMMON_LOG_RET(ERROR, ret_, "Fail to lock, ", K_(ret));
   }

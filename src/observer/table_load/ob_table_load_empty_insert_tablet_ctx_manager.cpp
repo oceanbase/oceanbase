@@ -30,6 +30,7 @@ using namespace table;
 
 ObTableLoadEmptyInsertTabletCtxManager::ObTableLoadEmptyInsertTabletCtxManager()
   : thread_count_(0),
+    op_lock_(common::ObLatchIds::OB_TABLE_LOAD_EMPTY_INSERT_TABLET_CTX_MANAGER_MUTEX),
     idx_(0),
     start_(0),
     is_inited_(false)

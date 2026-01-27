@@ -184,7 +184,8 @@ struct ObPluginVectorIndexTaskCtx
       failure_times_(0),
       err_code_(OB_SUCCESS),
       in_queue_(false),
-      task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE)
+      task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE),
+      lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_TASK_CTX_LOCK)
   {}
   TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time),
                K_(failure_times), K_(err_code), K_(in_queue), K_(task_status));
@@ -214,6 +215,7 @@ public:
       is_stopped_(false),
       is_logging_(false),
       need_refresh_(true),
+      logging_lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_SCHEDULER_LOGGING_LOCK),
       tenant_id_(OB_INVALID_TENANT_ID),
       ttl_tablet_timer_tg_id_(0),
       interval_factor_(1),

@@ -76,6 +76,7 @@ public:
                              finish_load_thread_cnt_(0),
                              running_dump_task_cnt_(0),
                              fly_mem_chunk_count_(0),
+                             mutex_(common::ObLatchIds::OB_DIRECT_LOAD_MEM_CONTEXT_MUTEX),
                              has_error_(false)
   {
   }

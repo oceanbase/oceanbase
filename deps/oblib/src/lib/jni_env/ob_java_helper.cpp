@@ -85,7 +85,7 @@ JVMFunctionHelper &JVMFunctionHelper::getInstance() {
   return helper;
 }
 
-JVMFunctionHelper::JVMFunctionHelper():load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK), error_msg_(nullptr) {
+JVMFunctionHelper::JVMFunctionHelper(): lock_(common::ObLatchIds::JVM_FUNCTION_HELPER_MUTEX), load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK), error_msg_(nullptr) {
     int ret = OB_SUCCESS;
     if (init_result_ != OB_NOT_INIT) {
       // do nothing

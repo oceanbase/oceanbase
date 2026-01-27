@@ -200,7 +200,7 @@ public:
   ObMergeFilterCtx()
     : compaction_filter_(nullptr),
       mds_filter_info_(),
-      lock_(),
+      lock_(common::ObLatchIds::OB_MERGE_FILTER_CTX_LOCK),
       filter_statistics_()
   {}
   void destroy(ObCompactionMemoryContext &merge_ctx);

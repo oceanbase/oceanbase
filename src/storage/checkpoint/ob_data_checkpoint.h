@@ -211,6 +211,12 @@ private:
 
   struct ObCheckpointLock
   {
+    ObCheckpointLock() : ls_frozen_list_lock_(common::ObLatchIds::OB_DATA_CHECKPOINT_LS_FROZEN_LIST_LOCK),
+                         new_create_list_lock_(common::ObLatchIds::OB_DATA_CHECKPOINT_NEW_CREATE_LIST_LOCK),
+                         active_list_lock_(common::ObLatchIds::OB_DATA_CHECKPOINT_ACTIVE_LIST_LOCK),
+                         prepare_list_lock_(common::ObLatchIds::OB_DATA_CHECKPOINT_PREPARE_LIST_LOCK)
+    {
+    }
     common::SpinRWLock ls_frozen_list_lock_;
     common::SpinRWLock new_create_list_lock_;
     common::SpinRWLock active_list_lock_;

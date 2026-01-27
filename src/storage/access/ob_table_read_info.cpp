@@ -1060,7 +1060,7 @@ ObTenantCGReadInfoMgr::ObTenantCGReadInfoMgr()
   : allocator_(MTL_ID()),
     index_read_info_(),
     normal_cg_read_infos_(),
-    lock_(),
+    lock_(common::ObLatchIds::OB_TENANT_CG_READ_INFO_MGR_LOCK),
     hold_cg_read_info_cnt_(0),
     in_progress_cnt_(0),
     alloc_buf_(nullptr),

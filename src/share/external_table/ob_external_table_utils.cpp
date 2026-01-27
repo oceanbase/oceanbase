@@ -2715,7 +2715,7 @@ int ObCachedExternalFileInfoCollector::init()
 {
   int ret = OB_SUCCESS;
   OZ(kv_cache_.init("cached_file_info"));
-  OZ(bucket_lock_.init(bucket_num_));
+  OZ(bucket_lock_.init(bucket_num_, common::ObLatchIds::OB_CACHED_EXTERNAL_FILE_INFO_COLLECTOR_BUCKET_LOCK));
   return ret;
 }
 

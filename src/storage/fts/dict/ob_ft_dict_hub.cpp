@@ -30,7 +30,7 @@ int ObFTDictHub::init()
   int ret = OB_SUCCESS;
   if (OB_FAIL(dict_map_.create(K_MAX_DICT_BUCKET, "dict_map"))) {
     LOG_WARN("init dict map failed", K(ret));
-  } else if (OB_FAIL(rw_dict_lock_.init(K_MAX_DICT_BUCKET))) {
+  } else if (OB_FAIL(rw_dict_lock_.init(K_MAX_DICT_BUCKET, common::ObLatchIds::OB_FT_DICT_HUB_BUCKET_LOCK))) {
     LOG_WARN("init dict lock failed", K(ret));
   } else {
     is_inited_ = true;

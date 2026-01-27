@@ -25,7 +25,7 @@ namespace observer
 using namespace storage;
 
 ObTableLoadDagParallelMerger::ObTableLoadDagParallelMerger()
-  : store_ctx_(nullptr), op_ctx_(nullptr), clear_table_prepared_(false), is_inited_(false)
+  : store_ctx_(nullptr), op_ctx_(nullptr), mutex_(common::ObLatchIds::OB_TABLE_LOAD_DAG_PARALLEL_MERGER_MUTEX), clear_table_prepared_(false), is_inited_(false)
 {
 }
 

@@ -213,7 +213,7 @@ public:
   {
   public:
     RpcRequestInfo():
-      req_lock_() { reset(); }
+      req_lock_(common::ObLatchIds::OB_CDC_RPC_REQUEST_INFO_REQ_LOCK) { reset(); }
     ~RpcRequestInfo() { reset(); }
     void reset()
     {
@@ -292,7 +292,7 @@ public:
   public:
     static constexpr int SNAPSHOT_NUM = 2;
     TrafficStatInfo():
-      traffic_lock_()
+      traffic_lock_(common::ObLatchIds::OB_CDC_TRAFFIC_STAT_INFO_TRAFFIC_LOCK)
     { reset(); }
     ~TrafficStatInfo() { reset(); }
     void reset()

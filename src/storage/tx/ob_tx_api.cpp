@@ -397,7 +397,7 @@ int ObTransService::rollback_tx(ObTxDesc &tx)
     abort_participants_(tx);
   case ObTxDesc::State::IDLE:
     tx.state_ = ObTxDesc::State::ROLLED_BACK;
-    tx.finish_ts_ = ObClockGenerator::getClock();
+    tx.finish_ts_ = ObTimeUtility::current_time();
     tx_post_terminate_(tx);
     break;
   default:
@@ -515,7 +515,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
   {
     ObSpinLockGuard guard(tx.lock_);
     if (tx.commit_ts_ <= 0) {
-      tx.commit_ts_ = ObClockGenerator::getClock();
+      tx.commit_ts_ = ObTimeUtility::current_time();
     }
     tx.inc_op_sn();
     switch(tx.state_) {

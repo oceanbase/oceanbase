@@ -36,7 +36,7 @@ ObArchiveSender::ObArchiveSender() :
   persist_mgr_(NULL),
   round_mgr_(NULL),
   task_queue_(),
-  send_cond_()
+  send_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::ARCHIVE_SENDER_COND_WAIT)
 {
 }
 

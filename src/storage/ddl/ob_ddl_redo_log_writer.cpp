@@ -461,7 +461,7 @@ int ObDDLCtrlSpeedHandle::init()
   } else if (OB_UNLIKELY(speed_handle_map_.created())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, speed handle map is created", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(MAP_BUCKET_NUM))) {
+  } else if (OB_FAIL(bucket_lock_.init(MAP_BUCKET_NUM, common::ObLatchIds::OB_DDL_CTRL_SPEED_HANDLE_BUCKET_LOCK))) {
     LOG_WARN("init bucket lock failed", K(ret));
   } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, attr, attr))) {
     LOG_WARN("fail to create speed handle map", K(ret));
@@ -763,7 +763,7 @@ int ObDDLRedoLock::init()
   int ret = OB_SUCCESS;
   const int64_t bucket_num = 10243L;
   if (is_inited_) {
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num))) {
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, common::ObLatchIds::DDL_REDO_LOCK))) {
     LOG_WARN("init bucket lock failed", K(ret), K(bucket_num));
   } else {
     is_inited_ = true;

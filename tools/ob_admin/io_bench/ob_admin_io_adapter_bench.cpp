@@ -546,7 +546,7 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
 
 /*--------------------------------ObBackupIoAdapterBenchmarkRunner--------------------------------*/
 ObBackupIoAdapterBenchmarkRunner::ObBackupIoAdapterBenchmarkRunner()
-    : lock_(), is_inited_(false), tg_id_(-1), ret_code_(OB_SUCCESS),
+    : lock_(common::ObLatchIds::OB_ADMIN_COMMON_LOCK), is_inited_(false), tg_id_(-1), ret_code_(OB_SUCCESS),
       config_(), metrics_(), storage_info_(nullptr), completed_threads_(0), total_threads_(0)
 {
 }

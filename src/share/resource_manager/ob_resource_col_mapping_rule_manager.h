@@ -184,7 +184,7 @@ private:
     TO_STRING_KV(K(group_id_), KP(user_name_ptr_), KP(literal_value_ptr_));
   };
 public:
-  ObTenantResColMappingInfo()
+  ObTenantResColMappingInfo() : lock_(common::ObLatchIds::RESOURCE_COL_MAPPING_INFO_LOCK)
   {}
   int init(uint64_t tenant_id);
   int refresh(sql::ObPlanCache *plan_cache, const common::ObString &plan);

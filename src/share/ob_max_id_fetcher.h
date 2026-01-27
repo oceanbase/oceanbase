@@ -138,8 +138,12 @@ private:
 
   static const int64_t MAX_TENANT_MUTEX_BUCKET_CNT = 4096;
 private:
+  struct ObMaxIdFetcherMutexWrapper {
+    lib::ObMutex mutex_;
+    ObMaxIdFetcherMutexWrapper() : mutex_(common::ObLatchIds::OB_MAX_ID_FETCHER_LOCK) {}
+  };
   common::ObMySQLProxy &proxy_;
-  static lib::ObMutex mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
+  static ObMaxIdFetcherMutexWrapper mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
   int32_t group_id_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMaxIdFetcher);

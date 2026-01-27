@@ -287,7 +287,8 @@ int ObTrafficControl::ObSharedDeviceControlV2::update_limit(const obrpc::ObShare
   }
   return ret;
 }
-ObTrafficControl::ObTrafficControl()
+ObTrafficControl::ObTrafficControl() :
+    rw_lock_(common::ObLatchIds::OB_TRAFFIC_CONTROL_DRW_LOCK)
 {
   int ret = OB_SUCCESS;
   set_device_bandwidth(observer::ObServer::DEFAULT_ETHERNET_SPEED);

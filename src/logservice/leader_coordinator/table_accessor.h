@@ -138,6 +138,7 @@ class TableAccessor
 {
   struct ServerZoneNameCache// zone name获取成功一次即可，避免每次都访问内部表
   {
+    explicit ServerZoneNameCache(uint32_t latch_id) : lock_(latch_id) {}
     void set_zone_name_to_global_cache(const ObStringHolder &zone_name) {
       ObSpinLockGuard lg(lock_);
       if (!server_zone_name_.empty()) {

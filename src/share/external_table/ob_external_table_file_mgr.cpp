@@ -1762,7 +1762,7 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
       int64_t total_wait_secs = 0;
 
       // lock
-      while (OB_FAIL(fill_cache_locks_[bucket_id].lock(LOCK_TIMEOUT)) && OB_TIMEOUT == ret
+      while (OB_FAIL(get_lock(bucket_id)->lock(LOCK_TIMEOUT)) && OB_TIMEOUT == ret
              && OB_SUCC(THIS_WORKER.check_status())) {
         total_wait_secs += (LOCK_TIMEOUT / 1000000);
         LOG_WARN("fill external table cache wait", K(ret), K(total_wait_secs));
@@ -1803,8 +1803,8 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
       }
 
       // unlock
-      if (fill_cache_locks_[bucket_id].self_locked()) {
-        fill_cache_locks_[bucket_id].unlock();
+      if (get_lock(bucket_id)->self_locked()) {
+        get_lock(bucket_id)->unlock();
       }
     }
 
@@ -2295,7 +2295,7 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
       int64_t total_wait_secs = 0;
 
       // lock
-      while (OB_FAIL(fill_cache_locks_[bucket_id].lock(LOCK_TIMEOUT)) && OB_TIMEOUT == ret
+      while (OB_FAIL(get_lock(bucket_id)->lock(LOCK_TIMEOUT)) && OB_TIMEOUT == ret
              && OB_SUCC(THIS_WORKER.check_status())) {
         total_wait_secs += (LOCK_TIMEOUT / 1000000);
         LOG_WARN("fill external table cache wait", K(ret), K(total_wait_secs));
@@ -2323,8 +2323,8 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
       }
 
       // unlock
-      if (fill_cache_locks_[bucket_id].self_locked()) {
-        fill_cache_locks_[bucket_id].unlock();
+      if (get_lock(bucket_id)->self_locked()) {
+        get_lock(bucket_id)->unlock();
       }
     }
   } else {
@@ -3000,7 +3000,7 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
   int64_t total_wait_secs = 0;
   uint64_t data_version = OB_INVALID_VERSION;
 
-  while (OB_FAIL(fill_cache_locks_[bucket_id].lock(LOCK_TIMEOUT))
+  while (OB_FAIL(get_lock(bucket_id)->lock(LOCK_TIMEOUT))
          && OB_TIMEOUT == ret && OB_SUCC(THIS_WORKER.check_status())) {
     total_wait_secs += (LOCK_TIMEOUT / 1000000);
     LOG_WARN("fill external table cache wait", K(total_wait_secs));
@@ -3098,8 +3098,8 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
       LOG_TRACE("external table fill cache", K(ext_files), K(key));
     }
   }
-  if (fill_cache_locks_[bucket_id].self_locked()) {
-    fill_cache_locks_[bucket_id].unlock();
+  if (get_lock(bucket_id)->self_locked()) {
+    get_lock(bucket_id)->unlock();
   }
   return ret;
 }

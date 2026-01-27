@@ -74,6 +74,8 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     write_ctx_(),
     merge_op_allocator_("TLD_MergeOp"),
     merge_root_op_(nullptr),
+    op_lock_(common::ObLatchIds::OB_TABLE_LOAD_STORE_CTX_MUTEX),
+    status_lock_(common::ObLatchIds::OB_TABLE_LOAD_STORE_STATUS_LOCK),
     status_(ObTableLoadStatusType::NONE),
     error_code_(OB_SUCCESS),
     rwlock_(common::ObLatchIds::TABLE_LOAD_STORE_RW_LOCK),

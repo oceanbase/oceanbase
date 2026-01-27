@@ -729,7 +729,7 @@ ObTenant::ObTenant(const int64_t id,
                    const int64_t times_of_workers,
                    ObCgroupCtrl &cgroup_ctrl)
     : ObTenantBase(id, epoch, true),
-      meta_lock_(),
+      meta_lock_(common::ObLatchIds::OB_TENANT_META_LOCK),
       tenant_meta_(),
       shrink_(0),
       total_worker_cnt_(0),

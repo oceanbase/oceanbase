@@ -141,8 +141,7 @@ template<class Key, class Value>
 class ObDirectLoadMultiMap
 {
 public:
-  ObDirectLoadMultiMap()
-  {
+  ObDirectLoadMultiMap() : mutex_(common::ObLatchIds::OB_DIRECT_LOAD_MULTI_MAP_MUTEX)  {
   }
 
   int init()

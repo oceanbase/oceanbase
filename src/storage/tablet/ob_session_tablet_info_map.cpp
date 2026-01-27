@@ -50,7 +50,7 @@ OB_SERIALIZE_MEMBER(ObSessionTabletInfo,
 
 ObSessionTabletInfoMap::ObSessionTabletInfoMap()
   : tablet_infos_(),
-    mutex_()
+    mutex_(common::ObLatchIds::SESSION_TABLET_INFO_MAP_LOCK)
 {
   tablet_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "SessTblInfoM"));
 }

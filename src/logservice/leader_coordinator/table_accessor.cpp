@@ -19,7 +19,7 @@ namespace logservice
 {
 namespace coordinator
 {
-TableAccessor::ServerZoneNameCache TableAccessor::SERVER_ZONE_NAME_CACHE;
+TableAccessor::ServerZoneNameCache TableAccessor::SERVER_ZONE_NAME_CACHE(common::ObLatchIds::OB_LEADER_COORDINATOR_TABLE_ACCESSOR_LOCK);
 using namespace common;
 
 int get_tenant_server_list(common::ObIArray<common::ObAddr> &tenant_server_list)

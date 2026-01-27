@@ -535,7 +535,7 @@ ObAsyncTask *ObForeignKeyConstraintValidationTask::deep_copy(char *buf, const in
 }
 
 ObConstraintTask::ObConstraintTask()
-  : ObDDLTask(ObDDLType::DDL_INVALID), lock_(),
+  : ObDDLTask(ObDDLType::DDL_INVALID), lock_(common::ObLatchIds::OB_CONSTRAINT_TASK_LOCK),
     alter_table_arg_(), root_service_(nullptr), check_job_ret_code_(INT64_MAX), check_replica_request_time_(0)
 {
 }

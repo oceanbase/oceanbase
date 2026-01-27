@@ -242,7 +242,7 @@ int ObTransService::start()
   return ret;
 }
 
-ObTransService::TenantConfigCache::TenantConfigCache()
+ObTransService::TenantConfigCache::TenantConfigCache() : lock_(common::ObLatchIds::OB_TRANS_TENANT_CONFIG_CACHE_LATCH)
 {
   reset();
 }

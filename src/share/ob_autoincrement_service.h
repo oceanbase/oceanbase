@@ -503,7 +503,11 @@ private:
   //common::hash::ObHashMap<AutoincKey, TableNode*> node_map_;
   NodeMap node_map_;
   const static int INIT_NODE_MUTEX_NUM = 1024;
-  lib::ObMutex init_node_mutex_[INIT_NODE_MUTEX_NUM];
+  struct InitNodeMutexWrapper {
+    lib::ObMutex mutex_;
+    InitNodeMutexWrapper() : mutex_(common::ObLatchIds::AUTO_INCREMENT_INIT_LOCK) {}
+  };
+  InitNodeMutexWrapper init_node_mutex_[INIT_NODE_MUTEX_NUM];
 };
 }//end namespace share
 }//end namespace oceanbase

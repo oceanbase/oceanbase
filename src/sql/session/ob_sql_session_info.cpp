@@ -193,7 +193,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       unit_gc_min_sup_proxy_version_(0),
       external_resource_schema_cache_(nullptr),
       has_ccl_rule_(false),
-      last_update_ccl_cnt_time_(-1)
+      last_update_ccl_cnt_time_(-1),
+      curr_request_id_(0)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));

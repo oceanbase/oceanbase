@@ -129,9 +129,9 @@ int ObMacroBlockRewriteSeqGenerator::generate_next_sequence(uint64_t &blk_seq) {
  */
 ObBlockManager::ObBlockManager()
     : bucket_lock_(), block_map_(), super_block_fd_(), default_block_size_(0),
-      marker_status_(), marker_lock_(), is_mark_sweep_enabled_(false),
-      sweep_lock_(), mark_block_task_(*this), inspect_bad_block_task_(*this),
-      timer_(), bad_block_lock_(), io_device_(NULL), blk_seq_generator_(),
+      marker_status_(), marker_lock_(common::ObLatchIds::OB_BLOCK_MANAGER_MARKER_LOCK), is_mark_sweep_enabled_(false),
+      sweep_lock_(common::ObLatchIds::OB_BLOCK_MANAGER_SWEEP_LOCK), mark_block_task_(*this), inspect_bad_block_task_(*this),
+      timer_(), bad_block_lock_(common::ObLatchIds::OB_BLOCK_MANAGER_BAD_BLOCK_LOCK), io_device_(NULL), blk_seq_generator_(),
       alloc_num_(0), group_id_(0), is_inited_(false), is_started_(false),
       pending_free_count_(0) {}
 
@@ -152,7 +152,7 @@ int ObBlockManager::init(ObIODevice *io_device, const int64_t block_size) {
   } else if (OB_FAIL(timer_.init("BlkMgr"))) {
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT,
-                                       ObLatchIds::BLOCK_MANAGER_LOCK))) {
+                                       ObLatchIds::OB_BLOCK_MANAGER_BUCKET_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else if (OB_FAIL(block_map_.init(SET_USE_UNEXPECTED_500(
                  ObMemAttr(OB_SERVER_TENANT_ID, "BlockMap"))))) {

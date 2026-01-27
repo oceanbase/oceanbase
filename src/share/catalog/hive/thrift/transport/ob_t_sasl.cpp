@@ -167,7 +167,7 @@ void TSasl::dispose_sasl_context()
 /*---------------------start of TSaslClient----------------------------*/
 
 // Define static mutex for TSaslClient
-oceanbase::lib::ObMutex TSaslClient::static_mutex_;
+oceanbase::lib::ObMutex TSaslClient::static_mutex_(oceanbase::common::ObLatchIds::T_SASL_CLIENT_MUTEX);
 TSaslClient::TSaslClient(const ObString &service, const ObString &server_FQDN,
                          const sasl_callback_t *callbacks, const ObString &mechanisms,
                          const ObString &authentication_id)

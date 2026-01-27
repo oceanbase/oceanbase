@@ -30,7 +30,7 @@ namespace storage
 {
 
 ObActiveDDLKVMgr::ObActiveDDLKVMgr()
-  : lock_(), active_ddl_tablets_()
+  : lock_(common::ObLatchIds::OB_ACTIVE_D_D_L_K_V_MGR_LOCK), active_ddl_tablets_()
 {
 }
 

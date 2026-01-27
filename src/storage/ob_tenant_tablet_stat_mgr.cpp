@@ -696,7 +696,7 @@ int ObTenantTabletStatMgr::init(const int64_t tenant_id)
   } else if (OB_FAIL(stream_map_.create(DEFAULT_BUCKET_NUM, ObMemAttr(tenant_id, "TabletStats")))) {
     LOG_WARN("failed to create TabletStats", K(ret));
   } else if (FALSE_IT(bucket_num = stream_map_.bucket_count())) {
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::DEFAULT_BUCKET_LOCK,
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::TENANT_TABLET_STAT_LOCK,
                                        ObMemAttr(tenant_id, "TabStatMgrLock")))) {
     LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TabletStatRpt, report_tg_id_))) {

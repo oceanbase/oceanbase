@@ -41,9 +41,9 @@ ObTxCallbackList::ObTxCallbackList(ObTransCallbackMgr &callback_mgr, const int16
     checksum_(0),
     tmp_checksum_(0),
     callback_mgr_(callback_mgr),
-    append_latch_(),
-    log_latch_(),
-    iter_synced_latch_()
+    append_latch_(common::ObLatchIds::TX_CALLBACK_LIST_APPEND_LOCK),
+    log_latch_(common::ObLatchIds::TX_CALLBACK_LIST_LOG_LOCK),
+    iter_synced_latch_(common::ObLatchIds::TX_CALLBACK_LIST_ITER_SYNCED_LOCK)
 {
   reset();
 }

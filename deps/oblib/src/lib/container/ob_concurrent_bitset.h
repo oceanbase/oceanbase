@@ -25,7 +25,7 @@ private:
   static const uint64_t FULL_WORD_VALUE = UINT64_MAX;
   static const uint16_t WORD_NUM = (SIZE / PER_WORD_BIT_NUM) + 1;
 public:
-  ObConcurrentBitset() : word_array_(), start_pos_(0), mutex_()
+  ObConcurrentBitset() : word_array_(), start_pos_(0), mutex_(common::ObLatchIds::CONCURRENT_BITSET_MUTEX)
   {
     memset(word_array_, 0, sizeof(word_array_));
   }

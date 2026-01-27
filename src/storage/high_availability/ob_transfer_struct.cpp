@@ -767,7 +767,7 @@ ObTransferRelatedInfo::ObTransferRelatedInfo()
     finish_out_log_replay_num_(0),
     finish_in_log_replay_num_(0),
     map_(),
-    lock_()
+    lock_(common::ObLatchIds::OB_TRANSFER_STRUCT_RELATED_INFO_LOCK)
 {
 }
 
@@ -1175,7 +1175,7 @@ int ObTransferRelatedInfo::get_related_info_task_id(share::ObTransferTaskID &tas
 
 /******************ObTransferTabletInfoMgr*********************/
 ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::ObTransferTabletInfoMgr()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_TRANSFER_TABLET_INFO_MGR_LOCK),
     tablet_info_array_(),
     storage_schema_mgr_()
 
@@ -1268,7 +1268,7 @@ int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::build_storage_schema(
 
 /******************ObTransferBuildTabletInfoCtx*********************/
 ObTransferBuildTabletInfoCtx::ObTransferBuildTabletInfoCtx()
-  : lock_(),
+  : lock_(common::ObLatchIds::OB_TRANSFER_BUILD_TABLET_INFO_CTX_LOCK),
     dest_ls_id_(),
     index_(0),
     tablet_info_array_(),

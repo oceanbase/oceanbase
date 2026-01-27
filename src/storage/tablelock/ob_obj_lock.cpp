@@ -86,7 +86,7 @@ int ObTableLockOpLinkNode::get_table_lock_store_info(ObTableLockOp &info)
   return ret;
 }
 
-ObOBJLock::ObOBJLock(const ObLockID &lock_id) : lock_id_(lock_id), priority_queue_()
+ObOBJLock::ObOBJLock(const ObLockID &lock_id) : rwlock_(common::ObLatchIds::OB_OBJ_LOCK_RWLOCK), lock_id_(lock_id), priority_queue_()
 {
   is_deleted_ = false;
   row_share_ = 0;

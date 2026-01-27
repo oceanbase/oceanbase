@@ -269,7 +269,7 @@ int ObTabletAutoincrementService::acquire_mgr(
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("get from map failed", K(ret));
     } else {
-      lib::ObMutex &mutex = init_node_mutexs_[key.tablet_id_.id() % INIT_NODE_MUTEX_NUM];
+      lib::ObMutex &mutex = init_node_mutexs_[key.tablet_id_.id() % INIT_NODE_MUTEX_NUM].mutex_;
       lib::ObMutexGuard guard(mutex);
       if (OB_ENTRY_NOT_EXIST == (ret = tablet_autoinc_mgr_map_.get(key, autoinc_mgr))) {
         if (OB_FAIL(tablet_autoinc_mgr_map_.alloc_value(autoinc_mgr))) {
@@ -431,9 +431,6 @@ int ObTabletAutoincrementService::init()
   } else if (OB_FAIL(tablet_autoinc_mgr_map_.init(attr))) {
     LOG_WARN("failed to init table node map", K(ret));
   } else {
-    for (int64_t i = 0; i < INIT_NODE_MUTEX_NUM; ++i) {
-      init_node_mutexs_[i].set_latch_id(common::ObLatchIds::TABLET_AUTO_INCREMENT_SERVICE_LOCK);
-    }
     is_inited_ = true;
   }
   return ret;
@@ -488,7 +485,7 @@ int ObTabletAutoincrementService::clear_tablet_autoinc_seq_cache(
     ObTabletAutoincKey key;
     key.tenant_id_ = tenant_id;
     key.tablet_id_ = tablet_ids.at(i);
-    lib::ObMutex &mutex = init_node_mutexs_[key.tablet_id_.id() % INIT_NODE_MUTEX_NUM];
+    lib::ObMutex &mutex = init_node_mutexs_[key.tablet_id_.id() % INIT_NODE_MUTEX_NUM].mutex_;
     lib::ObMutexGuardWithTimeout guard(mutex, abs_timeout_us);
     if (OB_FAIL(guard.get_ret())) {
       LOG_WARN("failed to lock", K(ret));

@@ -21,7 +21,7 @@ namespace storage
 
 ObTabletCopyDependencyMgr::ObTabletCopyDependencyMgr()
   : is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::TABLET_COPY_DEPENDENCY_MGR_LOCK),
     dependency_info_allocator_(),
     ready_info_allocator_(sizeof(ReadyTabletInfo), ObMemAttr(MTL_ID(), "ReadyTblInfo")),
     is_ready_(false),

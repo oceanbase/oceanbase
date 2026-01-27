@@ -23,7 +23,7 @@ TEST(ObBucketLock, succeed_wrlock_all)
 {
   ObBucketLock lock;
   const int64_t bucket_count = 1024;
-  lock.init(bucket_count);
+  lock.init(bucket_count, common::ObLatchIds::TEST_LATCH_LOCK);
 
   ObBucketTryWLockAllGuard guard(lock);
   ASSERT_EQ(OB_SUCCESS, guard.get_ret());
@@ -38,7 +38,7 @@ TEST(ObBucketLock, succeed_rdlock_all)
 {
   ObBucketLock lock;
   const int64_t bucket_count = 1024;
-  lock.init(bucket_count);
+  lock.init(bucket_count, common::ObLatchIds::TEST_LATCH_LOCK);
 
   ObBucketTryRLockAllGuard guard(lock);
   ASSERT_EQ(OB_SUCCESS, guard.get_ret());
@@ -61,7 +61,7 @@ TEST(ObBucketLock, failed_lock_all_because_of_wlock)
     ASSERT_EQ(OB_NOT_INIT, guard.get_ret());
   }
 
-  lock.init(1024);
+  lock.init(1024, common::ObLatchIds::TEST_LATCH_LOCK);
 
   {
     lock.wrlock(100);
@@ -99,7 +99,7 @@ TEST(ObBucketLock, failed_lock_all_because_of_wlock)
 TEST(ObBucketLock, failed_lock_all_because_of_rlock)
 {
   ObBucketLock lock;
-  lock.init(1024);
+  lock.init(1024, common::ObLatchIds::TEST_LATCH_LOCK);
 
   lock.rdlock(100);
 
@@ -127,7 +127,7 @@ TEST(ObBucketLock, wlock_multi_buckets)
   ObBucketLock lock;
   ObArray<uint64_t> bucket_array;
 
-  lock.init(1024);
+  lock.init(1024, common::ObLatchIds::TEST_LATCH_LOCK);
 
   {
     ObMultiBucketLockGuard guard(lock, true/*is_write_lock*/);
@@ -158,7 +158,7 @@ TEST(ObBucketLock, rlock_multi_buckets)
   ObBucketLock lock;
   ObArray<uint64_t> bucket_array;
 
-  lock.init(1024);
+  lock.init(1024, common::ObLatchIds::TEST_LATCH_LOCK);
 
   {
     ObMultiBucketLockGuard guard(lock, false/*is_write_lock*/);
@@ -192,7 +192,7 @@ TEST(ObBucketLock, rlock_multi_buckets)
 TEST(ObBucketLock, hash_rlock)
 {
   ObBucketLock lock;
-  lock.init(1024);
+  lock.init(1024, common::ObLatchIds::TEST_LATCH_LOCK);
 
   {
     ObBucketHashRLockGuard guard(lock, 1);
@@ -211,7 +211,7 @@ TEST(ObBucketLock, hash_rlock)
 TEST(ObBucketLock, hash_wlock)
 {
   ObBucketLock lock;
-  lock.init(1024);
+  lock.init(1024, common::ObLatchIds::TEST_LATCH_LOCK);
 
   {
     ObBucketHashWLockGuard guard(lock, 1);

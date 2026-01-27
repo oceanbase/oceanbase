@@ -244,12 +244,13 @@ struct ObExecTimestamp {
   int64_t decode_t_;
   int64_t get_plan_t_;
   int64_t executor_t_;
+  int64_t commit_t_;
 
   TO_STRING_KV(K(exec_type_), K(rpc_send_ts_), K(receive_ts_), K(enter_queue_ts_),
                K(run_ts_), K(before_process_ts_), K(single_process_ts_),
                K(process_executor_ts_), K(executor_end_ts_), K(multistmt_start_ts_),
                K(elapsed_t_), K(net_t_), K(net_wait_t_), K(queue_t_),
-               K(decode_t_), K(get_plan_t_), K(executor_t_));
+               K(decode_t_), K(get_plan_t_), K(executor_t_), K_(commit_t));
 
   //出现重试时时间累加
   void update_stage_time() {
@@ -345,6 +346,7 @@ struct ObAuditRecordData {
     ccl_rule_id_ = 0;
     ccl_match_time_ = 0;
     cursor_elapsed_ = 0;
+    request_id_ = 0;
   }
 
   int64_t get_elapsed_time() const

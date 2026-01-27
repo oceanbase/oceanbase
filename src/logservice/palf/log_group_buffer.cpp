@@ -19,7 +19,8 @@ namespace oceanbase
 using namespace share;
 namespace palf
 {
-LogGroupBuffer::LogGroupBuffer()
+LogGroupBuffer::LogGroupBuffer() :
+    truncate_lock_(common::ObLatchIds::LOG_GROUP_BUFFER_SPIN_LOCK)
 {
   reset();
 }

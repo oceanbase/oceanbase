@@ -24,7 +24,7 @@ namespace common
 class DRWLock
 {
 public:
-  explicit DRWLock(const uint32_t latch_id = ObLatchIds::DEFAULT_DRW_LOCK) : latches_(), latch_id_(latch_id) {}
+  explicit DRWLock(const uint32_t latch_id) : latches_(), latch_id_(latch_id) {}
   ~DRWLock() {}
   inline int rdlock();
   inline int try_rdlock();

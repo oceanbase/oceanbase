@@ -42,7 +42,7 @@ ObArchiveFetcher::ObArchiveFetcher() :
   ls_mgr_(NULL),
   round_mgr_(NULL),
   task_queue_(),
-  fetch_cond_()
+  fetch_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::ARCHIVE_FETCHER_COND_WAIT)
 {}
 
 ObArchiveFetcher::~ObArchiveFetcher()

@@ -136,6 +136,7 @@ void ObSchemaConstructTask::wait(const int64_t version)
     LOG_WARN_RET(OB_SUCCESS, "task: waiting", K(version), K(count()));
   }
   int rc = 0;
+  ObWaitEventGuard guard(ObWaitEventIds::SCHEMA_CONSTRUCT_TASK_WAIT, 0, version);
   do {
     rc = ob_pthread_cond_timedwait(&schema_cond_, &schema_mutex_, &ts);
   } while (0);

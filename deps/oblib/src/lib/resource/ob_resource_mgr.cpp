@@ -359,11 +359,10 @@ const ObTenantMemoryMgr *ObTenantResourceMgrHandle::get_memory_mgr() const
 }
 
 ObResourceMgr::ObResourceMgr()
-  : inited_(false), cache_washer_(NULL), locks_(), tenant_resource_mgrs_()
+  : inited_(false), cache_washer_(NULL), tenant_resource_mgrs_()
 {
   for (int64_t i = 0; i < MAX_TENANT_COUNT; ++i) {
-    locks_[i].enable_record_stat(false);
-    locks_[i].set_latch_id(common::ObLatchIds::TENANT_RES_MGR_LIST_LOCK);
+    locks_[i].lock_.enable_record_stat(false);
   }
 }
 
@@ -398,7 +397,7 @@ ObResourceMgr &ObResourceMgr::get_instance()
   if (!resource_mgr.inited_) {
     // use first lock to avoid concurrent init of resource mgr
     ObDisableDiagnoseGuard disable_diagnose_guard;
-    SpinWLockGuard guard(resource_mgr.locks_[0]);
+    SpinWLockGuard guard(resource_mgr.locks_[0].lock_);
     if (!resource_mgr.inited_) {
       int ret = OB_SUCCESS;
       if (OB_FAIL(resource_mgr.init())) {
@@ -419,7 +418,7 @@ int ObResourceMgr::set_cache_washer(ObICacheWasher &cache_washer)
     cache_washer_ = &cache_washer;
     for (int64_t pos = 0; pos < MAX_TENANT_COUNT; ++pos) {
       ObDisableDiagnoseGuard disable_diagnose_guard;
-      SpinWLockGuard guard(locks_[pos]);
+      SpinWLockGuard guard(locks_[pos].lock_);
       ObTenantResourceMgr *tenant_resource_mgr = tenant_resource_mgrs_[pos];
       while (NULL != tenant_resource_mgr) {
         tenant_resource_mgr->memory_mgr_.set_cache_washer(cache_washer);
@@ -446,7 +445,7 @@ int ObResourceMgr::get_tenant_resource_mgr(const uint64_t tenant_id,
     ObDisableDiagnoseGuard disable_diagnose_guard;
     ObTenantResourceMgr *tenant_resource_mgr = NULL;
     {
-      SpinRLockGuard guard(locks_[pos]);
+      SpinRLockGuard guard(locks_[pos].lock_);
       if (OB_FAIL(get_tenant_resource_mgr_unsafe(tenant_id, tenant_resource_mgr))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("get_tenant_resource_mgr_unsafe failed", K(ret), K(tenant_id));
@@ -459,7 +458,7 @@ int ObResourceMgr::get_tenant_resource_mgr(const uint64_t tenant_id,
     }
 
     if (OB_SUCC(ret) && !handle.is_valid()) {
-      SpinWLockGuard guard(locks_[pos]);
+      SpinWLockGuard guard(locks_[pos].lock_);
       // maybe other thread create, so retry get here
       if (OB_FAIL(get_tenant_resource_mgr_unsafe(tenant_id, tenant_resource_mgr))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
@@ -493,7 +492,7 @@ void ObResourceMgr::dec_ref(ObTenantResourceMgr *tenant_resource_mgr)
   if (NULL != tenant_resource_mgr) {
     const int64_t pos = tenant_resource_mgr->tenant_id_ % MAX_TENANT_COUNT;
     ObDisableDiagnoseGuard disable_diagnose_guard;
-    SpinWLockGuard guard(locks_[pos]);
+    SpinWLockGuard guard(locks_[pos].lock_);
     int64_t ref_cnt = 0;
     if (0 == (ref_cnt = ATOMIC_SAF(&tenant_resource_mgr->ref_cnt_, 1))) {
       int ret = OB_SUCCESS;

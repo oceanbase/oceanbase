@@ -267,7 +267,9 @@ public:
   int do_init();
   static PyThreadState *get_main_state() { return get_instance().main_state_; }
 private:
-  PyFunctionHelper()
+  PyFunctionHelper():
+    lock_(common::ObLatchIds::OB_PY_FUNCTION_HELPER_LOCK),
+    load_lib_lock_(common::ObLatchIds::OB_PY_HELPER_LOCK)
   {
     int ret = OB_SUCCESS;
     if (is_inited_) {

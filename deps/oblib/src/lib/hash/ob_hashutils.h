@@ -123,6 +123,8 @@ class MutexLocker
 public:
   explicit MutexLocker(pthread_mutex_t &mutex) : succ_(false), mutex_(NULL)
   {
+    oceanbase::common::ObWaitEventGuard
+      wait_guard(oceanbase::common::ObWaitEventIds::HASH_MAP_LOCK_WAIT, 0, reinterpret_cast<uint64_t>(this));
     if (0 != pthread_mutex_lock(&mutex)) {
       HASH_WRITE_LOG_RET(HASH_WARNING, OB_ERR_SYS, "lock mutex fail errno=%u", errno);
     } else {

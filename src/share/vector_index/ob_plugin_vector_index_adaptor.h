@@ -967,8 +967,8 @@ private:
   ObString snapshot_key_prefix_; // name rule: TabletID_SCN
 
   common::ObSpinLock opt_task_lock_;
-  common::ObSpinLock reload_lock_{ObLatchIds::VECTOR_RELOAD_LOCK};  // lock for reload from table
-  RWLock query_lock_{ObLatchIds::VECTOR_QUERY_LOCK};// lock for async task and query
+  common::ObSpinLock reload_lock_;  // lock for reload from table
+  RWLock query_lock_;// lock for async task and query
   bool reload_finish_;
   int64_t last_embedding_time_;
 

@@ -38,6 +38,7 @@ public:
         stack_size_(global_thread_stack_size),
         thread_group_id_(OB_INVALID_GROUP_ID),
         stop_(true),
+        lock_(common::ObLatchIds::OB_THREADS_LOCK),
         run_wrapper_(nullptr),
         numa_info_()
   {}

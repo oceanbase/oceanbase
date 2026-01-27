@@ -238,7 +238,7 @@ public:
 public:
   ObWindowCompactionBaseContainer(ObWindowCompactionMemoryContext &mem_ctx,
                                   ObWindowCompactionScoreTracker &score_tracker)
-    : lock_(),
+    : lock_(common::ObLatchIds::WINDOW_COMPACTION_BASE_CONTAINER_LOCK),
       mem_ctx_(mem_ctx),
       score_tracker_(score_tracker)
   {}

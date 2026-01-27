@@ -92,7 +92,7 @@ public:
       px_sequence_id_(OB_INVALID_ID), task_id_(OB_INVALID_ID),
       tenant_id_(OB_INVALID_ID), timeout_ts_(0),
       start_time_(0), msg_type_(NOT_INIT),
-      lock_(), allocator_(), msg_receive_cur_cnt_(0),
+      lock_(common::ObLatchIds::OB_P2P_DH_MSG_LOCK), allocator_(), msg_receive_cur_cnt_(0),
       msg_receive_expect_cnt_(0), is_active_(true),
       is_ready_(false), is_empty_(true), ref_count_(0),
       register_dm_info_(), dm_cb_node_seq_id_(0) {}

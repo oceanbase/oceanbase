@@ -34,7 +34,7 @@ ObLogSQLServerProvider::ObLogSQLServerProvider() : inited_(false),
                                                    is_using_rs_list_(false),
                                                    server_list_(ObModIds::OB_LOG_SERVER_PROVIDER, OB_MALLOC_NORMAL_BLOCK_SIZE),
                                                    refresh_lock_(ObLatchIds::OBCDC_SQLSERVER_LOCK),
-                                                   rs_conf_lock_(),
+                                                   rs_conf_lock_(ObLatchIds::OB_RS_CONF_LOCK),
                                                    svr_blacklist_()
 {
   (void)memset(rs_list_, 0, sizeof(char) * MAX_CONFIG_LENGTH);

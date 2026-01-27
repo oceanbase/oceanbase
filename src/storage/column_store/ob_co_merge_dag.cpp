@@ -384,7 +384,7 @@ ObCOMergeExeDag::ObCOMergeExeDag()
     merge_batch_size_(DEFAULT_CG_MERGE_BATCH_SIZE),
     range_status_(nullptr),
     cg_merge_status_(nullptr),
-    exe_lock_(),
+    exe_lock_(common::ObLatchIds::OB_CO_MERGE_EXE_DAG_LOCK),
     merge_progress_(nullptr)
 {}
 

@@ -192,6 +192,8 @@ ObDtlBasicChannel::ObDtlBasicChannel(
           peer_id_(id ^ 1),
           write_buffer_(nullptr),
           process_buffer_(nullptr),
+          send_sem_(common::ObWaitEventIds::DTL_PROCESS_BUFFER_SEND_WAIT),
+          recv_sem_(common::ObWaitEventIds::DTL_PROCESS_BUFFER_RECEIVE_WAIT),
           alloc_new_buf_(false),
           seq_no_(0),
           send_buffer_cnt_(0),

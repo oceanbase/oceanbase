@@ -82,7 +82,7 @@ public:
 private:
   ObQueryHashMap *get_query_session_map();
   int generate_query_sessid(uint64_t &sess_id);
-  lib::ObMutex& get_locker(uint64_t sessid) { return locker_arr_[sessid % DEFAULT_LOCK_ARR_SIZE];}
+  lib::ObMutex& get_locker(uint64_t sessid) { return locker_arr_[sessid % DEFAULT_LOCK_ARR_SIZE].mutex_;}
   int generate_new_session_ids(const int64_t arg_session_count);
   int release_occupied_session_id(const int64_t sess_id);
 
@@ -101,10 +101,14 @@ private:
   static const uint64_t INIT_ARRAY_SIZE = 10000;
 
 private:
+  struct LockerWrapper {
+    lib::ObMutex mutex_;
+    LockerWrapper() : mutex_(common::ObLatchIds::TABLE_API_LOCK) {}
+  };
   common::ObFIFOAllocator allocator_;
   int64_t session_id_;
   ObQueryHashMap query_session_map_;
-  lib::ObMutex locker_arr_[DEFAULT_LOCK_ARR_SIZE];
+  LockerWrapper locker_arr_[DEFAULT_LOCK_ARR_SIZE];
   common::ObTimer timer_;
   bool is_inited_;
   uint64_t session_count_;

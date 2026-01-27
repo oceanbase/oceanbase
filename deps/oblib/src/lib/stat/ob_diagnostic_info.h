@@ -28,7 +28,8 @@ class ObSrvDeliver;
 namespace common
 {
 
-#define WAIT_EVENT_LIST_THRESHOLD 10
+// TODO(roland.qk) perf test to determine a best threshold.
+#define WAIT_EVENT_LIST_THRESHOLD 30
 
 class ObDiagnosticInfoSwitchGuard;
 

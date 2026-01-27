@@ -2318,6 +2318,7 @@ int ObDDLWaitTransEndCtx::get_snapshot_check_list(
 /***************         ObDDLWaitColumnChecksumCtx        *************/
 
 ObDDLWaitColumnChecksumCtx::ObDDLWaitColumnChecksumCtx()
+  : lock_(common::ObLatchIds::OB_DDL_WAIT_COLUMN_CHECKSUM_CTX_LOCK)
 {
   reset();
 }

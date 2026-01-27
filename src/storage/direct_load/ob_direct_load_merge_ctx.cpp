@@ -325,6 +325,7 @@ ObDirectLoadTabletMergeCtx::ObDirectLoadTabletMergeCtx()
     param_(nullptr),
     insert_tablet_ctx_(nullptr),
     parallel_idx_(0),
+    mutex_(common::ObLatchIds::OB_DIRECT_LOAD_MERGE_CTX_MUTEX),
     task_finish_cnt_(0),
     task_ret_code_(OB_SUCCESS),
     is_inited_(false)

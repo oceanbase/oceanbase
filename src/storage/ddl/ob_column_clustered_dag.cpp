@@ -30,7 +30,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
 ObColumnClusteredDag::ObColumnClusteredDag()
-  : px_thread_count_(0), px_finished_count_(0), is_range_count_ready_(false), total_slice_count_(0), use_static_plan_(true), is_vec_tablet_rebuild_(false)
+  : px_thread_count_(0), px_finished_count_(0), mutex_(common::ObLatchIds::OB_COLUMN_CLUSTERED_DAG_MUTEX), is_range_count_ready_(false), total_slice_count_(0), use_static_plan_(true), is_vec_tablet_rebuild_(false)
 {
 
 }

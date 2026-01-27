@@ -1214,10 +1214,13 @@ int ObEmbeddingTask::get_task_info_for_virtual_table(ObEmbeddingTaskInfo &task_i
 
 //=============================================== ObEmbeddingTaskHandler ================================================
 
-ObEmbeddingTaskHandler::ObEmbeddingTaskHandler() : is_inited_(false),
+ObEmbeddingTaskHandler::ObEmbeddingTaskHandler() : lock_(common::ObLatchIds::OB_EMBEDDING_TASK_HANDLER_SPIN_LOCK),
+                                                  is_inited_(false),
                                                   tg_id_(ObEmbeddingTaskHandler::INVALID_TG_ID),
                                                   task_ref_cnt_(0),
-                                                  dropped_task_cnt_(0) {}
+                                                  dropped_task_cnt_(0),
+                                                  task_list_lock_(common::ObLatchIds::OB_VECTOR_EMBEDDING_HANDLER_TASK_LIST_LOCK)
+                                                  {}
 
 ObEmbeddingTaskHandler::~ObEmbeddingTaskHandler()
 {

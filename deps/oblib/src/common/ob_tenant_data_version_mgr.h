@@ -51,7 +51,8 @@ class ObTenantDataVersionMgr
 {
 public:
   ObTenantDataVersionMgr()
-      : is_inited_(false), allocator_(lib::ObLabel("TenantDVMgr")), mock_data_version_(0),
+      : is_inited_(false), map_(), lock_(common::ObLatchIds::OB_TENANT_DATA_VERSION_MGR_LOCK),
+        allocator_(lib::ObLabel("TenantDVMgr")), mock_data_version_(0),
         enable_compatible_monotonic_(false), file_exists_when_loading_(false)
   {
   }

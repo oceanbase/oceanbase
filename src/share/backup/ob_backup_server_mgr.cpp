@@ -16,7 +16,7 @@ using namespace lib;
 
 ObBackupServerMgr::ObBackupServerMgr()
   : is_inited_(false),
-    mtx_(),
+    mtx_(common::ObLatchIds::OB_BACKUP_SERVER_MGR_LOCK),
     tenant_id_(OB_INVALID_TENANT_ID),
     server_op_(),
     unit_op_(),

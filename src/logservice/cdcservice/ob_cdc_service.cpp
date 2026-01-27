@@ -125,7 +125,7 @@ ObCdcService::ObCdcService()
     tg_id_(-1),
     dest_info_version_(0),
     dest_info_(),
-    dest_info_lock_(),
+    dest_info_lock_(common::ObLatchIds::OB_CDC_SERVICE_DEST_INFO_LOCK),
     ls_ctx_map_(),
     large_buffer_pool_(),
     log_ext_handler_()

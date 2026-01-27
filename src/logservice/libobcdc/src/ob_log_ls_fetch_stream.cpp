@@ -61,7 +61,7 @@ const char *FetchStream::print_state(State state)
   return str;
 }
 
-FetchStream::FetchStream() : fetch_log_arpc_(*this)
+FetchStream::FetchStream() : fetch_log_arpc_(*this), stat_lock_(common::ObLatchIds::OB_CDC_COMMON_LOCK)
 {
   reset();
 }

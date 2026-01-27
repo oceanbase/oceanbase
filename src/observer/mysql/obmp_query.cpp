@@ -1801,6 +1801,8 @@ inline void ObMPQuery::record_stat(const stmt::StmtType type,
               EVENT_INC(SQL_FAIL_COUNT);
             }
           }
+        } else {
+          LOG_WARN_RET(OB_SUCCESS, "unexpected stmt type for T_END_TRANS", K(session));
         }
         break;
 

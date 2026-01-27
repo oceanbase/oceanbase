@@ -51,7 +51,7 @@ ObTenantWeakReadService::ObTenantWeakReadService() :
     self_(),
     svr_version_mgr_(),
     cluster_service_(),
-    thread_cond_(),
+    thread_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::WRS_THREAD_COND_WAIT),
     last_refresh_locaction_cache_tstamp_(0),
     last_post_cluster_heartbeat_tstamp_(0),
     post_cluster_heartbeat_count_(0),

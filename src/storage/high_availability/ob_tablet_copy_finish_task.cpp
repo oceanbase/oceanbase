@@ -62,7 +62,7 @@ void ObTabletCopyFinishTaskParam::reset()
 ObTabletCopyFinishTask::ObTabletCopyFinishTask()
   : ObITask(TASK_TYPE_MIGRATE_FINISH_PHYSICAL),
     is_inited_(false),
-    lock_(common::ObLatchIds::BACKUP_LOCK),
+    lock_(common::ObLatchIds::OB_TABLET_COPY_FINISH_TASK_SPIN_RW_LOCK),
     ha_dag_(nullptr),
     arena_allocator_("TabCopyFinish"),
     minor_tables_handle_(),

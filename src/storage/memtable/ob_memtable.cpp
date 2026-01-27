@@ -128,7 +128,7 @@ ObMemtable::ObMemtable()
       mode_(lib::Worker::CompatMode::INVALID),
       minor_merged_time_(0),
       encrypt_meta_(nullptr),
-      encrypt_meta_lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
+      encrypt_meta_lock_(common::ObLatchIds::OB_MEMTABLE_ENCRYPT_META_LOCK),
       max_column_cnt_(0),
       micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION) {}
 

@@ -323,12 +323,12 @@ public:
     Block* blk_;
   } CACHE_ALIGNED;
 public:
-  ObDynamicVSliceAlloc(): nway_(0), bsize_(0), expand_lock_(), blk_alloc_(default_blk_alloc), arenas_count_(0) {
+  ObDynamicVSliceAlloc(): nway_(0), bsize_(0), expand_lock_(common::ObLatchIds::DYNAMIC_SLICE_ALLOC_EXPAND_LOCK), blk_alloc_(default_blk_alloc), arenas_count_(0) {
     reset_arena_pointers();
   }
   ObDynamicVSliceAlloc(const ObMemAttr &attr, const int64_t block_size = DEFAULT_BLOCK_SIZE,
       BlockAlloc &blk_alloc = default_blk_alloc)
-    : nway_(0), bsize_(block_size), mattr_(attr), expand_lock_(), blk_alloc_(blk_alloc), arenas_count_(0) {
+    : nway_(0), bsize_(block_size), mattr_(attr), expand_lock_(common::ObLatchIds::DYNAMIC_SLICE_ALLOC_EXPAND_LOCK), blk_alloc_(blk_alloc), arenas_count_(0) {
       reset_arena_pointers();
     }
   virtual ~ObDynamicVSliceAlloc() override { destroy(); }

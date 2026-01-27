@@ -92,7 +92,7 @@ public:
     err_(OB_SUCCESS),
     need_response_packet_(false),
     can_release_tx_desc_(false),
-    lock_() {}
+    lock_(common::ObLatchIds::PL_END_TRANS_LOCK) {}
 
   ~ObPLEndTransCb() override { reset(); }
 

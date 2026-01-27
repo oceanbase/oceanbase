@@ -260,10 +260,6 @@ int ObAutoincrementService::init(ObAddr &addr,
     LOG_WARN("failed to init cache handle allocator", K(ret));
   } else if (OB_FAIL(node_map_.init(attr))) {
     LOG_WARN("failed to init table node map", K(ret));
-  } else {
-    for (int64_t i = 0; i < INIT_NODE_MUTEX_NUM; ++i) {
-      init_node_mutex_[i].set_latch_id(common::ObLatchIds::AUTO_INCREMENT_INIT_LOCK);
-    }
   }
   return ret;
 }
@@ -948,7 +944,7 @@ int ObAutoincrementService::get_table_node(const AutoincParam &param, TableNode 
     if (ret != OB_ENTRY_NOT_EXIST) {
       LOG_ERROR("get from map failed", K(ret));
     } else {
-      lib::ObMutex &mutex = init_node_mutex_[table_id % INIT_NODE_MUTEX_NUM];
+      lib::ObMutex &mutex = init_node_mutex_[table_id % INIT_NODE_MUTEX_NUM].mutex_;
       if (OB_FAIL(mutex.lock())) {
         LOG_WARN("failed to get lock", K(ret));
       } else {

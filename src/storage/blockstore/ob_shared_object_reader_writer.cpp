@@ -721,7 +721,7 @@ const char *ObSharedObjectIOCallback::get_data()
 //=================================== ObSharedObjectReaderWriter =============================
 const MacroBlockId ObSharedObjectHeader::DEFAULT_MACRO_ID(0, MacroBlockId::AUTONOMIC_BLOCK_INDEX, 0);
 ObSharedObjectReaderWriter::ObSharedObjectReaderWriter()
-    : mutex_(), data_("SHARE_BLOCK", 0, false, false/*use_fixed_blk*/),
+    : mutex_(common::ObLatchIds::OB_SHARED_OBJECT_READER_WRITER_MUTEX), data_("SHARE_BLOCK", 0, false, false/*use_fixed_blk*/),
       object_handle_(), offset_(0), align_offset_(0), write_align_size_(0),
       hanging_(false), need_align_(false), need_cross_(false),
       is_inited_(false)

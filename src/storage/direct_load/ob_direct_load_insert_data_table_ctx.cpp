@@ -585,7 +585,7 @@ int ObDirectLoadInsertDataTabletContext::fill_column_group(const int64_t thread_
  */
 
 ObDirectLoadInsertDataTableContext::ObDirectLoadInsertDataTableContext()
-  : safe_allocator_(allocator_), lob_table_ctx_(nullptr)
+  : safe_allocator_(allocator_), mutex_(common::ObLatchIds::OB_DIRECT_LOAD_INSERT_DATA_TABLE_CONTEXT_MUTEX), lob_table_ctx_(nullptr)
 {
   sql_stats_.set_tenant_id(MTL_ID());
 }
