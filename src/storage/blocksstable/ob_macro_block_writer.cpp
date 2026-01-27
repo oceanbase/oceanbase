@@ -1860,6 +1860,11 @@ int ObMacroBlockWriter::build_micro_block_desc_with_rewrite(
           STORAGE_LOG(WARN, "fail to calc micro block column checksum", K(ret));
         }
       }
+      // After rewriting header fields (especially has_column_checksum_ / header_size_ / column_count_),
+      // we must recalculate header checksum to keep it consistent with the serialized header.
+      if (OB_SUCC(ret)) {
+        header.set_header_checksum();
+      }
     }
   }
   STORAGE_LOG(DEBUG, "build micro block desc rewrite", "tablet_id", data_store_desc_->get_tablet_id(),
