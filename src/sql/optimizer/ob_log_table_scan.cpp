@@ -1563,6 +1563,7 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
   bool is_table_without_pk_or_cluster_by = false;
+  const TableItem *table_item = NULL;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) ||
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1573,13 +1574,16 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
           && FALSE_IT(is_table_without_pk_or_cluster_by = (table_schema->is_table_without_pk() || table_schema->is_table_with_clustering_key()))) {
   } else if (OB_FAIL(get_stmt()->has_lob_column(table_id_, has_lob_column))) {
     LOG_WARN("failed to check whether stmt has lob column", K(ret));
+  } else if (OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(get_mbr_column_exprs(table_id_, spatial_exprs_))) {
     LOG_WARN("failed to check whether stmt has mbr column", K(ret));
   } else if (is_table_without_pk_or_cluster_by && is_index_global_ && index_back_ &&
              OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
     LOG_WARN("failed to get part column exprs", K(ret));
-  } else if ((has_lob_column || need_get_rowkey_exprs())
-      && OB_FAIL(get_plan()->get_rowkey_exprs(table_id_, ref_table_id_, rowkey_exprs_))) {
+  } else if ((has_lob_column || need_get_rowkey_exprs()) && !table_item->is_fake_cte_table()
+             && OB_FAIL(get_plan()->get_rowkey_exprs(table_id_, ref_table_id_, rowkey_exprs_))) {
     LOG_WARN("failed to generate rowkey exprs", K(ret));
   } else { /*do nothing*/ }
   return ret;
