@@ -6737,6 +6737,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[1] = 0;       /* distinct int and bool */
   $$->int16_values_[2] = $4[0];   /* 2 is the same index as float or number. */
   $$->int16_values_[3] = $3[0];
+  $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
 }
 | float_type_i opt_float_precision opt_unsigned_i opt_zerofill_i
@@ -6753,6 +6754,11 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
+  if (NULL != $2) {
+    $$->param_num_ = (-1 == $2->int16_values_[1]) ? 1 : 2;
+  } else {
+    $$->param_num_ = 0;
+  }
   $$->sql_str_off_ = @$.first_column;
 }
 | NUMBER opt_number_precision opt_unsigned_i opt_zerofill_i
@@ -6765,6 +6771,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
+  $$->param_num_ = (NULL != $2) ? $2->param_num_ : 0;
   $$->sql_str_off_ = $2->sql_str_off_;
 }
 | DECIMAL opt_number_precision opt_unsigned_i opt_zerofill_i
@@ -6777,6 +6784,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
+  $$->param_num_ = (NULL != $2) ? $2->param_num_ : 0;
   $$->sql_str_off_ = $2->sql_str_off_;
 }
 | FIXED opt_number_precision opt_unsigned_i opt_zerofill_i
@@ -6789,6 +6797,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
+  $$->param_num_ = (NULL != $2) ? $2->param_num_ : 0;
   $$->sql_str_off_ = $2->sql_str_off_;
 }
 | NUMERIC opt_number_precision opt_unsigned_i opt_zerofill_i
@@ -6801,6 +6810,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[3] = $3[0];
   $$->int16_values_[2] = $4[0];
+  $$->param_num_ = (NULL != $2) ? $2->param_num_ : 0;
   $$->sql_str_off_ = $2->sql_str_off_;
 }
 | BOOL
@@ -6809,6 +6819,8 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[0] = 1;
   $$->int16_values_[1] = 1;
   $$->int16_values_[2] = 0;  // zerofill always false
+  $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | BOOLEAN
 {
@@ -6816,16 +6828,20 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[0] = 1;
   $$->int16_values_[1] = 2;
   $$->int16_values_[2] = 0; // zerofill always false
+  $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | datetime_type_i opt_datetime_fsp_i
 {
   malloc_terminal_node($$, result->malloc_pool_, $1[0]);
   $$->int16_values_[1] = $2[0];
+  $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
 }
 | date_year_type_i
 {
   malloc_terminal_node($$, result->malloc_pool_, $1[0]);
+  $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
 }
 | CHARACTER opt_string_length_i opt_binary opt_charset
@@ -6833,6 +6849,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHAR, 3, $4, NULL, $3);
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
 }
 | NCHAR opt_string_length_i opt_binary
@@ -6856,6 +6873,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHAR, 3, charset_node, NULL, $3);
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
 }
 | NATIONAL CHARACTER opt_string_length_i opt_binary
@@ -6878,6 +6896,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHAR, 3, charset_node, NULL, $4);
   $$->int32_values_[0] = $3[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $3[1];
   $$->sql_str_off_ = @1.first_column;
 }
 
@@ -6893,6 +6912,8 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, $4, NULL, $3);
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $2[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | NCHAR VARCHAR string_length_i opt_binary
 {
@@ -6915,6 +6936,8 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, charset_node, NULL, $4);
   $$->int32_values_[0] = $3[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $3[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | NVARCHAR string_length_i opt_binary
 {
@@ -6937,6 +6960,8 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, charset_node, NULL, $3);
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $2[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | NATIONAL VARCHAR string_length_i opt_binary
 {
@@ -6958,12 +6983,16 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, charset_node, NULL, $4);
   $$->int32_values_[0] = $3[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $3[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | CHARACTER VARYING string_length_i opt_binary opt_charset
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, $5, NULL, $4);
   $$->int32_values_[0] = $3[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $3[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | NATIONAL CHARACTER VARYING string_length_i opt_binary
 {
@@ -6985,6 +7014,8 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, charset_node, NULL, $5);
   $$->int32_values_[0] = $4[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->param_num_ = $4[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | blob_type_i opt_string_length_i_v2
 {
@@ -6998,6 +7029,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 1; /* is binary */
   $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = $2[1];
 }
 | text_type_i opt_string_length_i_v2 opt_binary opt_charset
 {
@@ -7014,6 +7046,8 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   } else {
     $$->int32_values_[1] = 0; /* is text */
   }
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = $2[1];
 }
 | BINARY opt_string_length_i
 {
@@ -7024,6 +7058,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 1; /* is binary */
   $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = $2[1];
 }
 | VARBINARY string_length_i
 {
@@ -7031,6 +7066,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 1; /* is binary */
   $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = $2[1];
 }
 | STRING_VALUE /* wrong or unsupported data type */
 {
@@ -7038,6 +7074,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->str_value_ = $1->str_value_;
   $$->str_len_ = $1->str_len_;
   $$->sql_str_off_ = $1->sql_str_off_;
+  $$->param_num_ = 0;
 }
 | BIT opt_bit_length_i
 {
@@ -7049,6 +7086,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     malloc_terminal_node($$, result->malloc_pool_, T_BIT);
     $$->int16_values_[0] = $2[0];
     $$->sql_str_off_ = @1.first_column;
+    $$->param_num_ = $2[1];
   }
 }
 | ENUM '(' string_list ')' opt_binary opt_charset
@@ -7058,6 +7096,8 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_ENUM, 4, $6, NULL, $5, string_list_node);
   $$->int32_values_[0] = 0;//not used so far
   $$->int32_values_[1] = 0; /* is char */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | SET '(' string_list ')' opt_binary opt_charset
 {
@@ -7066,53 +7106,71 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_SET, 4, $6, NULL, $5, string_list_node);
   $$->int32_values_[0] = 0;//not used so far
   $$->int32_values_[1] = 0; /* is char */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | JSON
 {
   malloc_terminal_node($$, result->malloc_pool_, T_JSON);
   $$->int32_values_[0] = 0; /* length */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | GEOMETRY
 {
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 0; /* geometry, geometry uses collation type value convey sub geometry type. */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | POINT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 1; /* point, geometry uses collation type value convey sub geometry type. */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | LINESTRING
 {
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 2; /* linestring, geometry uses collation type value convey sub geometry type. */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | POLYGON
 {
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 3; /* polygon, geometry uses collation type value convey sub geometry type. */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | MULTIPOINT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 4; /* mutipoint, geometry uses collation type value convey sub geometry type. */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | MULTILINESTRING
 {
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 5; /* multilinestring, geometry uses collation type value convey sub geometry type. */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | MULTIPOLYGON
 {
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 6; /* multipolygon, geometry uses collation type value convey sub geometry type. */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | geometry_collection
 {
@@ -7120,16 +7178,20 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_terminal_node($$, result->malloc_pool_, T_GEOMETRY);
   $$->int32_values_[0] = 0; /* length */
   $$->int32_values_[1] = 7; /* geometrycollection, geometry uses collation type value convey sub geometry type. */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 | ARRAY '(' data_type ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $3);
   $$->int32_values_[0] = 0; /* arry type */
+  $$->param_num_ = 0;
 }
 | ARRAY COMP_LT data_type COMP_GT
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $3);
   $$->int32_values_[0] = 0; /* arry type */
+  $$->param_num_ = 0;
 }
 | ARRAY COMP_LT ARRAY COMP_LT data_type SHIFT_RIGHT
 {
@@ -7138,31 +7200,38 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   inner_array->int32_values_[0] = 0; /* arry type */
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, inner_array);
   $$->int32_values_[0] = 0; /* arry type */
+  $$->param_num_ = 0;
 }
 | data_type '[' ']'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $1);
   $$->int32_values_[0] = 0; /* arry type */
+  $$->param_num_ = 0;
 }
 | VECTOR '(' INTNUM ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $3);
   $$->int32_values_[0] = 1; /* vector type */
+  $$->param_num_ = 1;
 }
 | MAP '(' data_type ',' data_type ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 2, $3, $5);
   $$->int32_values_[0] = 2; /* map type */
+  $$->param_num_ = 0;
 }
 | SPARSEVECTOR
 {
   malloc_terminal_node($$, result->malloc_pool_, T_COLLECTION);
   $$->int32_values_[0] = 3; /* sparse vector type */
+  $$->param_num_ = 0;
 }
 | ROARINGBITMAP
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ROARINGBITMAP);
   $$->int32_values_[0] = 0; /* length */
+  $$->sql_str_off_ = @1.first_column;
+  $$->param_num_ = 0;
 }
 ;
 
@@ -7272,13 +7341,13 @@ TINYBLOB     { $$[0] = T_TINYTEXT; }
 ;
 
 opt_int_length_i:
-'(' INTNUM ')'  { $$[0] = $2->value_; }
-| /*EMPTY*/       { $$[0] = -1; }
+'(' INTNUM ')'  { $$[0] = $2->value_; $$[1] = 1; }
+| /*EMPTY*/       { $$[0] = -1; $$[1] = 0; }
 ;
 
 opt_bit_length_i:
-'(' INTNUM ')'  { $$[0] = $2->value_; }
-| /*EMPTY*/       { $$[0] = 1; }
+'(' INTNUM ')'  { $$[0] = $2->value_; $$[1] = 1; }
+| /*EMPTY*/       { $$[0] = 1; $$[1] = 0; }
 ;
 
 opt_float_precision:
