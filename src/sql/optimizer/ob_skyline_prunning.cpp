@@ -79,7 +79,7 @@ int ObInterestOrderDim::compare(const ObSkylineDim &other, CompareStat &status) 
 int ObInterestOrderDim::add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
-  if (column_ids.count() < 0 || column_ids.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+  if (column_ids.count() < 0 || column_ids.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("too many rowkey ids", K(ret), K(column_ids.count()));
   } else if (OB_FAIL(column_ids_.assign(column_ids))) {
@@ -91,7 +91,7 @@ int ObInterestOrderDim::add_interest_prefix_ids(const common::ObIArray<uint64_t>
 int ObInterestOrderDim::add_const_column_info(const common::ObIArray<bool> &const_column_info)
 {
   int ret = OB_SUCCESS;
-  if (const_column_info.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+  if (const_column_info.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("too many rowkey ids", K(ret), K(const_column_info.count()));
   } else if (OB_FAIL(const_column_info_.assign(const_column_info))) {
@@ -269,7 +269,7 @@ int ObSkylineDim::add_column_ids(common::ObIArray<uint64_t> &dst_column_ids,
                                  const common::ObIArray<uint64_t> &src_column_ids)
 {
   int ret = OB_SUCCESS;
-  if (src_column_ids.count() < 0 || src_column_ids.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+  if (src_column_ids.count() < 0 || src_column_ids.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("too many rowkey ids", K(ret), K(src_column_ids.count()));
   } else if (OB_FAIL(dst_column_ids.assign(src_column_ids))) {

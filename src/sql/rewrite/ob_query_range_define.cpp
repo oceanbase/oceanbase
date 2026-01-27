@@ -932,7 +932,7 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
                                      bool &contain_always_false) const
 {
   int ret = OB_SUCCESS;
-  equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+  equal_prefix_count = OB_MAX_ROWKEY_COLUMN_NUMBER;
   range_prefix_count = 0;
   if (OB_ISNULL(node_head_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -956,7 +956,7 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
       }
       if (cur_node != nullptr && cur_node->min_offset_ == skip_scan_offset_) {
         const ObRangeNode *ss_head = cur_node;
-        int64_t ss_equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+        int64_t ss_equal_prefix_count = OB_MAX_ROWKEY_COLUMN_NUMBER;
         MEMSET(equals, 0, sizeof(bool) * column_count_);
         MEMSET(extract_ranges, 0, sizeof(bool) * column_count_);
         if (OB_FAIL(get_prefix_info(node_head_, equals, extract_ranges, skip_scan_offset_,

@@ -3099,7 +3099,7 @@ int ObOptimizerUtil::check_prefix_ranges_count(const ObIArray<common::ObNewRange
   range_prefix_count = 0;
   contain_always_false = false;
   if (ranges.count() > 0) {
-    equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    equal_prefix_count = OB_MAX_ROWKEY_COLUMN_NUMBER;
     range_prefix_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
       ObNewRange *range = ranges.at(i);
