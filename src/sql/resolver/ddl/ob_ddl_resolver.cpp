@@ -3136,7 +3136,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "(the children of option_node is null", K(option_node->children_), K(ret));
         } else {
-          const bool enable_macro_block_bloom_filter = static_cast<bool>(option_node->children_[0]->value_);
+          // const bool enable_macro_block_bloom_filter = static_cast<bool>(option_node->children_[0]->value_);
+          // NOTE(4.3.5,4.4.x): Macro-block bloom filter persistence has stability risks.
+          // We temporarily keep this option disabled on 4.3.5,4.4.x to avoid potential runtime issues.
+          const bool enable_macro_block_bloom_filter = false;
           if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
             ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
             arg.schema_.set_enable_macro_block_bloom_filter(enable_macro_block_bloom_filter);

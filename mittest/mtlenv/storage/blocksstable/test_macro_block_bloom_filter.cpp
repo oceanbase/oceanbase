@@ -35,7 +35,64 @@ using namespace blocksstable;
 namespace blocksstable
 {
 
-// Old data block meta val without bloom filter.
+int ObMicroBlockBareIterator::open(
+  const char *macro_block_buf,
+  const int64_t macro_block_buf_size,
+  const ObDatumRange &range,
+  const ObITableReadInfo &rowkey_read_info,
+  const bool is_left_border,
+  const bool is_right_border,
+  const bool need_deserialize)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("already inited", K(ret));
+  } else if (OB_ISNULL(macro_block_buf) || OB_UNLIKELY(macro_block_buf_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid macro block buf", KP(macro_block_buf), K(macro_block_buf_size));
+  } else if (OB_FAIL(common_header_.deserialize(macro_block_buf, macro_block_buf_size, read_pos_))) {
+    LOG_WARN("Failed to deserialize macro header", K(ret), KP(macro_block_buf), K(macro_block_buf_size));
+  } else if (OB_FAIL(common_header_.check_integrity())) {
+    LOG_ERROR("Invalid common header", K(ret), K_(common_header));
+  } else if (OB_UNLIKELY(!common_header_.is_sstable_data_block()
+      && !common_header_.is_sstable_index_block())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Macro block type not supported for data iterator", K(ret), K(common_header_));
+  } else if (OB_FAIL(macro_block_header_.deserialize(macro_block_buf, macro_block_buf_size, read_pos_))) {
+    LOG_WARN("fail to deserialize macro block header", K(ret), K(macro_block_header_),
+        K(macro_block_buf_size), K(read_pos_));
+  } else if (FALSE_IT(index_rowkey_cnt_ = macro_block_header_.fixed_header_.rowkey_column_count_ == 0 ?
+      1 : macro_block_header_.fixed_header_.rowkey_column_count_)) { // for cg
+  } else {
+    macro_block_buf_ = macro_block_buf;
+    macro_block_buf_size_ = macro_block_buf_size;
+    iter_idx_ = 0;
+    begin_idx_ = 0;
+    end_idx_ = macro_block_header_.fixed_header_.micro_block_count_ - 1;
+    need_deserialize_ = need_deserialize;
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    ObMicroBlockData index_block;
+    if (OB_FAIL(get_index_block(index_block, true))) {
+      LOG_WARN("Fail to get index block", K(ret), K(index_block));
+    } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(
+        macro_block_header_.fixed_header_.row_store_type_)))) {
+      LOG_WARN("Fail to set reader for index block", K(ret));
+    } else if (OB_ISNULL(reader_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null micro reader", K(ret));
+    } else if (OB_FAIL(reader_->init(index_block, nullptr))) {
+      LOG_WARN("Fail to init reader for index block", K(ret), K(index_block));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+// Old data block meta val without bloom filter before 4.3.5.1
 class MockDataBlockMetaVal final
 {
 public:
@@ -366,6 +423,7 @@ void TestMacroBlockBloomFilter::prepare_data_store_desc(
     ObWholeDataStoreDesc &data_desc, ObSSTableIndexBuilder *sstable_index_builder)
 {
   int ret = OB_SUCCESS;
+  table_schema_.enable_macro_block_bloom_filter_ = true;
   ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(ls_id_), ObTabletID(tablet_id_), MAJOR_MERGE,
                        ObTimeUtility::fast_current_time() /*snapshot_version*/,
                        DATA_CURRENT_VERSION,
@@ -479,6 +537,73 @@ TEST_F(TestMacroBlockBloomFilter, test_disable_get_bf_size)
   ASSERT_EQ(data_writer.data_store_desc_->enable_macro_block_bloom_filter(), false);
   ASSERT_EQ(data_writer.macro_blocks_[0].get_macro_block_bloom_filter_serialize_size(), 0);
   ASSERT_EQ(data_writer.macro_blocks_[1].get_macro_block_bloom_filter_serialize_size(), 0);
+}
+
+TEST_F(TestMacroBlockBloomFilter, test_append_micro_block)
+{
+  // prepare data store desc and macro block writer
+  ObWholeDataStoreDesc data_desc;
+  prepare_data_store_desc(data_desc, root_index_builder_);
+
+  ObMacroBlockWriter data_writer(true);
+  ObMacroBlockWriter data_writer_test;
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  OK(data_writer.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  OK(data_writer_test.open(data_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+  ASSERT_EQ(data_writer.is_need_macro_buffer_, true);
+
+  ObDatumRow multi_row;
+  ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
+  ObDmlFlag dml = DF_INSERT;
+  int64_t test_row_num = 10;
+  ObDatumRow row;
+  ObArenaAllocator allocator;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator, table_schema_.get_column_count()));
+  for (int64_t i = 0; i < test_row_num; ++i) {
+    OK(row_generate_.get_next_row(i, row));
+    convert_to_multi_version_row(row, table_schema_, SNAPSHOT_VERSION, dml, multi_row);
+    ASSERT_EQ(OB_SUCCESS, data_writer.append_row(multi_row));
+  }
+  if (data_writer.micro_writer_->get_row_count() > 0) {
+    ASSERT_EQ(OB_SUCCESS, data_writer.build_micro_block());
+  }
+  ObMacroBlock &current_block = data_writer.macro_blocks_[0];
+  ASSERT_EQ(true, current_block.is_dirty());
+  ASSERT_EQ(OB_SUCCESS, data_writer.flush_macro_block(current_block));
+  MacroBlockId macro_id = data_writer.macro_handles_[0].get_macro_id();
+  const char *macro_block_buf = data_writer.macro_blocks_[0].get_data_buf();
+  const int64_t macro_block_size = data_writer.macro_blocks_[0].get_data_size();
+  ASSERT_NE(nullptr, macro_block_buf);
+  ASSERT_GT(macro_block_size, 0);
+  
+  ObDatumRange range;
+  range.set_whole_range();
+  ObMicroBlockBareIterator micro_block_iter;
+  ObReadInfoStruct index_read_info;
+  micro_block_iter.reset();
+
+  ASSERT_EQ(OB_SUCCESS, micro_block_iter.open(macro_block_buf, macro_block_size, range, index_read_info, false, false,false));
+  compaction::ObLocalArena rowkey_allocator("TestMaBlkWriter");
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroIndexInfo micro_index_info;
+  int ret = OB_SUCCESS;
+  while (1) {
+    rowkey_allocator.reuse();
+    ret = micro_block_iter.get_next_micro_block_desc(micro_block_desc, micro_index_info, rowkey_allocator);
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+      break;
+    } else {
+      STORAGE_LOG(WARN, "fail to get next micro block", K(ret), K(micro_block_iter));
+    }
+    micro_index_info.parent_macro_id_ = macro_id;
+    ASSERT_EQ(OB_SUCCESS, data_writer_test.append_micro_block(micro_block_desc, micro_index_info));
+  }
+  ASSERT_EQ(OB_SUCCESS, ret);
 }
 
 TEST_F(TestMacroBlockBloomFilter, test_insert)

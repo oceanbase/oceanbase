@@ -60,6 +60,7 @@ struct ObMicroBlockDesc
   ObMicroBlockDesc() { reset(); }
   bool is_valid() const;
   void reset();
+  bool is_complete_micro_block_memory() const;
   int64_t get_block_size() const { return buf_size_ + header_->header_size_; }
   const char *get_block_buf() const { return reinterpret_cast<const char *>(header_); }
 

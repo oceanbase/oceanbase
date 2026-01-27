@@ -76,6 +76,8 @@ protected:
       const bool is_left_border,
       const bool is_right_border);
   int set_reader(const ObRowStoreType store_type);
+private:
+  int get_micro_block_header(const char *buf, int64_t buf_len, ObMicroBlockHeader *&header) const;
 protected:
   ObArenaAllocator allocator_;
   const char *macro_block_buf_;
