@@ -3232,7 +3232,7 @@ int ObIOCallbackManager::init(const int64_t tenant_id, const int64_t thread_coun
       } else {
         runner = nullptr;
       }
-      if (OB_UNLIKELY(nullptr == runner)) {
+      if (OB_UNLIKELY(nullptr != runner)) {
         io_allocator->free(runner);
       }
     }
