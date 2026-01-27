@@ -654,7 +654,11 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not supproted change extra_info_actual_size param");
     } else if (new_vec_param.extra_info_max_size_ != old_vec_param.extra_info_max_size_) {
       // extra_info_max_size changed
-      if (new_vec_param.extra_info_max_size_ == 0) {
+      if (old_vec_param.extra_info_max_size_ == 0 && new_vec_param.extra_info_max_size_ > 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported to set extra info max size", K(ret), K(new_vec_param), K(old_vec_param));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "change extra_info_max_size param");
+      } else if (new_vec_param.extra_info_max_size_ == 0) {
         // skip, do nothing
         LOG_DEBUG("extra_info_max_size set to 0, skip", K(new_vec_param), K(old_vec_param));
       } else {
