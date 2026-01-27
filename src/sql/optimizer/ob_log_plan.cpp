@@ -13565,7 +13565,7 @@ int ObLogPlan::compute_subplan_filter_repartition_distribution_info(ObLogicalOpe
     } else {
       exch_info.parallel_ = max_parallel_child->get_parallel();
       exch_info.server_cnt_ = max_parallel_child->get_server_cnt();
-      exch_info.unmatch_row_dist_method_ = ObPQDistributeMethod::DROP;
+      exch_info.unmatch_row_dist_method_ = ObPQDistributeMethod::RANDOM;
       LOG_TRACE("succeed to compute repartition distribution info", K(exch_info));
     }
   }
