@@ -3342,3 +3342,6 @@ DEF_CAP(_write_throttle_by_pending_log_size_limit, OB_TENANT_PARAMETER, "0", "[0
 DEF_TIME(_write_throttle_by_pending_log_sleep_interval, OB_TENANT_PARAMETER, "20ms", "[0ms, 1h]",
          "the sleep interval when write throttle by pending log size. Range: [0ms, 1h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_large_query_cpu_quota_adjustment_step, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "Large Query CPU Quota Tuning Step. Range: [0,100]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
