@@ -678,7 +678,7 @@ int ObMPStmtFetch::process()
     int64_t sys_version = 0;
     THIS_WORKER.set_session(sess);
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
-    session.init_use_rich_format();
+    ObSessionRichFormatGuard rich_format_guard(session);
     session.get_raw_audit_record().request_memory_used_ = 0;
     session.set_proxy_version(get_proxy_version());
     observer::ObProcessMallocCallback pmcb(0,

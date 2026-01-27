@@ -115,7 +115,7 @@ int ObMPStmtPrexecute::before_process()
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
       bool need_response_error = false;
       session->set_current_trace_id(ObCurTraceId::get_trace_id());
-      session->init_use_rich_format();
+      ObSessionRichFormatGuard rich_format_guard(*session);
       session->set_proxy_version(get_proxy_version());
       ObReqTimeGuard req_timeinfo_guard;
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));

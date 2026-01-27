@@ -159,7 +159,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       shadow_top_query_string_(false),
       use_pl_inner_info_string_(false),
       is_first_gen_pl_cache_str_(true),
-      influence_pl_cache_var_indexs_()
+      influence_pl_cache_var_indexs_(),
+      global_rich_vector_configured_(false)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -558,6 +559,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   last_refresh_schema_version_ = OB_INVALID_VERSION;
   proxy_user_id_ = OB_INVALID_ID;
   config_use_rich_format_ = true;
+  global_rich_vector_configured_ = false;
   sys_var_config_hash_val_ = 0;
   is_real_inner_session_ = false;
   sql_mem_used_ = 0;
@@ -5297,6 +5299,7 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
   OB_UNIS_ENCODE(diagnosis_info_);
   OB_UNIS_ENCODE(client_create_time_);
   OB_UNIS_ENCODE(sys_var_in_pl_cache_str_);
+  OB_UNIS_ENCODE(global_rich_vector_configured_);
   return ret;
 }
 
@@ -5621,6 +5624,7 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
     }
 
     OB_UNIS_DECODE(sys_var_in_pl_cache_str_);
+    OB_UNIS_DECODE(global_rich_vector_configured_);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pl_cache_str_, &sys_var_in_pl_cache_str_))) {
         LOG_WARN("fail to write sys_var_in_pl_cache_str to string_buf_", K(sys_var_in_pl_cache_str_), K(ret));
@@ -5924,6 +5928,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(diagnosis_info_);
   OB_UNIS_ADD_LEN(client_create_time_);
   OB_UNIS_ADD_LEN(sys_var_in_pl_cache_str_);
+  OB_UNIS_ADD_LEN(global_rich_vector_configured_);
   return len;
 }
 

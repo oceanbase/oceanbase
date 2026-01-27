@@ -634,14 +634,17 @@ public:
                     const bool need_check_valid /* true */);
   void init_use_rich_format()
   {
-    config_use_rich_format_ = GCONF._global_enable_rich_vector_format;
-    if (!config_use_rich_format_) {
-      use_rich_vector_format_ = false;
-      force_rich_vector_format_ = ForceRichFormatStatus::FORCE_OFF;
-    } else {
-      use_rich_vector_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
-                                && sys_vars_cache_.get_enable_rich_vector_format();
-      force_rich_vector_format_ = ForceRichFormatStatus::Disable;
+    if (!global_rich_vector_configured_) {
+      global_rich_vector_configured_ = true;
+      config_use_rich_format_ = GCONF._global_enable_rich_vector_format;
+      if (!config_use_rich_format_) {
+        use_rich_vector_format_ = false;
+        force_rich_vector_format_ = ForceRichFormatStatus::FORCE_OFF;
+      } else {
+        use_rich_vector_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+                                  && sys_vars_cache_.get_enable_rich_vector_format();
+        force_rich_vector_format_ = ForceRichFormatStatus::Disable;
+      }
     }
   }
   bool is_force_off_rich_format() {
@@ -1788,6 +1791,8 @@ private:
   //写入系统变量的默认值, deserialized scene need use base_value as baseline.
   int init_system_variables(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
   virtual inline int64_t get_truncated_sql_len(const ObString &stmt) { return std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length())); }
+
+  void reset_global_rich_vector_flag() { global_rich_vector_configured_ = false; }
 protected:
   //============注意：下面的成员变量使用时，需要考虑并发控制================================
   struct MultiThreadData
@@ -2918,7 +2923,9 @@ private:
   bool is_first_gen_pl_cache_str_; // whether is first time t o generate sys_var_in_pl_cache_str_
   common::ObString sys_var_in_pl_cache_str_;
   common::ObSEArray<int64_t, 8> influence_pl_cache_var_indexs_;
+  bool global_rich_vector_configured_;
 public:
+friend struct ObSessionRichFormatGuard;
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;
   bool get_extend_sql_plan_monitor_metrics() const;
@@ -3115,6 +3122,22 @@ inline int ObBasicSessionInfo::set_partition_location_feedback(const share::ObFB
   }
   return ret;
 }
+
+struct ObSessionRichFormatGuard
+{
+  ObSessionRichFormatGuard(ObBasicSessionInfo &session) : sess_(session)
+  {
+    session.init_use_rich_format();
+  }
+
+  ~ObSessionRichFormatGuard()
+  {
+    sess_.reset_global_rich_vector_flag();
+  }
+
+private:
+  ObBasicSessionInfo &sess_;
+};
 
 }//end of namespace sql
 }//end of namespace oceanbase

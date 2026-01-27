@@ -86,7 +86,7 @@ int ObMPStmtClose::process()
       const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
       session->set_proxy_version(get_proxy_version());
-      session->init_use_rich_format();
+      ObSessionRichFormatGuard rich_format_guard(*session);
       const bool enable_flt = session->get_control_info().is_valid();
       LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_server_sid()));
       if (OB_FAIL(session->check_tenant_status())) {

@@ -77,7 +77,7 @@ int ObMPStmtReset::process()
     THIS_WORKER.set_session(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_server_sid()));
-    session->init_use_rich_format();
+    ObSessionRichFormatGuard rich_format_guard(*session);
 
     // get stmt info
     if (OB_NOT_NULL(session->get_ps_cache())) {
