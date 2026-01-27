@@ -66,15 +66,18 @@ class ObCreateTableExecutor
       schema_guard_(schema_guard),
       print_params_(print_params),
       param_store_(param_store),
-      do_osg_(do_osg)
+      do_osg_(do_osg),
+      is_direct_load_(false)
       {}
     virtual int inner_print(char *buf, int64_t buf_len, int64_t &res_len) override;
+    bool is_direct_load() const { return is_direct_load_; }
   private:
     ObCreateTableStmt *stmt_;
     ObSchemaGetterGuard *schema_guard_;
     ObObjPrintParams print_params_;
     const ParamStore *param_store_;
     bool do_osg_;
+    bool is_direct_load_;
   };
 public:
   ObCreateTableExecutor();
@@ -88,7 +91,8 @@ private:
                       const ObSQLSessionInfo *my_session,
                       ObSchemaGetterGuard *schema_guard,
                       const ParamStore *param_store,
-                      ObSqlString &ins_sql);
+                      ObSqlString &ins_sql,
+                      bool &is_direct_load);
   int prepare_alter_arg(ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, const ObString &create_table_name, obrpc::ObAlterTableArg &alter_table_arg);
   int prepare_drop_arg(const ObCreateTableStmt &stmt, const ObSQLSessionInfo *my_session, obrpc::ObTableItem &table_item, obrpc::ObDropTableArg &drop_table_arg);
 };
