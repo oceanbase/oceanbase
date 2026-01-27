@@ -917,16 +917,16 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
   }
 
-  if (OB_SUCC(ret) && !session_info.get_use_pl_inner_info_string()) {
+  if (OB_SUCC(ret) && !is_top_stack_ && !session_info.get_use_pl_inner_info_string()) {
     saved_pl_internal_time_split_point_ = session_info.get_pl_internal_time_split_point();
   }
+  OX (saved_use_pl_inner_info_string_ = session_info.get_use_pl_inner_info_string());
   OX (session_info.set_use_pl_inner_info_string(true));
   if (OB_SUCC(ret)) {
     ObString empty_string;
     saved_cur_query_string_ = session_info.get_current_query_string();
     saved_cur_query_buf_len_ = session_info.get_cur_query_buf_len();
     session_info.swap_query_string(empty_string, 0);
-    saved_use_pl_inner_info_string_ = session_info.get_use_pl_inner_info_string();
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(routine) && is_function_or_trigger && lib::is_mysql_mode() &&
       routine->get_has_parallel_affect_factor()) {
@@ -1248,6 +1248,7 @@ void ObPLContext::destory(
     {
       ObSQLSessionInfo::LockGuard lock_guard(session_info.get_thread_data_lock());
       session_info.set_pl_cur_query_start_time_bak(0);
+      session_info.set_pl_internal_time_split_point(0);
     }
     // 无论如何恢复session上的状态
     session_info.set_pl_stack_ctx(NULL);
@@ -1294,7 +1295,9 @@ void ObPLContext::destory(
   if (saved_cur_query_buf_len_ > 0 || 0 != saved_pl_internal_time_split_point_) {
     ObSQLSessionInfo::LockGuard lock_guard(session_info.get_thread_data_lock());
     session_info.swap_query_string(saved_cur_query_string_, saved_cur_query_buf_len_, true);
-    session_info.set_pl_internal_time_split_point(saved_pl_internal_time_split_point_);
+    if (!is_top_stack_) {
+      session_info.set_pl_internal_time_split_point(saved_pl_internal_time_split_point_);
+    }
   }
   OX (session_info.set_use_pl_inner_info_string(saved_use_pl_inner_info_string_));
   if (is_autonomous_) {
