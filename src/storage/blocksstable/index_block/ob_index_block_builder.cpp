@@ -349,7 +349,6 @@ int ObSSTableMergeRes::assign(const ObSSTableMergeRes &src)
     master_key_id_ = src.master_key_id_;
     nested_size_ = src.nested_size_;
     nested_offset_ = src.nested_offset_;
-    is_small_sstable_ = src.is_small_sstable_;
     root_row_store_type_ = src.root_row_store_type_;
     root_macro_seq_ = src.root_macro_seq_;
     is_small_sstable_ = src.is_small_sstable_;

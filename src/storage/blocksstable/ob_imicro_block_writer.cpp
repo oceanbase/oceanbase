@@ -66,7 +66,7 @@ bool ObMicroBlockDesc::is_complete_micro_block_memory() const
   bool is_complete = false;
   const char *header_buf = get_block_buf();
   const char *micro_data_buf = nullptr;
-  if (OB_ISNULL(header_buf) || OB_ISNULL(buf_)) {
+  if (OB_ISNULL(header_buf) || !header_->is_valid() || OB_ISNULL(buf_)) {
     is_complete = false;
   } else if (FALSE_IT(micro_data_buf = header_buf + header_->header_size_)) {
   } else if (micro_data_buf == buf_) {
