@@ -13649,7 +13649,15 @@ int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
                                                              is_result_local,
                                                              source_sharding))) {
     LOG_WARN("failed to check whether location need multi-partition dml", K(ret));
-  } else { /*do nothing*/ }
+  } else if (!is_multi_part_dml && stmt.is_select_stmt() && stmt.has_for_update()) {
+    if (OB_FAIL(check_for_update_need_multi_partition_dml(stmt,
+                                                          index_dml_infos,
+                                                          top,
+                                                          source_sharding,
+                                                          is_multi_part_dml))) {
+      LOG_WARN("failed to check for update partitioned table", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -13695,14 +13703,27 @@ int ObLogPlan::check_stmt_need_multi_partition_dml(const ObDMLStmt &stmt,
     } else {
       is_multi_part_dml = !ObSQLUtils::is_one_part_table_can_skip_part_calc(*table_schema);
     }
-  } else if (!is_multi_part_dml && stmt.is_select_stmt() && stmt.has_for_update()) {
+  }
+  return ret;
+}
+
+int ObLogPlan::check_for_update_need_multi_partition_dml(const ObDMLStmt &stmt,
+                                                  const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                                  ObLogicalOperator &top,
+                                                  ObShardingInfo *source_sharding,
+                                                  bool &is_multi_part_dml)
+{
+  int ret = OB_SUCCESS;
+  if (is_multi_part_dml || !stmt.is_select_stmt() || !stmt.has_for_update()) {
+    // do nothing
+  } else if (OB_ISNULL(index_dml_infos.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index dml info", K(ret));
+  } else {
     ObSchemaGetterGuard *schema_guard = get_optimizer_context().get_schema_guard();
     ObSQLSessionInfo* session_info = get_optimizer_context().get_session_info();
     const ObTableSchema *table_schema = NULL;
-    if (OB_ISNULL(index_dml_infos.at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid index dml info", K(ret));
-    } else if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+    if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(schema_guard), K(session_info), K(ret));
     } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
@@ -13712,8 +13733,37 @@ int ObLogPlan::check_stmt_need_multi_partition_dml(const ObDMLStmt &stmt,
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
+    } else if (table_schema->is_global_index_table()) {
+      is_multi_part_dml = true;
+    } else if (!table_schema->is_partitioned_table()) {
+      // non-partitioned table skip const partition key check
+    } else if (OB_ISNULL(source_sharding)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(source_sharding));
     } else {
-      is_multi_part_dml = table_schema->is_partitioned_table();
+      const ObIArray<ObRawExpr *> &const_exprs = top.get_output_const_exprs();
+      const ObIArray<ObRawExpr *> &part_keys = source_sharding->get_partition_keys();
+      const ObIArray<ObRawExpr *> &subpart_keys = source_sharding->get_sub_partition_keys();
+      for (int64_t i = 0; OB_SUCC(ret) && !is_multi_part_dml && i < part_keys.count(); ++i) {
+       ObRawExpr *key = part_keys.at(i);
+        bool is_const = false;
+        if (OB_ISNULL(key)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(key));
+       } else if (!is_contain(const_exprs, key)) {
+         is_multi_part_dml = true;
+       }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && !is_multi_part_dml && i < subpart_keys.count(); ++i) {
+       ObRawExpr *key = subpart_keys.at(i);
+        bool is_const = false;
+        if (OB_ISNULL(key)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(key));
+        } else if (!is_contain(const_exprs, key)) {
+          is_multi_part_dml = true;
+        }
+      }
     }
   }
   return ret;
