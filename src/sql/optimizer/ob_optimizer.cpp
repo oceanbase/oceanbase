@@ -832,7 +832,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool partition_wise_plan_enabled = true;
   bool exists_partition_wise_plan_enabled_hint = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
-  bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
+  bool rowsets_enabled = true;
   ctx_.set_is_online_ddl(session.get_ddl_info().is_ddl());  // set is online ddl first, is used by other extract operations
   bool das_keep_order_enabled = tenant_config.is_valid() && tenant_config->_enable_das_keep_order;
   bool hash_join_enabled = tenant_config.is_valid() && tenant_config->_hash_join_enabled;
@@ -879,8 +879,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("calc link stmt count failed", K(ret));
   } else if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(&stmt, has_dblink, true))) {
     LOG_WARN("failed to find dblink in stmt", K(ret));
-  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
-    LOG_WARN("fail to check rowsets enabled", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::check_rowsets_enabled(&session, query_ctx->get_global_hint(), rowsets_enabled))) {
+    LOG_WARN("check rowsets enabled failed", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PARTIAL_GROUP_BY_PUSHDOWN, is_partial_group_by_pushdown_enabled))) {
     LOG_WARN("fail to check pushdown partial group by enabled", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PARTIAL_LIMIT_PUSHDOWN, is_partial_limit_pushdown_enabled))) {

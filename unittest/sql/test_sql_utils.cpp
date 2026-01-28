@@ -294,6 +294,8 @@ void TestSqlUtils::init_schema()
       session_info_.set_plan_cache(pc);
       session_info_.set_ps_cache(ps);
       session_info_.set_user_session();
+      // set rowsets_enabled to true for test
+      session_info_.inf_pc_configs_.rowsets_enabled_ = true;
       init_sql_ctx();
       create_system_db();
       create_system_table();

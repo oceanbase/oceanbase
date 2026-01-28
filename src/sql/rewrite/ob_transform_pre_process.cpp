@@ -1069,16 +1069,12 @@ int ObTransformPreProcess::transform_groupingsets_rollup_cube(ObDMLStmt *&stmt,
     enable_grouping_sets_expansion = false;
     if (OB_FAIL(opt_hints.get_bool_opt_param(ObOptParamHint::ENABLE_GROUPING_SETS_EXPANSION, enable_by_hint, is_hint_exists))) {
       LOG_WARN("get bool opt param failed", K(ret));
-    } else if (OB_FAIL(opt_hints.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_hint_exists, rowsets_enabled))) {
-      LOG_WARN("get bool opt param failed", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_rowsets_enabled(ctx_->session_info_, stmt->get_query_ctx()->get_global_hint(), rowsets_enabled))) {
+      LOG_WARN("check rowsets enabled failed", K(ret));
     } else {
       enable_grouping_sets_expansion =
         is_hint_exists ? enable_by_hint :
                          (tenant_config.is_valid() && tenant_config->_enable_grouping_sets_expansion);
-      if (!rowsets_hint_exists) {
-        // default to true, no matter config is valid or not.
-        rowsets_enabled = tenant_config.is_valid() ? tenant_config->_rowsets_enabled : true;
-      }
       enable_grouping_sets_expansion =
         enable_grouping_sets_expansion
         && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0
