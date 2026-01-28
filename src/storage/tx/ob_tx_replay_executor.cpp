@@ -142,11 +142,11 @@ OB_NOINLINE int ObTxReplayExecutor::errsim_tx_replay_()
   int retry_delay = abs(EN_TX_REPLAY_TASK_DELAY_RETRY);
   bool sleep_succ = false;
 
-  if (errsim_tenant_id <= 0 || errsim_tenant_id == tenant_id_) {
-    if (errsim_ls_id <= 0 || errsim_ls_id == ls_id_.id()) {
-      usleep(sleep_time);
-      sleep_succ = true;
-    }
+  if ((errsim_tenant_id > 0 || errsim_ls_id > 0) &&
+      (errsim_tenant_id == tenant_id_ || errsim_tenant_id <= 0) &&
+      (errsim_ls_id == ls_id_.id() || errsim_ls_id <= 0)) {
+    usleep(sleep_time);
+    sleep_succ = true;
   }
 
   if (retry_delay > 0) {
