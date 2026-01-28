@@ -235,7 +235,8 @@ private:
                                          const ObRawExpr *left_expr,
                                          const bool is_root_condition,
                                          ObRawExpr *&right_expr);
-
+  int fold_cnn_expr(ObOpRawExpr *ori_cnn_expr, ObOpRawExpr *&folded_cnn_expr);
+  int create_cnn_expr_with_same_type(ObOpRawExpr *ori_cnn_expr, const ObIArray<ObRawExpr*> &group, ObIArray<ObRawExpr*> &final_groups);
 private:
   // data members
   ObExprResolveContext &ctx_;

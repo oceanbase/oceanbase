@@ -2984,6 +2984,20 @@ int ObShowResolver::replace_where_clause(ParseNode* node, const ObShowResolverCo
       }
       case T_OP_AND:
       case T_OP_OR:
+      case T_OP_CNN: {
+        if (NULL == node->children_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parse tree is wrong", K(ret), K(node->num_child_), K(node->children_));
+        } else {
+          for (int32_t i = 0; i < node->num_child_; i++) {
+            if (OB_FAIL(replace_where_clause(node->children_[i], show_resv_ctx))) {
+              LOG_WARN("failed replace expr", K(ret));
+            }
+          }
+        }
+        break;
+      }
+      case T_OP_XOR:
       case T_OP_ADD:
       case T_OP_MINUS:
       case T_OP_MUL:
@@ -3005,7 +3019,6 @@ int ObShowResolver::replace_where_clause(ParseNode* node, const ObShowResolverCo
       case T_OP_NE:
       case T_OP_IS:
       case T_OP_IS_NOT:
-      case T_OP_CNN:
       case T_OP_REGEXP:
       case T_OP_NOT_REGEXP:
       case T_OP_IN:
