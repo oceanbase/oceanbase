@@ -320,11 +320,14 @@ TEST_F(ObSharedStorageTest, test_tenant_gc)
   sleep(1);
 
   share::ObTenantSwitchGuard tguard;
+  ObTenantIdSet tenant_ids;
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(1));
   SYS_EXE_SQL("alter system set _ss_deleted_tablet_gc_time = '1s';");
   SYS_EXE_SQL("alter system set _ss_garbage_collect_file_expiration_time = '10s';");
   wait_private_tenant_dir_gc_finish();
   wait_shared_tenant_dir_gc();
+  ASSERT_EQ(OB_SUCCESS, MTL(ObSSMetaService*)->get_tenant_ids(tenant_ids));
+  ASSERT_EQ(0, tenant_ids.tenant_ids_.count());
 }
 
 void ObSharedStorageTest::wait_private_tenant_dir_gc_finish()
@@ -333,6 +336,13 @@ void ObSharedStorageTest::wait_private_tenant_dir_gc_finish()
   char dir_path[common::MAX_PATH_SIZE] = {0};
   do {
     ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tenant_dir(dir_path, sizeof(dir_path), RunCtx.tenant_id_, RunCtx.tenant_epoch_));
+    ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(dir_path, is_exist));
+    LOG_INFO("wait_private_tenant_gc_finish", K(dir_path), K(is_exist));
+    usleep(100 *1000);
+  } while (is_exist);
+
+  do {
+    ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tenant_dir(dir_path, sizeof(dir_path), RunCtx.tenant_id_ - 1, RunCtx.tenant_epoch_));
     ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::exist(dir_path, is_exist));
     LOG_INFO("wait_private_tenant_gc_finish", K(dir_path), K(is_exist));
     usleep(100 *1000);
@@ -347,6 +357,14 @@ void ObSharedStorageTest::wait_shared_tenant_dir_gc()
   do {
     shared_macro_op.reset();
     ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_tenant_dir(dir_path, sizeof(dir_path), RunCtx.tenant_id_));
+    ret = MTL(ObTenantFileManager*)->list_remote_files(dir_path, shared_macro_op);
+    LOG_INFO("wait shared tenant dir gc", K(dir_path), K(ret), K(shared_macro_op));
+    usleep(100 * 1000);
+  } while (0 != shared_macro_op.get_file_cnt());
+
+  do {
+    shared_macro_op.reset();
+    ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_tenant_dir(dir_path, sizeof(dir_path), RunCtx.tenant_id_ - 1));
     ret = MTL(ObTenantFileManager*)->list_remote_files(dir_path, shared_macro_op);
     LOG_INFO("wait shared tenant dir gc", K(dir_path), K(ret), K(shared_macro_op));
     usleep(100 * 1000);
