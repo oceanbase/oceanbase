@@ -681,6 +681,8 @@ GLOBAL_ERRSIM_POINT_DEF(2625, EN_DELETE_HTABLE_SKIP_CF_ERR, "delete htable table
 // DDL begin 2651 - 2700
 GLOBAL_ERRSIM_POINT_DEF(2651, EN_AUTO_SPLIT_SCHEDULER_ERR, "inject error in auto split schedule step");
 GLOBAL_ERRSIM_POINT_DEF(2652, EN_DDL_SCAN_TASK_PERIOD, "ddl scan task timer thread schedule period");
+GLOBAL_ERRSIM_POINT_DEF(2653, EN_PART_SPLIT_AT_DECIDE_RANGES, "partition split at decide tablet split ranges");
+
 // Rescan op 2701 - 2710
 GLOBAL_ERRSIM_POINT_DEF(2701, EN_ENABLE_RESCAN_OP, "enable rescan op");
 

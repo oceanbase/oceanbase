@@ -959,7 +959,8 @@ LATCH_DEF(OB_TRANS_TENANT_CONFIG_CACHE_LATCH, 926, "trans service tenant config 
 LATCH_DEF(WINDOW_COMPACTION_BASE_CONTAINER_LOCK, 927, "window compaction base container lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(GI_ONE_STAGE_PARALLEL_TASK_GEN_LOCK, 928, "gi one stage parallel task gen lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SQC_CTX_ICEBERG_DATA_FILES_LOCK, 929, "sqc ctx iceberg data files lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 930, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLET_SPLIT_SSTABLE_HELPERS_LOCK, 930, "tablet split sstable helpers lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 931, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
