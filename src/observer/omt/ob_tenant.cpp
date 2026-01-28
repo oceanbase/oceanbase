@@ -111,6 +111,11 @@ int ObPxPools::create_pool(int64_t group_id, ObPxPool *&pool)
           LOG_WARN("fail set pool to hashmap", K(group_id), K(ret));
         }
       }
+      if (OB_FAIL(ret) && OB_NOT_NULL(pool)) {
+        pool->destroy();
+        common::ob_delete(pool);
+        pool = nullptr;
+      }
     } else {
       LOG_WARN("fail get group id from hashmap", K(ret), K(group_id));
     }
