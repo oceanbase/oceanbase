@@ -15,6 +15,9 @@
 #include "storage/access/ob_rows_info.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/direct_load/ob_inc_major_ddl_aggregate_sstable.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
+#include "storage/ddl/ob_direct_load_type.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
 
 namespace oceanbase
 {
@@ -1831,8 +1834,30 @@ int ObDDLMergeBlockRowIterator::inner_get_next(const ObIndexBlockRowHeader *&idx
             }
           }
         } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("exist same endkey!!!", K(ret), KPC(top_item), KPC(endkey_merger_));
+          // exist same endkey, trigger ddl merge to generate major sstable
+          ret = OB_DATA_NOT_UPTODATE;
+          LOG_WARN("exist same endkey, try to schedule ddl merge", K(ret), KPC(top_item), KPC(endkey_merger_));
+          if (iter_param_.is_valid() && OB_NOT_NULL(iter_param_.tablet_)) {
+            const ObTablet &tablet = *iter_param_.tablet_;
+            ObDDLTableMergeDagParam param;
+            param.ls_id_               = tablet.get_ls_id();
+            param.tablet_id_           = tablet.get_tablet_meta().tablet_id_;
+            param.start_scn_           = tablet.get_tablet_meta().ddl_start_scn_;
+            param.rec_scn_             = tablet.get_tablet_meta().ddl_commit_scn_;
+            param.direct_load_type_    = tablet.get_tablet_meta().ddl_snapshot_version_ >= DDL_IDEM_DATA_FORMAT_VERSION ?
+                                         ObDirectLoadType::SN_IDEM_DIRECT_LOAD_DDL : ObDirectLoadType::DIRECT_LOAD_DDL;
+            param.is_commit_           = true;
+            param.data_format_version_ = tablet.get_tablet_meta().ddl_data_format_version_;
+            param.snapshot_version_    = tablet.get_tablet_meta().ddl_snapshot_version_;
+            int tmp_ret = OB_SUCCESS;
+            // try to freeze ddl kv and schedule ddl merge
+            if (OB_TMP_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param))) {
+              LOG_WARN("try to freeze ddl kv failed", K(tmp_ret), K(param));
+            } else if (OB_TMP_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
+              LOG_WARN("try schedule ddl merge dag failed when same endkey exists", K(tmp_ret), K(param));
+            }
+            LOG_INFO("schedule ddl merge dag due to same endkey", K(tmp_ret), K(param));
+          }
         }
 
         if (OB_SUCC(ret) && !endkey_merger_->empty()) {
