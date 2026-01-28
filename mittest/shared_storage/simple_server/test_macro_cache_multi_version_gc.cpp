@@ -119,7 +119,7 @@ public:
   {
     ObSimpleClusterTestBase::SetUp();
     if (!tenant_created_) {
-      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 8));
+      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       OK(get_curr_simple_server().init_sql_proxy2());
