@@ -71,7 +71,6 @@ int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
     ObGlobalHint &global_hint_dblink = query_hint_dblink.get_global_hint();
     global_hint_dblink.reset();
     global_hint_dblink.merge_query_timeout_hint(global_hint.query_timeout_);
-    global_hint_dblink.merge_read_consistency_hint(global_hint.read_consistency_, global_hint.frozen_version_);
     global_hint_dblink.merge_log_level_hint(global_hint.log_level_);
     global_hint_dblink.force_trace_log_ = global_hint.force_trace_log_;
     global_hint_dblink.monitor_ = global_hint.monitor_;
@@ -79,6 +78,17 @@ int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)
     if (OB_ISNULL(session_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret), K(lbt()));
+    } else {
+      int64_t read_consistency = INVALID_CONSISTENCY;
+      if (INVALID_CONSISTENCY != global_hint.read_consistency_) {
+        global_hint_dblink.merge_read_consistency_hint(global_hint.read_consistency_, global_hint.frozen_version_);
+      } else if (OB_FAIL(session_->get_sys_variable(SYS_VAR_OB_READ_CONSISTENCY, read_consistency))) {
+        LOG_WARN("get read consistency failed", K(ret));
+      } else {
+        global_hint_dblink.merge_read_consistency_hint(static_cast<ObConsistencyLevel>(read_consistency), -1);
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (stmt_->is_select_stmt()) {
       uint64_t dblink_id = OB_INVALID_ID;
       dblink_id = stmt_->get_dblink_id();
