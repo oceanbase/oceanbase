@@ -460,6 +460,10 @@ public:
   bool is_hierarchical_query() const { return is_hierarchical_query_; }
   inline void set_expanded_mview(bool is_expanded_mview) { is_expanded_mview_ = is_expanded_mview; }
   inline bool is_expanded_mview() const { return is_expanded_mview_; }
+  inline void set_expanded_realtime_major_refresh_mview(bool is_expanded_realtime_major_refresh_mview) {
+    is_expanded_realtime_major_refresh_mview_ = is_expanded_realtime_major_refresh_mview;
+  }
+  inline bool is_expanded_realtime_major_refresh_mview() const { return is_expanded_realtime_major_refresh_mview_; }
   int contain_hierarchical_query(bool &contain_hie_query) const;
   void set_has_prior(bool has_prior) { has_prior_ = has_prior; }
   bool has_prior() const { return has_prior_; }
@@ -759,6 +763,7 @@ private:
   bool has_prior_;
   bool has_reverse_link_;
   bool is_expanded_mview_;
+  bool is_expanded_realtime_major_refresh_mview_;
   //denote if the query option 'STRAIGHT_JOIN' has been specified
   bool is_select_straight_join_;
   // denote if the duplicate value of this stmt will not change the query result

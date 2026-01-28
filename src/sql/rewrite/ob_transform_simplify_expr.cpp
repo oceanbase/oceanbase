@@ -139,6 +139,16 @@ int ObTransformSimplifyExpr::transform_one_stmt(common::ObIArray<ObParentDMLStmt
       LOG_TRACE("succeed to canonicalize_condition", K(is_happened));
     }
   }
+  if (OB_SUCC(ret) &&
+      stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2)) {
+    if (OB_FAIL(replace_nullsafe_equal_condition(stmt, is_happened))) {
+      LOG_WARN("failed to replace nullsafe equal condition", K(is_happened));
+    } else {
+      trans_happened |= is_happened;
+      OPT_TRACE("replace nullsafe equal condition:", is_happened);
+      LOG_TRACE("succeed to replace nullsafe equal condition", K(is_happened));
+    }
+  }
   if (OB_SUCC(ret) && trans_happened) {
     if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
@@ -3996,6 +4006,178 @@ int ObTransformSimplifyExpr::add_constraint_for_convert_case_when_by_then(ObIArr
       ObExprConstraint true_cons(true_exprs.at(i), PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE);
       if (OB_FAIL(ctx_->expr_constraints_.push_back(true_cons))) {
         LOG_WARN("failed to push back expr constraints", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// simplify nullsafe equal condition: if either side is not null, convert to normal equal
+int ObTransformSimplifyExpr::replace_nullsafe_equal_condition(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  bool is_happened = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data member or parameter is NULL", K(stmt), K(ctx_));
+  } else if (stmt->is_sel_del_upd()) {
+    ObNotNullContext not_null_ctx(*ctx_, stmt);
+    if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_FROM))){
+      LOG_WARN("failed to generate not null context", K(ret));
+    }
+    // process where conditions
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); ++i) {
+      if (OB_FAIL(do_replace_nullsafe_equal_condition(
+                           stmt, stmt->get_condition_exprs().at(i), not_null_ctx, is_happened))) {
+        LOG_WARN("failed to replace nullsafe equal expr", K(ret));
+      } else {
+        trans_happened |= is_happened;
+      }
+    }
+    // process join conditions
+    if (OB_SUCC(ret)) {
+      ObIArray<JoinedTable*> &joined_tables = stmt->get_joined_tables();
+      for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables.count(); ++i) {
+        if (OB_FAIL(recursive_replace_nullsafe_equal_join_conditions(
+                     stmt, joined_tables.at(i), not_null_ctx, is_happened))) {
+          LOG_WARN("failed to replace nullsafe equal in join conditions", K(ret));
+        } else {
+          trans_happened |= is_happened;
+        }
+      }
+    }
+    // process semi info conditions
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_info_size(); ++i) {
+        SemiInfo *semi_info = stmt->get_semi_infos().at(i);
+        if (OB_ISNULL(semi_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("semi info is null", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < semi_info->semi_conditions_.count(); ++j) {
+            if (OB_FAIL(do_replace_nullsafe_equal_condition(
+                         stmt, semi_info->semi_conditions_.at(j), not_null_ctx, is_happened))) {
+              LOG_WARN("failed to replace nullsafe equal in semi conditions", K(ret));
+            } else {
+              trans_happened |= is_happened;
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::do_replace_nullsafe_equal_condition(ObDMLStmt *stmt,
+                                                                  ObRawExpr *&expr,
+                                                                  ObNotNullContext &not_null_ctx,
+                                                                  bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(stmt) ||
+      OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(stmt), K(expr), K(ret));
+  } else if (T_OP_NSEQ == expr->get_expr_type()) {
+    const ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
+    if (OB_UNLIKELY(op_expr->get_param_count() != 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param num", K(op_expr->get_param_count()), K(ret));
+    } else {
+      const ObRawExpr *left_expr = op_expr->get_param_expr(0);
+      const ObRawExpr *right_expr = op_expr->get_param_expr(1);
+      if (OB_ISNULL(left_expr) || OB_ISNULL(right_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(left_expr), K(right_expr), K(ret));
+      } else if (left_expr->is_static_const_expr() || right_expr->is_static_const_expr()) {
+        // do nothing
+        // avoid too mush meaningless constraints
+      } else {
+        ObArray<ObRawExpr *> constraints;
+        bool left_not_null = false;
+        bool right_not_null = false;
+
+        // check if left expr is not null
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, left_expr,
+                                                         left_not_null, &constraints))) {
+            LOG_WARN("failed to check left expr not null", K(ret));
+          }
+        }
+
+        // check if right expr is not null
+        if (OB_SUCC(ret) && !left_not_null) {
+          if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, right_expr,
+                                                          right_not_null, &constraints))) {
+            LOG_WARN("failed to check right expr not null", K(ret));
+          }
+        }
+
+        // if either side is not null, convert to normal equal
+        if (OB_SUCC(ret) && (left_not_null || right_not_null)) {
+          expr->set_expr_type(T_OP_EQ);
+          if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
+            LOG_WARN("failed to add param not null constraint", K(ret));
+          } else if (OB_FAIL(expr->formalize(ctx_->session_info_))) {
+            LOG_WARN("failed to formalize expr", K(ret));
+          } else {
+            trans_happened = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifyExpr::recursive_replace_nullsafe_equal_join_conditions(ObDMLStmt *stmt,
+                                                                               TableItem *table,
+                                                                               ObNotNullContext &not_null_ctx,
+                                                                               bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  JoinedTable *join_table = NULL;
+  trans_happened = false;
+  bool cur_happened = false;
+  bool left_happened = false;
+  bool right_happened = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null pointer", K(stmt), K(table), K(ret));
+  } else if (!table->is_joined_table()) {
+    /*do nothing*/
+  } else if (OB_ISNULL(join_table = static_cast<JoinedTable*>(table)) ||
+             OB_ISNULL(join_table->left_table_) || OB_ISNULL(join_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(join_table));
+  } else {
+    // process current join conditions
+    for (int64_t i = 0; OB_SUCC(ret) && i < join_table->get_join_conditions().count(); ++i) {
+      if (OB_FAIL(do_replace_nullsafe_equal_condition(
+                   stmt, join_table->get_join_conditions().at(i), not_null_ctx, cur_happened))) {
+        LOG_WARN("failed to replace nullsafe equal in join condition", K(ret));
+      } else {
+        trans_happened |= cur_happened;
+      }
+    }
+    // recursively process left and right tables
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(SMART_CALL(recursive_replace_nullsafe_equal_join_conditions(
+                   stmt, join_table->left_table_, not_null_ctx, left_happened)))) {
+        LOG_WARN("failed to replace nullsafe equal in left child join conditions", K(ret));
+      } else {
+        trans_happened |= left_happened;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(SMART_CALL(recursive_replace_nullsafe_equal_join_conditions(
+                   stmt, join_table->right_table_, not_null_ctx, right_happened)))) {
+        LOG_WARN("failed to replace nullsafe equal in right child join conditions", K(ret));
+      } else {
+        trans_happened |= right_happened;
       }
     }
   }

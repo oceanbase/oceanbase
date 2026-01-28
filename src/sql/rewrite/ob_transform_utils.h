@@ -1980,7 +1980,7 @@ public:
   static int generate_view_stmt_from_query_string(const ObString &expand_view,
                                                   ObTransformerCtx *ctx,
                                                   ObSelectStmt *&view_stmt);
-  static int set_expand_mview_flag(ObSelectStmt *view_stmt);
+  static int set_expand_mview_flag(ObSelectStmt *view_stmt, bool is_major_refresh_mview);
 
   static int is_where_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           const ObSelectStmt &subquery,

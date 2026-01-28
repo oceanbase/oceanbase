@@ -14910,7 +14910,7 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
       LOG_WARN("generate unexpected null view stmt", K(ret));
     } else if (OB_FAIL(ctx->temp_table_ignore_stmts_.push_back(view_stmt))) {
       LOG_WARN("failed to push back", K(ret));
-    } else if (OB_FAIL(set_expand_mview_flag(view_stmt))) {
+    } else if (OB_FAIL(set_expand_mview_flag(view_stmt, is_major_refresh_mview))) {
       LOG_WARN("fail to set expand mview flag", K(ret));
     } else if (TableItem::NOT_USING != rt_mv_table->flashback_query_type_
                && OB_FAIL(ObResolverUtils::set_flashback_info_for_view(view_stmt,
@@ -15043,7 +15043,7 @@ int ObTransformUtils::generate_view_stmt_from_query_string(const ObString &query
   return ret;
 }
 
-int ObTransformUtils::set_expand_mview_flag(ObSelectStmt *view_stmt)
+int ObTransformUtils::set_expand_mview_flag(ObSelectStmt *view_stmt, bool is_major_refresh_mview)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 4> child_stmts;
@@ -15054,8 +15054,9 @@ int ObTransformUtils::set_expand_mview_flag(ObSelectStmt *view_stmt)
     LOG_WARN("failed to get child stmts", K(ret));
   } else {
     view_stmt->set_expanded_mview(true);
+    view_stmt->set_expanded_realtime_major_refresh_mview(is_major_refresh_mview);
     for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-      if (OB_FAIL(SMART_CALL(set_expand_mview_flag(child_stmts.at(i))))) {
+      if (OB_FAIL(SMART_CALL(set_expand_mview_flag(child_stmts.at(i), is_major_refresh_mview)))) {
         LOG_WARN("failed to set child expand mview flag", K(ret), K(i));
       }
     }

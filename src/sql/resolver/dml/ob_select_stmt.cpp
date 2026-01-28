@@ -276,6 +276,7 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     has_prior_ = other.has_prior_;
     has_reverse_link_ = other.has_reverse_link_;
     is_expanded_mview_ = other.is_expanded_mview_;
+    is_expanded_realtime_major_refresh_mview_ = other.is_expanded_realtime_major_refresh_mview_;
     is_select_straight_join_ = other.is_select_straight_join_;
     is_implicit_distinct_ = false; // it is a property from upper stmt, do not copy
     is_oracle_compat_groupby_ = other.is_oracle_compat_groupby_;
@@ -615,6 +616,7 @@ ObSelectStmt::ObSelectStmt(ObIAllocator &allocator)
   has_prior_ = false;
   has_reverse_link_ = false;
   is_expanded_mview_ = false;
+  is_expanded_realtime_major_refresh_mview_ = false;
   is_select_straight_join_ = false;
   is_implicit_distinct_ = false;
   is_oracle_compat_groupby_ = false;
