@@ -39,7 +39,7 @@ ObPxTaskProcess::ObPxTaskProcess(const observer::ObGlobalContext &gctx, ObPxRpcI
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_PX_TASK_PROCESSS),
     vt_iter_factory_(*gctx.vt_iter_creator_),
     enqueue_timestamp_(0), process_timestamp_(0), exec_start_timestamp_(0), exec_end_timestamp_(0),
-    is_oracle_mode_(false)
+    is_oracle_mode_(false), is_interrupted_(false)
 {
 }
 
@@ -356,7 +356,10 @@ int ObPxTaskProcess::execute(const ObOpSpec &root_spec)
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
         LOG_WARN("failed to apply error code", K(ret), K(tmp_ret));
       }
-      if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_,
+      bool is_interrupted_ = IS_INTERRUPTED();
+      if (is_interrupted_) {
+        // do nothing.
+      } else if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_,
                                               OB_GOT_SIGNAL_ABORTING))) {
         LOG_WARN("interrupt_tasks failed", K(tmp_ret));
       }
@@ -525,7 +528,10 @@ int ObPxTaskProcess::do_process()
       }
     }
   }
-
+  if (OB_UNLIKELY(OB_ITER_END == ret)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("err code unexpected", K(ret));
+  }
   // for forward warning msg and user error msg
   (void)record_user_error_msg(ret);
   // for transaction
@@ -549,8 +555,9 @@ int ObPxTaskProcess::do_process()
     }
     if (OB_SUCC(ret)) {
       // nop
-    } else if (IS_INTERRUPTED()) {
+    } else if (is_interrupted_) {
       //当前是被QC中断的，不再向QC发送中断，退出即可。
+      ObInterruptChecker *checker = get_checker();
     } else if (arg_.get_sqc_handler()->get_sqc_init_arg().sqc_.is_ignore_vtable_error()
                && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(ret)) {
       // 忽略虚拟表错误

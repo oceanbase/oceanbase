@@ -125,6 +125,7 @@ private:
 
   /* record oracle mode */
   bool is_oracle_mode_;
+  bool is_interrupted_;
   DISALLOW_COPY_AND_ASSIGN(ObPxTaskProcess);
 };
 }
