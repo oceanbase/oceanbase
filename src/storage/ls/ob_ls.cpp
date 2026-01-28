@@ -665,7 +665,9 @@ int ObLS::stop_()
 
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
-      ls_prewarm_handler_.stop();
+      if (FAILEDx(ls_prewarm_handler_.stop())) {
+        LOG_WARN("fail to stop ls prewarm handler", KR(ret));
+      }
       primary_sswriter_ls_handler_.stop();
       restore_sswriter_ls_handler_.stop();
     }
