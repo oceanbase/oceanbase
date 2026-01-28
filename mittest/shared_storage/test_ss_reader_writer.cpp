@@ -407,9 +407,7 @@ void check_object_type_stat(const MacroBlockId &macro_id,
 {
   ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
   ObSSObjectTypeStat type_stat;
-  ObIOFlag flag;
-  object_handle.get_io_handle().get_io_flag(flag);
-  bool is_remote = flag.is_sync();
+  bool is_remote = object_handle.is_limit_net_bandwidth_req();
   ASSERT_EQ(OB_SUCCESS, local_cache_service->get_object_type_stat(macro_id.storage_object_type(), is_remote, type_stat));
   ObSSBaseStat stat;
   type_stat.get_stat(ObSSObjectTypeStatType::READ, stat);

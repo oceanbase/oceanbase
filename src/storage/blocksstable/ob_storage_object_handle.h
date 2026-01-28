@@ -80,6 +80,7 @@ public:
   const char *get_buffer() { return io_handle_.get_buffer(); }
   const MacroBlockId& get_macro_id() const { return macro_id_; }
   common::ObIOHandle &get_io_handle() { return io_handle_; }
+  bool is_limit_net_bandwidth_req() const { return io_handle_.is_limit_net_bandwidth_req(); }
   int64_t get_data_size() const { return io_handle_.get_data_size(); }
   int64_t get_user_io_size() const { return io_handle_.get_user_io_size(); }
   int async_read(const ObStorageObjectReadInfo &read_info);

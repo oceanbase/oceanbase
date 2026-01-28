@@ -412,14 +412,9 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
     util_ = &util_union_.hdfs_util_;
     handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == device_type_) {
-    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
-      ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
-    } else {
-      new (&util_union_.obdal_util_) ObStorageObDalUtil();
-      util_ = &util_union_.obdal_util_;
-      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
-    }
+    new (&util_union_.obdal_util_) ObStorageObDalUtil();
+    util_ = &util_union_.obdal_util_;
+    handle_type_ = OB_STORAGE_HANDLE_OBDAL;
   } else if (OB_STORAGE_OSS == device_type_) {
     new (&util_union_.oss_util_) ObStorageOssUtil();
     util_ = &util_union_.oss_util_;
@@ -1831,14 +1826,9 @@ int ObStorageReader::open(const common::ObString &uri,
     reader_ = &reader_union_.hdfs_reader_;
     handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
-    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
-      ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
-    } else {
-      new (&reader_union_.obdal_reader_) ObStorageObDalReader();
-      reader_ = &reader_union_.obdal_reader_;
-      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
-    }
+    new (&reader_union_.obdal_reader_) ObStorageObDalReader();
+    reader_ = &reader_union_.obdal_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_OBDAL;
   } else if (OB_STORAGE_OSS == type) {
     new (&reader_union_.oss_reader_) ObStorageOssReader();
     reader_ = &reader_union_.oss_reader_;
@@ -2071,14 +2061,9 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
     reader_ = &reader_union_.hdfs_reader_;
     handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
-    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
-      ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
-    } else {
-      new (&reader_union_.obdal_reader_) ObStorageObDalReader();
-      reader_ = &reader_union_.obdal_reader_;
-      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
-    }
+    new (&reader_union_.obdal_reader_) ObStorageObDalReader();
+    reader_ = &reader_union_.obdal_reader_;
+    handle_type_ = OB_STORAGE_HANDLE_OBDAL;
   } else if (OB_STORAGE_OSS == type) {
     new (&reader_union_.oss_reader_) ObStorageOssReader();
     reader_ = &reader_union_.oss_reader_;
@@ -2337,14 +2322,9 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
     writer_ = &writer_union_.hdfs_writer_;
     handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
-    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
-      ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
-    } else {
-      new (&writer_union_.obdal_writer_) ObStorageObDalWriter();
-      writer_ = &writer_union_.obdal_writer_;
-      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
-    }
+    new (&writer_union_.obdal_writer_) ObStorageObDalWriter();
+    writer_ = &writer_union_.obdal_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_OBDAL;
   } else if (OB_STORAGE_OSS == type) {
     new (&writer_union_.oss_writer_) ObStorageOssWriter();
     writer_ = &writer_union_.oss_writer_;
@@ -2527,14 +2507,9 @@ int ObStorageAppender::open(
     appender_ = &appender_union_.hdfs_appender_;
     handle_type_ = OB_STORAGE_HANDLE_HDFS;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type_) {
-    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
-      ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
-    } else {
-      new (&appender_union_.obdal_appender_) ObStorageObDalAppendWriter();
-      appender_ = &appender_union_.obdal_appender_;
-      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
-    }
+    new (&appender_union_.obdal_appender_) ObStorageObDalAppendWriter();
+    appender_ = &appender_union_.obdal_appender_;
+    handle_type_ = OB_STORAGE_HANDLE_OBDAL;
   } else if (OB_STORAGE_OSS == type_ ||
              OB_STORAGE_S3 == type_) {
     if (OB_STORAGE_OSS == type_) {
@@ -2860,14 +2835,9 @@ int ObStorageMultiPartWriter::open(
     multipart_writer_ = &multipart_writer_union_.file_multipart_writer_;
     handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
-    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
-      ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
-    } else {
-      new (&multipart_writer_union_.obdal_multipart_writer_) ObStorageObDalMultiPartWriter();
-      multipart_writer_ = &multipart_writer_union_.obdal_multipart_writer_;
-      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
-    }
+    new (&multipart_writer_union_.obdal_multipart_writer_) ObStorageObDalMultiPartWriter();
+    multipart_writer_ = &multipart_writer_union_.obdal_multipart_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_OBDAL;
   } else if (OB_STORAGE_OSS == type ||
              OB_STORAGE_S3 == type) {
     if (OB_STORAGE_OSS == type) {
@@ -3144,14 +3114,9 @@ int ObStorageParallelMultiPartWriterBase::open(
     multipart_writer_ = &multipart_writer_union_.file_multipart_writer_;
     handle_type_ = OB_STORAGE_HANDLE_FILE;
   } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
-    if (OB_UNLIKELY(storage_info->is_enable_worm())) {
-      ret = OB_NOT_SUPPORTED;
-      STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
-    } else {
-      new (&multipart_writer_union_.obdal_multipart_writer_) ObStorageParallelObDalMultiPartWriter();
-      multipart_writer_ = &multipart_writer_union_.obdal_multipart_writer_;
-      handle_type_ = OB_STORAGE_HANDLE_OBDAL;
-    }
+    new (&multipart_writer_union_.obdal_multipart_writer_) ObStorageParallelObDalMultiPartWriter();
+  multipart_writer_ = &multipart_writer_union_.obdal_multipart_writer_;
+    handle_type_ = OB_STORAGE_HANDLE_OBDAL;
   } else if (OB_STORAGE_OSS == type) {
     new (&multipart_writer_union_.oss_multipart_writer_) ObStorageParallelOssMultiPartWriter();
     multipart_writer_ = &multipart_writer_union_.oss_multipart_writer_;

@@ -16,6 +16,7 @@
 #include "../dumpsst/ob_admin_dumpsst_print_helper.h"
 #include "src/share/io/ob_io_manager.h"
 #include "src/share/ob_device_manager.h"
+#include "deps/oblib/src/lib/alloc/memory_dump.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -41,6 +42,8 @@ ObAdminIOAdapterBenchmarkExecutor::ObAdminIOAdapterBenchmarkExecutor()
     memory_limit_size_gb_(DEFAULT_MEMORY_LIMIT_SIZE_GB),
     is_adaptive_(false),
     clean_after_execution_(false),
+    obdal_work_thread_cnt_(INVALID_WORK_THREAD_CNT),
+    obdal_blocking_thread_max_cnt_(INVALID_BLOCKING_THREAD_MAX_CNT),
     configs_()
 {
   MEMSET(base_path_, 0, sizeof(base_path_));
@@ -53,9 +56,14 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
   if (OB_FAIL(parse_cmd_(argc, argv))) {
     OB_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
   } else {
+    ob_admin_config_work_thread_cnt = obdal_work_thread_cnt_;
+    ob_admin_config_blocking_thread_max_cnt = obdal_blocking_thread_max_cnt_;
     const int64_t MEMORY_LIMIT = memory_limit_size_gb_ * 1024 * 1024 * 1024LL;
+    const int64_t BANDWIDTH = 50L * 1024 * 1024 * 1024LL;
     lib::set_memory_limit(MEMORY_LIMIT);
     lib::set_tenant_memory_limit(500, MEMORY_LIMIT);
+    GMEMCONF.reload_config(GCONF);
+    GMEMCONF.set_500_tenant_limit(0);
     OB_LOGGER.set_log_level("INFO");
 
     ObTenantBase *tenant_base = new ObTenantBase(OB_SERVER_TENANT_ID);
@@ -73,6 +81,7 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
       STORAGE_LOG(WARN, "init device manager failed", KR(ret));
     } else if (OB_FAIL(ObIOManager::get_instance().init(MEMORY_LIMIT))) {
       STORAGE_LOG(WARN, "failed to init io manager", K(ret));
+    } else if (FALSE_IT(ObIOManager::get_instance().get_tc().set_device_bandwidth(BANDWIDTH))) {
     } else if (OB_FAIL(ObIOManager::get_instance().start())) {
       STORAGE_LOG(WARN, "failed to start io manager", K(ret));
     } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()))) {
@@ -84,6 +93,18 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
       STORAGE_LOG(WARN, "failed to get tenant io manager", K(ret));
     } else if (OB_FAIL(tenant_holder.get_ptr()->update_memory_pool(MEMORY_LIMIT))) {
       STORAGE_LOG(WARN, "failed to update memory pool", K(ret), K(MEMORY_LIMIT));
+    } else {
+      ObTenantIOConfig::ParamConfig io_param_config(tenant_holder.get_ptr()->get_io_config().param_config_);
+      io_param_config.memory_limit_ = MEMORY_LIMIT;
+      if (OB_FAIL(tenant_holder.get_ptr()->update_basic_io_param_config(io_param_config))) {
+        STORAGE_LOG(WARN, "failed to update basic io param config", KR(ret), K(MEMORY_LIMIT));
+      }
+    }
+
+    if (FAILEDx(ObClockGenerator::get_instance().init())) {
+      OB_LOG(WARN, "failed init clock generate", KR(ret));
+    } else if (OB_FAIL(ObMemoryDump::get_instance().init())) {
+      OB_LOG(WARN, "failed init MemoryDump", KR(ret));
     }
 
     if (FAILEDx(run_all_tests_())) {
@@ -98,7 +119,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
   int ret = OB_SUCCESS;
   int opt = 0;
   int index = -1;
-  const char *opt_str = "hd:s:t:r:l:o:n:f:p:cje:i:a";
+  const char *opt_str = "hd:s:t:r:l:o:n:f:p:cje:i:am:";
   struct option longopts[] = {{"help", 0, NULL, 'h'},
       {"file-path-prefix", 1, NULL, 'd'},
       {"storage-info", 1, NULL, 's'},
@@ -119,6 +140,9 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       {"append-fragment-size", 1, NULL, '0'},
       {"multi-size", 1, NULL, '0'},
       {"multi-fragment-size", 1, NULL, '0'},
+      {"sync-io", 0, NULL, '0'},
+      {"obdal-work-thread-cnt", 1, NULL, '0'},
+      {"obdal-blocking-thread-max-cnt", 1, NULL, '0'},
       {"memory-limit-size", 1, NULL, 'm'},
       {NULL, 0, NULL, 0}};
   ObClusterStateBaseMgr::get_instance().set_enable_obdal(false);
@@ -261,6 +285,16 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
           } else if (strcmp(opt_name, "multi-fragment-size") == 0) {
             if (OB_FAIL(c_str_to_int(optarg, multi_fragment_size_))) {
               OB_LOG(WARN, "failed to parse multi fragment size", KR(ret), K((char *) optarg));
+            }
+          } else if (strcmp(opt_name, "sync-io") == 0) {
+            ObClusterStateBaseMgr::get_instance().set_enable_object_storage_async_io(false);
+          } else if (strcmp(opt_name, "obdal-work-thread-cnt") == 0) {
+            if (OB_FAIL(c_str_to_int(optarg, obdal_work_thread_cnt_))) {
+              OB_LOG(WARN, "failed to parse obdal work thread cnt", KR(ret), K((char *) optarg));
+            }
+          } else if (strcmp(opt_name, "obdal-blocking-thread-max-cnt") == 0) {
+            if (OB_FAIL(c_str_to_int(optarg, obdal_blocking_thread_max_cnt_))) {
+              OB_LOG(WARN, "failed to parse obdal blocking thread max cnt", KR(ret), K((char *) optarg));
             }
           }
           break;
@@ -529,6 +563,9 @@ int ObAdminIOAdapterBenchmarkExecutor::print_usage_()
   printf(HELP_FMT, "-e, --s3_url_encode_type", "set S3 protocol url encode type");
   printf(HELP_FMT, "-i, --sts_credential", "set sts credential");
   printf(HELP_FMT, "-a", "enable obdal");
+  printf(HELP_FMT, "--sync-io", "enable sync io");
+  printf(HELP_FMT, "--obdal-work-thread-cnt", "specifies the obdal work thread cnt");
+  printf(HELP_FMT, "--obdal-blocking-thread-max-cnt", "specifies the obdal blocking thread max cnt");
   printf("samples:\n");
   printf("  test nfs device: \n");
   printf("\tob_admin io_adapter_benchmark -dfile:///home/admin/backup_info \n");

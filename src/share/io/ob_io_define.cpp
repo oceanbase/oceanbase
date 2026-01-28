@@ -43,6 +43,18 @@ const char *oceanbase::common::get_io_mode_string(const ObIOMode mode)
   return ret_name;
 }
 
+// some read mode doesn't need buffer, e.g., unlink, adaptive_unlink, mkdir, rmdir, complete, abort, seal_file
+bool oceanbase::common::is_without_read_buf(const ObIOReadMode read_mode)
+{
+  return read_mode == ObIOReadMode::UNLINK
+        || read_mode == ObIOReadMode::ADAPTIVE_UNLINK
+        || read_mode == ObIOReadMode::MKDIR
+        || read_mode == ObIOReadMode::RMDIR
+        || read_mode == ObIOReadMode::COMPLETE
+        || read_mode == ObIOReadMode::ABORT
+        || read_mode == ObIOReadMode::SEAL_FILE;
+}
+
 const char *oceanbase::common::get_io_mode_string(const ObIOGroupMode group_mode)
 {
   const char *str = "INVALID";
@@ -216,6 +228,7 @@ const char *oceanbase::common::get_io_sys_group_name(ObIOModule module)
 /******************             IOFlag              **********************/
 ObIOFlag::ObIOFlag()
     : mode_(0),
+      read_mode_(0),
       func_type_(oceanbase::share::ObFunctionType::DEFAULT_FUNCTION),
       wait_event_id_(0),
       is_sync_(false),
@@ -226,6 +239,7 @@ ObIOFlag::ObIOFlag()
       need_close_dev_and_fd_(false),
       is_buffered_read_(true),
       is_preread_(false),
+      is_upload_part_(false),
       ss_dir_type_(ObIODirType::OB_DIR_TYPE_LOCAL),
       reserved_(0),
       group_id_(USER_RESOURCE_OTHER_GROUP_ID),
@@ -241,6 +255,7 @@ ObIOFlag::~ObIOFlag()
 void ObIOFlag::reset()
 {
   mode_ = 0;
+  read_mode_ = 0;
   group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   sys_module_id_ = OB_INVALID_ID;
   wait_event_id_ = 0;
@@ -253,6 +268,7 @@ void ObIOFlag::reset()
   is_buffered_read_ = true;
   ss_dir_type_ = ObIODirType::OB_DIR_TYPE_LOCAL;
   is_preread_ = false;
+  is_upload_part_ = false;
   reserved_ = 0;
   group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   sys_module_id_ = OB_INVALID_ID;
@@ -261,6 +277,7 @@ void ObIOFlag::reset()
 bool ObIOFlag::is_valid() const
 {
   return mode_ >= 0 && mode_ < static_cast<int>(ObIOMode::MAX_MODE)
+    && read_mode_ >= 0 && read_mode_ < static_cast<uint8_t>(ObIOReadMode::MAX_MODE)
     && is_valid_group(group_id_)
     && wait_event_id_ > 0;
 }
@@ -336,14 +353,20 @@ int64_t ObIOFlag::get_wait_event() const
   return wait_event_id_;
 }
 
-void ObIOFlag::set_read()
+void ObIOFlag::set_read(ObIOReadMode read_mode)
 {
   set_mode(ObIOMode::READ);
+  read_mode_ = static_cast<uint8_t>(read_mode);
 }
 
 bool ObIOFlag::is_read() const
 {
   return static_cast<int>(ObIOMode::READ) == mode_;
+}
+
+ObIOReadMode ObIOFlag::get_read_mode() const
+{
+  return static_cast<ObIOReadMode>(read_mode_);
 }
 
 void ObIOFlag::set_write()
@@ -356,12 +379,12 @@ bool ObIOFlag::is_write() const
   return static_cast<int>(ObIOMode::WRITE) == mode_;
 }
 
-void ObIOFlag::set_sync()
+void ObIOFlag::set_sync_()
 {
   is_sync_ = true;
 }
 
-void ObIOFlag::set_async()
+void ObIOFlag::set_async_()
 {
   is_sync_ = false;
 }
@@ -466,6 +489,20 @@ bool ObIOFlag::is_preread() const
   return is_preread_;
 }
 
+void ObIOFlag::set_upload_part()
+{
+  is_upload_part_ = true;
+}
+
+void ObIOFlag::set_no_upload_part()
+{
+  is_upload_part_ = false;
+}
+
+bool ObIOFlag::is_upload_part() const
+{
+  return is_upload_part_;
+}
 void ObIOFlag::set_ss_private_dir()
 {
   ss_dir_type_ = ObIODirType::OB_DIR_TYPE_SS_PRIVATE;
@@ -538,7 +575,8 @@ ObSNIOInfo::ObSNIOInfo()
     callback_(nullptr),
     buf_(nullptr),
     user_data_buf_(nullptr),
-    part_id_(-1)
+    part_id_(-1),
+    uri_()
 {
 }
 
@@ -565,6 +603,7 @@ void ObSNIOInfo::reset()
   buf_ = nullptr;
   user_data_buf_ = nullptr;
   part_id_ = -1;
+  uri_.reset();
 }
 
 bool ObSNIOInfo::is_valid() const
@@ -574,7 +613,7 @@ bool ObSNIOInfo::is_valid() const
     && offset_ >= 0
     // in order to address concurrent write issues, archive checkpoint module would write
     // multiple non-content objects (it stores content in object name) whose size = 0
-    && (flag_.is_sync() ? size_ >= 0 : size_ > 0)
+    && size_ >= 0
     && timeout_us_ >= 0 //todo qilu: reopen after column_store steady
     && flag_.is_valid()
     && (flag_.is_read() || nullptr != buf_);
@@ -594,6 +633,7 @@ ObSNIOInfo &ObSNIOInfo::operator=(const ObSNIOInfo &other)
     buf_ = other.buf_;
     user_data_buf_ = other.user_data_buf_;
     part_id_ = other.part_id_;
+    uri_ = other.uri_;
   }
   return (*this);
 }
@@ -784,10 +824,15 @@ bool ObIOResult::is_valid() const
   return offset_ >= 0
     // in order to address concurrent write issues, archive checkpoint module would write
     // multiple non-content objects (it stores content in object name) whose size = 0
-    && (flag_.is_sync() ? size_ >= 0 : size_ > 0)
+    && size_ >= 0
     && timeout_us_ >= 0 //todo qilu: reopen after column_store steady
     && flag_.is_valid()
-    && (flag_.is_read() ? (nullptr != io_callback_ || nullptr != user_data_buf_ || flag_.is_detect()) : nullptr != buf_);
+    && (flag_.is_read() ?
+       (nullptr != io_callback_
+        || nullptr != user_data_buf_
+        || flag_.is_detect()
+        || is_without_read_buf(flag_.get_read_mode()))
+      : nullptr != buf_);
 }
 
 int ObIOResult::basic_init()
@@ -795,6 +840,39 @@ int ObIOResult::basic_init()
   int ret = OB_SUCCESS;
   if (OB_FAIL(cond_.init(ObWaitEventIds::IO_CONTROLLER_COND_WAIT))) {
     LOG_WARN("init result condition failed", K(ret));
+  }
+  return ret;
+}
+
+int ObIOResult::set_flag_sync_or_async_(const ObIOInfo &info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(info.fd_.device_handle_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(info));
+  } else {
+    if (info.fd_.device_handle_->is_local_device() || info.fd_.device_handle_->is_local_cache_device()) {
+      flag_.set_async_();
+    } else if (info.fd_.device_handle_->is_object_device()) {
+      // is_object_storage_async_io_ indicates that the handle(such as ObStorageAsyncReader)
+      // supports asynchronous I/O, but not all the interfaces of the handle support async io.
+      // (such as ObStorageAsyncMultipartWriter complete)
+      // Utility I/O uses read mode, so we need to verify if the read mode is default.
+      if (info.fd_.is_object_storage_async_io_) {
+        if (flag_.is_read() && flag_.get_read_mode() != ObIOReadMode::DEFAULT) {
+          flag_.set_sync_();
+        } else if (info.fd_.is_backup_block_file()) {
+          flag_.set_sync_();
+        } else {
+          flag_.set_async_();
+        }
+      } else {
+        flag_.set_sync_();
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("unknown device type, please check", KR(ret), K(info));
+    }
   }
   return ret;
 }
@@ -812,11 +890,7 @@ int ObIOResult::init(const ObIOInfo &info)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(info.fd_.device_handle_));
   } else {
-    if (info.flag_.is_sync()) {
-      aligned_size_ = info.fd_.device_handle_->get_io_aligned_size();
-    } else {
-      aligned_size_ = DIO_ALIGN_SIZE;
-    }
+    aligned_size_ = info.fd_.device_handle_->get_io_aligned_size();
   }
   if (OB_SUCC(ret)) {
     //init info and check valid
@@ -836,7 +910,10 @@ int ObIOResult::init(const ObIOInfo &info)
     user_data_buf_ = info.user_data_buf_;
     time_log_.begin_ts_ = ObTimeUtility::fast_current_time();
     is_limit_net_bandwidth_req_ = info.fd_.device_handle_->should_limit_net_bandwidth();
-    if (OB_UNLIKELY(!is_valid())) {
+
+    if (OB_FAIL(set_flag_sync_or_async_(info))) {
+      LOG_WARN("fail to set flag sync or async", K(ret), K(info));
+    } else if (OB_UNLIKELY(!is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(*this));
     }
@@ -1167,7 +1244,8 @@ ObIORequest::ObIORequest()
     storage_accesser_(),
     fd_(),
     trace_id_(),
-    part_id_(-1)
+    part_id_(-1),
+    uri_cstr_(nullptr)
 {
 
 }
@@ -1209,7 +1287,9 @@ int ObIORequest::init(const ObIOInfo &info, ObIOResult *result)
     part_id_ = info.part_id_;
     char *io_buf = nullptr;
     buf_size_ = 0;
-    if (OB_FAIL(set_block_handle(info))) {
+    if (OB_FAIL(alloc_uri_cstr(info))) {
+      LOG_WARN("fail to alloc uri_cstr", K(ret), K(info));
+    } else if (OB_FAIL(set_block_handle(info))) {
       LOG_WARN("fail to set block handle", K(ret), K(info));
     } else if (OB_FAIL(set_fd_cache_handle(info))) {
       LOG_WARN("fail to fd cache handle", K(ret), K(info));
@@ -1220,17 +1300,16 @@ int ObIORequest::init(const ObIOInfo &info, ObIOResult *result)
       LOG_WARN("device handle is null", KR(ret), K(*this));
     } else if (fd_.device_handle_->is_object_device()) {
       ObObjectDevice *obj_device_handle = static_cast<ObObjectDevice *>(fd_.device_handle_);
-      int flag = -1;
-      ObFdSimulator::get_fd_flag(fd_, flag);
+      ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+      ObFdSimulator::get_fd_op_type(fd_, op_type);
 
-      io_result_->flag_.set_sync();
       // alloc buffer for sync read/write request when ObIORequest init
       if (OB_UNLIKELY(!is_valid())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret), K(*this));
       } else if (info.flag_.is_write()
                  && (io_result_->size_ > 0) // size == 0 does not need to alloc io buf
-                 && (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != flag)
+                 && (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER != op_type)
                  && OB_FAIL(alloc_io_buf(io_buf))) {
         LOG_WARN("fail to alloc io buffer for sync read or write", K(ret), K(info));
       } else if (OB_FAIL(hold_storage_accesser(fd_, *obj_device_handle))) {
@@ -1298,14 +1377,20 @@ void ObIORequest::destroy()
 {
   int ret = OB_SUCCESS;
   retry_count_ = 0;
-  if (nullptr != control_block_ && nullptr != fd_.device_handle_) {
-    fd_.device_handle_->free_iocb(control_block_);
-    control_block_ = nullptr;
+  if (nullptr != control_block_) {
+    if (OB_ISNULL(fd_.device_handle_)) {
+      ret = OB_ERR_SYS;
+      OB_LOG(ERROR, "device_handle is nullptr, memory leak", K(ret), K(*this), KP(this));
+    } else {
+      fd_.device_handle_->free_iocb(control_block_);
+      control_block_ = nullptr;
+    }
   }
 
   fd_.reset();
   tenant_id_ = 0;
   free_io_buffer();
+  free_uri_cstr();
   ref_cnt_ = 0;
   trace_id_.reset();
   if (nullptr != io_result_) {
@@ -1439,7 +1524,7 @@ const char *ObIORequest::get_io_data_buf()
 
 int64_t ObIORequest::get_align_size() const
 {
-  return std::max(1L, align_size_);
+  return align_size_;
 }
 
 int64_t ObIORequest::get_align_offset() const
@@ -1570,17 +1655,22 @@ int ObIORequest::prepare(char *next_buffer, int64_t next_size, int64_t next_offs
     io_size = this->get_align_size();
   }
   char *io_buf = next_buffer != nullptr ? next_buffer : calc_io_buf();
+  ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+  ObFdSimulator::get_fd_op_type(fd_, op_type);
 
   if (OB_ISNULL(fd_.device_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("device handle is null", K(ret), K(*this));
-  } else if (fd_.device_handle_->is_object_device()) {
+  } else if (fd_.device_handle_->is_object_device() && get_flag().is_sync()) {
     // do nothing
   } else if (OB_ISNULL(control_block_) && OB_ISNULL(control_block_ = fd_.device_handle_->alloc_iocb(tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc io control block failed", K(ret), K(*this));
   } else if (FALSE_IT(tg.click("alloc_iocb"))) {
-  } else if (OB_ISNULL(io_buf) && OB_FAIL(alloc_io_buf(io_buf))) {
+  } else if (OB_ISNULL(io_buf)
+             && (io_result_->size_ > 0)
+             && (op_type != OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER)
+             && OB_FAIL(alloc_io_buf(io_buf))) {
     // delayed alloc buffer for read request here to reduce memory usage when io request enqueue
     LOG_WARN("alloc io buffer for read failed", K(ret), K(*this));
   } else if (FALSE_IT(tg.click("alloc_buf"))) {
@@ -1601,7 +1691,7 @@ int ObIORequest::prepare(char *next_buffer, int64_t next_size, int64_t next_offs
         LOG_WARN("prepare io read failed", K(ret), K(*this));
       }
       tg.click("prepare_read");
-    } else if (io_result_->flag_.is_write()) {
+    } else if (io_result_->flag_.is_write() && !io_result_->flag_.is_upload_part()) {
       if (OB_FAIL(fd_.device_handle_->io_prepare_pwrite(
               fd_,
               io_buf,
@@ -1612,6 +1702,17 @@ int ObIORequest::prepare(char *next_buffer, int64_t next_size, int64_t next_offs
         LOG_WARN("prepare io write failed", K(ret), K(*this));
       }
       tg.click("prepare_write");
+    } else if (io_result_->flag_.is_write() && io_result_->flag_.is_upload_part()) {
+      if (OB_FAIL(fd_.device_handle_->io_prepare_upload_part(
+              fd_,
+              io_buf,
+              io_size,
+              part_id_,
+              control_block_,
+              this/*data*/))) {
+        LOG_WARN("prepare io upload part failed", K(ret), K(*this));
+      }
+      tg.click("prepare_upload_part");
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported io mode", K(ret), K(*this));
@@ -1830,6 +1931,28 @@ int ObIORequest::hold_storage_accesser(const ObIOFd &fd, ObObjectDevice &object_
     storage_accesser_.hold(storage_accesser);
   }
   return ret;
+}
+
+int ObIORequest::alloc_uri_cstr(const ObIOInfo &info)
+{
+  int ret = OB_SUCCESS;
+  if (info.uri_.empty()) {
+    // do-nothing
+  } else if (OB_ISNULL(tenant_io_mgr_.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant io manager is null", K(ret));
+  } else if (OB_FAIL(ob_dup_cstring(tenant_io_mgr_.get_ptr()->io_allocator_, info.uri_, uri_cstr_))) {
+    LOG_WARN("fail to copy url", K(ret), K(info));
+  }
+  return ret;
+}
+
+void ObIORequest::free_uri_cstr()
+{
+  if (nullptr != uri_cstr_ && nullptr != tenant_io_mgr_.get_ptr()) {
+    tenant_io_mgr_.get_ptr()->io_allocator_.free(uri_cstr_);
+    uri_cstr_ = nullptr;
+  }
 }
 
 

@@ -8,6 +8,11 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        },
+        {
+          "name": "_enable_object_storage_async_io",
+          "value": true,
+          "comment": "Enable or disable object storage async io."
         }
       ],
       "tenant": [
@@ -63,6 +68,11 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        },
+        {
+          "name": "_enable_object_storage_async_io",
+          "value": true,
+          "comment": "Enable or disable object storage async io."
         }
       ],
       "tenant": [
@@ -118,6 +128,11 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        },
+        {
+          "name": "_enable_object_storage_async_io",
+          "value": true,
+          "comment": "Enable or disable object storage async io."
         }
       ],
       "tenant": [
@@ -178,6 +193,11 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        },
+        {
+          "name": "_enable_object_storage_async_io",
+          "value": true,
+          "comment": "Enable or disable object storage async io."
         }
       ],
       "tenant": [
@@ -238,6 +258,11 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        },
+        {
+          "name": "_enable_object_storage_async_io",
+          "value": true,
+          "comment": "Enable or disable object storage async io."
         }
       ],
       "tenant": [
@@ -293,6 +318,11 @@
           "name": "_enable_obdal",
           "value": true,
           "comment": "Enable or disable use obdal to access object storage."
+        },
+        {
+          "name": "_enable_object_storage_async_io",
+          "value": true,
+          "comment": "Enable or disable object storage async io."
         }
       ],
       "tenant": [

@@ -14,7 +14,6 @@
 #define OB_ADMIN_IO_ADAPTER_BENCH_H_
 #include <gtest/gtest.h>
 #include "../ob_admin_executor.h"
-#include "deps/oblib/src/lib/restore/ob_storage_info.h"
 #include "deps/oblib/src/lib/ob_define.h"                   // OB_MAX_URI_LENGTH
 #include "share/backup/ob_backup_struct.h"                  // OB_MAX_BACKUP_STORAGE_INFO_LENGTH
 #include "share/ob_thread_mgr.h"
@@ -71,7 +70,8 @@ private:
   int64_t memory_limit_size_gb_;
   bool is_adaptive_;
   bool clean_after_execution_;
-
+  int64_t obdal_work_thread_cnt_;
+  int64_t obdal_blocking_thread_max_cnt_;
   std::vector<TaskConfig> configs_;
 
 private:

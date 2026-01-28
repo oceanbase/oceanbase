@@ -14,14 +14,99 @@
 #define SRC_LIBRARY_SRC_LIB_RESTORE_OB_STORAGE_DEVICE_H_
 #include "common/storage/ob_io_device.h"
 #include "lib/restore/ob_storage.h"
+#include "lib/restore/ob_storage_async.h"
 #include "common/storage/ob_fd_simulator.h"
 #include "lib/allocator/ob_pooled_allocator.h"
+#include "lib/allocator/ob_fifo_allocator.h"
+#include "lib/lock/ob_latch.h"
+#include "lib/lock/ob_thread_cond.h"
+#include "lib/restore/ob_storage_info.h"
 
 namespace oceanbase
 {
 namespace common
 {
 const char *get_storage_access_type_str(const ObStorageAccessType &type);
+
+class ObObjectDeviceIOCB: public common::ObIOCB
+{
+public:
+  ObObjectDeviceIOCB() = default;
+  virtual ~ObObjectDeviceIOCB() = default;
+  virtual ObIOCBType get_type() const override { return ObIOCBType::IOCB_TYPE_OBJECT_DEVICE; }
+  TO_STRING_KV(K(fd_), KP(io_buf_), K(io_buf_size_), K(io_offset_), K(part_id), KP(ctx_));
+public:
+  ObIOFd fd_;
+  void *io_buf_;
+  size_t io_buf_size_;
+  int64_t io_offset_;
+  int64_t part_id;
+  void *ctx_; // ObIORequest
+};
+
+struct ObObjectDeviceIOEvent
+{
+  TO_STRING_KV(K(ret_code_), K(ret_bytes_), KP(data_));
+  int assign(const ObObjectDeviceIOEvent &other);
+  int ret_code_;
+  int ret_bytes_;
+  void *data_;
+};
+
+class ObObjectDeviceIOEvents: public common::ObIOEvents
+{
+public:
+  ObObjectDeviceIOEvents();
+  virtual ~ObObjectDeviceIOEvents();
+  virtual ObIOEventsType get_type() const override
+  {
+    return ObIOEventsType::IO_EVENTS_TYPE_OBJECT_DEVICE;
+  }
+  virtual int64_t get_complete_cnt() const override;
+  virtual int get_ith_ret_code(const int64_t i) const override;
+  virtual int get_ith_ret_bytes(const int64_t i) const override;
+  virtual void *get_ith_data(const int64_t i) const override;
+  void clear();
+private:
+  friend class ObObjectDevice;
+  ObArray<ObObjectDeviceIOEvent> io_events_;
+  int64_t complete_io_cnt_;
+};
+
+class ObObjectDeviceAsyncContextForWait
+{
+public:
+  ObObjectDeviceAsyncContextForWait();
+  ~ObObjectDeviceAsyncContextForWait();
+  int init();
+  int wait();
+  void reset();
+  static int async_callback(int ret_code, int64_t bytes, void *ctx);
+  TO_STRING_KV(K(is_inited_), K(completed_), K(ret_code_), K(bytes_));
+public:
+  bool is_inited_;
+  bool completed_;
+  int ret_code_;
+  int64_t bytes_;
+  ObThreadCond cond_;
+};
+
+class ObObjectDeviceAsyncContextForNoWait
+{
+public:
+  ObObjectDeviceAsyncContextForNoWait(ObObjectDevice *device, void *ctx)
+    : device_(device),
+      ctx_(ctx)
+  {};
+  ~ObObjectDeviceAsyncContextForNoWait() {};
+  static int async_callback(int ret_code, int64_t bytes, void *ctx);
+
+  TO_STRING_KV(KPC(device_), KP(ctx_));
+public:
+  ObObjectDevice *device_;
+  void *ctx_;
+};
+
 /*
 there are three write mode
 ------use write interface----
@@ -103,6 +188,46 @@ public:
   virtual int get_part_id(const ObIOFd &fd, bool &is_exist, int64_t &part_id) override;
   virtual int get_part_size(const ObIOFd &fd, const int64_t part_id, int64_t &part_size) override;
 
+  //async io interfaces
+  virtual int io_setup(uint32_t max_events, ObIOContext *&io_context) override;
+  virtual int io_destroy(ObIOContext *io_context) override;
+  virtual int io_prepare_pwrite(const ObIOFd &fd,
+                                void *buf,
+                                size_t count,
+                                int64_t offset,
+                                ObIOCB *iocb,
+                                void *callback) override;
+  virtual int io_prepare_pread(const ObIOFd &fd,
+                               void *buf,
+                               size_t count,
+                               int64_t offset,
+                               ObIOCB *iocb,
+                               void *callback) override;
+  virtual int io_prepare_upload_part(const ObIOFd &fd,
+                                     void *buf,
+                                     size_t count,
+                                     int64_t part_id,
+                                     ObIOCB *iocb,
+                                     void *callback) override;
+  virtual int io_submit(ObIOContext *io_context, ObIOCB *iocb) override;
+  virtual int io_cancel(ObIOContext *io_context, ObIOCB *iocb) override;
+  virtual int io_getevents(ObIOContext *io_context,
+                           int64_t min_nr,
+                           ObIOEvents *events,
+                           struct timespec *timeout) override;
+  virtual ObIOCB *alloc_iocb(const uint64_t tenant_id) override;
+  virtual void free_iocb(ObIOCB *iocb) override;
+  virtual ObIOEvents *alloc_io_events(const uint32_t max_events) override;
+  virtual void free_io_events(ObIOEvents *io_event) override;
+  ObObjectDeviceIOEvent *alloc_io_event();
+  void free_io_event(ObObjectDeviceIOEvent *io_event);
+
+  int alloc_and_assign_async_context(void *ctx, ObObjectDeviceAsyncContextForNoWait *&context);
+  void free_async_context(ObObjectDeviceAsyncContextForNoWait *&context);
+
+  int push_io_event(ObObjectDeviceIOEvent *io_event);
+  int pop_io_event(ObObjectDeviceIOEvent *&io_event);
+
   void set_storage_id_mod(const ObStorageIdMod &storage_id_mod);
   const ObStorageIdMod &get_storage_id_mod() const;
   int release_fd(const ObIOFd &fd);
@@ -123,8 +248,57 @@ public:
 
 protected:
   int get_access_type(ObIODOpts *opts, ObStorageAccessType& access_type);
+
+  #define CALL_CTX_METHOD_WITH_ARGS(ctx, type_class, method, ...) \
+  do { \
+    type_class *obj = static_cast<type_class*>(ctx); \
+    if (OB_FAIL(obj->method(__VA_ARGS__))) { \
+      OB_LOG(WARN, "fail to call " #method "!", KR(ret)); \
+    } \
+  } while(0)
+
+  template<typename T, typename Pool, typename... Args>
+  int open_ctx_in_pool(const char *pathname, void *&ctx, Pool &pool, const char *type_name, Args &&... args)
+  {
+    int ret = OB_SUCCESS;
+    T *obj = pool.alloc();
+    if (OB_ISNULL(obj)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "failed to alloc mem for object device", KR(ret), K(pathname), KCSTRING(type_name));
+    } else {
+      common::ObObjectStorageInfo &info = get_storage_info();
+      if (OB_FAIL(obj->open(pathname, &info, std::forward<Args>(args)...))) {
+        OB_LOG(WARN, "failed to open", KR(ret), K(pathname), K(info));
+      } else {
+        ctx = (void*)obj;
+      }
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(obj)) {
+      pool.free(obj);
+      obj = nullptr;
+    }
+    return ret;
+  }
+
+  template<typename T, typename Pool>
+  int close_and_free_ctx_in_pool(void *ctx, Pool &pool, ObStorageAccessType access_type, const char *type_name)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "ctx is null", KR(ret), K(access_type), KCSTRING(type_name));
+    } else {
+      T *obj = static_cast<T*>(ctx);
+      if (OB_FAIL(obj->close())) {
+        OB_LOG(WARN, "fail to close", KR(ret), K(access_type), KCSTRING(type_name));
+      }
+      pool.free(obj);
+    }
+    return ret;
+  }
   // The nohead_reader does not perform a head operation to obtain the file length when opened,
   // hence the caller must ensure the validity of the read range during pread operations.
+  int open_for_util(void *&ctx);
   int open_for_reader(const char *pathname, void *&ctx, const bool head_meta = true);
   int open_for_adaptive_reader_(const char *pathname, void *&ctx);
   int open_for_overwriter(const char *pathname, void*& ctx);
@@ -132,6 +306,10 @@ protected:
   int open_for_multipart_writer_(const char *pathname, void *&ctx);
   int open_for_parallel_multipart_writer_(const char *pathname, void *&ctx);
   int open_for_buffered_multipart_writer_(const char *pathname, void *&ctx);
+  int open_for_async_reader(const char *pathname, void *&ctx, const bool head_meta = true);
+  int open_for_async_writer(const char *pathname, void *&ctx);
+  int open_for_async_direct_multiwriter(const char *pathname, void *&ctx);
+  int open_for_async_buffered_multiwriter(const char *pathname, void *&ctx);
   int release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType access_type);
   int inner_exist_(const char *pathname, bool &is_exist, const bool is_adaptive = false);
   int inner_stat_(const char *pathname, ObIODFileStat &statbuf, const bool is_adaptive = false);
@@ -140,23 +318,37 @@ protected:
       ObBaseDirEntryOperator &op, const bool is_adaptive = false);
 
 protected:
+  template<typename T>
+  using ObCtxPooledAllocator = ObPooledAllocator<T, ObMalloc, ObSpinLock>;
+  static const int64_t DEFAULT_PRE_ALLOCATED_IOCB_COUNT = 512;
+  static const int64_t MAX_ASYNC_IO_EVENT_COUNT = 512;
   //maybe fd mng can be device level
   common::ObFdSimulator    fd_mng_;
-  
+
   ObStorageUtil            util_;
   /*obj ctx pool: use to create fd ctx(reader/writer)*/
-  common::ObPooledAllocator<ObStorageReader, ObMalloc, ObSpinLock> reader_ctx_pool_;
-  common::ObPooledAllocator<ObStorageAdaptiveReader, ObMalloc, ObSpinLock> adaptive_reader_ctx_pool_;
-  common::ObPooledAllocator<ObStorageAppender, ObMalloc, ObSpinLock> appender_ctx_pool_;
-  common::ObPooledAllocator<ObStorageWriter, ObMalloc, ObSpinLock> overwriter_ctx_pool_;
-  common::ObPooledAllocator<ObStorageMultiPartWriter, ObMalloc, ObSpinLock> multipart_writer_ctx_pool_;
-  common::ObPooledAllocator<ObStorageDirectMultiPartWriter, ObMalloc, ObSpinLock> direct_multiwriter_ctx_pool_;
-  common::ObPooledAllocator<ObStorageBufferedMultiPartWriter, ObMalloc, ObSpinLock> buffered_multiwriter_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageUtil> util_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageReader> reader_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageAdaptiveReader> adaptive_reader_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageAppender> appender_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageWriter> overwriter_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageMultiPartWriter> multipart_writer_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageDirectMultiPartWriter> direct_multiwriter_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageBufferedMultiPartWriter> buffered_multiwriter_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageAsyncReader> async_reader_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageAsyncWriter> async_writer_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageAsyncDirectMultiPartWriter> async_direct_multiwriter_ctx_pool_;
+  ObCtxPooledAllocator<ObStorageAsyncBufferedMultiPartWriter> async_buffered_multiwriter_ctx_pool_;
   common::ObObjectStorageInfo storage_info_;
   bool is_started_;
   char storage_info_str_[OB_MAX_URI_LENGTH];
   common::ObSpinLock lock_;
+  common::ObFIFOAllocator allocator_;
+  common::ObFixedQueue<ObObjectDeviceIOEvent> async_io_event_queue_;
   ObStorageIdMod storage_id_mod_;
+  int64_t iocb_count_;
+  int64_t async_context_count_;
+  int64_t io_event_count_;
 
 protected:
   /*Object device will not use this interface, just return not support error code*/
@@ -191,40 +383,6 @@ protected:
     const void *buf,
     const int64_t size,
     int64_t &write_size) override;
-  //async io interfaces
-  virtual int io_setup(
-    uint32_t max_events,
-    ObIOContext *&io_context) override;
-  virtual int io_destroy(ObIOContext *io_context) override;
-  virtual int io_prepare_pwrite(
-    const ObIOFd &fd,
-    void *buf,
-    size_t count,
-    int64_t offset,
-    ObIOCB *iocb,
-    void *callback) override;
-  virtual int io_prepare_pread(
-    const ObIOFd &fd,
-    void *buf,
-    size_t count,
-    int64_t offset,
-    ObIOCB *iocb,
-    void *callback) override;
-  virtual int io_submit(
-    ObIOContext *io_context,
-    ObIOCB *iocb) override;
-  virtual int io_cancel(
-    ObIOContext *io_context,
-    ObIOCB *iocb) override;
-  virtual int io_getevents(
-    ObIOContext *io_context,
-    int64_t min_nr,
-    ObIOEvents *events,
-    struct timespec *timeout) override;
-  virtual ObIOCB *alloc_iocb(const uint64_t tenant_id) override;
-  virtual ObIOEvents *alloc_io_events(const uint32_t max_events) override;
-  virtual void free_iocb(ObIOCB *iocb) override;
-  virtual void free_io_events(ObIOEvents *io_event) override;
 
   // space management interface
   virtual int64_t get_total_block_size() const override;

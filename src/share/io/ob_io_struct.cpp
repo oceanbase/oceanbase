@@ -16,6 +16,7 @@
 #include "share/ob_io_device_helper.h"
 #include "observer/ob_server.h"
 #include "common/storage/ob_fd_simulator.h"
+#include "lib/restore/ob_object_device.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
@@ -1960,46 +1961,50 @@ int ObIOChannel::base_init(ObDeviceChannel *device_channel)
 int ObIOChannel::convert_sys_errno(const int system_errno)
 {
   int ret = OB_IO_ERROR;
-  // system_errno is a positive number.
-  bool use_warn_log = false;
-  switch (system_errno) {
-    case EACCES:
-      ret = OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
-      LOG_ERROR("file or directory permission denied", K(ret), K(system_errno));
-      break;
-    case ENOENT:
-      ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
-      LOG_ERROR("no such file or directory", K(ret), K(system_errno));
-      break;
-    case EEXIST:
-    case ENOTEMPTY:
-      ret = OB_FILE_OR_DIRECTORY_EXIST;
-      LOG_ERROR("file or directory exist", K(ret), K(system_errno));
-      break;
-    case ETIMEDOUT:
-      ret = OB_TIMEOUT;
-      LOG_ERROR("io timeout", K(ret), K(system_errno));
-      break;
-    case EAGAIN:
-      ret = OB_EAGAIN;
-      LOG_WARN("io eagain", K(ret), K(system_errno));
-      break;
-    case ENOSPC:
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
-      LOG_ERROR("server out of disk space", K(ret), K(system_errno));
-      break;
-    case EDQUOT:
-      ret = OB_DISK_QUOTA_EXCEEDED;
-      LOG_ERROR("server out of disk quota", K(ret), K(system_errno));
-      break;
-    default:
-      use_warn_log = true;
-      break;
-  }
-  if (use_warn_log) {
-    LOG_INFO("convert sys errno", K(ret), K(system_errno));
+  if (system_errno <= -4000) {
+    ret = system_errno;
   } else {
-    LOG_WARN("convert sys errno", K(ret), K(system_errno));
+    // system_errno is a positive number.
+    bool use_warn_log = false;
+    switch (system_errno) {
+      case EACCES:
+        ret = OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
+        LOG_ERROR("file or directory permission denied", K(ret), K(system_errno));
+        break;
+      case ENOENT:
+        ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
+        LOG_ERROR("no such file or directory", K(ret), K(system_errno));
+        break;
+      case EEXIST:
+      case ENOTEMPTY:
+        ret = OB_FILE_OR_DIRECTORY_EXIST;
+        LOG_ERROR("file or directory exist", K(ret), K(system_errno));
+        break;
+      case ETIMEDOUT:
+        ret = OB_TIMEOUT;
+        LOG_ERROR("io timeout", K(ret), K(system_errno));
+        break;
+      case EAGAIN:
+        ret = OB_EAGAIN;
+        LOG_WARN("io eagain", K(ret), K(system_errno));
+        break;
+      case ENOSPC:
+        ret = OB_SERVER_OUTOF_DISK_SPACE;
+        LOG_ERROR("server out of disk space", K(ret), K(system_errno));
+        break;
+      case EDQUOT:
+        ret = OB_DISK_QUOTA_EXCEEDED;
+        LOG_ERROR("server out of disk quota", K(ret), K(system_errno));
+        break;
+      default:
+        use_warn_log = true;
+        break;
+    }
+    if (use_warn_log) {
+      LOG_INFO("convert sys errno", K(ret), K(system_errno));
+    } else {
+      LOG_WARN("convert sys errno", K(ret), K(system_errno));
+    }
   }
   return ret;
 }
@@ -2153,7 +2158,7 @@ void ObAsyncIOChannel::run1()
   }
 }
 
-static int64_t get_io_depth(const int64_t io_size)
+int64_t oceanbase::common::get_io_depth(const int64_t io_size)
 {
   const int64_t IO_SPLIT_SIZE = 512L * 1024L; // 512KB
   return upper_align(io_size, IO_SPLIT_SIZE) / IO_SPLIT_SIZE;
@@ -2188,6 +2193,7 @@ int ObAsyncIOChannel::submit(ObIORequest &req)
     ATOMIC_INC(&submit_count_);
     ATOMIC_FAA(&device_channel_->used_io_depth_, get_io_depth(req.get_align_size()));
     req.inc_ref("os_inc"); // ref for file system
+    ObTraceIdGuard trace_id_guard(req.trace_id_);
     if (OB_FAIL(device_handle_->io_submit(io_context_, req.control_block_))) {
       ATOMIC_DEC(&submit_count_);
       req.dec_ref("os_dec"); // ref for file system
@@ -2261,9 +2267,14 @@ void ObAsyncIOChannel::get_events()
         const int complete_size = io_events_->get_ith_ret_bytes(i);
         if (OB_LIKELY(0 == system_errno)) { // io succ
           ObDIActionGuard di_action_guard("IO success");
-          if (complete_size == io_size) { // full complete
+          // on_full_return will be called if one of the two conditions is met:
+          // 1. The request is object storage I/O request, because object storage doesn't have
+          //    partial return, even in no-head read where it might return a smaller size than
+          //    io size, the user prefers to return directly without performing a partial retry.
+          // 2. complete size is equal to io size.
+          if (req->fd_.device_handle_->is_object_device() || complete_size == io_size) { // full complete
             LOG_DEBUG("Success to get io event", K(*req), K(complete_size));
-            if (OB_FAIL(on_full_return(*req, io_size))) {
+            if (OB_FAIL(on_full_return(*req, complete_size))) {
               LOG_WARN("process full return io request failed", K(ret), K(*req));
             }
           } else if (complete_size >= 0 && complete_size < io_size) { // partial complete
@@ -2291,7 +2302,12 @@ void ObAsyncIOChannel::get_events()
         } else { // io failed
           ObDIActionGuard di_action_guard("IO failed");
           int tmp_ret = convert_sys_errno(system_errno);
-          LOG_ERROR("io request failed", K(ret), K(tmp_ret), K(system_errno), K(complete_size), K(*req));
+          if (device_handle_->is_object_device()) {
+            // object storage do not want to log error here
+            LOG_WARN("io request failed", K(ret), K(tmp_ret), K(system_errno), K(complete_size), K(*req));
+          } else {
+            LOG_ERROR("io request failed", K(ret), K(tmp_ret), K(system_errno), K(complete_size), K(*req));
+          }
           if (EAGAIN == system_errno) { //retry
             if (OB_FAIL(on_full_retry(*req))) {
               LOG_WARN("retry io request failed", K(ret), K(tmp_ret), K(system_errno), K(*req));
@@ -2630,9 +2646,80 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
   } else if (FALSE_IT(io_offset = static_cast<int64_t>(req.io_result_->offset_))) {
   } else if (FALSE_IT(req.io_result_->time_log_.submit_ts_ = ObTimeUtility::fast_current_time())) {
   } else if (req.get_flag().is_read()) {
-    if (OB_FAIL(check_io_hang_errsim())) {
-    } else if (OB_FAIL(device_handle->pread(req.fd_, io_offset, req.io_result_->size_, req.calc_io_buf(), io_size))) {
-        LOG_WARN("pread failed", K(ret), K(req));
+    const ObIOReadMode read_mode = req.get_flag().get_read_mode();
+    char *io_buf = req.calc_io_buf();
+    char *uri_cstr = req.get_uri_cstr();
+    if (ObIOReadMode::DEFAULT == read_mode) {
+      if (OB_FAIL(check_io_hang_errsim())) {
+      } else if (OB_FAIL(device_handle->pread(req.fd_, io_offset, req.io_result_->size_, io_buf, io_size))) {
+          LOG_WARN("pread failed", K(ret), K(req));
+      }
+    } else if (ObIOReadMode::EXIST == read_mode) {
+      bool *exist = (bool *)io_buf;
+      if (OB_FAIL(device_handle->exist(uri_cstr, *exist))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      } else {
+        io_size = req.io_result_->size_;
+      }
+    } else if (ObIOReadMode::ADAPTIVE_EXIST == read_mode) {
+      bool *exist = (bool *)io_buf;
+      if (OB_FAIL(device_handle->adaptive_exist(uri_cstr, *exist))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      } else {
+        io_size = req.io_result_->size_;
+      }
+    } else if (ObIOReadMode::STAT == read_mode) {
+      ObIODFileStat *statbuf = new (io_buf) ObIODFileStat();
+      if (OB_FAIL(device_handle->stat(uri_cstr, *statbuf))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      } else {
+        io_size = req.io_result_->size_;
+      }
+    } else if (ObIOReadMode::ADAPTIVE_STAT == read_mode) {
+      ObIODFileStat *statbuf = new (io_buf) ObIODFileStat();
+      if (OB_FAIL(device_handle->adaptive_stat(uri_cstr, *statbuf))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      } else {
+        io_size = req.io_result_->size_;
+      }
+    } else if (ObIOReadMode::UNLINK == read_mode) {
+      if (OB_FAIL(device_handle->unlink(uri_cstr))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      }
+    } else if (ObIOReadMode::ADAPTIVE_UNLINK == read_mode) {
+      if (OB_FAIL(device_handle->adaptive_unlink(uri_cstr))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      }
+    } else if (ObIOReadMode::MKDIR == read_mode) {
+      if (OB_FAIL(device_handle->mkdir(uri_cstr, 0))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      }
+    } else if (ObIOReadMode::RMDIR == read_mode) {
+      if (OB_FAIL(device_handle->rmdir(uri_cstr))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      }
+    } else if (ObIOReadMode::IS_TAGGING == read_mode) {
+      bool *is_tagging = (bool *)io_buf;
+      if (OB_FAIL(device_handle->is_tagging(uri_cstr, *is_tagging))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      } else {
+        io_size = req.io_result_->size_;
+      }
+    } else if (ObIOReadMode::COMPLETE == read_mode) {
+      if (OB_FAIL(device_handle->complete(req.fd_))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      }
+    } else if (ObIOReadMode::ABORT == read_mode) {
+      if (OB_FAIL(device_handle->abort(req.fd_))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      }
+    } else if (ObIOReadMode::SEAL_FILE == read_mode) {
+      if (OB_FAIL(device_handle->seal_file(req.fd_))) {
+        LOG_WARN("failed to get file stat", K(ret), K(req));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported io read mode", K(ret), K(req));
     }
   } else if (req.get_flag().is_write()) {
     if (device_handle->is_local_device()) {
@@ -2641,9 +2728,9 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
         LOG_WARN("pwrite failed", K(ret), K(req));
       }
     } else {
-      int flag = -1;
-      ObFdSimulator::get_fd_flag(req.fd_, flag);
-      if (ObStorageAccessType::OB_STORAGE_ACCESS_OVERWRITER == flag) {
+      ObStorageAccessType op_type = ObStorageAccessType::OB_STORAGE_ACCESS_MAX_TYPE;
+      ObFdSimulator::get_fd_op_type(req.fd_, op_type);
+      if (ObStorageAccessType::OB_STORAGE_ACCESS_OVERWRITER == op_type) {
         if (0 == req.io_result_->size_) {
           char buf = '\0';
           if (OB_FAIL(device_handle->write(req.fd_, &buf, req.io_result_->size_, io_size))) {
@@ -2654,29 +2741,29 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
             LOG_WARN("write failed", K(ret), K(req));
           }
         }
-      } else if ((ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER == flag)
-                 || (ObStorageAccessType::OB_STORAGE_ACCESS_MULTIPART_WRITER == flag)) {
+      } else if ((ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER == op_type)
+                 || (ObStorageAccessType::OB_STORAGE_ACCESS_MULTIPART_WRITER == op_type)) {
         if (OB_FAIL(device_handle->pwrite(req.fd_, io_offset, req.io_result_->size_, req.calc_io_buf(), io_size))) {
           LOG_WARN("pwrite failed", K(ret), K(req));
         }
-      } else if (OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER == flag) {
+      } else if (OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER == op_type) {
         if (OB_FAIL(device_handle->upload_part(req.fd_, req.calc_io_buf(),
                                                 req.io_result_->size_,
                                                 req.part_id_,
                                                 io_size))) {
-          LOG_WARN("direct upload part failed", K(ret), K(req), K(flag), K(req.io_result_));
+          LOG_WARN("direct upload part failed", K(ret), K(req), K(op_type), K(req.io_result_));
         }
-      } else if (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == flag) {
+      } else if (OB_STORAGE_ACCESS_BUFFERED_MULTIPART_WRITER == op_type) {
         // buffered multipart writer does not require reallocation of memory and data copying
         if (OB_FAIL(device_handle->upload_part(req.fd_, nullptr,
                                                 req.io_result_->size_,
                                                 req.part_id_,
                                                 io_size))) {
-          LOG_WARN("buffered upload part failed", K(ret), K(req), K(flag), K(req.io_result_));
+          LOG_WARN("buffered upload part failed", K(ret), K(req), K(op_type), K(req.io_result_));
         }
       } else {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("storage access type not supported", K(ret), K(flag), K(req));
+        LOG_WARN("storage access type not supported", K(ret), K(op_type), K(req));
       }
     }
   } else {
@@ -2783,7 +2870,7 @@ int ObDeviceChannel::init(ObIODevice *device_handle,
       }
     }
     // only one sync io channel
-    {
+    if (OB_SUCC(ret)) {
       ObSyncIOChannel *ch = nullptr;
       void *buf = nullptr;
       if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSyncIOChannel)))) {
@@ -2865,6 +2952,7 @@ int ObDeviceChannel::submit(ObIORequest &req)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (req.fd_.device_handle_->is_object_device()
+             && req.get_flag().is_sync()
              && req.get_flag().is_read()
              && req.io_result_->get_user_io_size() > 0
              && req.calc_io_buf() == nullptr
@@ -2875,7 +2963,7 @@ int ObDeviceChannel::submit(ObIORequest &req)
       lock_for_sync_io_.lock();
     }
     if (OB_FAIL(get_random_io_channel(is_sync ? sync_channels_ : async_channels_, ch))) {
-      LOG_WARN("get random io channel failed", K(ret), K(sync_channels_.count()), K(is_sync));
+      LOG_WARN("get random io channel failed", K(ret), K(sync_channels_.count()), K(async_channels_.count()), K(is_sync), KPC(this));
     } else if (OB_FAIL(ch->submit(req))) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("submit request failed", K(ret), K(req));

@@ -177,7 +177,7 @@ struct ObObjectStorageCredential
 class ObClusterStateBaseMgr
 {
 public:
-  ObClusterStateBaseMgr() : is_write_with_if_match_(false) {}
+  ObClusterStateBaseMgr(): enable_object_storage_async_io_(true), enable_obdal_(true), is_write_with_if_match_(false) {}
   virtual ~ObClusterStateBaseMgr() {}
   virtual int is_supported_assume_version() const
   {
@@ -196,6 +196,7 @@ public:
     return false;
   }
   virtual bool is_write_with_if_match() const { return is_write_with_if_match_; }
+  virtual bool is_enable_object_storage_async_io() const { return enable_object_storage_async_io_; }
   virtual bool is_enable_obdal() const { return enable_obdal_; }
   static ObClusterStateBaseMgr &get_instance()
   {
@@ -203,6 +204,12 @@ public:
     return mgr;
   }
 public:
+  // for test
+  void set_enable_object_storage_async_io(const bool enable_object_storage_async_io)
+  {
+    enable_object_storage_async_io_ = enable_object_storage_async_io;
+  }
+
   void set_enable_obdal(const bool enable_obdal)
   {
     enable_obdal_ = enable_obdal;
@@ -211,6 +218,7 @@ public:
   void set_is_write_with_if_match(const bool is_write_with_if_match) { is_write_with_if_match_ = is_write_with_if_match; }
 
 private:
+  bool enable_object_storage_async_io_;
   bool enable_obdal_;
   bool is_write_with_if_match_;
 };

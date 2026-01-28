@@ -59,6 +59,28 @@ static constexpr int64_t DEFAULT_OBJECT_STORAGE_IO_TIMEOUT_MS = 20 * 1000L;
 
 enum class ObIOMode : uint8_t { READ = 0, WRITE = 1, MAX_MODE };
 
+/*
+ObIOReadMode is a submodule under the READ module. Its configurations include:
+DEFAULT: Handles standard read requests;
+Other modes: Designed for utility requests.
+*/
+enum class ObIOReadMode {
+  DEFAULT,
+  EXIST,
+  ADAPTIVE_EXIST,
+  STAT,
+  ADAPTIVE_STAT,
+  UNLINK,
+  ADAPTIVE_UNLINK,
+  MKDIR,
+  RMDIR,
+  IS_TAGGING,
+  COMPLETE,
+  ABORT,
+  SEAL_FILE,
+  MAX_MODE,
+};
+
 enum class ObIOGroupMode : uint8_t { LOCALREAD = 0, LOCALWRITE = 1, REMOTEREAD = 2, REMOTEWRITE = 3, MODECNT };
 
 enum class ObIOPriority : uint8_t {
@@ -70,6 +92,7 @@ enum class ObIOPriority : uint8_t {
 
 const char *get_io_mode_string(const ObIOMode mode);
 const char *get_io_mode_string(const ObIOGroupMode mode);
+bool is_without_read_buf(const ObIOReadMode read_mode);
 int transform_usage_index_to_group_config_index(const uint64_t &usage_index, uint64_t &group_config_index);
 ObIOMode get_io_mode_enum(const char *mode_string);
 
@@ -131,12 +154,11 @@ public:
   bool is_sys_module() const;
   uint8_t get_func_type() const;
   int64_t get_wait_event() const;
-  void set_read();
+  void set_read(ObIOReadMode read_mode = ObIOReadMode::DEFAULT);
   bool is_read() const;
+  ObIOReadMode get_read_mode() const;
   void set_write();
   bool is_write() const;
-  void set_sync();
-  void set_async();
   bool is_sync() const;
   void set_unlimited(const bool is_unlimited = true);
   bool is_unlimited() const;
@@ -162,20 +184,27 @@ public:
   bool is_buffered_read() const;
   void set_preread();
   void set_no_preread();
+  void set_upload_part();
+  void set_no_upload_part();
+  bool is_upload_part() const;
   bool is_preread() const;
   void set_ss_private_dir();
   void set_ss_public_dir();
   bool is_ss_private_dir() const;
   bool is_ss_public_dir() const;
-  TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)), K(group_id_), K(func_type_),
+  TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)), K_(read_mode), K(group_id_), K(func_type_),
       K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(is_detect_), K(is_write_through_), K(is_sealed_),
-      K(is_time_detect_), K(need_close_dev_and_fd_), K(is_preread_), K(is_buffered_read_), K(reserved_));
+      K(is_time_detect_), K(need_close_dev_and_fd_), K(is_preread_), K(is_buffered_read_), K(is_upload_part_), K(reserved_));
+private:
+  void set_sync_();
+  void set_async_();
 
 private:
   friend struct ObIOResult;
   void set_func_type(const uint8_t func_type);
   void set_resource_group_id(const uint64_t group_id);
   static constexpr int64_t IO_MODE_BIT = 4; // read, write, append
+  static constexpr int64_t IO_READ_MOD_BIT = 4;
   static constexpr int64_t IO_FUNC_TYPE_BIT = 8;
   static constexpr int64_t IO_WAIT_EVENT_BIT = 32; // for performance monitor
   static constexpr int64_t IO_SYNC_FLAG_BIT = 1; // indicate if the caller is waiting io finished
@@ -195,8 +224,10 @@ private:
   static constexpr int64_t IO_CLOSE_DEV_AND_FD_BIT = 1;
   static constexpr int64_t IO_BUFFERED_READ_BIT = 1; // indicate read mode of the io
   static constexpr int64_t IO_PREREAD_FLAG_BIT = 1;
+  static constexpr int64_t IO_UPLOAD_PART_BIT = 1;
   static constexpr int64_t IO_SS_DIR_TYPE_BIT = 4; // indicate the type of ss dir, 0: not ss dir, 1: private, 2: public
   static constexpr int64_t IO_RESERVED_BIT = 64 - IO_MODE_BIT
+                                                - IO_READ_MOD_BIT
                                                 - IO_WAIT_EVENT_BIT
                                                 - IO_SYNC_FLAG_BIT
                                                 - IO_DETECT_FLAG_BIT
@@ -207,12 +238,15 @@ private:
                                                 - IO_CLOSE_DEV_AND_FD_BIT
                                                 - IO_BUFFERED_READ_BIT
                                                 - IO_PREREAD_FLAG_BIT
+                                                - IO_UPLOAD_PART_BIT
                                                 - IO_SS_DIR_TYPE_BIT;
+  static_assert(IO_RESERVED_BIT >= 0, "IO_RESERVED_BIT must be >= 0");
 
   union { // FARM COMPAT WHITELIST
     int64_t flag_;
     struct {
       int64_t mode_ : IO_MODE_BIT;
+      uint8_t read_mode_ : IO_READ_MOD_BIT;
       uint8_t func_type_ : IO_FUNC_TYPE_BIT;
       int64_t wait_event_id_ : IO_WAIT_EVENT_BIT;
       bool is_sync_ : IO_SYNC_FLAG_BIT;
@@ -224,6 +258,7 @@ private:
       bool need_close_dev_and_fd_ : IO_CLOSE_DEV_AND_FD_BIT;
       bool is_buffered_read_ : IO_BUFFERED_READ_BIT;
       bool is_preread_ : IO_PREREAD_FLAG_BIT;
+      bool is_upload_part_ : IO_UPLOAD_PART_BIT;
       uint8_t ss_dir_type_ : IO_SS_DIR_TYPE_BIT;
       int64_t reserved_ : IO_RESERVED_BIT;
     };
@@ -327,6 +362,7 @@ public:
   const char *buf_;
   char *user_data_buf_;  // actual data buf without cb, allocated by the calling layer
   int64_t part_id_;      // multipart upload's part id
+  ObString uri_;
 };
 
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -507,7 +543,6 @@ struct ObIOSSGrpKey
   TO_STRING_KV(K(tenant_id_), K(group_key_));
 };
 
-
 class ObIOResult final
 {
 public:
@@ -544,6 +579,8 @@ public:
                K(timeout_us_), K(result_ref_cnt_), K(out_ref_cnt_), K(flag_), K(ret_code_), K(tenant_id_), K(tenant_io_mgr_),
                KP(user_data_buf_), KP(buf_), KP(io_callback_), K_(time_log));
   DISALLOW_COPY_AND_ASSIGN(ObIOResult);
+private:
+  int set_flag_sync_or_async_(const ObIOInfo &info);
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
   friend class ObSSIORequest;
@@ -621,11 +658,15 @@ public:
   void dec_ref(const char *msg = nullptr);
   bool is_canceled() const;
 
+  int alloc_uri_cstr(const ObIOInfo &info);
+  void free_uri_cstr();
+  char *get_uri_cstr() const { return uri_cstr_; }
+
   int64_t get_remained_io_timeout_us();
 
   TO_STRING_KV(KP(this), KP(io_result_), K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_), K(is_limit_net_bandwidth_req()),
                K(align_size_), K(align_offset_), K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K_(storage_accesser),
-               KPC(io_result_), K_(part_id));
+               KPC(io_result_), K_(part_id), KCSTRING_(uri_cstr));
 private:
   friend class ObTenantIOSchedulerV2;
   friend class ObDeviceChannel;
@@ -667,6 +708,7 @@ protected:
   ObIOFd fd_;
   ObCurTraceId::TraceId trace_id_;
   int64_t part_id_;   // multipart upload's part id
+  char *uri_cstr_;
 };
 
 typedef common::ObDList<ObIORequest> IOReqList;

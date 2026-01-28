@@ -1779,6 +1779,36 @@ bool ObConfigDefaultMicroBlockFormatVersionChecker::check(const ObConfigItem &t)
   return is_valid;
 }
 
+bool ObConfigObDALChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = true;
+  bool value = ObConfigBoolParser::get(t.str(), is_valid);
+  bool _enable_object_storage_async_io = GCONF._enable_object_storage_async_io;
+  if (!is_valid) {
+    LOG_USER_ERROR(OB_INVALID_CONFIG, "invalid config value", K(t.str()));
+  } else if (!value && _enable_object_storage_async_io) {
+    is_valid = false;
+    OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "when _enable_obdal is false, the _enable_object_storage_async_io must be false", K(_enable_object_storage_async_io));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "when _enable_obdal is false, the _enable_object_storage_async_io must be false");
+  }
+  return is_valid;
+}
+
+bool ObConfigObjectStorageAsyncIOChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = true;
+  bool value = ObConfigBoolParser::get(t.str(), is_valid);
+  bool _enable_obdal = GCONF._enable_obdal;
+  if (!is_valid) {
+    LOG_USER_ERROR(OB_INVALID_CONFIG, "invalid config value", K(t.str()));
+  } else if (value && !_enable_obdal) {
+    is_valid = false;
+    OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "object storage async io is not supported when _enable_obdal is false", K(_enable_obdal));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "object storage async io is not supported when _enable_obdal is false");
+  }
+  return is_valid;
+}
+
 bool ObSQLFuncExtensionChecker::check(const ObConfigItem &t) const
 {
   const ObString tmp_str(t.str());

@@ -251,8 +251,6 @@ int ObStorageObjectHandle::sn_async_read(const ObStorageObjectReadInfo &read_inf
                                                                   backup_device,
                                                                   io_info.fd_))) {
         LOG_WARN("failed to get backup device and fd", K(ret), K(read_info));
-      } else {
-        io_info.flag_.set_sync();
       }
     }
 
@@ -374,10 +372,10 @@ int ObStorageObjectHandle::ss_update_object_type_rw_stat(const blocksstable::ObS
         ObIOMode mode = io_flag.get_mode();
         if (mode == ObIOMode::READ) {
           IGNORE_RETURN local_cache_service->update_object_type_stat(object_type, ObSSObjectTypeStatType::READ,
-            io_flag.is_sync(), result, delta_cnt, get_data_size(), io_time_us/*delta_time_us*/);
+            io_handle_.is_limit_net_bandwidth_req(), result, delta_cnt, get_data_size(), io_time_us/*delta_time_us*/);
         } else if (mode == ObIOMode::WRITE) {
           IGNORE_RETURN local_cache_service->update_object_type_stat(object_type, ObSSObjectTypeStatType::WRITE,
-            io_flag.is_sync(), result, delta_cnt, get_data_size(), io_time_us/*delta_time_us*/);
+            io_handle_.is_limit_net_bandwidth_req(), result, delta_cnt, get_data_size(), io_time_us/*delta_time_us*/);
         } else {
           LOG_WARN("unexpected io mode", KR(ret), K(mode));
         }

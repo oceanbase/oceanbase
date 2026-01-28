@@ -2924,7 +2924,8 @@ DEF_BOOL(_enable_pseudo_partition_id, OB_CLUSTER_PARAMETER, "True",
          "Control whether to enable pseudo_partition_id.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_obdal, OB_CLUSTER_PARAMETER, "False",
+DEF_BOOL_WITH_CHECKER(_enable_obdal, OB_CLUSTER_PARAMETER, "True",
+         common::ObConfigObDALChecker,
          "Enable or disable use obdal to access object storage.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -3203,7 +3204,10 @@ DEF_BOOL(_enable_streaming_cursor_prefetch, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "False",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL_WITH_CHECKER(_enable_object_storage_async_io, OB_CLUSTER_PARAMETER, "False",
+                common::ObConfigObjectStorageAsyncIOChecker,
+                "Enable or disable object storage async io.",
+                ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ss_macro_block_check_interval, OB_TENANT_PARAMETER, "1d", "[30s,365d]",
          "Control the period of macro block check in shared dir."
          "Range: [30s, 365d]",

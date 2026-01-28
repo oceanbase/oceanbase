@@ -50,5 +50,10 @@ int64_t ObObjectStorageTenantGuard::get_timeout_us()
   return tl_timeout_us_;
 }
 
+int64_t ObObjectStorageTenantGuard::get_timeout_ms()
+{
+  return tl_timeout_us_ / 1000;
+}
+
 } // common
 } // oceanbase

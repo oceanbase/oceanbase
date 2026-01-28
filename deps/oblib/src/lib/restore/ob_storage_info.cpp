@@ -418,10 +418,6 @@ int ObObjectStorageInfo::validate_arguments() const
       LOG_WARN("device or checksum type don't support enable_worm", K(ret), KPC(this));
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
           "Only OSS and checksum_type=md5 support setting enable_worm, other devices or checksum types are");
-    } else if (OB_UNLIKELY(is_use_obdal())) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("using obdal mode don't support enable_worm", K(ret), KPC(this));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting enable_worm=true when using obdal is");
     }
   }
 
@@ -544,8 +540,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         }
       } else if (0 == strncmp(ROLE_ARN, token, strlen(ROLE_ARN))) {
         if (ObStorageType::OB_STORAGE_FILE == device_type_
-            || ObStorageType::OB_STORAGE_AZBLOB == device_type_
-            || is_use_obdal()) {
+            || ObStorageType::OB_STORAGE_AZBLOB == device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
           LOG_WARN("OB_STORAGE_FILE don't support assume role yet",
               K(ret), K_(device_type), KP(token));
@@ -895,9 +890,9 @@ int ObObjectStorageInfo::to_account(ObStorageAccount &account) const
     ObObjectStorageCredential credential;
     if (OB_FAIL(ObDeviceCredentialMgr::get_instance().get_credential(*this, credential))) {
       OB_LOG(WARN, "failed to get credential", K(ret), KPC(this), K(credential));
-    } else if (OB_FAIL(ob_set_field(credential.access_id_ + strlen(ACCESS_ID), account.access_id_, sizeof(account.access_id_)))) {
+    } else if (OB_FAIL(ob_set_field(credential.access_id_, account.access_id_, sizeof(account.access_id_)))) {
       OB_LOG(WARN, "failed to set access_id", K(ret), K(access_id_));
-    } else if (OB_FAIL(ob_set_field(credential.access_key_ + strlen(ACCESS_KEY), account.access_key_, sizeof(account.access_key_)))) {
+    } else if (OB_FAIL(ob_set_field(credential.access_key_, account.access_key_, sizeof(account.access_key_)))) {
       OB_LOG(WARN, "failed to set access_key", K(ret), K(access_key_));
     } else if (OB_FAIL(account.sts_token_.assign(credential.sts_token_))) {
       OB_LOG(WARN, "failed to set sts_token_", K(ret), K(account.sts_token_), K(credential.sts_token_));

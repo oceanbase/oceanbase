@@ -32,6 +32,8 @@ namespace oceanbase
 namespace common
 {
 
+int64_t get_io_depth(const int64_t io_size);
+
 struct ObIOConfig final
 {
 public:

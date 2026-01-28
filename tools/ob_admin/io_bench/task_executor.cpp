@@ -271,9 +271,8 @@ void Metrics::summary(
         const double cpu_usage_for_100MB_bw = (100.0 / BW) * cpu_usage;
         PrintHelper::print_dump_line("CPU usage for 100MB/s BW",
             (std::to_string(cpu_usage_for_100MB_bw) + "% per 100MB/s").c_str());
-      } else {
-        PrintHelper::print_dump_line("Total CPU usage", (std::to_string(cpu_usage) + "%").c_str());
       }
+      PrintHelper::print_dump_line("Total CPU usage", (std::to_string(cpu_usage) + "%").c_str());
       PrintHelper::print_dump_line("Total throughput bytes", throughput_bytes_);
       PrintHelper::print_dump_line("Total QPS", std::to_string(QPS).c_str());
       PrintHelper::print_dump_line("Per Thread QPS", std::to_string(QPS / thread_num).c_str());
@@ -681,7 +680,7 @@ int MultipartWriteTaskExecutor::execute()
     ObBackupIoAdapter adapter;
     ObIOFd fd;
     ObIODevice *device_handle = nullptr;
-    ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
+    ObStorageAccessType access_type = OB_STORAGE_ACCESS_DIRECT_MULTIPART_WRITER;
 
     const int64_t open_start_time_us = ObTimeUtility::current_time();
     if (OB_FAIL(adapter.open_with_access_type(
@@ -699,19 +698,26 @@ int MultipartWriteTaskExecutor::execute()
     int64_t cur_offset = 0;
     int64_t actual_write_size = -1;
     int64_t cur_part_size = -1;
+    std::vector<ObIOHandle> io_handles;
     while (OB_SUCC(ret) && cur_offset < obj_size_) {
       cur_part_size = MIN(obj_size_ - cur_offset, part_size_);
       MEMCPY(write_buf_,
              RANDOM_CONTENT + ObRandom::rand(0, MAX_RANDOM_CONTENT_LEN - cur_part_size),
              cur_part_size);
       write_buf_[cur_part_size] = '\0';
+      io_handles.push_back(ObIOHandle());
 
-      if (OB_FAIL(device_handle->pwrite(fd, cur_offset, cur_part_size,
-                                        write_buf_, actual_write_size))) {
+      if (OB_FAIL(adapter.async_upload_data(*device_handle, fd, write_buf_, cur_offset, cur_part_size, io_handles.back()))) {
         OB_LOG(WARN, "fail to upload part",
             K(ret), K_(base_uri), K(cur_offset), K(cur_part_size), K(fd));
       } else {
         cur_offset += cur_part_size;
+      }
+    }
+
+    for (int i = 0; i < io_handles.size() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(io_handles[i].wait())) {
+        OB_LOG(WARN, "fail to wait", KR(ret), K(i), K(io_handles.size()));
       }
     }
 
@@ -721,7 +727,8 @@ int MultipartWriteTaskExecutor::execute()
     }
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(adapter.close_device_and_fd(device_handle, fd))) {
-      OB_LOG(WARN, "fail to close device handle", K(ret), K(tmp_ret), K_(base_uri));
+      ret = COVER_SUCC(tmp_ret);
+      OB_LOG(WARN, "fail to close device handle", KR(tmp_ret), K(ret), K_(base_uri));
     }
     metrics_.close_time_ms_map_.log_entry(close_start_time_us);
 

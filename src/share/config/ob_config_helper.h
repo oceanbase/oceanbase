@@ -1236,6 +1236,26 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigUseDistinctWithExpansionChecker);
 };
 
+class ObConfigObDALChecker: public ObConfigChecker
+{
+public:
+  ObConfigObDALChecker() {}
+  virtual ~ObConfigObDALChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigObDALChecker);
+};
+
+class ObConfigObjectStorageAsyncIOChecker: public ObConfigChecker
+{
+public:
+  ObConfigObjectStorageAsyncIOChecker() {}
+  virtual ~ObConfigObjectStorageAsyncIOChecker() {}
+  virtual bool check(const ObConfigItem &t) const override;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigObjectStorageAsyncIOChecker);
+};
+
 class ObSQLFuncExtensionChecker
   : public ObConfigChecker
 {

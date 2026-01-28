@@ -38,7 +38,8 @@ struct ObIOFd
 {
   ObIOFd(ObIODevice *device_handle = nullptr, const int64_t first_id = -1,
       const int64_t second_id = -1, const int64_t third_id = -1,
-      const int64_t fd_id_ = -1, const int64_t slot_version= -1);
+      const int64_t fd_id_ = -1, const int64_t slot_version= -1,
+      const bool is_object_storage_async_io = false);
   bool is_super_block() const { return 0 == first_id_ && 0 == second_id_; }
   bool is_tiered_super_block() const { return 0 == first_id_ && 2 == second_id_; }
   bool is_normal_file() const { return NORMAL_FILE_ID == first_id_ && second_id_ > 0; }
@@ -51,17 +52,19 @@ struct ObIOFd
   {
     return other.first_id_ == this->first_id_ && other.second_id_ == this->second_id_ && other.third_id_ == this->third_id_
         && other.fd_id_ == this->fd_id_ && other.slot_version_ == this->slot_version_
+        && other.is_object_storage_async_io_ == this->is_object_storage_async_io_
         && other.device_handle_ == this->device_handle_;
   }
   bool operator != (const ObIOFd& other) const
   {
     return other.first_id_ != this->first_id_ || other.second_id_ != this->second_id_ || other.third_id_ != this->third_id_
         || other.fd_id_ != this->fd_id_ || other.slot_version_ != this->slot_version_
+        || other.is_object_storage_async_io_ != this->is_object_storage_async_io_
         || other.device_handle_ != this->device_handle_;
   }
   bool is_valid() const;
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(first_id), K_(second_id), K_(third_id), K_(fd_id), K_(slot_version), KP_(device_handle));
+  TO_STRING_KV(K_(first_id), K_(second_id), K_(third_id), K_(fd_id), K_(slot_version), K_(is_object_storage_async_io), KP_(device_handle));
   static const int64_t NORMAL_FILE_ID = 0xFFFFFFFFFFFFFFFF;// all of bit is one.
   static const int64_t BACKUP_BLOCK_ID_MODE_FIELD_MASK = 0xFF;
   static const int64_t BACKUP_BLOCK_ID_MODE_SHIFT_SIZE= 52LL;
@@ -71,6 +74,7 @@ struct ObIOFd
   int64_t third_id_;
   int64_t fd_id_; // used for fd simulator
   int64_t slot_version_;  // used for fd simulator
+  bool is_object_storage_async_io_;
   ObIODevice *device_handle_; // no need to serialize
 };
 
@@ -473,6 +477,12 @@ public:
     int64_t offset,
     ObIOCB *iocb,
     void *callback) = 0;
+  virtual int io_prepare_upload_part(const ObIOFd &fd,
+                                     void *buf,
+                                     size_t count,
+                                     int64_t part_id,
+                                     ObIOCB *iocb,
+                                     void *callback);
   virtual int io_submit(
     ObIOContext *io_context,
     ObIOCB *iocb) = 0;
@@ -517,6 +527,11 @@ public:
   OB_INLINE bool is_local_device() const
   {
     return (ObStorageType::OB_STORAGE_LOCAL == device_type_);
+  }
+
+  OB_INLINE bool is_local_cache_device() const
+  {
+    return (ObStorageType::OB_STORAGE_LOCAL_CACHE == device_type_);
   }
 
   virtual bool should_limit_net_bandwidth() const

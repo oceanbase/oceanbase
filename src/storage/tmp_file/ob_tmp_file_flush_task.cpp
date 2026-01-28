@@ -209,7 +209,6 @@ int ObTmpFileFlushTask::write()
     io_info.size_ = size_;
     io_info.buf_ = buf_;
     io_info.flag_.set_write();
-    io_info.flag_.set_sync();
     io_info.flag_.set_wait_event(ObWaitEventIds::TMP_FILE_WRITE);
     io_info.flag_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
     io_info.fd_.first_id_ = macro_id.first_id();

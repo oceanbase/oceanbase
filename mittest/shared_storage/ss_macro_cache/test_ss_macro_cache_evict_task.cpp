@@ -190,7 +190,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_read_cache)
 
   ObIOFlag flag;
   ASSERT_EQ(OB_SUCCESS, read_object_handle.get_io_handle().get_io_flag(flag));
-  ASSERT_TRUE(flag.is_sync()); // read from object storage
+  ASSERT_TRUE(read_object_handle.get_io_handle().is_limit_net_bandwidth_req()); // read from object storage
   read_object_handle.reset();
 
   // 8. release local cache disk size
@@ -265,7 +265,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_tmp_file_write_cache)
 
   ObIOFlag flag;
   ASSERT_EQ(OB_SUCCESS, read_object_handle.get_io_handle().get_io_flag(flag));
-  ASSERT_TRUE(flag.is_sync()); // read from object storage
+  ASSERT_TRUE(read_object_handle.get_io_handle().is_limit_net_bandwidth_req()); // read from object storage
   read_object_handle.reset();
 
   // 7. release local cache disk size
@@ -335,7 +335,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_other_write_cache)
 
   ObIOFlag flag;
   ASSERT_EQ(OB_SUCCESS, read_object_handle.get_io_handle().get_io_flag(flag));
-  ASSERT_TRUE(flag.is_sync()); // read from object storage
+  ASSERT_TRUE(read_object_handle.get_io_handle().is_limit_net_bandwidth_req()); // read from object storage
   read_object_handle.reset();
 
   // 7. release local cache disk size
@@ -423,7 +423,7 @@ TEST_F(TestSSMacroCacheEvictTask, fg_trigger_evict)
 
   ObIOFlag flag;
   ASSERT_EQ(OB_SUCCESS, read_object_handle.get_io_handle().get_io_flag(flag));
-  ASSERT_TRUE(flag.is_sync()); // read from object storage
+  ASSERT_TRUE(read_object_handle.get_io_handle().is_limit_net_bandwidth_req()); // read from object storage
   read_object_handle.reset();
 
   write_info_.set_is_write_cache(true); // resume default value of is_write_cache flag

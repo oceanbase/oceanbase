@@ -147,6 +147,10 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     }
   }
   // 3. read and compare the read data with the written data
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ObSSMemMacroCacheStat &cache_stat = mem_macro_cache->cache_stat_;
+  const int64_t hit_cnt_before = cache_stat.hit_stat().hit_cnt_;
+  const int64_t miss_cnt_before = cache_stat.hit_stat().miss_cnt_;
   for (int64_t i = 0; i < tmp_file_cnt; ++i) {
     read_info_.macro_block_id_ = macro_ids[i];
     ObStorageObjectHandle read_object_handle;
@@ -157,10 +161,14 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     ASSERT_EQ(read_info_.size_, read_object_handle.get_data_size());
     ASSERT_EQ(0, memcmp(write_buf_, read_object_handle.get_buffer(), WRITE_IO_SIZE));
 
-    ObIOFlag flag;
-    ASSERT_EQ(OB_SUCCESS, read_object_handle.get_io_handle().get_io_flag(flag));
-    // check read tmp_file from mem_macro_cache, and it will set_sync
-    ASSERT_TRUE(flag.is_sync());
+    // Verify that data was read from mem_macro_cache by checking cache statistics
+    // When reading from mem_macro_cache, there is no actual IO operation,
+    // data is directly copied from memory. The correct way to verify is to check
+    // cache hit statistics instead of IO flags.
+    const int64_t hit_cnt_after = cache_stat.hit_stat().hit_cnt_;
+    const int64_t miss_cnt_after = cache_stat.hit_stat().miss_cnt_;
+    ASSERT_EQ(hit_cnt_before + i + 1, hit_cnt_after);
+    ASSERT_EQ(miss_cnt_before, miss_cnt_after); // miss count should not change
   }
 
   // 4. wait preread_next_segment_file finish
