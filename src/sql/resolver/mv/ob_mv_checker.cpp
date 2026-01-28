@@ -449,8 +449,8 @@ bool ObMVChecker::check_mlog_table_valid(const share::schema::ObTableSchema *tab
     LOG_WARN("failed to get table rowkey ids", K(ret), KPC(table_schema));
   }
   for (int i = 0; is_valid && OB_SUCC(ret) && i < unique_col_ids.count(); ++i) {
-    is_valid = NULL != mlog_schema.get_column_schema(unique_col_ids.at(i))
-               || OB_HIDDEN_PK_INCREMENT_COLUMN_ID == unique_col_ids.at(i);
+    mlog_cid = ObTableSchema::gen_mlog_col_id_from_ref_col_id(unique_col_ids.at(i));
+    is_valid = NULL != mlog_schema.get_column_schema(mlog_cid);
     if (!is_valid) {
       ObString column_name;
       bool column_exist = false;

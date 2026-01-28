@@ -28,9 +28,9 @@ const ObString ObMVPrinter::INNER_RT_MV_VIEW_NAME = "INNER_RT_MV$$";
 const ObString ObMVPrinter::MV_STAT_VIEW_NAME = "MVS$$";
 const ObString ObMVPrinter::GROUP_CALC_AGGR_VIEW_NAME = "GROUP_CALC_VIEW$$";
 // column name
-const ObString ObMVPrinter::HEAP_TABLE_ROWKEY_COL_NAME  = "M_ROW$$";
-const ObString ObMVPrinter::OLD_NEW_COL_NAME  = "OLD_NEW$$";
-const ObString ObMVPrinter::SEQUENCE_COL_NAME  = "SEQUENCE$$";
+const ObString ObMVPrinter::HEAP_TABLE_ROWKEY_COL_NAME  = OB_MLOG_ROWID_COLUMN_NAME;
+const ObString ObMVPrinter::OLD_NEW_COL_NAME  = OB_MLOG_OLD_NEW_COLUMN_NAME;
+const ObString ObMVPrinter::SEQUENCE_COL_NAME  = OB_MLOG_SEQ_NO_COLUMN_NAME;
 const ObString ObMVPrinter::DML_FACTOR_COL_NAME  = "DMLFACTOR$$";
 const ObString ObMVPrinter::WIN_MAX_SEQ_COL_NAME  = "MAXSEQ$$";
 const ObString ObMVPrinter::WIN_MIN_SEQ_COL_NAME  = "MINSEQ$$";
@@ -479,7 +479,7 @@ int ObMVPrinter::add_table_columns_to_select_list(const TableItem &table,
   for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
     SelectItem *sel_item = NULL;
     const ObString &column_name = column_items.at(i).column_name_;
-    const bool use_hidden_pk_name = is_for_mlog_table && OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_items.at(i).column_id_;
+    const bool use_hidden_pk_name = is_for_mlog_table && is_map_to_mlog_mrow(column_items.at(i).column_id_);
     if (OB_ISNULL(sel_item = select_items.alloc_place_holder())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("allocate select item from array error", K(ret));
@@ -522,7 +522,7 @@ int ObMVPrinter::add_table_rowkey_to_select_list(const TableItem &table,
   for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_ids.count(); ++i) {
     SelectItem *sel_item = NULL;
     const ObColumnSchemaV2 *rowkey_column = NULL;
-    const bool use_hidden_pk_name = is_for_mlog_table && OB_HIDDEN_PK_INCREMENT_COLUMN_ID == rowkey_column_ids.at(i);
+    const bool use_hidden_pk_name = is_for_mlog_table && is_map_to_mlog_mrow(rowkey_column_ids.at(i));
     if (OB_ISNULL(rowkey_column = table_schema->get_column_schema(rowkey_column_ids.at(i)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(rowkey_column), K(rowkey_column_ids.at(i)));
@@ -621,7 +621,7 @@ int ObMVPrinter::gen_max_min_seq_window_func_exprs(const TableItem &table,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(rowkey_column));
     } else if (OB_FAIL(create_simple_column_expr(table.get_table_name(),
-                                                 OB_HIDDEN_PK_INCREMENT_COLUMN_ID == unique_col_ids.at(i) ?
+                                                 is_map_to_mlog_mrow(unique_col_ids.at(i)) ?
                                                  HEAP_TABLE_ROWKEY_COL_NAME :
                                                  rowkey_column->get_column_name(),
                                                  table.table_id_,
@@ -1027,7 +1027,7 @@ int ObMVPrinter::gen_rowkey_join_conds_for_table(const TableItem &origin_table,
     ObRawExpr *join_cond = NULL;
     const ObString *orig_sel_alias = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_column_ids.count(); ++i) {
-      const bool left_use_hidden_pk_name = left_is_mlog_table && OB_HIDDEN_PK_INCREMENT_COLUMN_ID == rowkey_column_ids.at(i);
+      const bool left_use_hidden_pk_name = left_is_mlog_table && is_map_to_mlog_mrow(rowkey_column_ids.at(i));
       if (OB_ISNULL(rowkey_column = table_schema->get_column_schema(rowkey_column_ids.at(i)))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(rowkey_column));
@@ -1260,7 +1260,7 @@ int ObMVPrinter::get_table_rowkey_exprs(const TableItem &table,
     const ObColumnSchemaV2 *rowkey_column = NULL;
     const ObString *orig_sel_alias = NULL;
     ObRawExpr *rowkey_expr = NULL;
-    const bool use_hidden_pk_name = is_for_mlog_table && OB_HIDDEN_PK_INCREMENT_COLUMN_ID == rowkey_column_ids.at(i);
+    const bool use_hidden_pk_name = is_for_mlog_table && is_map_to_mlog_mrow(rowkey_column_ids.at(i));
     if (OB_ISNULL(rowkey_column = table_schema->get_column_schema(rowkey_column_ids.at(i)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(rowkey_column_ids.at(i)));

@@ -427,7 +427,7 @@ int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &requ
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < orig_column_ids.count(); ++i) {
         uint64_t column_id = orig_column_ids.at(i);
-        if (column_id < OB_MLOG_SEQ_NO_COLUMN_ID) {
+        if (column_id < OB_MIN_MLOG_SPECIAL_COLUMN_ID) {
           ObString column_name;
           bool is_column_exist;
           mlog_schema->get_column_name_by_column_id(column_id, column_name, is_column_exist);

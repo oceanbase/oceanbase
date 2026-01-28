@@ -333,10 +333,11 @@ protected:
     }
     return ret;
   }
-
   static int set_table_read_snapshot_recursively(ObRawExpr *mv_refresh_scn,
-                                                ObRawExpr *table_refresh_scn,
-                                                ObSelectStmt *stmt);
+                                                 ObRawExpr *table_refresh_scn,
+                                                 ObSelectStmt *stmt);
+  static OB_INLINE bool is_map_to_mlog_mrow(const uint64_t column_id)
+  { return OB_MLOG_ROWID_COLUMN_ID == ObTableSchema::gen_mlog_col_id_from_ref_col_id(column_id); }
 protected:
   ObMVPrinterCtx &ctx_;
   bool inited_;

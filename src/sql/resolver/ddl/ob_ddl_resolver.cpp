@@ -1113,6 +1113,13 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
       if (OB_ISNULL(option_node = node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "node is null", K(ret));
+      } else if (OB_UNLIKELY(is_creating_mview()
+                             && (T_ORGANIZATION == option_node->type_
+                                 || T_CLUSTERING_KEY == option_node->type_))) {
+        // organization and clustering key are not handled in ObMViewResolverHelper::resolve_materialized_view
+        // throw not supported error before resolve_materialized_view is adapted.
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify organization type or clustering key for materialized view is");
       } else if (OB_FAIL(resolve_table_option(option_node, is_index_option))) {
         SQL_RESV_LOG(WARN, "resolve table option failed", K(ret));
       } else if (T_DUPLICATE_READ_CONSISTENCY == option_node->type_) {
