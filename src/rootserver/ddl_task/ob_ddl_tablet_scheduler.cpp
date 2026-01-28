@@ -712,10 +712,11 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
                                                             tenant_id_,
                                                             tablet_data_row_cnt,
                                                             pre_vec_construct_mem,
-                                                            current_vec_construct_mem)) {
+                                                            current_vec_construct_mem,
+                                                            in_tablets.count())) {
               satisfied_built_vec_index_if_need = false;
             }
-            if (pre_data_size == 0 || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {
+            if ( 0 >= out_tablets.count() || ((tablet_data_row_cnt + pre_data_row_cnt) <= task_max_data_row_cnt && (tablet_data_size + pre_data_size) <= task_max_data_size && satisfied_built_vec_index_if_need)) {
               if (OB_FAIL(out_tablets.push_back(in_tablets.at(i)))) {
                 LOG_WARN("fail to push back", K(ret), K(in_tablets.at(i)));
               } else {

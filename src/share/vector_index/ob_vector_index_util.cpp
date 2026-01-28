@@ -6496,7 +6496,7 @@ int ObVectorIndexUtil::get_tenant_vector_memory_used_by_inner_sql(
   return ret;
 }
 
-bool ObVectorIndexUtil::check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const common::ObAddr &addr, const uint64_t tenant_id, const int64_t row_count, const int64_t pre_construct_mem, uint64_t &current_construct_mem)
+bool ObVectorIndexUtil::check_ivf_vector_index_memory(ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const common::ObAddr &addr, const uint64_t tenant_id, const int64_t row_count, const int64_t pre_construct_mem, uint64_t &current_construct_mem, const int64_t remaining_partition_cnt)
 {
   int ret = OB_SUCCESS;
   bool is_satisfied = true;
@@ -6553,8 +6553,17 @@ bool ObVectorIndexUtil::check_ivf_vector_index_memory(ObSchemaGetterGuard &schem
       LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id));
     } else if (OB_FAIL(estimate_ivf_memory(row_count, param, current_construct_mem, buff_mem))) {
       LOG_WARN("failed to estimate ivf memory", K(ret));
-    } else if (hold_mem + pre_construct_mem + current_construct_mem > mem_limited_size) {
-      is_satisfied = false;
+    } else {
+      // For IVF_PQ type in PQ phase, multiply buff_mem by remaining partition count
+      // because all partitions will build IVF cache during PQ clustering process
+      if (index_schema.is_vec_ivfpq_pq_centroid_index() && param.type_ == VIAT_IVF_PQ) {
+        buff_mem = buff_mem * remaining_partition_cnt;
+      }
+      LOG_INFO("estimate ivf memory", K(ret), K(hold_mem), K(pre_construct_mem), K(current_construct_mem), K(buff_mem), K(mem_limited_size), K(remaining_partition_cnt));
+      // Check memory: hold_mem + pre_construct_mem + current_construct_mem + buff_mem <= mem_limited_size
+      if (hold_mem + pre_construct_mem + current_construct_mem + buff_mem > mem_limited_size) {
+        is_satisfied = false;
+      }
     }
   }
   return is_satisfied;

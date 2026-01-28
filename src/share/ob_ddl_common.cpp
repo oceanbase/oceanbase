@@ -41,6 +41,7 @@
 #endif
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
+#include "lib/utility/ob_sort.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -4243,7 +4244,10 @@ int ObDDLUtil::get_tablet_data_row_cnt(
         if (!addr.ip_to_string(ip_buf, sizeof(ip_buf))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to execute ip_to_string", K(ret));
-        } else if (OB_FAIL(query_string.assign_fmt("SELECT sum(row_count) as row_count FROM %s WHERE tenant_id = %lu AND tablet_id = %lu AND ls_id = %lu AND svr_ip = '%s' AND svr_port = %d",
+        } else if (OB_FAIL(query_string.assign_fmt(
+                           "SELECT start_log_scn, end_log_scn, row_count FROM %s "
+                           "WHERE tenant_id = %lu AND tablet_id = %lu AND ls_id = %lu AND svr_ip = '%s' AND svr_port = %d "
+                           "AND table_type NOT IN (26, 27)",
             OB_ALL_VIRTUAL_TABLE_MGR_TNAME, tenant_id, tablet_id.id(), ls_id.id(), ip_buf, addr.get_port()))) {
           LOG_WARN("assign sql string failed", K(ret), K(OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME), K(tenant_id), K(tablet_id), K(ls_id));
         } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
@@ -4255,21 +4259,82 @@ int ObDDLUtil::get_tablet_data_row_cnt(
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get sql result", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
-      } else if (OB_FAIL(result->next())) {
-        LOG_WARN("get next result failed", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
-      } else if (OB_FAIL(result->get_obj(obj_pos, result_obj))) {
-        LOG_WARN("failed to get object", K(ret));
-      } else if (result_obj.is_null()) {
-        data_row_cnt = 0;
-        LOG_WARN("data size is null", K(ret));
-        ret = OB_SUCCESS;
-      } else if (result_obj.is_integer_type()) {
-        data_row_cnt = result_obj.get_int();
-      } else if (result_obj.is_decimal_int()) {
-        data_row_cnt = *result_obj.get_decimal_int()->int64_v_;
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected obj type", K(ret), K(result_obj.get_type()));
+        if (data_version < DATA_VERSION_4_4_1_0) {
+          if (OB_FAIL(result->next())) {
+            LOG_WARN("get next result failed", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
+          } else if (OB_FAIL(result->get_obj(obj_pos, result_obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (result_obj.is_null()) {
+            data_row_cnt = 0;
+            LOG_WARN("data size is null", K(ret));
+            ret = OB_SUCCESS;
+          } else if (result_obj.is_integer_type()) {
+            data_row_cnt = result_obj.get_int();
+          } else if (result_obj.is_decimal_int()) {
+            data_row_cnt = *result_obj.get_decimal_int()->int64_v_;
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected obj type", K(ret), K(result_obj.get_type()));
+          }
+        } else {
+          // for data version >= 4.4.1.0, we need to get the row count from the virtual table manager table
+          struct TableMgrRowStat {
+            uint64_t start_log_scn_;
+            uint64_t end_log_scn_;
+            int64_t row_count_;
+            TO_STRING_KV(K(start_log_scn_), K(end_log_scn_), K(row_count_));
+          };
+          ObSEArray<TableMgrRowStat, 8> row_stats;
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(result->next())) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("get next result failed", K(ret), K(tenant_id), K(meta_tenant_id), K(query_string));
+              }
+            } else {
+              TableMgrRowStat stat;
+              EXTRACT_UINT_FIELD_MYSQL(*result, "start_log_scn", stat.start_log_scn_, uint64_t);
+              EXTRACT_UINT_FIELD_MYSQL(*result, "end_log_scn", stat.end_log_scn_, uint64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "row_count", stat.row_count_, int64_t);
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(row_stats.push_back(stat))) {
+                  LOG_WARN("failed to push stat", K(ret), K(stat.start_log_scn_), K(stat.end_log_scn_), K(stat.row_count_));
+                }
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            struct Compare {
+              bool operator()(const TableMgrRowStat &l, const TableMgrRowStat &r) const {
+                if (l.start_log_scn_ == r.start_log_scn_) {
+                  return l.end_log_scn_ > r.end_log_scn_; // Put larger intervals first to facilitate containment checking
+                }
+                return l.start_log_scn_ < r.start_log_scn_;
+              }
+            };
+            lib::ob_sort(row_stats.begin(), row_stats.end(), Compare());
+            data_row_cnt = 0;
+            uint64_t max_cover_end = 0;
+            bool has_init = false;
+            for (int64_t i = 0; OB_SUCC(ret) && i < row_stats.count(); ++i) {
+              const TableMgrRowStat &stat = row_stats.at(i);
+              if (!has_init) {
+                data_row_cnt += stat.row_count_;
+                max_cover_end = stat.end_log_scn_;
+                has_init = true;
+              } else if (stat.end_log_scn_ > max_cover_end) {
+                // Not contained by any previous interval (start increases and end exceeds current coverage upper bound), need to include
+                data_row_cnt += stat.row_count_;
+                max_cover_end = stat.end_log_scn_;
+              } else {
+                // Covered by existing intervals, skip
+              }
+            }
+          }
+        }
       }
     }
   }
