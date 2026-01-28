@@ -11958,5 +11958,19 @@
     "background_cn": "",
     "ref_url": "",
     "placeholder": true
+  },
+  "ap_query_replica_fallback": {
+    "id": 10764,
+    "name": "ap_query_replica_fallback",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "bool",
+    "info": "When ap_query_route_policy is AUTO or FORCE, controls whether query will fallback to non-column replica when there is no available column replica",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "publish_version": "4.5.1",
+    "info_cn": "当 ap 查询自动分流功能开启控制时，控制无可用列存副本的情况下查询是否回退到非列存副本执行",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }
