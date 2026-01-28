@@ -133,7 +133,7 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
-    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(static_param_.merge_scn), K_(merge_version_range), K_(merge_rowid_range));
+    FLOG_INFO("success to init ObMergeParameter", K(ret), "tablet_id", static_param_.get_tablet_id(), K(idx), K_(static_param_.merge_scn), K_(merge_version_range), K_(merge_range), K_(merge_rowid_range));
   }
   return ret;
 }

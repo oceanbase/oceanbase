@@ -879,8 +879,8 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
                   allocator_,
                   range_array))) {
             LOG_WARN("failed to get split multi range", K(ret), K(range_array));
-          } else if (OB_FAIL(medium_info.gene_parallel_info(range_array))) {
-            LOG_WARN("failed to get parallel ranges", K(ret), K(range_array));
+          } else if (OB_FAIL(medium_info.gene_parallel_info(*first_sstable, tablet->get_rowkey_read_info(), range_array))) {
+            LOG_WARN("failed to get parallel ranges", K(ret), KPC(first_sstable), K(range_array));
           } else {
             int64_t buf_len = ObTabletMediumCompactionInfoRecorder::cal_buf_len(tablet->get_tablet_meta().tablet_id_, medium_info, nullptr/*log_header*/);
 #ifdef ERRSIM

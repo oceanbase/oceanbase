@@ -285,10 +285,10 @@ public:
   // TODO: get_index_tree_root and get_last_rowkey now required sstable to be loaded
   int get_index_tree_root(
       blocksstable::ObMicroBlockData &index_data,
-      const bool need_transform = true);
+      const bool need_transform = true) const;
   int get_last_rowkey(
       common::ObIAllocator &allocator,
-      ObDatumRowkey &endkey);
+      ObDatumRowkey &endkey) const;
 
   int deep_copy(common::ObIAllocator &allocator, ObSSTable *&dst, const bool transfer_macro_ref = false) const;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const override;
@@ -356,7 +356,7 @@ protected:
     int init_sstable_meta(
         const ObTabletCreateSSTableParam &param, 
         common::ObArenaAllocator *allocator);
-  int get_last_rowkey(const ObDatumRowkey *&sstable_endkey);
+  int get_last_rowkey(const ObDatumRowkey *&sstable_endkey) const;
   int serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_fixed_struct(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_sstable_fix_serialize_size() const;

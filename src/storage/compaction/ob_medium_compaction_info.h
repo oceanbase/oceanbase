@@ -70,6 +70,9 @@ public:
   int64_t get_serialize_size() const;
   int generate_from_range_array(
       ObIAllocator &allocator,
+      const blocksstable::ObSSTable &old_major,
+      const ObITableReadInfo &index_read_info,
+      const int64_t tablet_size,
       common::ObArrayArray<ObStoreRange> &paral_range);
   int deep_copy_datum_rowkey(
     const int64_t idx,
@@ -78,7 +81,7 @@ public:
 public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MAX_PARALLEL_RANGE_SERIALIZE_LEN = 1 * 1024 * 1024;
-  static const int64_t VALID_CONCURRENT_CNT = 1;
+  static const int64_t MIN_VALID_CONCURRENT_CNT = 1;
   static const int64_t PARALLEL_INFO_VERSION_V0 = 0; // StoreRowkey
   static const int64_t PARALLEL_INFO_VERSION_V1 = 1; // DatumRowkey
 private:
@@ -87,6 +90,11 @@ private:
     ObArrayArray<ObStoreRange> &paral_range);
   int generate_store_rowkey_list(
     ObIAllocator &allocator,
+    ObArrayArray<ObStoreRange> &paral_range);
+  int generate_serial_rowkey_list_for_compat(
+    ObIAllocator &allocator,
+    const blocksstable::ObSSTable &old_major,
+    const ObITableReadInfo &index_read_info,
     ObArrayArray<ObStoreRange> &paral_range);
 
   union {
@@ -200,6 +208,8 @@ public:
     medium_snapshot_ = medium_snapshot;
   }
   int gene_parallel_info(
+      const blocksstable::ObSSTable &old_major,
+      const ObITableReadInfo &index_read_info,
       common::ObArrayArray<ObStoreRange> &paral_range);
   static inline bool is_valid_compaction_type(const ObCompactionType type) { return MEDIUM_COMPACTION <= type && type < COMPACTION_TYPE_MAX; }
   static inline bool is_medium_compaction(const ObCompactionType type) { return MEDIUM_COMPACTION == type; }

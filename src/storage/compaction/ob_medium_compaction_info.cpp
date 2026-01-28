@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_medium_compaction_info.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/compaction/ob_partition_parallel_merge_ctx.h"
 
 namespace oceanbase
 {
@@ -168,6 +169,9 @@ int64_t ObParallelMergeInfo::get_serialize_size() const
 
 int ObParallelMergeInfo::generate_from_range_array(
     ObIAllocator &allocator,
+    const blocksstable::ObSSTable &old_major,
+    const ObITableReadInfo &index_read_info,
+    const int64_t tablet_size,
     ObArrayArray<ObStoreRange> &paral_range)
 {
   int ret = OB_SUCCESS;
@@ -181,8 +185,24 @@ int ObParallelMergeInfo::generate_from_range_array(
     for (int64_t i = 0; i < paral_range.count(); ++i) {
       sum_range_cnt += paral_range.at(i).count();
     }
-    if (sum_range_cnt <= VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
+    if (sum_range_cnt < MIN_VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
       // do nothing
+    } else if (1 == sum_range_cnt) {
+      if (old_major.is_empty()) {
+        // end rowkey is MAX, do nothing
+      } else {
+        // check if replicas would do serial merge
+        const int64_t macro_block_cnt = old_major.get_data_macro_block_count();
+        int64_t concurrent_cnt = 0;
+        if (OB_FAIL(ObParallelMergeCtx::get_concurrent_cnt(tablet_size, macro_block_cnt, concurrent_cnt))) {
+          LOG_WARN("failed to get concurrent cnt", K(ret), K(tablet_size), K(macro_block_cnt));
+        } else if (concurrent_cnt <= 1) {
+          // replicas would do serial merge, no need to write parallel info
+          LOG_INFO("skip parallel info for serial merge case", K(tablet_size), K(macro_block_cnt), K(concurrent_cnt));
+        } else if (OB_FAIL(generate_serial_rowkey_list_for_compat(allocator, old_major, index_read_info, paral_range))) {
+          LOG_WARN("failed to generate serial rowkey list for compat", K(ret), K(old_major), K(paral_range));
+        }
+      }
     } else {
       list_size_ = sum_range_cnt - 1;
       uint64_t compat_version = 0;
@@ -218,6 +238,50 @@ int ObParallelMergeInfo::generate_datum_rowkey_list(
       }
     }
   } // end of loop array
+  return ret;
+}
+
+int ObParallelMergeInfo::generate_serial_rowkey_list_for_compat(
+    ObIAllocator &allocator,
+    const blocksstable::ObSSTable &old_major,
+    const ObITableReadInfo &index_read_info,
+    ObArrayArray<ObStoreRange> &paral_range)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<share::schema::ObColDesc> &col_descs = index_read_info.get_columns_desc();
+  int64_t rowkey_col_cnt = index_read_info.get_schema_rowkey_count();
+  if (OB_UNLIKELY(paral_range.count() != 1
+      || !paral_range.at(0).at(0).get_start_key().is_min()
+      || !paral_range.at(0).at(0).get_end_key().is_max())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parallel range", K(ret), K(paral_range));
+  } else {
+    list_size_ = 1; // should init list_size_ before alloc parallel_datum_rowkey_list_
+    compat_ = PARALLEL_INFO_VERSION_V1;
+    ObDatumRowkey last_row_key;
+    ObDatumRowkey rowkey;
+    ObStoreRowkey endkey;
+    ALLOC_ROWKEY_ARRAY(parallel_datum_rowkey_list_, ObDatumRowkey);
+    // Split 2 parallel range: (MIN, last_row_key] and (last_row_key, MAX), which only the first range is used.
+    // 
+    if (FAILEDx(old_major.get_last_rowkey(allocator, last_row_key))) {
+      LOG_WARN("failed to get last rowkey", K(ret), K(old_major));
+    } else if (OB_UNLIKELY(rowkey_col_cnt <= 0 || last_row_key.datum_cnt_ < rowkey_col_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected rowkey_col_cnt", K(ret), K(rowkey_col_cnt), K(last_row_key));
+    } else if (OB_FAIL(rowkey.assign(last_row_key.datums_, rowkey_col_cnt))) {
+      STORAGE_LOG(WARN, "Fail to construct src rowkey", K(ret), K(last_row_key));
+    } else if (OB_FAIL(rowkey.to_store_rowkey(col_descs, allocator, endkey))) {
+      STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(rowkey), K(rowkey));
+    } else if (OB_UNLIKELY(!endkey.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid endkey", K(ret), K(endkey));
+    } else if (OB_FAIL(parallel_datum_rowkey_list_[0].from_rowkey(endkey.get_rowkey(), allocator))) {
+      STORAGE_LOG(WARN, "failed to from rowkey", K(ret), K(endkey));
+    } else {
+      LOG_INFO("success to generate serial rowkey list for compat", K(ret), K(old_major), K(rowkey_col_cnt), K(parallel_datum_rowkey_list_[0]));
+    }
+  }
   return ret;
 }
 
@@ -494,6 +558,8 @@ bool ObMediumCompactionInfo::should_throw_for_standby_cluster() const
 }
 
 int ObMediumCompactionInfo::gene_parallel_info(
+    const blocksstable::ObSSTable &old_major,
+    const ObITableReadInfo &index_read_info,
     ObArrayArray<ObStoreRange> &paral_range)
 {
   int ret = OB_SUCCESS;
@@ -501,9 +567,9 @@ int ObMediumCompactionInfo::gene_parallel_info(
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is not init", KR(ret), KP_(allocator));
-  } else if (OB_FAIL(parallel_merge_info_.generate_from_range_array(*allocator_, paral_range))) {
+  } else if (OB_FAIL(parallel_merge_info_.generate_from_range_array(*allocator_, old_major, index_read_info, storage_schema_.get_tablet_size(), paral_range))) {
     if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
-      LOG_WARN("failed to generate parallel merge info", K(ret), K(paral_range));
+      LOG_WARN("failed to generate parallel merge info", K(ret), K(old_major), K(paral_range));
     }
   } else if (parallel_merge_info_.get_size() > 0) {
     contain_parallel_range_ = true;

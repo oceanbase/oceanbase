@@ -900,7 +900,7 @@ int ObSSTable::get_frozen_schema_version(int64_t &schema_version) const
 
 int ObSSTable::get_last_rowkey(
     ObIAllocator &allocator,
-    ObDatumRowkey &endkey)
+    ObDatumRowkey &endkey) const
 {
   int ret = OB_SUCCESS;
   const ObDatumRowkey *last_rowkey;
@@ -1563,7 +1563,7 @@ int ObSSTable::dec_used_size() const
 
 int ObSSTable::get_index_tree_root(
     blocksstable::ObMicroBlockData &index_data,
-    const bool need_transform)
+    const bool need_transform) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid())) {
@@ -1640,7 +1640,7 @@ void ObSSTable::destroy_multi_row_lock_checker(
   }
 }
 
-int ObSSTable::get_last_rowkey(const ObDatumRowkey *&sstable_endkey)
+int ObSSTable::get_last_rowkey(const ObDatumRowkey *&sstable_endkey) const
 {
   int ret = OB_SUCCESS;
   ObMicroBlockData root_block;
