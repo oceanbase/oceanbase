@@ -51,6 +51,7 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/optimizer/ob_log_expand.h"
 #include "share/ob_fts_index_builder_util.h"
+#include "sql/optimizer/ob_log_rescan.h"
 #include "sql/optimizer/ob_join_order_enum_idp.h"
 #include "sql/optimizer/ob_join_order_enum_permutation.h"
 
@@ -3160,6 +3161,25 @@ int ObLogPlan::init_candidate_plans(ObIArray<CandidatePlan> &candi_plans)
   return ret;
 }
 
+int ObLogPlan::candi_allocate_rescan()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_E(EventTable::EN_ENABLE_RESCAN_OP) OB_SUCCESS;
+  // alloc rescan op if needed
+  if (OB_SUCCESS != tmp_ret) {
+    bool allocate_rescan = true;
+    if (OB_SUCCESS != tmp_ret && OB_FAIL(get_plan_root()->is_top_rescan_allowed(allocate_rescan))) {
+      LOG_WARN("failed to check if top rescan op is allowed", K(ret));
+    } else if (allocate_rescan) {
+      const uint64_t rescan_cnt = (tmp_ret < 0 ? -tmp_ret : tmp_ret);
+      if (OB_FAIL(get_plan_root()->allocate_rescan_node_above(rescan_cnt))) {
+        LOG_WARN("failed to allocate rescan node", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::candi_allocate_err_log(const ObDelUpdStmt *del_upd_stmt)
 {
   int ret = OB_SUCCESS;
@@ -3643,6 +3663,626 @@ int ObLogPlan::prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_ex
   if (OB_SUCC(ret)) {
     if (OB_FAIL(calculate_group_distinct_ndv(group_by_exprs, helper))) {
       LOG_WARN("failed to calculate group distinct ndv", K(ret), K(helper));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::create_three_stage_expansion_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
+                                                 const ObIArray<ObRawExpr*> &having_exprs,
+                                                 GroupingOpHelper &helper,
+                                                 ObLogicalOperator *&top)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> first_group_by_exprs;
+  ObSEArray<ObRawExpr*, 8> second_group_by_exprs;
+  ObSEArray<ObRawExpr*, 8> second_distinct_exprs;
+  ObSEArray<ObRawExpr*, 8> second_exch_exprs;
+  ObSEArray<ObAggFunRawExpr*, 8> second_aggr_items;
+  ObSEArray<ObAggFunRawExpr*, 8> third_aggr_items;
+  ObSEArray<ObRawExpr*, 8> third_group_by_exprs;
+  ObSEArray<ObRawExpr*, 8> third_exch_exprs;
+  ObSEArray<ObRawExpr*, 1> dummy_exprs;
+
+  ObLogGroupBy *first_group_by = NULL;
+  ObLogGroupBy *second_group_by = NULL;
+  ObLogGroupBy *third_group_by = NULL;
+  ObLogExpand *expand = NULL;
+  ObLogDistinct *distinct_op = nullptr;
+  ObLogExchange *second_exch_consumer = nullptr;
+  ObLogExchange *second_exch_producer = nullptr;
+
+  AggregateAlgo third_aggr_algo;
+  ObExchangeInfo second_exch_info;
+  ObExchangeInfo third_exch_info;
+  ObSEArray<OrderItem, 1> dummy_sort_keys;
+  ObSEArray<OrderItem, 1> grouping_sort_key;
+  double aggr_code_ndv = 0;
+  ObGroupingSetInfo *rollup_groupingset_info = helper.grouping_set_info_;
+  ObGroupingSetInfo *distinct_gs_info = nullptr;
+  ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 4> third_stage_replace_pairs;
+  ObRawExpr *encoded_dup_expr = nullptr;
+  ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_COMPILE);
+  // allocate expansion
+  if (OB_FAIL(prepare_three_stage_expansion_info(top, group_by_exprs, helper, distinct_gs_info, encoded_dup_expr,
+                                                 third_stage_replace_pairs))) {
+    LOG_WARN("failed to prepare three stage expansion info", K(ret));
+  } else if (OB_FAIL(allocate_expand_as_top(top, distinct_gs_info))) {
+    LOG_WARN("failed to allocate expand as top", K(ret));
+  } else if (OB_UNLIKELY(top->get_type() != LOG_EXPAND)
+             || OB_ISNULL(expand = static_cast<ObLogExpand *>(top))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid expand", K(ret), K(top));
+  } else if (helper.enable_expansion_ordered_output_) {
+    expand->set_ordered_output(true);
+  }
+  // allocate first stage groupby
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(first_group_by_exprs.push_back(distinct_gs_info->grouping_set_id_))) {
+    LOG_WARN("failed to push back grouping set id", K(ret));
+  } else if (OB_FAIL(append(first_group_by_exprs, group_by_exprs))) {
+    LOG_WARN("failed to append first group by exprs", K(ret));
+  } else if (OB_FAIL(append(first_group_by_exprs, distinct_gs_info->group_exprs_))) {
+    LOG_WARN("failed to append group exprs", K(ret));
+  } else if (OB_FAIL(allocate_group_by_as_top(top,
+                                              HASH_AGGREGATE,
+                                              first_group_by_exprs,
+                                              dummy_exprs,
+                                              helper.non_distinct_aggr_items_,
+                                              dummy_exprs,
+                                              false,
+                                              helper.group_distinct_ndv_,
+                                              top->get_card(),
+                                              false,
+                                              true,
+                                              false,
+                                              ObRollupStatus::NONE_ROLLUP,
+                                              false,
+                                              AggregatePathType::SINGLE,
+                                              nullptr,
+                                              rollup_groupingset_info))) {
+    LOG_WARN("failed to allocate groupby as top", K(ret));
+  } else if (OB_UNLIKELY(top->get_type() != LOG_GROUP_BY)
+             || OB_ISNULL(first_group_by = static_cast<ObLogGroupBy *>(top))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first group by is invalid", K(ret), KP(top));
+  } else {
+    first_group_by->set_is_three_stage_expand_aggr(true);
+    first_group_by->set_first_stage_hash_val_expr(distinct_gs_info->hash_val_expr_);
+    // group distinct exprs = group by exprs + distinct exprs
+    if (helper.enable_expansion_ordered_output_) {
+      first_group_by->set_grouping_id(distinct_gs_info->grouping_set_id_);
+      ObSqlArray<GroupDistinctExprs, true> group_distinct_exprs(tmp_allocator);
+      GroupDistinctExprs distinct_exprs(tmp_allocator);
+      if (OB_FAIL(group_distinct_exprs.reserve(distinct_gs_info->groupset_exprs_.count()))) {
+        LOG_WARN("reserve array failed", K(ret));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < distinct_gs_info->groupset_exprs_.count(); i++) {
+        distinct_exprs.reuse();
+        if (i == 0 && distinct_gs_info->groupset_exprs_.at(0).groupby_exprs_.count() == 0) {
+          // non distinct aggr
+          if (OB_FAIL(group_distinct_exprs.push_back(distinct_exprs))) {
+            LOG_WARN("failed to push back distinct exprs", K(ret));
+          }
+        } else if (OB_FAIL(append(distinct_exprs, group_by_exprs))) {
+          LOG_WARN("append failed", K(ret));
+        } else if (OB_FAIL(append(distinct_exprs, distinct_gs_info->groupset_exprs_.at(i).groupby_exprs_))) {
+          LOG_WARN("append failed", K(ret));
+        } else if (OB_FAIL(group_distinct_exprs.push_back(distinct_exprs))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(first_group_by->set_group_distinct_exprs(group_distinct_exprs))) {
+        LOG_WARN("failed to set group distinct exprs", K(ret));
+      }
+    }
+  }
+
+  // second stage real transmit exprs
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(second_exch_exprs.assign(first_group_by_exprs))) {
+    LOG_WARN("failed to assign array", K(ret));
+  } else if (OB_FAIL(get_grouping_style_exchange_info(second_exch_exprs,
+                                                      top->get_output_equal_sets(),
+                                                      second_exch_info))) {
+    LOG_WARN("failed to get grouping style exchange info", K(ret));
+  } else if (FALSE_IT(second_exch_info.parallel_ = helper.grouping_dop_)) {
+  } else if (FALSE_IT(second_exch_info.is_ordered_agg_ = helper.enable_expansion_ordered_output_)) {
+  } else if (helper.enable_expansion_ordered_output_) {
+    // second_exch_info.ordered_aggr_code_ = distinct_gs_info->grouping_set_id_;
+    ObSEArray<ObRawExpr *, 1> tmp_exprs;
+    if (OB_FAIL(tmp_exprs.push_back(distinct_gs_info->grouping_set_id_))) {
+      LOG_WARN("failed to push back grouping set id", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::make_sort_keys(tmp_exprs, default_desc_direction(), grouping_sort_key))) {
+      LOG_WARN("failed to make sort keys", K(ret));
+    } else if (OB_FAIL(allocate_sort_and_exchange_as_top(top, second_exch_info, grouping_sort_key,
+                                                         false, 0, false))) {
+      LOG_WARN("failed to allocate sort and exchange as top", K(ret));
+    } else if (OB_UNLIKELY(top->get_type() != LOG_EXCHANGE)
+               || OB_ISNULL(second_exch_consumer = static_cast<ObLogExchange *>(top))
+               || OB_ISNULL(second_exch_consumer->get_child(ObLogicalOperator::first_child))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("second exchange is invalid", K(ret), KP(top));
+    } else {
+      second_exch_producer = static_cast<ObLogExchange *>(second_exch_consumer->get_child(ObLogicalOperator::first_child));
+      second_exch_consumer->set_ordered_aggr_code(distinct_gs_info->grouping_set_id_);
+      second_exch_consumer->set_max_ordered_aggr_code(distinct_gs_info->groupset_exprs_.count());
+      if (encoded_dup_expr != nullptr) {
+        second_exch_consumer->set_encoded_dup_expr(encoded_dup_expr);
+        second_exch_producer->set_encoded_dup_expr(encoded_dup_expr);
+        second_exch_producer->set_ordered_aggr_code(distinct_gs_info->grouping_set_id_);
+        second_exch_producer->set_max_ordered_aggr_code(distinct_gs_info->groupset_exprs_.count());
+        ObSEArray<ObRawExpr *, 4> dup_expr_list;
+        for (int i = 0; OB_SUCC(ret) && i < distinct_gs_info->groupset_exprs_.count(); i++) {
+          ObGroupbyExpr &groupby_expr = distinct_gs_info->groupset_exprs_.at(i);
+          if (groupby_expr.groupby_exprs_.count() == 0 && OB_FAIL(dup_expr_list.push_back(nullptr))) {
+            LOG_WARN("push back null expr failed", K(ret));
+          } else if (groupby_expr.groupby_exprs_.count() == 1 && OB_FAIL(dup_expr_list.push_back(groupby_expr.groupby_exprs_.at(0)))) {
+            LOG_WARN("push back expr failed", K(ret));
+          } else if (groupby_expr.groupby_exprs_.count() > 1) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid groupby exprs", K(ret), K(groupby_expr));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(second_exch_consumer->set_dup_expr_list(dup_expr_list))) {
+          LOG_WARN("failed to set dup expr list", K(ret));
+        } else if (OB_FAIL(second_exch_producer->set_dup_expr_list(dup_expr_list))) {
+          LOG_WARN("failed to set dup expr list", K(ret));
+        } else {
+        }
+      }
+    }
+  } else if (!helper.enable_expansion_ordered_output_
+             && OB_FAIL(allocate_sort_and_exchange_as_top(top, second_exch_info, dummy_sort_keys,
+                                                          false, 0, top->get_is_local_order()))) {
+    LOG_WARN("failed to allocate sort exchange as top", K(ret));
+  }
+
+  // allocate distinct
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(second_distinct_exprs.assign(first_group_by_exprs))) {
+    LOG_WARN("failed to assign array", K(ret));
+  } else if (OB_FAIL(static_cast<ObSelectLogPlan *>(this)->allocate_distinct_as_top(
+                                              top,
+                                              AggregateAlgo::HASH_AGGREGATE,
+                                              DistAlgo::DIST_BASIC_METHOD, second_distinct_exprs,
+                                              helper.group_distinct_ndv_))) {
+    LOG_WARN("failed to allocate distinct as top", K(ret));
+  } else if (OB_UNLIKELY(top->get_type() != LOG_DISTINCT)
+             || OB_ISNULL(distinct_op = static_cast<ObLogDistinct *>(top))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("distinct is invalid", K(ret), KP(top));
+  } else {
+    distinct_op->set_block_mode(!helper.enable_expansion_ordered_output_);
+    ObSqlArray<ObLogDistinct::GroupDistintctExprs, true> group_distinct_exprs(tmp_allocator);
+    ObSEArray<ObRawExpr*, 4> distinct_exprs;
+    if (OB_FAIL(group_distinct_exprs.prepare_allocate(distinct_gs_info->groupset_exprs_.count()))) {
+      LOG_WARN("prepare allocate failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < distinct_gs_info->groupset_exprs_.count(); i++) {
+      distinct_exprs.reuse();
+      if (OB_FAIL(append(distinct_exprs, group_by_exprs))) {
+        LOG_WARN("failed to append group by exprs", K(ret));
+      } else if (OB_FAIL(append(distinct_exprs, distinct_gs_info->groupset_exprs_.at(i).groupby_exprs_))) {
+        LOG_WARN("failed to append group by exprs", K(ret));
+      } else if (OB_FAIL(group_distinct_exprs.at(i).assign(distinct_exprs))) {
+        LOG_WARN("failed to assign array", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(distinct_op->set_group_distinct_exprs(group_distinct_exprs))) {
+      LOG_WARN("failed to set group distinct exprs", K(ret));
+    } else {
+      distinct_op->set_grouping_id(distinct_gs_info->grouping_set_id_);
+      distinct_op->set_has_non_distinct_aggr_params(helper.non_distinct_aggr_items_.count() > 0);
+    }
+  }
+
+  // allocate second stage groupby
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(aggr_code_ndv = distinct_gs_info->replaced_agg_pairs_.count()
+                                      +  (helper.non_distinct_aggr_items_.empty() ? 0 : 1))) {
+  } else if (OB_FAIL(append(second_aggr_items, helper.distinct_aggr_items_))) {
+    LOG_WARN("failed to append aggr items", K(ret));
+  } else if (OB_FAIL(append(second_aggr_items, helper.non_distinct_aggr_items_))) {
+    LOG_WARN("failed to append aggr items", K(ret));
+  } else if (OB_FAIL(append(second_group_by_exprs, group_by_exprs))) {
+    LOG_WARN("failed to append group by exprs", K(ret));
+  } else if (OB_FAIL(allocate_group_by_as_top(top,
+                                              second_group_by_exprs.count() > 0 ? HASH_AGGREGATE : MERGE_AGGREGATE,
+                                              second_group_by_exprs,
+                                              dummy_exprs,
+                                              second_aggr_items,
+                                              dummy_exprs,
+                                              false,
+                                              helper.group_ndv_,
+                                              top->get_card(),
+                                              false,
+                                              true,
+                                              false,
+                                              ObRollupStatus::NONE_ROLLUP,
+                                              false,
+                                              AggregatePathType::SINGLE,
+                                              nullptr,
+                                              rollup_groupingset_info))) {
+    LOG_WARN("failed to allocate groupby as top", K(ret));
+  } else if (OB_UNLIKELY(top->get_type() != LOG_GROUP_BY)
+             || OB_ISNULL(second_group_by = static_cast<ObLogGroupBy *>(top))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("second group by is invalid", K(ret), KP(top));
+  } else if (OB_FAIL(second_group_by->set_second_stage_expand_replace_pairs(distinct_gs_info->replaced_agg_pairs_))) {
+    LOG_WARN("failed to set three stage expand replace pairs", K(ret));
+  } else {
+    second_group_by->set_is_three_stage_expand_aggr(true);
+  }
+
+  // allocate third exchange
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(append(third_exch_exprs, group_by_exprs))) {
+    LOG_WARN("failed to append group by exprs", K(ret));
+  } else if (OB_FAIL(append(third_aggr_items, second_aggr_items))) {
+    LOG_WARN("failed to append aggr items", K(ret));
+  } else if (OB_FAIL(get_grouping_style_exchange_info(third_exch_exprs, top->get_output_equal_sets(), third_exch_info))) {
+    LOG_WARN("failed to get grouping style exchange info", K(ret));
+  } else if (OB_FAIL(allocate_sort_and_exchange_as_top(top,
+                                                      third_exch_info, dummy_sort_keys,
+                                                      false,
+                                                      0,
+                                                      top->get_is_local_order()))) {
+    LOG_WARN("failed to allocate sort and exchange as top", K(ret));
+  }
+
+  // allocate third groupby
+  if (helper.is_scalar_group_by_) {
+    third_aggr_algo = SCALAR_AGGREGATE;
+  } else {
+    third_aggr_algo = HASH_AGGREGATE;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(append(third_group_by_exprs, group_by_exprs))) {
+    LOG_WARN("failed to append group by exprs", K(ret));
+  } else if (OB_FAIL(allocate_group_by_as_top(top,
+                                              third_group_by_exprs.count() > 0 ? third_aggr_algo : MERGE_AGGREGATE,
+                                              third_group_by_exprs,
+                                              dummy_exprs,
+                                              third_aggr_items,
+                                              having_exprs,
+                                              false,
+                                              helper.group_ndv_,
+                                              top->get_card(),
+                                              false,
+                                              false,
+                                              false,
+                                              ObRollupStatus::NONE_ROLLUP,
+                                              false,
+                                              AggregatePathType::SINGLE,
+                                              nullptr,
+                                              rollup_groupingset_info))) {
+    LOG_WARN("failed to allocate groupby as top", K(ret));
+  } else if (OB_UNLIKELY(top->get_type() != LOG_GROUP_BY)
+             || OB_ISNULL(third_group_by = static_cast<ObLogGroupBy *>(top))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("third group by is invalid", K(ret), KP(top));
+  } else if (OB_FAIL(third_group_by->set_third_stage_expand_replace_pairs(third_stage_replace_pairs))) {
+    LOG_WARN("failed to set third stage expand replace pairs", K(ret));
+  } else {
+    third_group_by->set_is_three_stage_expand_aggr(true);
+    third_group_by->set_group_by_outline_info(DistAlgo::DIST_HASH_HASH, true, true, false,
+                                              second_group_by->get_parallel());
+  }
+  return ret;
+}
+
+int ObLogPlan::prepare_three_stage_expansion_info(ObLogicalOperator *top,
+                                                  const ObIArray<ObRawExpr *> &group_by_exprs,
+                                                  GroupingOpHelper &helper,
+                                                  ObGroupingSetInfo *&gs_info,
+                                                  ObRawExpr *&encoded_dup_expr,
+                                                  ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &third_stage_replace_pairs)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  ObSEArray<ObAggFunRawExpr *, 4> dup_distinct_aggr_items;
+  encoded_dup_expr = nullptr;
+  ObOpPseudoColumnRawExpr *built_expr = nullptr;
+  bool enable_encoding_opt = false;
+  ObRawExprResType encoded_res_type;
+  ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObGroupbyExpr, true> gen_groupset_exprs(tmp_allocator);
+  if (OB_ISNULL(buf = get_allocator().alloc(sizeof(ObGroupingSetInfo)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else {
+    ObRawExprFactory &expr_factory = get_optimizer_context().get_expr_factory();
+    gs_info = new (buf) ObGroupingSetInfo(get_allocator());
+    if (OB_FAIL(ObRawExprUtils::build_grouping_id(expr_factory,
+                                                  *get_optimizer_context().get_session_info(),
+                                                  gs_info->grouping_set_id_,
+                                                  true))) {
+      LOG_WARN("failed to build grouping id", K(ret));
+    } else if (OB_ISNULL(gs_info->grouping_set_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("grouping set id is null", K(ret));
+    } else {
+      // do nothing
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObLogExpand::dup_and_replace_params_for_distinct_agg(
+               expr_factory,
+               get_optimizer_context().get_session_info(),
+               helper.distinct_aggr_items_,
+               dup_distinct_aggr_items,
+               gs_info->dup_expr_pairs_,
+               gs_info->replaced_agg_pairs_))) {
+      LOG_WARN("failed to dup and replace exprs within aggrs", K(ret));
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(gen_groupset_exprs.reserve(helper.distinct_aggr_items_.count() + 1))) {
+      LOG_WARN("reserve array failed", K(ret));
+    }
+
+    if (OB_SUCC(ret) && helper.non_distinct_aggr_items_.count() > 0) {
+      // if non distinct aggr exists, push back empty group set first
+      if (OB_FAIL(gen_groupset_exprs.push_back(ObGroupbyExpr(tmp_allocator)))) {
+        LOG_WARN("failed to push back groupset expr", K(ret));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < helper.non_distinct_aggr_items_.count(); i++) {
+        ObAggFunRawExpr *aggr = helper.non_distinct_aggr_items_.at(i);
+        ObAggFunRawExpr *new_agg = nullptr;
+        if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_MAX, new_agg))) {
+          LOG_WARN("failed to create raw expr", K(ret));
+        } else if (OB_FAIL(new_agg->add_real_param_expr(aggr))) {
+          LOG_WARN("failed to add real param expr", K(ret));
+        } else if (OB_FAIL(new_agg->formalize(get_optimizer_context().get_session_info()))) {
+          LOG_WARN("failed to formalize aggr expr", K(ret));
+        } else if (OB_FAIL(third_stage_replace_pairs.push_back(ObTuple<ObRawExpr *, ObRawExpr *>(aggr, new_agg)))) {
+          LOG_WARN("failed to push back third stage replace pair", K(ret));
+        }
+      }
+    }
+
+    for(int64_t i = 0; OB_SUCC(ret) && i < gs_info->replaced_agg_pairs_.count(); i++) {
+      ObAggFunRawExpr *new_aggr = NULL;
+      ObAggFunRawExpr *org_aggr = static_cast<ObAggFunRawExpr *>(gs_info->replaced_agg_pairs_.at(i).element<0>());
+      ObAggFunRawExpr *aggr = static_cast<ObAggFunRawExpr *>(gs_info->replaced_agg_pairs_.at(i).element<1>());
+      ObGroupbyExpr groupset(tmp_allocator);
+      if (OB_ISNULL(aggr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aggr is null", K(ret), K(aggr));
+      } else if (!aggr->is_param_distinct()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid aggr", K(ret), K(*aggr));
+      } else if (OB_FAIL(expr_factory.create_raw_expr(aggr->get_expr_type(), new_aggr))) {
+        LOG_WARN("failed to create raw expr", K(ret));
+      } else if (OB_FAIL(new_aggr->assign(*aggr))) {
+        LOG_WARN("failed to assign aggr expr", K(ret));
+      } else if (FALSE_IT(new_aggr->set_param_distinct(false))) {
+      } else {
+        gs_info->replaced_agg_pairs_.at(i).element<1>() = new_aggr;
+      }
+      bool has_same_distinct = false;
+      int64_t group_id = -1;
+      for (int64_t j = 0; OB_SUCC(ret) && !has_same_distinct && j < gen_groupset_exprs.count(); j++) {
+        has_same_distinct = ObOptimizerUtil::same_exprs(gen_groupset_exprs.at(j).groupby_exprs_,
+                                                        aggr->get_real_param_exprs());
+        if (has_same_distinct) {
+          group_id = j;
+          break;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (has_same_distinct) {
+      } else if (OB_FAIL(append(groupset.groupby_exprs_, aggr->get_real_param_exprs()))) {
+        LOG_WARN("failed to append groupby exprs", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(gs_info->group_exprs_, aggr->get_real_param_exprs()))) {
+        LOG_WARN("failed to append array no dup", K(ret));
+      } else if (OB_FAIL(gen_groupset_exprs.push_back(groupset))) {
+        LOG_WARN("failed to push back groupset expr", K(ret));
+      } else {
+        // do nothing
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(gs_info->groupset_exprs_.assign(gen_groupset_exprs))) {
+      LOG_WARN("failed to assign groupset exprs", K(ret));
+    } else if (OB_FAIL(calculate_group_distinct_ndv(group_by_exprs, helper, gs_info))) {
+      LOG_WARN("failed to calculate group distinct ndv", K(ret));
+    } else if (OB_ISNULL(top)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("top is null", K(ret));
+    } else if (OB_FAIL(choose_distinct_expansion_mode(gs_info, top, group_by_exprs, helper))) {
+      LOG_WARN("failed to choose distinct expansion mode", K(ret));
+    }
+    //  common group exprs && expr used to stored common group hash value
+    built_expr = nullptr;
+    if (OB_FAIL(ret) || helper.enable_expansion_ordered_output_ || group_by_exprs.count() == 0) {
+      // do not need encode_hash_val in ordered mode or gby exprs is empty
+      // e.g. select count(distinct c1), count(distinct c2) from t1 ehre c3 = 1 group by c3;
+    } else if (OB_FAIL(ObRawExprUtils::build_hash_val_expr(
+                 expr_factory, *get_optimizer_context().get_session_info(), built_expr))) {
+      LOG_WARN("failed to build hash val expr", K(ret));
+    } else if (OB_ISNULL(built_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hash val expr is null", K(ret));
+    } else if (FALSE_IT(gs_info->hash_val_expr_ = built_expr)) {
+    } else if (OB_FAIL(gs_info->common_group_exprs_.assign(group_by_exprs))) {
+      LOG_WARN("assign common group exprs failed", K(ret));
+    }
+    built_expr = nullptr;
+    if (OB_SUCC(ret)
+        && helper.enable_expansion_ordered_output_
+        && OB_FAIL(detect_encoded_dup_expr_restype(helper.distinct_aggr_items_, *gs_info,
+                                                   enable_encoding_opt, encoded_res_type))) {
+      LOG_WARN("failed to detect encoded dup expr res type", K(ret));
+    } else if (!enable_encoding_opt) { // do nothing
+    } else if (OB_FAIL(ObRawExprUtils::build_encoded_dup(
+                 expr_factory, *get_optimizer_context().get_session_info(), encoded_res_type,
+                 built_expr))) {
+      LOG_WARN("failed to build encoded dup expr", K(ret));
+    } else if (OB_ISNULL(built_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("built expr is null", K(ret));
+    } else {
+      encoded_dup_expr = built_expr;
+    }
+    LOG_TRACE("prepare three stage expansion info", K(ret), K(helper), K(*gs_info),
+              K(enable_encoding_opt), K(encoded_res_type), KP(encoded_dup_expr));
+  }
+  return ret;
+}
+
+int ObLogPlan::choose_distinct_expansion_mode(ObGroupingSetInfo *gs_info, ObLogicalOperator *top,
+                                              const ObIArray<ObRawExpr *> &group_by_exprs, GroupingOpHelper &helper)
+{
+  static const uint64_t MIN_CUT_RATIO = 3;
+  int ret = OB_SUCCESS;
+  uint64_t nopushdown_cut_ratio = 3;
+  if (!helper.use_expand_distinct_mode_with_cost_ || helper.enable_expansion_ordered_output_) {
+    LOG_TRACE("using specified distinct expansion plan mode",
+              K(helper.use_expand_distinct_mode_with_cost_),
+              K(helper.enable_expansion_ordered_output_));
+    OPT_TRACE("using specified distinct expansion plan mode", K(helper.enable_expansion_ordered_output_));
+  } else if (OB_FAIL(top->get_plan()->get_optimizer_context().get_session_info()->get_sys_variable(
+                share::SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO, nopushdown_cut_ratio))) {
+    LOG_WARN("failed to get nopushdown cut ratio", K(ret));
+  } else {
+    // TODO: improve strategy
+    nopushdown_cut_ratio = std::max(nopushdown_cut_ratio, MIN_CUT_RATIO);
+    double first_stage_cut_ratio = top->get_card() / helper.group_distinct_ndv_;
+    helper.enable_expansion_ordered_output_ =
+      first_stage_cut_ratio < static_cast<double>(nopushdown_cut_ratio);
+    LOG_TRACE("distinct expansion mode", K(first_stage_cut_ratio), K(nopushdown_cut_ratio));
+    OPT_TRACE("choost distinct expansion plan mode by cost", K(first_stage_cut_ratio),
+              K(nopushdown_cut_ratio));
+  }
+  return ret;
+}
+
+int ObLogPlan::detect_encoded_dup_expr_restype(const ObIArray<ObAggFunRawExpr *> &distinct_aggr_items,
+                                               const ObGroupingSetInfo &distinct_gs_info,
+                                               bool &enable_encoding, ObRawExprResType &res_type)
+{
+  int ret = OB_SUCCESS;
+  enable_encoding = true;
+  bool all_same_fixed_tc = true;
+  VecValueTypeClass fixed_tc = MAX_VEC_TC;
+  for (int i = 0; OB_SUCC(ret) && enable_encoding && i < distinct_aggr_items.count(); i++) {
+    if (distinct_aggr_items.at(i)->get_real_param_count() > 1) {
+      enable_encoding = false;
+    } else {
+      // do nothing
+    }
+  }
+  ObScale fixed_double_scale = -1;
+  for (int i = 0; OB_SUCC(ret) && enable_encoding && all_same_fixed_tc && i < distinct_gs_info.dup_expr_pairs_.count(); i++) {
+    ObRawExprResType param_type = distinct_gs_info.dup_expr_pairs_.at(i).element<1>()->get_result_type();
+    VecValueTypeClass tc = get_vec_value_tc(param_type.get_type(), param_type.get_scale(), param_type.get_precision());
+    if (is_discrete_vec(tc)) {
+      all_same_fixed_tc = false;
+    } else if (fixed_tc == MAX_VEC_TC) {
+      fixed_tc = tc;
+      if (tc == VEC_TC_FIXED_DOUBLE) {
+        fixed_double_scale = param_type.get_scale();
+      }
+    } else if (fixed_tc != tc || (tc == VEC_TC_FIXED_DOUBLE && fixed_double_scale != param_type.get_scale())) {
+      all_same_fixed_tc = false;
+    }
+  }
+  if (enable_encoding) {
+    if (all_same_fixed_tc) {
+      ObObjType fixed_type;
+      ObPrecision precision = -1;
+      ObScale scale = 0;
+      switch (fixed_tc) {
+        case VEC_TC_INTEGER:
+        case VEC_TC_UINTEGER:
+        case VEC_TC_DATETIME:
+        case VEC_TC_TIME:
+        case VEC_TC_UNKNOWN:
+        case VEC_TC_BIT:
+        case VEC_TC_ENUM_SET:
+        case VEC_TC_INTERVAL_YM:
+        case VEC_TC_DEC_INT64:
+        case VEC_TC_MYSQL_DATETIME: {
+          fixed_type = ObIntType;
+          precision = ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_;
+          break;
+        }
+        case VEC_TC_FLOAT: {
+          fixed_type = ObFloatType;
+          precision = ObAccuracy::DDL_DEFAULT_ACCURACY[ObFloatType].precision_;
+          break;
+        }
+        case VEC_TC_DOUBLE: {
+          fixed_type = ObDoubleType;
+          precision = ObAccuracy::DDL_DEFAULT_ACCURACY[ObDoubleType].precision_;
+          scale = -1;
+          break;
+        }
+        case VEC_TC_FIXED_DOUBLE: {
+          fixed_type = ObDoubleType;
+          precision = ObAccuracy::DDL_DEFAULT_ACCURACY[ObDoubleType].precision_;
+          scale = fixed_double_scale;
+          break;
+        }
+        case VEC_TC_DATE:
+        case VEC_TC_DEC_INT32:
+        case VEC_TC_MYSQL_DATE: {
+          fixed_type = ObDecimalIntType;
+          precision = MAX_PRECISION_DECIMAL_INT_32;
+          break;
+        }
+        case VEC_TC_YEAR: {
+          fixed_type = ObYearType;
+          precision = ObAccuracy::DDL_DEFAULT_ACCURACY[ObYearType].precision_;
+          break;
+        }
+        case VEC_TC_DEC_INT128: {
+          fixed_type = ObDecimalIntType;
+          precision = MAX_PRECISION_DECIMAL_INT_128;
+          break;
+        }
+        case VEC_TC_DEC_INT256: {
+          fixed_type = ObDecimalIntType;
+          precision = MAX_PRECISION_DECIMAL_INT_256;
+          break;
+        }
+        case VEC_TC_DEC_INT512: {
+          fixed_type = ObDecimalIntType;
+          precision = MAX_PRECISION_DECIMAL_INT_512;
+          break;
+        }
+        case VEC_TC_TIMESTAMP_TZ: {
+          fixed_type = ObTimestampTZType;
+          break;
+        }
+
+        case VEC_TC_TIMESTAMP_TINY: {
+          fixed_type = ObTimestampNanoType;
+          precision = ObAccuracy::DDL_DEFAULT_ACCURACY[ObTimestampNanoType].precision_;
+          scale = ObAccuracy::DDL_DEFAULT_ACCURACY[ObTimestampNanoType].scale_;
+          break;
+        }
+        case VEC_TC_INTERVAL_DS: {
+          fixed_type = ObIntervalDSType;
+          precision = ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntervalDSType].precision_;
+          scale = ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntervalDSType].scale_;
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid fixed tc", K(ret), K(fixed_tc));
+        }
+      }
+      res_type.set_type(fixed_type);
+      res_type.set_precision(precision);
+      res_type.set_scale(scale);
+    } else {
+      res_type.set_varchar();
+      res_type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+      res_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      res_type.set_collation_level(CS_LEVEL_NUMERIC);
     }
   }
   return ret;
@@ -4170,6 +4810,49 @@ int ObLogPlan::perform_groupingsets_replacement(ObLogicalOperator *op)
   }
   return ret;
 }
+
+int ObLogPlan::perform_three_stage_expansion_replacement(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  ObLogGroupBy *groupby = nullptr;
+  if (NULL != (groupby = dynamic_cast<ObLogGroupBy *>(op))) {
+    if (groupby->get_second_stage_expand_replace_pairs().count() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < groupby->get_second_stage_expand_replace_pairs().count(); ++i) {
+        const ObTuple<ObRawExpr *, ObRawExpr *> &replace_pair =
+          groupby->get_second_stage_expand_replace_pairs().at(i);
+        ObRawExpr *old_aggr = replace_pair.element<0>();
+        ObRawExpr *new_aggr = replace_pair.element<1>();
+        if (OB_ISNULL(old_aggr) || OB_ISNULL(new_aggr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null exprs", K(ret));
+        } else if (OB_FAIL(groupingset_agg_replacer_.add_replace_expr(old_aggr, new_aggr))) {
+          LOG_WARN("failed to add replace expr", K(ret));
+        } else {
+          // do nothing
+        }
+      }
+    }
+    if (OB_SUCC(ret) && groupby->get_third_stage_expand_replace_pairs().count() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < groupby->get_third_stage_expand_replace_pairs().count(); ++i) {
+        const ObTuple<ObRawExpr *, ObRawExpr *> &replace_pair = groupby->get_third_stage_expand_replace_pairs().at(i);
+        ObRawExpr *old_aggr = replace_pair.element<0>();
+        ObRawExpr *new_aggr = replace_pair.element<1>();
+        if (OB_ISNULL(old_aggr) || OB_ISNULL(new_aggr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null exprs", K(ret));
+        } else if (OB_FAIL(groupingset_agg_replacer_.add_replace_expr(old_aggr, new_aggr))) {
+          LOG_WARN("failed to add replace expr", K(ret));
+        } else {
+          // do nothing
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(groupingset_agg_replacer_))) {
+    LOG_WARN("failed to replace op exprs", K(ret));
+  }
+  return ret;
+}
 /**
  * @brief ObLogPlan::try_to_generate_pullup_aggr
  * 1. If the old_aggr exists in the group_replaced_exprs_,
@@ -4691,10 +5374,6 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   groupby_helper.is_from_povit_ = is_from_povit;
   groupby_helper.clear_ignore_hint();
   groupby_helper.optimizer_features_enable_version_ = get_log_plan_hint().optimizer_features_enable_version_;
-  bool has_rollup_opt_param = false;
-  bool enable_hash_rollup = false;
-  bool force_hash_rollup = false;
-  ObObj hash_rollup_policy;
   ObQueryCtx *query_ctx = nullptr;
   bool rowsets_enabled = true;
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
@@ -4709,13 +5388,39 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
              OB_FALSE_IT(groupby_helper.is_scalar_group_by_ =
                          static_cast<const ObSelectStmt*>(stmt)->is_scala_group_by())) {
   } else if (FALSE_IT(query_ctx = get_optimizer_context().get_query_ctx())) {
-  } else if (OB_FAIL(query_ctx->query_hint_.global_hint_.opt_params_.get_hash_rollup_param(hash_rollup_policy,
-                                                                                           has_rollup_opt_param))) {
-    LOG_WARN("check and get opt param failed", K(ret));
   } else {
     rowsets_enabled = get_optimizer_context().get_rowsets_enabled();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
-    if (OB_FAIL(append(group_rollup_exprs, group_exprs))
+    ObOptParamHint &opt_params = query_ctx->query_hint_.global_hint_.opt_params_;
+    const ObString config_policy = tenant_config.is_valid() ?
+                              tenant_config->_use_distinct_with_expansion.get_value_string() :
+                              ObString::make_empty_string();
+    ObString hint_policy;
+    ObString policy;
+    bool has_hint_policy = false;
+    rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
+    if (OB_FAIL(opt_params.get_distinct_with_expansion_param(hint_policy, has_hint_policy))) {
+      LOG_WARN("failed to get distinct with expansion hint", K(ret));
+    } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, rowsets_enabled))) {
+      LOG_WARN("failed to get rowsets enabled hint", K(ret));
+    } else {
+      groupby_helper.use_expand_distinct_mode_with_cost_ =
+        has_hint_policy ? hint_policy.case_compare("auto") == 0 :
+                          config_policy.case_compare("auto") == 0;
+      policy = has_hint_policy ? hint_policy : config_policy;
+      groupby_helper.enable_expansion_ordered_output_ = rowsets_enabled
+                                                        && (policy.case_compare("ordered") == 0)
+                                                        && session_info->use_rich_format()
+                                                        && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_5_1
+                                                        && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
+      groupby_helper.enable_distinct_with_expansion_ = rowsets_enabled
+                                                && (policy.case_compare("normal") == 0 || policy.case_compare("ordered") == 0 || policy.case_compare("auto") == 0)
+                                                && session_info->use_rich_format()
+                                                && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_5_1
+                                                && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(group_rollup_exprs, group_exprs))
         || OB_FAIL(append(group_rollup_exprs, rollup_exprs))) {
       LOG_WARN("failed to append group rollup exprs", K(ret));
     } else if (OB_FAIL(get_log_plan_hint().get_aggregation_info(groupby_helper.force_use_hash_,
@@ -4858,7 +5563,6 @@ int ObLogPlan::init_grouping_set_info(const ObLogicalOperator &top,
                  && OB_FAIL(ObLogExpand::dup_and_replace_exprs_within_aggrs(
                                         factory,
                                         get_optimizer_context().get_session_info(),
-                                        q_ctx->all_expr_constraints_,
                                         group_exprs,
                                         aggr_items,
                                         new_agg_items,
@@ -5057,7 +5761,9 @@ int ObLogPlan::check_op_need_calc_dop(const ObLogicalOperator *cur_op,
   return ret;
 }
 
-int ObLogPlan::calculate_group_distinct_ndv(const ObIArray<ObRawExpr*> &groupby_rollup_exprs, GroupingOpHelper &groupby_helper)
+int ObLogPlan::calculate_group_distinct_ndv(const ObIArray<ObRawExpr *> &groupby_rollup_exprs,
+                                            GroupingOpHelper &groupby_helper,
+                                            ObGroupingSetInfo *gs_info)
 {
   int ret = OB_SUCCESS;
   double total_ndv = 0;
@@ -5070,30 +5776,81 @@ int ObLogPlan::calculate_group_distinct_ndv(const ObIArray<ObRawExpr*> &groupby_
   } else {
     get_selectivity_ctx().init_op_ctx(best_plan);
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < groupby_helper.distinct_aggr_batch_.count(); ++i) {
-    ObSEArray<ObRawExpr*, 8> group_distinct_exprs;
-    ObDistinctAggrBatch &distinct_aggr_batch = groupby_helper.distinct_aggr_batch_.at(i);
-    double ndv = 0;
-    for (int64_t j = 0; OB_SUCC(ret) && j < distinct_aggr_batch.mocked_params_.count(); j ++) {
-      if (OB_FAIL(group_distinct_exprs.push_back(distinct_aggr_batch.mocked_params_.at(j).first))) {
-        LOG_WARN("Failed to push back exprs", K(ret));
+  if (OB_FAIL(ret)) {
+  } else if (gs_info == nullptr) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < groupby_helper.distinct_aggr_batch_.count(); ++i) {
+      ObSEArray<ObRawExpr *, 8> group_distinct_exprs;
+      ObDistinctAggrBatch &distinct_aggr_batch = groupby_helper.distinct_aggr_batch_.at(i);
+      double ndv = 0;
+      for (int64_t j = 0; OB_SUCC(ret) && j < distinct_aggr_batch.mocked_params_.count(); j++) {
+        if (OB_FAIL(
+              group_distinct_exprs.push_back(distinct_aggr_batch.mocked_params_.at(j).first))) {
+          LOG_WARN("Failed to push back exprs", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(append(group_distinct_exprs, groupby_rollup_exprs))) {
+        LOG_WARN("failed to append group distinct exprs", K(ret));
+      } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(
+                   get_update_table_metas(), get_selectivity_ctx(), group_distinct_exprs,
+                   get_selectivity_ctx().get_current_rows(), ndv))) {
+        LOG_WARN("failed to calculate distinct", K(ret));
+      } else {
+        total_ndv += ndv;
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(append(group_distinct_exprs, groupby_rollup_exprs))) {
-      LOG_WARN("failed to append group distinct exprs", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
-                                                            get_selectivity_ctx(),
-                                                            group_distinct_exprs,
-                                                            get_selectivity_ctx().get_current_rows(),
-                                                            ndv))) {
-      LOG_WARN("failed to calculate distinct", K(ret));
-    } else {
-      total_ndv += ndv;
+    if (OB_SUCC(ret) && !groupby_helper.non_distinct_aggr_items_.empty()) {
+      total_ndv += groupby_helper.group_ndv_;
     }
-  }
-  if (OB_SUCC(ret) && !groupby_helper.non_distinct_aggr_items_.empty()) {
-    total_ndv += groupby_helper.group_ndv_;
+  } else {
+    ObMemAttr attr(OB_SERVER_TENANT_ID, "TmpDupMap", ObCtxIds::WORK_AREA);
+    ObHashMap<int64_t, int64_t> dup_exprs_map; // dup expr -> org expr
+    if (OB_FAIL(dup_exprs_map.create(gs_info->dup_expr_pairs_.count(), attr))) {
+      LOG_WARN("failed to create dup exprs map", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < gs_info->dup_expr_pairs_.count(); i++) {
+      if (OB_FAIL(dup_exprs_map.set_refactored(
+            reinterpret_cast<int64_t>(gs_info->dup_expr_pairs_.at(i).element<1>()),
+            reinterpret_cast<int64_t>(gs_info->dup_expr_pairs_.at(i).element<0>())))) {
+        LOG_WARN("failed to set dup exprs map", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < gs_info->groupset_exprs_.count(); i++) {
+      ObSEArray<ObRawExpr *, 8> group_distinct_exprs;
+      ObIArray<ObRawExpr *> &dup_group_exprs = gs_info->groupset_exprs_.at(i).groupby_exprs_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < dup_group_exprs.count(); j++) {
+        ObRawExpr *dup_expr = dup_group_exprs.at(j);
+        int64_t key = reinterpret_cast<int64_t>(dup_expr);
+        int64_t value = 0;
+        ObRawExpr *org_expr = nullptr;
+        if (dup_expr->is_const_expr()) {
+          continue;
+        } else if (OB_FAIL(dup_exprs_map.get_refactored(key, value))) {
+          LOG_WARN("failed to get org expr", K(ret), K(*dup_expr));
+        } else if (OB_ISNULL(org_expr = reinterpret_cast<ObRawExpr *>(value))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("org expr is null", K(ret));
+        } else if (OB_FAIL(group_distinct_exprs.push_back(org_expr))) {
+          LOG_WARN("failed to push back org expr", K(ret));
+        }
+      }
+      double ndv = 0;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(append(group_distinct_exprs, groupby_rollup_exprs))) {
+        LOG_WARN("failed to append group distinct exprs", K(ret));
+      } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
+                                                              get_selectivity_ctx(),
+                                                              group_distinct_exprs,
+                                                              get_selectivity_ctx().get_current_rows(),
+                                                              ndv))) {
+        LOG_WARN("failed to calculate distinct", K(ret));
+      } else {
+        total_ndv += ndv;
+      }
+    }
+    if (OB_SUCC(ret) && !groupby_helper.non_distinct_aggr_items_.empty()) {
+      total_ndv += groupby_helper.group_ndv_;
+    }
   }
   groupby_helper.group_distinct_ndv_ = total_ndv;
   LOG_TRACE("succeed to calculate group distinct ndv for three stage", K(groupby_helper));
@@ -6580,7 +7337,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     // allocate exchange if necessary
     if (OB_SUCC(ret) && exch_info.need_exchange()) {
       if (!sort_keys.empty() &&
-          (top->is_distributed() || is_local_order) &&
+          (top->is_distributed() || is_local_order || exch_info.is_ordered_agg_) &&
           (!need_sort || exch_info.is_pq_local())) {
         ObExchangeInfo cur_exch_info;
         if (OB_FAIL(cur_exch_info.assign(exch_info))) {
@@ -6920,11 +7677,14 @@ int ObLogPlan::create_limit_plan(ObLogicalOperator *&top,
                                                offset_expr,
                                                is_pushed))) {
       LOG_WARN("failed to push limit into table scan", K(ret));
+    } else if (OB_FAIL(create_partition_ordered_plan(top))) {
+      LOG_WARN("failed to create order by hint", K(ret));
     } else if (top->is_single() && is_pushed) {
       // pushed into table-scan
       // add partial limit
-    } else if (top->is_distributed() && !is_calc_found_rows && NULL != pushed_expr &&
-               OB_FAIL(allocate_limit_as_top(top,
+    } else if (OB_FALSE_IT(is_pushed = top->is_distributed() && !is_calc_found_rows && NULL != pushed_expr)) {
+      /*do nothing*/
+    } else if (is_pushed && OB_FAIL(allocate_limit_as_top(top,
                                              pushed_expr,
                                              NULL,
                                              NULL,
@@ -6946,7 +7706,9 @@ int ObLogPlan::create_limit_plan(ObLogicalOperator *&top,
                                              is_fetch_with_ties,
                                              ties_ordering))) {
       LOG_WARN("failed to allocate limit as top", K(ret));
-    } else { /*do nothing*/ }
+    } else if (is_pushed && log_op_def::LOG_LIMIT == top->get_type()) {
+      static_cast<ObLogLimit*>(top)->set_has_pushed_down();
+    }
   }
   return ret;
 }
@@ -10008,12 +10770,32 @@ int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
         }
         break;
       }
+      case LOG_GROUP_BY: {
+        ObLogGroupBy* group_by = static_cast<ObLogGroupBy*>(top);
+        // Only hash aggregate supports limit pushdown
+        // No rollup or three-stage aggregation
+        if (get_optimizer_context().enable_hash_groupby_limit_pushdown()
+            && limit_count >= 0
+            && HASH_AGGREGATE == group_by->get_algo()
+            && group_by->get_filter_exprs().empty()
+            && !group_by->has_rollup()
+            && !group_by->is_three_stage_aggr()
+            && NULL == group_by->get_limit_expr()) {
+          group_by->set_limit_expr(limit_expr);
+          pushed_down = true;
+          // Continue traversing children with -1 (no limit)
+          // because group by is a barrier for limit pushdown
+          if (OB_FAIL(partial_limit_pushdown_for_children(top, -1, dummy_expr))) {
+            LOG_WARN("failed to push down partial limit for group by children", K(ret));
+          }
+        }
+        break;
+      }
       case LOG_LIMIT: {
-        // todo handle offset, ObTransformUtils::merge_limit_offset
+        // Handle LIMIT with offset: pushed_limit = offset + min(cur_limit, limit_from_parent)
         ObLogLimit* limit = static_cast<ObLogLimit*>(top);
         bool child_pushed_down = false;
-        if (!limit->is_top_limit()
-            && OB_ISNULL(limit->get_offset_expr())
+        if (OB_NOT_NULL(limit->get_limit_expr())
             && OB_ISNULL(limit->get_percent_expr())
             && !limit->get_is_calc_found_rows()
             && !limit->is_fetch_with_ties()) {
@@ -10022,6 +10804,7 @@ int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
           int64_t cur_limit_value = -1;
           bool is_null_value = true;
           bool is_partial = limit->is_partial();
+          bool is_single = (!limit->is_partial()) && (!limit->has_pushed_down());
           ObLogicalOperator* child = top->get_child(0);
           if (OB_ISNULL(cur_limit_expr)) {
             ret = OB_ERR_UNEXPECTED;
@@ -10031,10 +10814,31 @@ int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
                                                                   &get_allocator(),
                                                                   cur_limit_value,
                                                                   is_null_value))) {
-
-          } else if (!is_null_value && cur_limit_value >= 0) {
-            // replace by limit count
-            int64_t min_limit_value = -1;
+            LOG_WARN("failed to get limit value", K(ret));
+          }
+          // Get offset value if offset_expr exists
+          int64_t cur_offset_value = 0;
+          bool is_offset_null = true;
+          ObRawExpr *cur_offset_expr = limit->get_offset_expr();
+          if (OB_SUCC(ret) && NULL != cur_offset_expr) {
+            if (OB_FAIL(ObTransformUtils::get_expr_int_value(
+                    static_cast<ObConstRawExpr*>(cur_offset_expr),
+                    get_optimizer_context().get_params(),
+                    get_optimizer_context().get_exec_ctx(),
+                    &get_allocator(),
+                    cur_offset_value,
+                    is_offset_null))) {
+              LOG_WARN("failed to get offset value", K(ret));
+            } else if (is_offset_null || cur_offset_value < 0) {
+              cur_offset_value = 0;
+            }
+          }
+          if (OB_SUCC(ret) && !is_null_value && cur_limit_value >= 0) {
+            // Calculate effective_limit = min(cur_limit_value, limit_from_parent)
+            // Calculate pushed_limit = cur_offset_value + effective_limit
+            int64_t effective_limit_value = -1;
+            int64_t pushed_limit_value = -1;
+            ObRawExpr *pushed_limit_expr_raw = NULL;
             ObConstRawExpr *new_limit_count_expr = NULL;
             if (limit_count >= 0) {
               // create a min of both expr
@@ -10044,7 +10848,7 @@ int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
                                                                       T_OP_GE,
                                                                       limit_expr,
                                                                       cur_limit_expr, ge_expr))) {
-                LOG_WARN("failed to build null safe equal expr", K(ret));
+                LOG_WARN("failed to build ge expr", K(ret));
               } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(get_optimizer_context().get_expr_factory(),
                                                                       ge_expr,
                                                                       cur_limit_expr,
@@ -10053,14 +10857,14 @@ int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
                 LOG_WARN("failed to build case when expr", K(ret));
               } else {
                 new_limit_count_expr = static_cast<ObConstRawExpr*>(case_when);
-                min_limit_value = MIN(cur_limit_value, limit_count);
+                effective_limit_value = MIN(cur_limit_value, limit_count);
                 // if new expr is 'pure' const, new a const value instead of using case when
                 if (OB_SUCC(ret) && new_limit_count_expr->is_const_expr()
                     && !new_limit_count_expr->has_flag(CNT_STATIC_PARAM)
                     && !new_limit_count_expr->has_flag(CNT_DYNAMIC_PARAM)) {
                   if (OB_FAIL(ObRawExprUtils::build_const_int_expr(get_optimizer_context().get_expr_factory(),
                                                                    ObIntType,
-                                                                   min_limit_value,
+                                                                   effective_limit_value,
                                                                    new_limit_count_expr))) {
                     LOG_WARN("failed to build constant expr", K(ret));
                   }
@@ -10074,15 +10878,31 @@ int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
                 limit->set_limit_expr(new_limit_count_expr);
               }
             } else {
-              min_limit_value = cur_limit_value;
+              effective_limit_value = cur_limit_value;
               new_limit_count_expr = cur_limit_expr;
+            }
+            // Calculate pushed_limit = offset + effective_limit
+            pushed_limit_value = cur_offset_value + effective_limit_value;
+            // Create pushed_limit_expr using make_pushdown_limit_count
+            if (OB_FAIL(ret)) {
+              /*do nothing*/
+            } else if (OB_FAIL(ObTransformUtils::make_pushdown_limit_count(
+                    get_optimizer_context().get_expr_factory(),
+                    *get_optimizer_context().get_session_info(),
+                    new_limit_count_expr,
+                    cur_offset_expr,
+                    pushed_limit_expr_raw))) {
+              LOG_WARN("failed to make pushdown limit count", K(ret));
             }
             // do another pushdown caused by current limit, if it is not partial
             pushed_down = true;
-            // push down cur limit value is sufficient..
-            if (OB_FAIL(SMART_CALL(partial_limit_pushdown(child,
-                                                          is_partial ? cur_limit_value : -1,
-                                                          is_partial ? cur_limit_expr : dummy_expr,
+            // push down pushed_limit_value (which includes offset) to child
+            ObConstRawExpr *child_limit_expr = static_cast<ObConstRawExpr*>(pushed_limit_expr_raw);
+            if (OB_FAIL(ret)) {
+              /*do nothing*/
+            } else if (OB_FAIL(SMART_CALL(partial_limit_pushdown(child,
+                                                          (is_partial || is_single) ? pushed_limit_value : -1,
+                                                          (is_partial || is_single) ? child_limit_expr : dummy_expr,
                                                           child_pushed_down)))) {
               LOG_WARN("failed to rewrite child", K(ret), K(top->get_name()));
             } else {
@@ -10093,8 +10913,7 @@ int ObLogPlan::partial_limit_pushdown(ObLogicalOperator* &top,
                 // check whether child is partial limit then do a merge
                 if (LOG_LIMIT == child->get_type()) {
                   ObLogLimit* child_limit = static_cast<ObLogLimit*>(child);
-                  if (!child_limit->is_top_limit() && OB_ISNULL(child_limit->get_offset_expr()) &&
-                      OB_ISNULL(child_limit->get_percent_expr())
+                  if (OB_ISNULL(child_limit->get_percent_expr())
                       && !child_limit->get_is_calc_found_rows()
                       && child_limit->is_partial()) {
                     // merge
@@ -10983,7 +11802,7 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
           // do not handle other than hash
         } else if (groupby_op->has_push_down()) {
           // final agg, do nothing
-        } else if (groupby_op->is_three_stage_aggr()) {
+        } else if (groupby_op->is_three_stage_aggr() || groupby_op->is_three_stage_expand_aggr()) {
           // final agg, do nothing
         } else if (OB_FAIL(is_eligible_for_groupby_pushdown(top, can_split))) {
         } else if (!groupby_op->is_push_down() && !can_split) {
@@ -13369,6 +14188,7 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("failed to check das need keep ordering", K(ret));
   } else if (OB_FAIL(set_scan_order(root))) {
     LOG_WARN("failed to set scan order", K(ret));
+  } else if (OB_FAIL(candi_allocate_rescan())) {
   } else { /*do nothing*/ }
   return ret;
 }
@@ -13464,6 +14284,9 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
           } else if (OB_FAIL(plan->distinct_pushdown_replacer_.append_replace_exprs(
                        child_plan->distinct_pushdown_replacer_))) {
             LOG_WARN("failed to append grouping_set_replacer exprs", K(ret));
+          } else if (OB_FAIL(plan->groupingset_agg_replacer_.append_replace_exprs(
+                       child_plan->groupingset_agg_replacer_))) {
+            LOG_WARN("failed to append groupingset_agg_replacer exprs", K(ret));
           }
         }
       }
@@ -13545,6 +14368,8 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("failed to add plan root exprs", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_groupingsets_replacement(op))) {
         LOG_WARN("failed to perform grouping set replacement", K(ret));
+      } else if (OB_FAIL(op->get_plan()->perform_three_stage_expansion_replacement(op))) {
+        LOG_WARN("failed to perform three stage expansion replacement", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_one_distinct_pushdown(op))) {
         LOG_WARN("failed to perform grouping set distinct pushdown", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_group_by_pushdown(op))) {
@@ -18267,5 +19092,121 @@ int ObLogPlan::extend_rollup_to_groupset(const ObIArray<ObRawExpr *> &gby_exprs,
     }
   }
   LOG_TRACE("extend rollup to groupset", K(groupset_exprs), K(rollup_exprs), K(gby_exprs));
+  return ret;
+}
+
+int ObLogPlan::create_partition_ordered_plan(ObLogicalOperator *&top)
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = get_optimizer_context().get_query_ctx();
+  const ObDMLStmt *stmt = NULL;
+  bool has_partition_ordered = false;
+  ObObj order_direction;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.has_opt_param(
+               ObOptParamHint::PARTITION_ORDERED, has_partition_ordered))) {
+    LOG_WARN("failed to get partition iterator ordered hint", K(ret));
+  } else if (!has_partition_ordered || !stmt->has_limit() || !stmt->is_select_stmt()) {
+    // do nothing
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_opt_param(
+               ObOptParamHint::PARTITION_ORDERED, order_direction))) {
+    LOG_WARN("failed to get partition iterator ordered hint", K(ret));
+  } else {
+    ObSEArray<ObRawExpr*, 2> select_exprs;
+    ObSEArray<ObRawExpr*, 2> part_exprs;
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt);
+    bool is_single_table = select_stmt->is_single_table_stmt();
+    bool has_condition = stmt->get_condition_size() > 0;
+    bool has_group_by = select_stmt->has_group_by();
+    bool has_window_function = select_stmt->has_window_function();
+    bool has_distinct = select_stmt->has_distinct();
+    bool has_order_by = select_stmt->has_order_by();
+    bool has_having = select_stmt->has_having();
+    bool can_partition_ordered = is_single_table && !has_condition && !has_group_by &&
+                       !has_window_function && !has_distinct && !has_order_by && !has_having;
+    const ObIArray<PartExprItem> &part_items = select_stmt->get_part_exprs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_items.count(); ++i) {
+      if (part_items.at(i).part_expr_ != NULL &&
+          OB_FAIL(part_exprs.push_back(part_items.at(i).part_expr_))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL((select_stmt->get_select_exprs(select_exprs)))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (!can_partition_ordered || !ObOptimizerUtil::same_exprs(select_exprs, part_exprs)) {
+      // do nothing
+    } else {
+      bool need_sort = false;
+      int64_t prefix_pos = 0;
+      ObSEArray<ObRawExpr*, 4> order_by_exprs;
+      ObSEArray<ObOrderDirection, 4> directions;
+      ObSEArray<OrderItem, 8> candi_order_items;
+      ObSEArray<OrderItem, 8> order_items;
+      ObRawExpr *topn_expr = NULL;
+      bool is_fetch_with_ties = false;
+      bool need_limit = true;
+      bool is_at_most_one_row = top->get_is_at_most_one_row();
+      ObExchangeInfo exch_info;
+      exch_info.dist_method_ = (NULL != top && top->is_single()) ?
+                              ObPQDistributeMethod::NONE : ObPQDistributeMethod::LOCAL;
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_exprs.count(); i++) {
+        if (OB_ISNULL(part_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(order_by_exprs.push_back(part_exprs.at(i)))) {
+          LOG_WARN("failed to add order by expr", K(ret));
+        } else {
+          ret = directions.push_back(order_direction.get_string().case_compare("ASC") == 0 ?
+                                     default_asc_direction() : default_desc_direction());
+        }
+      }
+      if (OB_FAIL(ret) || order_by_exprs.empty()) {
+        // do nothing
+      } else if (OB_FAIL(make_order_items(order_by_exprs, directions, order_items))) {
+        LOG_WARN("failed to make order items", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::simplify_ordered_exprs(top->get_fd_item_set(),
+                                                                 top->get_output_equal_sets(),
+                                                                 top->get_output_const_exprs(),
+                                                                 onetime_query_refs_,
+                                                                 order_items,
+                                                                 candi_order_items))) {
+        LOG_WARN("failed to simplify ordered exprs", K(ret));
+      } else if (order_items.empty()) {
+        OPT_TRACE("this plan has interesting order, no need allocate order by");
+      } else if (OB_FAIL(get_order_by_topn_expr(top->get_card(),
+                                                topn_expr,
+                                                is_fetch_with_ties,
+                                                need_limit))) {
+        LOG_WARN("failed to get order by top-n expr", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(order_items,
+                                                          top->get_op_ordering(),
+                                                          top->get_fd_item_set(),
+                                                          top->get_output_equal_sets(),
+                                                          top->get_output_const_exprs(),
+                                                          onetime_query_refs_,
+                                                          is_at_most_one_row,
+                                                          need_sort,
+                                                          prefix_pos))) {
+        LOG_WARN("failed to check need sort", K(ret));
+      } else if (OB_FAIL(allocate_sort_and_exchange_as_top(top,
+                                                          exch_info,
+                                                          order_items,
+                                                          need_sort,
+                                                          prefix_pos,
+                                                          top->get_is_local_order(),
+                                                          topn_expr,
+                                                          false))) {
+        LOG_WARN("failed to allocate sort as top", K(ret));
+      } else {
+        top->set_is_order_by_plan_top(true);
+      }
+    }
+  }
   return ret;
 }

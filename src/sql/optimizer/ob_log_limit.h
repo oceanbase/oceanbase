@@ -30,6 +30,7 @@ namespace sql
           offset_expr_(NULL),
           percent_expr_(NULL),
           is_partial_(false),
+          has_pushed_down_(false),
           order_items_(plan.get_allocator())
     {}
     virtual ~ObLogLimit() {}
@@ -65,6 +66,15 @@ namespace sql
     {
       return is_partial_;
     }
+
+    void set_has_pushed_down()
+    {
+      has_pushed_down_ = true;
+    }
+    inline bool has_pushed_down()
+    {
+      return has_pushed_down_;
+    }
     inline bool is_top_limit()
     {
       return is_top_limit_;
@@ -91,6 +101,7 @@ namespace sql
     ObRawExpr *offset_expr_;
     ObRawExpr *percent_expr_;
     bool is_partial_;
+    bool has_pushed_down_;
     ObSqlArray<OrderItem> order_items_;
   };
 }

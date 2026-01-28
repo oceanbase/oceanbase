@@ -445,9 +445,9 @@ struct RuntimeContext
 public:
   struct TmpAllocGuard
   {
-    TmpAllocGuard(RuntimeContext &agg_ctx) : agg_ctx_(agg_ctx), org_allocator_ptr_(&agg_ctx_.inner_data_allocator_) {}
-
-    void set_data_allocator(ObIAllocator &allocator) {
+    TmpAllocGuard(RuntimeContext &agg_ctx, ObIAllocator &allocator) :
+      agg_ctx_(agg_ctx), org_allocator_ptr_(&agg_ctx_.inner_data_allocator_)
+    {
       agg_ctx_.data_alloc_wrapper_.set_alloc(&allocator);
     }
 

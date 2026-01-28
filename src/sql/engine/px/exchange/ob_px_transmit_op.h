@@ -126,6 +126,14 @@ public:
   void set_batch_param_remain(bool batch_param_remain) { batch_param_remain_ = batch_param_remain; }
 protected:
   virtual int do_transmit() = 0;
+  virtual int do_project_trans_exprs(const ObIArray<ObExpr *> &trans_exprs, const ObBatchRows &brs,
+                                     ObEvalCtx &eval_ctx)
+  {
+    UNUSED(trans_exprs);
+    UNUSED(brs);
+    UNUSED(eval_ctx);
+    return OB_SUCCESS;
+  }
   int init_channels_cur_block(common::ObIArray<dtl::ObDtlChannel*> &dtl_chs);
 protected:
   int link_ch_sets(ObPxTaskChSet &ch_set,
@@ -158,11 +166,16 @@ protected:
         LOG_WARN("fetch next rows failed", K(ret));
         break;
       }
-      if (dfc_.all_ch_drained()) {
+      bool should_project_trans_exprs = static_cast<const ObPxTransmitSpec &>(get_spec()).real_trans_exprs_.count() > 0;
+      if (OB_FAIL(ret)) {
+      } else if (should_project_trans_exprs
+                 && OB_FAIL(do_project_trans_exprs(
+                   static_cast<const ObPxTransmitSpec &>(get_spec()).real_trans_exprs_, brs_,
+                   eval_ctx_))) {
+        LOG_WARN("failed to project trans exprs", K(ret));
+      } else if (dfc_.all_ch_drained()) {
         int tmp_ret = child_->drain_exch();
-        if (OB_SUCCESS != tmp_ret) {
-          LOG_WARN("drain exchange data failed", K(tmp_ret));
-        }
+        if (OB_SUCCESS != tmp_ret) { LOG_WARN("drain exchange data failed", K(tmp_ret)); }
         LOG_TRACE("all channel has been drained");
         break;
       }
@@ -797,7 +810,11 @@ int ObPxTransmitOp::broadcast_rows(ObSliceIdxCalc &slice_calc)
     } else if (OB_FAIL(try_wait_channel())) {
       LOG_WARN("failed to wait channel", K(ret));
     } else if (USE_VEC) {
-      ObPxNewRow px_row(get_spec().output_, OB_INVALID_ID, data_msg_type_);
+      const ObIArray<ObExpr *> &trans_exprs =
+        static_cast<const ObPxTransmitSpec &>(get_spec()).real_trans_exprs_.count() > 0 ?
+          static_cast<const ObPxTransmitSpec &>(get_spec()).real_trans_exprs_ :
+          static_cast<const ObPxTransmitSpec &>(get_spec()).output_;
+      ObPxNewRow px_row(trans_exprs, OB_INVALID_ID, data_msg_type_);
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
       batch_info_guard.set_batch_size(rows);
       for (int64_t i = 0; OB_SUCC(ret) && i < rows; i++) {

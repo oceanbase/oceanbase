@@ -31,11 +31,13 @@ namespace oceanbase
 namespace sql
 {
 
+class ObPxReceiveOp;
 class ObReceiveRowReader
 {
 public:
   ObReceiveRowReader(int64_t id, const ExprFixedArray *child_exprs,
-                    bool reorder_fixed_expr, common::ObIAllocator *allocator = NULL) :
+                    bool reorder_fixed_expr, common::ObIAllocator *allocator = NULL,
+                    ObPxReceiveOp *recv_op = nullptr) :
       recv_head_(NULL),
       recv_tail_(NULL),
       iterated_buffers_(NULL),
@@ -49,7 +51,8 @@ public:
       id_(id),
       reorder_fixed_expr_(reorder_fixed_expr),
       child_exprs_(child_exprs),
-      allocator_(allocator)
+      allocator_(allocator),
+      recv_op_(recv_op)
   {
   }
   ~ObReceiveRowReader()
@@ -178,6 +181,7 @@ private:
   const ExprFixedArray *child_exprs_ = NULL;
   common::ObIAllocator *allocator_ = NULL;
   bool row_meta_init_ = false;
+  ObPxReceiveOp *recv_op_;
 };
 
 class ObPxNewRow

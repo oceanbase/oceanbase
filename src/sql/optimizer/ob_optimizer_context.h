@@ -319,6 +319,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     extend_sql_plan_monitor_metrics_(false),
     enable_delete_insert_scan_(false),
     min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
+    enable_hash_groupby_limit_pushdown_(true),
     join_order_enum_threshold_(10),
     max_permutation_(2000),
     idp_reduction_threshold_(5000)
@@ -837,6 +838,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
   inline bool enable_delete_insert_scan() const { return enable_delete_insert_scan_; }
   inline void set_enable_delete_insert_scan(bool enabled) { enable_delete_insert_scan_ = enabled; }
+  inline bool enable_hash_groupby_limit_pushdown() const { return enable_hash_groupby_limit_pushdown_; }
+  inline void set_enable_hash_groupby_limit_pushdown(bool enabled) { enable_hash_groupby_limit_pushdown_= enabled; }
   inline uint64_t get_join_order_enum_threshold() const { return join_order_enum_threshold_; }
   inline void set_join_order_enum_threshold(uint64_t threshold) { join_order_enum_threshold_ = threshold; }
   inline uint64_t get_max_permutation() const { return max_permutation_; }
@@ -979,6 +982,7 @@ private:
   bool extend_sql_plan_monitor_metrics_;
   bool enable_delete_insert_scan_;
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
+  bool enable_hash_groupby_limit_pushdown_;
   uint64_t join_order_enum_threshold_;
   uint64_t max_permutation_;
   uint64_t idp_reduction_threshold_;

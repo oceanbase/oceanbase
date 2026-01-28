@@ -748,6 +748,10 @@ int ObOperator::output_expr_sanity_check_batch()
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("error unexpected, expr is nullptr", K(ret));
+    } else if (expr->type_ == T_PSEUDO_ENCODE_DUP_EXPR) {
+      // encoded expr is projected by transmit op when translation data
+      // its data haven't produced yet
+      // skip checking
     } else if (OB_FAIL(expr->eval_vector(eval_ctx_, brs_))) {
       LOG_WARN("eval vector failed", K(ret));
     } else if (GET_MY_SESSION(eval_ctx_.exec_ctx_)->is_diagnosis_enabled() &&

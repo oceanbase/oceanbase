@@ -1021,7 +1021,7 @@ public:
     } else if (!extra->data_store_is_inited()
                && OB_FAIL(extra->init_data_set(aggr_info, agg_ctx.eval_ctx_,
                                                agg_ctx.op_monitor_info_, agg_ctx.io_event_observer_,
-                                               agg_ctx.allocator_, agg_ctx.in_window_func_))) {
+                                               agg_ctx.allocator_, agg_ctx.in_window_func_ || agg_ctx.has_rollup_))) {
       SQL_LOG(WARN, "init_distinct_set failed", K(ret));
     } else {
       sql::ObEvalCtx &ctx = agg_ctx.eval_ctx_;
@@ -1043,13 +1043,10 @@ public:
                          AggrRowPtr rollup_row, int64_t cur_rollup_group_idx,
                          int64_t max_group_cnt = INT64_MIN) override
   {
-    /*
-      Never used in Group Concat for now. Please test it when you try to use this function.
-      Especially keep eyes on the rewind situation.
-    */
     int ret = OB_SUCCESS;
     UNUSEDx(cur_rollup_group_idx, max_group_cnt);
     sql::ObEvalCtx &ctx = agg_ctx.eval_ctx_;
+    ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_idx);
     ObIArray<ObExpr *> &param_exprs = agg_ctx.aggr_infos_.at(agg_col_idx).param_exprs_;
     char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
     char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
@@ -1058,10 +1055,15 @@ public:
       agg_ctx.get_extra_data_store(agg_col_idx, rollup_agg_cell);
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     char *skip_mem = nullptr;
-    if (OB_ISNULL(ad_result) || !ad_result->is_inited() || OB_ISNULL(rollup_result)
-        || !rollup_result->is_inited()) {
+    if (OB_ISNULL(ad_result) || !ad_result->data_store_is_inited() || OB_ISNULL(rollup_result)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_LOG(WARN, "distinct set is NULL", K(ret));
+    } else if (!rollup_result->data_store_is_inited()
+                && OB_FAIL(rollup_result->init_data_set(aggr_info, agg_ctx.eval_ctx_,
+                                                        agg_ctx.op_monitor_info_, agg_ctx.io_event_observer_,
+                                                        agg_ctx.allocator_,
+                                                        agg_ctx.in_window_func_ || agg_ctx.has_rollup_))) {
+      SQL_LOG(WARN, "init_distinct_set failed", K(ret));
     } else if (OB_FAIL(ad_result->data_store_brs_holder_.save(ctx.max_batch_size_))) {
       SQL_LOG(WARN, "backup datum failed", K(ret));
     } else if (OB_ISNULL(skip_mem = (char *)alloc_guard.get_allocator().alloc(
@@ -1120,10 +1122,6 @@ public:
       SQL_LOG(WARN, "Invalid null extra or extra not inited", K(ret));
     } else if (OB_FAIL(data_result->data_store_brs_holder_.save(ctx.max_batch_size_))) {
       SQL_LOG(WARN, "backup datum failed", K(ret));
-    } else if (agg_ctx.has_rollup_ && group_id > 0) {
-      ret = OB_NOT_IMPLEMENT;
-      // Should not be here. Merge rollupllup is not supported. Hash based rollup will not reach
-      // here.
     } else if (OB_FAIL(data_result->prepare_for_eval())) {
       SQL_LOG(WARN, "prepare fetch failed", K(ret));
     } else if (agg_ctx.is_in_window_func() && (aggr_info.get_expr_type() == T_FUN_GROUP_CONCAT

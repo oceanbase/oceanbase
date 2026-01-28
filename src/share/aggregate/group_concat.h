@@ -164,13 +164,62 @@ public:
                                  int64_t cur_rollup_group_idx,
                                  int64_t max_group_cnt = INT64_MIN) override
   {
-    int ret = OB_NOT_IMPLEMENT;
-    if (lib::is_oracle_mode()) {
-      SQL_LOG(WARN, "vectorization 2.0 not support LISTAGG with rollup", K(ret));
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_idx);
+    ObIArray<ObExpr *> &param_exprs = agg_ctx.aggr_infos_.at(agg_col_idx).param_exprs_;
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    bool not_null = agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell).at(agg_col_idx);
+    uint64_t concat_str_max_len = 0;
+    if (has_truncated_from_cell(rollup_agg_cell) || !not_null) {
+    } else if (OB_FAIL(get_concat_str_max_len(agg_ctx, concat_str_max_len))) {
+      SQL_LOG(WARN, "fail to get group concat max len", K(ret));
     } else {
-      SQL_LOG(WARN, "vectorization 2.0 not support group_concat with rollup", K(ret));
-    }
+      ObString curr_string = nullptr;
+      int64_t curr_concated_rows = 0;
+      ObString rollup_string = nullptr;
+      int64_t rollup_concated_rows = 0;
+      ObString sep_str = nullptr;
+      int64_t mock_skip_data = 0;
+      ObBitVector *mock_skip = to_bit_vector(&mock_skip_data);
 
+      get_string_from_cell(curr_agg_cell, curr_string, curr_concated_rows);
+      get_string_from_cell(rollup_agg_cell, rollup_string, rollup_concated_rows);
+      if (OB_FAIL(get_sep_str(agg_ctx, aggr_info, sep_str, *mock_skip, sql::EvalBound(1, true)))) {
+        SQL_LOG(WARN, "get sep str failed", K(ret));
+      } else {
+        int64_t append_length = 0;
+        if (rollup_concated_rows > 0) {
+          append_length += sep_str.length();
+        }
+        append_length += curr_string.length();
+        if (OB_FAIL(ensure_string_space(rollup_string, append_length, agg_ctx.allocator_,
+                                        concat_str_max_len))) {
+          SQL_LOG(WARN, "fail to ensure string space", K(ret));
+        } else {
+          bool buf_is_full = false;
+          if (rollup_concated_rows > 0) {
+            if (OB_FAIL(append_str(aggr_info.expr_->datum_meta_.cs_type_, rollup_string, sep_str,
+                                   rollup_concated_rows, buf_is_full, concat_str_max_len))) {
+              SQL_LOG(WARN, "append sep string failed", K(ret), K(rollup_string));
+            }
+          }
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (OB_FAIL(append_str(aggr_info.expr_->datum_meta_.cs_type_, rollup_string, curr_string,
+                                 rollup_concated_rows, buf_is_full, concat_str_max_len))) {
+            SQL_LOG(WARN, "append string failed", K(ret), K(rollup_string));
+          } else {
+            rollup_concated_rows += curr_concated_rows;
+            NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+            not_nulls.set(agg_col_idx);
+            set_string(rollup_agg_cell, rollup_string, rollup_concated_rows, buf_is_full);
+          }
+        }
+        LOG_DEBUG("debug rollup aggregation", K(curr_string), K(rollup_string), K(sep_str), K(curr_concated_rows), K(rollup_concated_rows));
+      }
+    }
     return ret;
   }
 

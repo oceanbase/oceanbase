@@ -102,7 +102,7 @@ struct ObDtlVectorsBlock
 class ObDtlVectorsBuffer
 {
 public:
-  static const int32_t MAX_COL_CNT = 16;
+  static const int32_t MAX_COL_CNT = 32;
   static const int32_t DEFAULT_BLOCK_SIZE = 4 * 1024;
   static const int32_t MAGIC = 0xe02d8536;
   static int init_vector_buffer(void* mem, const int32_t size, ObDtlVectorsBlock *&block);

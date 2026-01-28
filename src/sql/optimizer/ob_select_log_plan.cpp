@@ -597,6 +597,33 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
                            && !disable_during_upgrade;
     }
   }
+
+  bool enable_merge_rollup = true;
+  if (OB_SUCC(ret)
+      && get_stmt()->has_rollup()
+      && lib::is_oracle_mode()
+      && optimizer_context_.get_rowsets_enabled()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_items.count() && enable_merge_rollup; i++) {
+      ObAggFunRawExpr *aggr_expr = get_stmt()->get_aggr_items().at(i);
+      if (OB_NOT_NULL(aggr_expr)
+          && aggr_expr->get_expr_type() == T_FUN_GROUP_CONCAT
+          && aggr_expr->get_real_param_count() > 1) {
+        if (OB_FAIL(check_expr_contains_rollup_expr(
+              aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1),
+              rollup_exprs,
+              enable_merge_rollup))) {
+          LOG_WARN("failed to check separator expr contains rollup expr", K(ret));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !enable_merge_rollup && !enable_hash_rollup
+      && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("force use hash rollup when listagg separator referring rollup expr", K(ret));
+  }
+
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (enable_hash_rollup) {
@@ -615,7 +642,7 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
   } else if (!groupby_plans.empty()) {
     LOG_TRACE("succeed to allocate rollup group by plan", K(groupby_plans.count()));
     OPT_TRACE("succeed to allocate rollup group by plan");
-  } else {
+  } else if (enable_merge_rollup) {
     SMART_VAR(GroupingOpHelper, groupby_helper) {
       if (OB_FAIL(init_groupby_helper(group_by_exprs,
                                       rollup_exprs,
@@ -1072,6 +1099,26 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &
   return ret;
 }
 
+int ObSelectLogPlan::check_expr_contains_rollup_expr(const ObRawExpr *check_expr,
+                                                     const ObIArray<ObRawExpr*> &rollup_exprs,
+                                                     bool &not_contains)
+  {
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> contain_exprs;
+
+  if (OB_ISNULL(check_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("check expr is null", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_contain_exprs(const_cast<ObRawExpr*>(check_expr),
+                                                           rollup_exprs,
+                                                           contain_exprs))) {
+    LOG_WARN("failed to extract contain exprs", K(ret));
+  } else {
+    not_contains = contain_exprs.count() == 0;
+  }
+  return ret;
+}
+
 int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_exprs,
                                          const ObIArray<ObRawExpr *> &rollup_exprs,
                                          const GroupingOpHelper &groupby_helper,
@@ -1093,6 +1140,7 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
     part_sort_valid = !groupby_helper.force_normal_sort_;
     normal_sort_valid = !groupby_helper.force_part_sort_;
   }
+
   bool enable_hash_rollup = false;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(optimizer_context_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1213,13 +1261,16 @@ int ObSelectLogPlan::candi_allocate_normal_group_by(const bool ignore_transform_
         LOG_WARN("failed to get distribute method", K(ret));
       } else if (!(DistAlgo::DIST_HASH_HASH & group_dist_methods)) {
         OPT_TRACE("basic or partition wise can not use three stage group by");
-      } else if (OB_FAIL(create_three_stage_group_plan(group_by_exprs,
-                                                      having_exprs,
-                                                      groupby_helper,
-                                                      candidate_plan.plan_tree_))) {
+      } else if (groupby_helper.enable_distinct_with_expansion_
+                 && OB_FAIL(create_three_stage_expansion_plan(
+                   group_by_exprs, having_exprs, groupby_helper, candidate_plan.plan_tree_))) {
+        LOG_WARN("failed to create three stage expansion plan", K(ret));
+      } else if (!groupby_helper.enable_distinct_with_expansion_
+                 && OB_FAIL(create_three_stage_group_plan(
+                   group_by_exprs, having_exprs, groupby_helper, candidate_plan.plan_tree_))) {
         LOG_WARN("failed to candi allocate three stage group by", K(ret));
-      } else if (NULL != candidate_plan.plan_tree_ &&
-                      OB_FAIL(groupby_plans.push_back(candidate_plan))) {
+      } else if (NULL != candidate_plan.plan_tree_
+                 && OB_FAIL(groupby_plans.push_back(candidate_plan))) {
         LOG_WARN("failed to push merge group by", K(ret));
       } else {
         OPT_TRACE("succeed to generate three stage group by plan:", candidate_plan.plan_tree_);

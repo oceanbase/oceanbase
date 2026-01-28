@@ -69,6 +69,10 @@ public:
       sample_type_(NOT_INIT_SAMPLE_TYPE),
       in_server_cnt_(0),
       px_info_(NULL),
+      ordered_aggr_code_(NULL),
+      max_ordered_aggr_code_(0),
+      encoded_dup_expr_(NULL),
+      dup_expr_list_(plan.get_allocator()),
       hidden_pk_expr_(NULL)
   {
     repartition_table_id_ = 0;
@@ -209,6 +213,17 @@ public:
   virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
   void set_px_info(ObPxResourceAnalyzer::PxInfo *px_info) { px_info_ = px_info; }
   ObPxResourceAnalyzer::PxInfo *get_px_info() { return px_info_; }
+  void set_ordered_aggr_code(ObRawExpr *ordered_aggr_code) { ordered_aggr_code_ = ordered_aggr_code; }
+  ObRawExpr *get_ordered_aggr_code() { return ordered_aggr_code_; }
+  int32_t get_max_ordered_aggr_code() { return max_ordered_aggr_code_; }
+  void set_max_ordered_aggr_code(int32_t max_ordered_aggr_code) { max_ordered_aggr_code_ = max_ordered_aggr_code; }
+  void set_encoded_dup_expr(ObRawExpr *encoded_dup_expr) { encoded_dup_expr_ = encoded_dup_expr; }
+  const ObRawExpr *get_encoded_dup_expr() const { return encoded_dup_expr_; }
+
+  int generate_final_shuffle_exprs(common::ObIArray<ObRawExpr *> &real_shuffle_exprs);
+
+  int set_dup_expr_list(const common::ObIArray<ObRawExpr *> &dup_expr_list) { return dup_expr_list_.assign(dup_expr_list); }
+  const common::ObIArray<ObRawExpr *> &get_dup_expr_list() const { return dup_expr_list_; }
 private:
   int prepare_px_pruning_param(ObLogicalOperator *op, int64_t &count,
       common::ObIArray<const ObDMLStmt *> &stmts, common::ObIArray<int64_t> &drop_expr_idxs);
@@ -289,6 +304,10 @@ private:
   // -end pkey range/range
   int64_t in_server_cnt_; // for producer, need use exchange in server cnt to compute cost
   ObPxResourceAnalyzer::PxInfo *px_info_;
+  ObRawExpr *ordered_aggr_code_;
+  int32_t max_ordered_aggr_code_;
+  ObRawExpr *encoded_dup_expr_;
+  ObSqlArray<ObRawExpr *> dup_expr_list_;
   // Hidden primary key expression for PDML heap table insert scenario.
   // Needs to be passed through exchange but not used for hash calculation.
   ObRawExpr *hidden_pk_expr_;

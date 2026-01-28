@@ -82,12 +82,21 @@ public:
   inline void count_not_null(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                              RowSelector &row_sel, AggrRowPtr *agg_rows, T &cur_vec)
   {
-    for (int i = 0; i < row_sel.size(); i++) {
-      int batch_idx = row_sel.index(i);
-      if (!cur_vec.is_null(batch_idx)) {
+    if (OB_LIKELY(!cur_vec.has_null())) {
+      for (int i = 0; i < row_sel.size(); i++) {
+        int batch_idx = row_sel.index(i);
         char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
         int64_t &count = *reinterpret_cast<int64_t *>(agg_cell);
         count += 1;
+      }
+    } else {
+      for (int i = 0; i < row_sel.size(); i++) {
+        int batch_idx = row_sel.index(i);
+        if (!cur_vec.is_null(batch_idx)) {
+          char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_rows[batch_idx]);
+          int64_t &count = *reinterpret_cast<int64_t *>(agg_cell);
+          count += 1;
+        }
       }
     }
   }
@@ -189,7 +198,7 @@ public:
     int64_t output_idx = ctx.get_batch_idx();
     ColumnFormat &columns = *static_cast<ColumnFormat *>(agg_expr.get_vector(ctx));
     SQL_LOG(DEBUG, "count collect result", K(agg_col_id), K(res_data));
-    if (lib::is_oracle_mode()) {
+    if (OB_UNLIKELY(lib::is_oracle_mode())) {
       char buf_alloc[number::ObNumber::MAX_CALC_BYTE_LEN] = {0};
       ObDataBuffer local_alloc(buf_alloc, number::ObNumber::MAX_CALC_BYTE_LEN);
       number::ObNumber tmp_nmb;

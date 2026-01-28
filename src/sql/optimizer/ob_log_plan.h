@@ -649,6 +649,9 @@ public:
       grouping_dop_(ObGlobalHint::UNSET_PARALLEL),
       grouping_set_info_(NULL),
       ignore_stmt_distinct_or_rollup_(false),
+      enable_distinct_with_expansion_(false),
+      enable_expansion_ordered_output_(false),
+      use_expand_distinct_mode_with_cost_(true),
       real_groupingset_agg_items_(),
       is_trans_distinct_agg_(false)
     {
@@ -732,6 +735,10 @@ public:
     ObGroupingSetInfo *grouping_set_info_;
     bool ignore_stmt_distinct_or_rollup_;
 
+    bool enable_distinct_with_expansion_;
+    bool enable_expansion_ordered_output_;
+    bool use_expand_distinct_mode_with_cost_;
+
     ObSEArray<ObAggFunRawExpr *, 4> real_groupingset_agg_items_;
     bool is_trans_distinct_agg_;
 
@@ -764,7 +771,11 @@ public:
                  K_(grouping_dop),
                  K_(ignore_stmt_distinct_or_rollup),
                  K_(real_groupingset_agg_items),
-                 K_(is_trans_distinct_agg));
+                 K_(is_trans_distinct_agg),
+                 K_(group_distinct_ndv),
+                 K_(enable_distinct_with_expansion),
+                 K_(enable_expansion_ordered_output),
+                 K_(use_expand_distinct_mode_with_cost));
   };
 
   /**
@@ -939,6 +950,20 @@ public:
   int prepare_three_stage_info(const ObIArray<ObRawExpr *> &group_by_exprs,
                                GroupingOpHelper &helper);
 
+  int prepare_three_stage_expansion_info(ObLogicalOperator *top,
+                                         const ObIArray<ObRawExpr *> &group_by_exprs,
+                                         GroupingOpHelper &helper,
+                                         ObGroupingSetInfo *&gs_info,
+                                         ObRawExpr *&encoded_dup_expr,
+                                         ObIArray<ObTuple<ObRawExpr *, ObRawExpr *>> &third_stage_replace_pairs);
+
+  int choose_distinct_expansion_mode(ObGroupingSetInfo *gs_info, ObLogicalOperator *top,
+                                     const ObIArray<ObRawExpr *> &group_by_exprs, GroupingOpHelper &helper);
+
+  int detect_encoded_dup_expr_restype(const ObIArray<ObAggFunRawExpr *> &distinct_aggr_items,
+                                      const ObGroupingSetInfo &distinct_gs_info,
+                                      bool &enable_encoding, ObRawExprResType &res_type);
+
   int generate_three_stage_aggr_expr(ObRawExprFactory &expr_factory,
                                      ObSQLSessionInfo &session_info,
                                      const bool is_rollup,
@@ -954,9 +979,15 @@ public:
                                     GroupingOpHelper &helper,
                                     ObLogicalOperator *&top);
 
+  int create_three_stage_expansion_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
+    const ObIArray<ObRawExpr*> &having_exprs,
+    GroupingOpHelper &helper,
+    ObLogicalOperator *&top);
+
   int perform_group_by_pushdown(ObLogicalOperator *op);
   int perform_one_distinct_pushdown(ObLogicalOperator *op);
   int perform_groupingsets_replacement(ObLogicalOperator *op);
+  int perform_three_stage_expansion_replacement(ObLogicalOperator *op);
   int perform_simplify_win_expr(ObLogicalOperator *op);
   int perform_adjust_onetime_expr(ObLogicalOperator *op);
   int init_onetime_replaced_exprs_if_needed();
@@ -1014,6 +1045,7 @@ public:
                                 const ObIArray<ObRawExpr *> &rollup_exprs,
                                 ObLogicalOperator &top,
                                 ObIArray<ObGroupbyExpr> &groupset_exprs);
+  int create_partition_ordered_plan(ObLogicalOperator *&top);
 
   int compute_groupby_dop_by_auto_dop(const ObIArray<ObRawExpr*> &group_exprs,
                                       const ObIArray<ObRawExpr*> &rollup_exprs,
@@ -1030,7 +1062,9 @@ public:
   int check_candi_plan_need_calc_dop(bool &need_calc_dop) const;
   int check_op_need_calc_dop(const ObLogicalOperator *cur_op, bool &need_calc) const;
 
-  int calculate_group_distinct_ndv(const ObIArray<ObRawExpr*> &groupby_rollup_exprs, GroupingOpHelper &groupby_helper);
+  int calculate_group_distinct_ndv(const ObIArray<ObRawExpr *> &groupby_rollup_exprs,
+                                   GroupingOpHelper &groupby_helper,
+                                   ObGroupingSetInfo *distinct_gs_info = nullptr);
 
   int init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
                            GroupingOpHelper &distinct_helper);
@@ -1290,6 +1324,8 @@ public:
                                         const ObSqlTempTableInfo *temp_table_info);
 
   int candi_allocate_temp_table_transformation();
+
+  int candi_allocate_rescan();
 
   int create_temp_table_transformation_plan(ObLogicalOperator *&top,
                                             const ObIArray<ObLogicalOperator*> &temp_table_insert);

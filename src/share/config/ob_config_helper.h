@@ -1226,6 +1226,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultMicroBlockFormatVersionChecker);
 };
 
+class ObConfigUseDistinctWithExpansionChecker : public ObConfigChecker
+{
+public:
+  ObConfigUseDistinctWithExpansionChecker() {}
+  virtual ~ObConfigUseDistinctWithExpansionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigUseDistinctWithExpansionChecker);
+};
+
 class ObSQLFuncExtensionChecker
   : public ObConfigChecker
 {

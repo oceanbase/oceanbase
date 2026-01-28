@@ -38,6 +38,7 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/hybrid_hist.cpp
   aggregate/wm_concat.cpp
   aggregate/str_prefix_max.cpp
+  aggregate/single_row_approx_cnt_synopsis.cpp
   aggregate/any.cpp
   aggregate/var_samp.cpp
   aggregate/stddev_samp.cpp

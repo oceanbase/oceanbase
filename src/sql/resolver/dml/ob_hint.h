@@ -241,6 +241,8 @@ struct ObOptParamHint
     DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
     DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
+    DEF(PARTITION_ORDERED,)                         \
+    DEF(USE_DISTINCT_WITH_EXPANSION,)               \
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
     DEF(ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS,)  \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
@@ -271,6 +273,7 @@ struct ObOptParamHint
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   int get_disable_op_rich_format_flags(int64_t &disable_op_flags) const;
+  int get_distinct_with_expansion_param(ObString &policy, bool &has_opt_param) const;
   int enable_window_function_streaming_process_param(bool &enabled, bool &has_opt_param) const;
 
   template<typename T>

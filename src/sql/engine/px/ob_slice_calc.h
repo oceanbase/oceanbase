@@ -737,7 +737,9 @@ public:
         hash_dist_columns_(&hash_dist_columns), dist_exprs_(&dist_exprs), task_cnt_(task_cnt),
         round_robin_idx_(0), obj_casted_(false), hash_dist_exprs_(NULL), hash_funcs_(NULL),
         n_keys_(0), null_dist_value_exist_(true), null_bitmap_(nullptr), malloc_alloc_(nullptr),
-        fast_calc_hash_slice_(can_fast_calc_hash)
+        fast_calc_hash_slice_(can_fast_calc_hash),
+        dup_expr_list_(nullptr),
+        aggr_code_expr_(nullptr)
   {
     support_vectorized_calc_ = true;
   }
@@ -752,7 +754,9 @@ public:
         hash_dist_columns_(NULL), dist_exprs_(NULL), task_cnt_(task_cnt), round_robin_idx_(0),
         obj_casted_(false), hash_dist_exprs_(dist_exprs), hash_funcs_(hash_funcs),
         n_keys_(dist_exprs->count()), null_dist_value_exist_(true), null_bitmap_(nullptr), malloc_alloc_(nullptr),
-        fast_calc_hash_slice_(can_fast_calc_hash)
+        fast_calc_hash_slice_(can_fast_calc_hash),
+        dup_expr_list_(nullptr),
+        aggr_code_expr_(nullptr)
   {
     support_vectorized_calc_ = true;
   }
@@ -794,6 +798,20 @@ public:
     OB_ASSERT(task_cnt < UINT32_MAX);
     slice_idx = ((uint32_t)(hash_val) * task_cnt) >> 32;
   }
+
+  OB_INLINE bool should_skip_dup_expr_hash_by_aggr_code() const
+  {
+    return aggr_code_expr_ != nullptr && dup_expr_list_ != nullptr;
+  }
+
+  void set_aggr_code_and_dup_list(const ObExpr *aggr_code_expr, const ObIArray<ObExpr *> *dup_expr_list)
+  {
+    aggr_code_expr_ = aggr_code_expr;
+    dup_expr_list_ = dup_expr_list;
+  }
+  int check_skipping_dup_expr_hash_calc(ObEvalCtx &eval_ctx, const ObBitVector &skip,
+                                        const EvalBound &bound, const ObExpr *calc_expr,
+                                        bool &skip_hash_calc);
   common::ObExprCtx *expr_ctx_;
   const common::ObIArray<ObHashColumn> *hash_dist_columns_;
   const common::ObIArray<ObSqlExpression *> *dist_exprs_;
@@ -813,6 +831,8 @@ public:
   ObBitVector *null_bitmap_;
   ObIAllocator *malloc_alloc_;
   bool fast_calc_hash_slice_;
+  const ObIArray<ObExpr *> *dup_expr_list_;
+  const ObExpr *aggr_code_expr_;
 };
 
 class ObHybridHashSliceIdCalcBase

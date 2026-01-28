@@ -56,7 +56,8 @@ ObPxMSReceiveVecOp::ObPxMSReceiveVecOp(ObExecContext &exec_ctx, const ObOpSpec &
     merge_inputs_(),
     finish_(false),
     mem_context_(nullptr),
-    profile_(ObSqlWorkAreaType::SORT_WORK_AREA),
+    profile_(static_cast<const ObPxMSReceiveVecSpec &>(spec).max_ordered_aggr_code_ > 0 ?
+               ObSqlWorkAreaType::HASH_WORK_AREA : ObSqlWorkAreaType::SORT_WORK_AREA),
     sql_mem_processor_(profile_, op_monitor_info_),
     processed_cnt_(0),
     all_expr_vectors_(exec_ctx.get_allocator()),
@@ -64,19 +65,31 @@ ObPxMSReceiveVecOp::ObPxMSReceiveVecOp(ObExecContext &exec_ctx, const ObOpSpec &
     selector_(nullptr),
     row_meta_(nullptr),
     stored_compact_rows_(nullptr),
-    output_store_()
+    output_store_(),
+    ordered_agg_store_(nullptr),
+    aggr_code_(-1),
+    last_chan_idx_(OB_INVALID_INDEX_INT64),
+    min_aggr_codes_(exec_ctx.get_allocator()),
+    ordered_agg_status_(OrderedAggStatus::INIT)
 {}
 
 void ObPxMSReceiveVecOp::destroy()
 {
   sql_mem_processor_.unregister_profile_if_necessary();
   output_store_.~ObTempRowStore();
+  if (ordered_agg_store_ != nullptr) {
+    ordered_agg_store_->destroy();
+    ordered_agg_store_ = nullptr;
+  }
   if (nullptr != mem_context_) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;
   }
   merge_inputs_.reset();
   row_heap_.reset();
+  aggr_code_ = -1;
+  last_chan_idx_ = OB_INVALID_INDEX_INT64;
+  ordered_agg_status_ = OrderedAggStatus::INIT;
   //no need to reset interrupt_proc_
   ObPxReceiveOp::destroy();
 }
@@ -168,6 +181,16 @@ int ObPxMSReceiveVecOp::inner_open()
         }
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (use_ordered_aggr_opt()) {
+      void *buf = ctx_.get_allocator().alloc(sizeof(OrderedAggCodeStore));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret));
+      } else {
+        ordered_agg_store_ = new (buf) OrderedAggCodeStore(*this);
+      }
+    }
   }
   return ret;
 }
@@ -198,6 +221,9 @@ int ObPxMSReceiveVecOp::inner_close()
   int ret = OB_SUCCESS;
   output_iter_.reset();
   output_store_.reset();
+  aggr_code_ = -1;
+  last_chan_idx_ = OB_INVALID_INDEX_INT64;
+  ordered_agg_status_ = OrderedAggStatus::INIT;
   int release_channel_ret = ObPxChannelUtil::flush_rows(task_channels_);
   if (release_channel_ret != common::OB_SUCCESS) {
     LOG_WARN("release dtl channel failed", K(release_channel_ret));
@@ -223,6 +249,9 @@ int ObPxMSReceiveVecOp::inner_close()
   release_channel_ret = erase_dtl_interm_result();
   if (release_channel_ret != common::OB_SUCCESS) {
     LOG_TRACE("release interm result failed", KR(release_channel_ret));
+  }
+  if (ordered_agg_store_ != nullptr) {
+    ordered_agg_store_->reset();
   }
   sql_mem_processor_.unregister_profile();
   return ret;
@@ -691,89 +720,86 @@ int ObPxMSReceiveVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     LOG_WARN("failed to init channel", K(ret));
   } else if (OB_FAIL(try_send_bloom_filter())) {
     LOG_WARN("fail to send bloom filter", K(ret));
-  }
-  if (OB_SUCC(ret) && MY_SPEC.local_order_ && !finish_) {
-    // local order需要先把channel里的数据拿完，每个channel的数据分段后生成一组inputs
-    ret = get_all_rows_from_channels(phy_plan_ctx);
-  }
-  if (OB_FAIL(ret)) {
-  } else if (output_iter_.is_valid() && output_iter_.has_next()) {
-    // do nothing
+  } else if (use_ordered_aggr_opt()) {
+    ret = inner_get_next_ordered_aggr_batch(max_row_cnt);
   } else {
-    const ObCompactRow *store_row = nullptr;
-    output_iter_.reset();
-    output_store_.reset();
-    while (OB_SUCC(ret) && output_store_.get_row_cnt() < max_row_cnt) {
-      // (1) 向 heap 中添加一个或多个元素，直至 heap 满
-      while (OB_SUCC(ret) && row_heap_.capacity() > row_heap_.count()) {
-        // 不断从inputs中拿行放入row_heap_中，直到放满。
-        if (OB_FAIL(get_one_row_from_channels(phy_plan_ctx,
-                                              row_heap_.writable_channel_idx(),
-                                              MY_SPEC.all_exprs_,
-                                              eval_ctx_,
-                                              store_row))) {
-          if (OB_ITER_END == ret) {
-            row_heap_.shrink();
-            ret = OB_SUCCESS;
+    if (OB_SUCC(ret) && MY_SPEC.local_order_ && !finish_) {
+      // local order需要先把channel里的数据拿完，每个channel的数据分段后生成一组inputs
+      ret = get_all_rows_from_channels(phy_plan_ctx);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (output_iter_.is_valid() && output_iter_.has_next()) {
+      // do nothing
+    } else {
+      const ObCompactRow *store_row = nullptr;
+      output_iter_.reset();
+      output_store_.reset();
+      while (OB_SUCC(ret) && output_store_.get_row_cnt() < max_row_cnt) {
+        // (1) 向 heap 中添加一个或多个元素，直至 heap 满
+        while (OB_SUCC(ret) && row_heap_.capacity() > row_heap_.count()) {
+          // 不断从inputs中拿行放入row_heap_中，直到放满。
+          if (OB_FAIL(get_one_row_from_channels(phy_plan_ctx, row_heap_.writable_channel_idx(),
+                                                MY_SPEC.all_exprs_, eval_ctx_, store_row))) {
+            if (OB_ITER_END == ret) {
+              row_heap_.shrink();
+              ret = OB_SUCCESS;
+            }
+          } else if (OB_ISNULL(store_row)) {
+            ret = OB_ERR_UNEXPECTED;
+          } else if (OB_FAIL(row_heap_.push(store_row))) {
+            LOG_WARN("fail push row to heap", K(ret));
           }
-        } else if (OB_ISNULL(store_row)) {
-          ret = OB_ERR_UNEXPECTED;
-        } else if (OB_FAIL(row_heap_.push(store_row))) {
-          LOG_WARN("fail push row to heap", K(ret));
         }
-      }
 
-      // (2) 从 heap 中弹出最大值
-      if (OB_SUCC(ret)) {
-        ObCompactRow *out_row = NULL;
-        if (0 == row_heap_.capacity()) {
-          ret = OB_ITER_END;
-          iter_end_ = true;
-          metric_.mark_eof();
-          int release_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (release_ret = release_merge_inputs())) {
-            LOG_WARN("failed to release merge sort and row store", K(ret), K(release_ret));
+        // (2) 从 heap 中弹出最大值
+        if (OB_SUCC(ret)) {
+          ObCompactRow *out_row = NULL;
+          if (0 == row_heap_.capacity()) {
+            ret = OB_ITER_END;
+            iter_end_ = true;
+            metric_.mark_eof();
+            int release_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (release_ret = release_merge_inputs())) {
+              LOG_WARN("failed to release merge sort and row store", K(ret), K(release_ret));
+            }
+          } else if (row_heap_.capacity() == row_heap_.count()) {
+            //弹出最大值，放入表达式datum中
+            if (OB_FAIL(row_heap_.pop(store_row))) {
+              LOG_WARN("fail pop row from heap", K(ret));
+            } else if (OB_FAIL(output_store_.add_row(store_row, out_row))) {
+              LOG_WARN("failed to push back", K(ret));
+            }
+            metric_.count();
+            metric_.mark_first_out();
+            metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid row heap state", K(row_heap_), K(ret));
           }
-        } else if (row_heap_.capacity() == row_heap_.count()) {
-          //弹出最大值，放入表达式datum中
-          if (OB_FAIL(row_heap_.pop(store_row))) {
-            LOG_WARN("fail pop row from heap", K(ret));
-          } else if (OB_FAIL(output_store_.add_row(store_row, out_row))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-          metric_.count();
-          metric_.mark_first_out();
-          metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid row heap state", K(row_heap_), K(ret));
         }
       }
+      if (OB_ITER_END == ret) { ret = OB_SUCCESS; }
+      if (OB_SUCC(ret) && OB_FAIL(output_store_.begin(output_iter_))) {
+        LOG_WARN("init temp row store iterator failed", K(ret));
+      }
     }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret) && OB_FAIL(output_store_.begin(output_iter_))) {
-      LOG_WARN("init temp row store iterator failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    const ObIArray<ObExpr *> &all_exprs = MY_SPEC.all_exprs_;
-    brs_.all_rows_active_ = true;
-    brs_.reset_skip(brs_.size_);
     if (OB_SUCC(ret)) {
-      int64_t read_rows = 0;
-      if (OB_FAIL(output_iter_.get_next_batch(MY_SPEC.all_exprs_, eval_ctx_, max_row_cnt, read_rows))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next batch failed", K(ret));
-        } else {
-          ret = OB_SUCCESS;
-          if (iter_end_) {
-            brs_.end_ = true;
+      const ObIArray<ObExpr *> &all_exprs = MY_SPEC.all_exprs_;
+      brs_.all_rows_active_ = true;
+      brs_.reset_skip(brs_.size_);
+      if (OB_SUCC(ret)) {
+        int64_t read_rows = 0;
+        if (OB_FAIL(
+              output_iter_.get_next_batch(MY_SPEC.all_exprs_, eval_ctx_, max_row_cnt, read_rows))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("get next batch failed", K(ret));
+          } else {
+            ret = OB_SUCCESS;
+            if (iter_end_) { brs_.end_ = true; }
           }
         }
+        brs_.size_ = read_rows;
       }
-      brs_.size_ = read_rows;
     }
   }
   return ret;
@@ -1077,6 +1103,13 @@ int ObPxMSReceiveVecOp::inner_rescan()
   processed_cnt_ = 0;
   output_iter_.reset();
   output_store_.reset();
+  aggr_code_ = -1;
+  ordered_agg_status_ = OrderedAggStatus::INIT;
+  last_chan_idx_ = OB_INVALID_INDEX_INT64;
+  if (ordered_agg_store_ != nullptr) {
+    ordered_agg_store_->reset();
+  }
+  min_aggr_codes_.reset();
   if (OB_FAIL(ObPxReceiveOp::inner_rescan())) {
     LOG_WARN("fail to do receive op rescan", K(ret));
   } else if (!MY_SPEC.local_order_
@@ -1276,6 +1309,568 @@ int ObPxMSReceiveVecOp::MergeSortInput::need_dump(ObSqlMemMgrProcessor &sql_mem_
             },
             need_dump, sql_mem_processor.get_data_size()))) {
     LOG_WARN("failed to extend max memory size", K(ret));
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::inner_get_next_ordered_aggr_batch(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  bool output = false;
+  int64_t batch_size = MIN(MY_SPEC.max_batch_size_, max_row_cnt);
+  while (OB_SUCC(ret) && !output) {
+    bool all_chan_eof = false;
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status failed", K(ret));
+      break;
+    }
+    switch (ordered_agg_status_) {
+    case OrderedAggStatus::INIT: {
+      aggr_code_ = MY_SPEC.max_ordered_aggr_code_ - 1;
+      if (OB_ISNULL(ordered_agg_store_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null ordered agg store", K(ret));
+      } else if (OB_FAIL(ordered_agg_store_->init())) {
+        LOG_WARN("init ordered agg store failed", K(ret));
+      } else if (OB_FAIL(min_aggr_codes_.prepare_allocate(get_channel_count()))) {
+        LOG_WARN("prepare allocate min aggr codes failed", K(ret));
+      } else {
+        for (int i = 0; i < get_channel_count(); i++) {
+          min_aggr_codes_.at(i) = MY_SPEC.max_ordered_aggr_code_ - 1;
+        }
+        ordered_agg_status_ = OrderedAggStatus::READ_CHAN;
+      }
+      break;
+    }
+    case OrderedAggStatus::READ_CHAN: {
+      int64_t chan_idx = -1;
+      int64_t read_rows = 0;
+      int64_t last_aggr_code = -1;
+      if (row_reader_.has_more()) {
+        if (OB_FAIL(row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_,
+                                                   MY_SPEC.dynamic_const_exprs_, eval_ctx_,
+                                                   batch_size, read_rows, vector_rows_))) {
+          LOG_WARN("get next batch failed", K(ret));
+        } else if (OB_UNLIKELY(read_rows <= 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected read rows", K(ret), K(read_rows));
+        } else if (OB_FAIL(eval_child_exprs(read_rows))) {
+          LOG_WARN("eval all exprs failed", K(ret));
+        } else if (OB_UNLIKELY(last_chan_idx_ < 0 || last_chan_idx_ >= get_channel_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid last chan idx", K(ret), K(last_chan_idx_));
+        } else if (FALSE_IT(last_aggr_code = MY_SPEC.aggr_code_->get_vector(eval_ctx_)->get_int(read_rows - 1))) {
+        } else if (FALSE_IT(min_aggr_codes_.at(last_chan_idx_) = last_aggr_code)) {
+        } else if (last_aggr_code != aggr_code_) {
+          if (OB_FAIL(ordered_agg_store_->add_batch(read_rows))) {
+            LOG_WARN("add batch failed", K(ret));
+          } else {
+            INC_METRIC_VAL(ObMetricId::PX_MS_RECV_STORED_ROWS, read_rows);
+          }
+          bool all_recv = true;
+          for (int i = 0; OB_SUCC(ret) && all_recv && i < get_channel_count(); i++) {
+            if (min_aggr_codes_.at(i) >= aggr_code_) {
+              all_recv = false;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (all_recv && aggr_code_ >= 0) {
+            ordered_agg_status_ = OrderedAggStatus::READ_STORE;
+            if (OB_FAIL(ordered_agg_store_->begin(aggr_code_))) {
+              LOG_WARN("failed to start read store", K(ret));
+            }
+          }
+        } else if (MY_SPEC.encoded_dup_expr_ != nullptr
+                   && OB_FAIL(setup_and_copy_encoded_exprs(read_rows, aggr_code_))) {
+          LOG_WARN("failed to setup and copy encoded exprs", K(ret));
+        } else {
+          // do output
+          brs_.size_ = read_rows;
+          brs_.all_rows_active_ = true;
+          brs_.skip_->reset(read_rows);
+          brs_.end_ = false;
+          output = true;
+        }
+      } else if (OB_FAIL(get_next_chan_idx(chan_idx, all_chan_eof))) {
+        LOG_WARN("get next chan idx failed", K(ret));
+      } else if (OB_UNLIKELY(chan_idx < 0 || all_chan_eof)) {
+        ordered_agg_status_ = OrderedAggStatus::READ_STORE;
+        if (aggr_code_ >= 0) {
+          if (OB_FAIL(ordered_agg_store_->begin(aggr_code_))) {
+            LOG_WARN("failed to start read store", K(ret));
+          }
+        }
+      } else if (chan_idx >= 0 && OB_FAIL(ptr_row_msg_loop_->process_one(chan_idx))) {
+        if (OB_DTL_WAIT_EAGAIN == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("process one failed", K(ret));
+        }
+      } else {
+        last_chan_idx_ = chan_idx;
+      }
+      break;
+    }
+    case OrderedAggStatus::READ_STORE: {
+      // TODO finish add row
+      int64_t read_rows = 0;
+      if (aggr_code_ < 0) {
+        ordered_agg_status_ = OrderedAggStatus::END;
+      } else if (OB_FAIL(ordered_agg_store_->get_next_batch(batch_size, aggr_code_, read_rows))) {
+        LOG_WARN("failed to get next batch", K(ret));
+      } else if (OB_UNLIKELY(read_rows <= 0)) {
+        if (OB_FAIL(ordered_agg_store_->dec_aggr_code())) {
+          LOG_WARN("failed to dec aggr code", K(ret));
+        } else {
+          aggr_code_ -= 1;
+          if (aggr_code_ >= 0) {
+            ordered_agg_status_ = OrderedAggStatus::READ_NEXT_STORE_FIRST;
+            if (OB_FAIL(ordered_agg_store_->begin(aggr_code_))) {
+              LOG_WARN("failed to begin", K(ret));
+            }
+          }
+        }
+      } else if (MY_SPEC.encoded_dup_expr_ != nullptr
+                 && OB_FAIL(setup_and_copy_encoded_exprs(read_rows, aggr_code_))) {
+        LOG_WARN("failed to setup and copy encoded exprs", K(ret));
+      } else {
+        brs_.size_ = read_rows;
+        brs_.all_rows_active_ = true;
+        brs_.skip_->reset(read_rows);
+        brs_.end_ = false;
+        output = true;
+      }
+      break;
+    }
+    case OrderedAggStatus::READ_NEXT_STORE_FIRST: {
+      int64_t read_rows =0;
+      if (OB_FAIL(ordered_agg_store_->get_next_batch(batch_size, aggr_code_, read_rows))) {
+        LOG_WARN("read next batch failed", K(ret));
+      } else if (OB_UNLIKELY(read_rows <= 0)) {
+        if (OB_FAIL(ordered_agg_store_->clear_store(aggr_code_))) {
+          LOG_WARN("failed to clear store", K(ret));
+        } else {
+          ordered_agg_status_ = OrderedAggStatus::READ_CHAN;
+        }
+      } else if (MY_SPEC.encoded_dup_expr_ != nullptr
+                 && OB_FAIL(setup_and_copy_encoded_exprs(read_rows, aggr_code_))) {
+        LOG_WARN("failed to setup and copy encoded exprs", K(ret));
+      } else {
+        brs_.size_ = read_rows;
+        brs_.all_rows_active_ = true;
+        brs_.skip_->reset(read_rows);
+        brs_.end_ = false;
+        output = true;
+      }
+      break;
+    }
+    case OrderedAggStatus::END: {
+      brs_.end_ = true;
+      brs_.size_ = 0;
+      output = true;
+      break;
+    }
+  }
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::get_next_chan_idx(int64_t &chan_idx, bool &all_eof)
+{
+  int ret = OB_SUCCESS;
+  all_eof = true;
+  chan_idx = -1;
+  int64_t max_remain_buf_cnt = -1;
+  for (int i = 0; OB_SUCC(ret) && i < get_channel_count(); i++) {
+    dtl::ObDtlChannel *ch = ptr_row_msg_loop_->get_channel(i);
+    if (OB_ISNULL(ch)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null channel", K(ret), K(i), K(ch));
+    } else if (ch->is_eof()) {
+      continue;
+    } else {
+      all_eof = false;
+      if (min_aggr_codes_.at(i) < aggr_code_) {
+        continue;
+      } else {
+        ObDtlBasicChannel *basic_ch = static_cast<ObDtlBasicChannel *>(ch);
+        if (chan_idx == -1
+            || basic_ch->get_recv_buffer_cnt() - basic_ch->get_processed_buffer_cnt() > max_remain_buf_cnt) {
+          max_remain_buf_cnt = basic_ch->get_recv_buffer_cnt() - basic_ch->get_processed_buffer_cnt();
+          chan_idx = i;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::init()
+{
+  int ret = OB_SUCCESS;
+  int64_t max_aggr_code = ms_receive_op_.my_spec().max_ordered_aggr_code_;
+  cur_aggr_code_ = max_aggr_code - 1;
+  store_rows_ = 0;
+  // read_iter_.reset();
+  if (OB_FAIL(stores_.prepare_allocate(max_aggr_code))) {
+    LOG_WARN("prepare allocate stores failed", K(ret));
+  }
+  void *buf = nullptr;
+  uint64_t tenant_id = ms_receive_op_.ctx_.get_my_session()->get_effective_tenant_id();
+  const ObPxMSReceiveVecSpec &spec = ms_receive_op_.my_spec();
+  ObIAllocator &allocator = ms_receive_op_.ctx_.get_allocator();
+  ObMemAttr mem_attr(tenant_id, "MSRecvStore", ObCtxIds::WORK_AREA);
+  for (int i = 0; OB_SUCC(ret) && i < ms_receive_op_.my_spec().max_ordered_aggr_code_; i++) {
+    stores_.at(i) = nullptr;
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::process_dump()
+{
+  int ret = OB_SUCCESS;
+  bool updated = false;
+  bool need_dump = false;
+  ObSqlMemMgrProcessor &sql_mem_proc = ms_receive_op_.sql_mem_processor_;
+  bool should_check_dump = sql_mem_proc.get_data_size() > sql_mem_proc.get_mem_bound();
+  if (OB_FAIL(sql_mem_proc.update_max_available_mem_size_periodically(
+        &ms_receive_op_.mem_context_->get_malloc_allocator(),
+        ObSqlMemMgrProcessor::DefaultPeriodicCheckOp<ObPxMSReceiveVecOp::OrderedAggCodeStore>(*this), updated))) {
+    LOG_WARN("update max available memory size periodically failed", K(ret));
+  } else if ((should_check_dump || updated) && GCONF.is_sql_operator_dump_enabled()
+            && OB_FAIL(sql_mem_proc.extend_max_memory_size(&ms_receive_op_.mem_context_->get_malloc_allocator(),
+                                                           ObSqlMemMgrProcessor::DefaultMemExtendCheckOp(sql_mem_proc),
+                                                           need_dump, sql_mem_proc.get_data_size()))) {
+    LOG_WARN("extend max memory size failed", K(ret));
+  } else if (need_dump) {
+    sql_mem_proc.set_number_pass(1);
+    for (int i = 0; OB_SUCC(ret) && i < stores_.count(); i++) {
+      if (stores_.at(i) != nullptr && OB_FAIL(stores_.at(i)->dump(false))) {
+        LOG_WARN("dump store failed", K(ret));
+      }
+    }
+    LOG_TRACE("trace px ms receive ordered agg code store dump", K(sql_mem_proc.get_data_size()),
+              K(sql_mem_proc.get_mem_bound()), K(store_rows_), K(in_mem_rows_));
+    in_mem_rows_ = 0;
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::dec_aggr_code()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(cur_aggr_code_ < 0 || cur_aggr_code_ >= ms_receive_op_.my_spec().max_ordered_aggr_code_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid aggr code", K(ret), K(cur_aggr_code_));
+  } else if (OB_ISNULL(stores_.at(cur_aggr_code_))) {
+    cur_aggr_code_ -= 1;
+  } else {
+    read_iter_.reset();
+    stores_.at(cur_aggr_code_)->~ObTempColumnStore();
+    stores_.at(cur_aggr_code_) = nullptr;
+    cur_aggr_code_ -= 1;
+  }
+  return ret;
+}
+
+template<typename ColumnFmt>
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::inner_add_batch(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  const ObPxMSReceiveVecSpec &spec = ms_receive_op_.my_spec();
+  ObExpr *aggr_code = spec.aggr_code_;
+  ObEvalCtx &eval_ctx = ms_receive_op_.eval_ctx_;
+  ColumnFmt *column = static_cast<ColumnFmt *>(aggr_code->get_vector(eval_ctx));
+  ObBitVector &skip = *ms_receive_op_.skip_;
+  int64_t start_pos = 0;
+  int64_t cur_pos = start_pos + 1;
+  while (OB_SUCC(ret) && cur_pos <= size) {
+    if (cur_pos >= size || column->get_int(cur_pos) != column->get_int(start_pos)) {
+      int64_t agg_code = column->get_int(start_pos);
+      // EvalBound tmp_bound(size, start_pos, cur_pos, true);
+      int64_t stored_rows_count = 0;
+      ObBatchRows tmp_brs;
+      tmp_brs.skip_ = ms_receive_op_.skip_;
+      tmp_brs.size_ = size;
+      tmp_brs.all_rows_active_ = false;
+      tmp_brs.skip_->set_all(size);
+      tmp_brs.skip_->unset_all(start_pos, cur_pos);
+      if (OB_FAIL(process_dump())) {
+        LOG_WARN("process dump failed", K(ret));
+      } else if (OB_FAIL(create_one_store(agg_code))) {
+        LOG_WARN("create one store failed", K(ret));
+      } else if (OB_ISNULL(stores_.at(agg_code))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null store", K(ret), K(agg_code));
+      } else if (OB_FAIL(stores_.at(agg_code)->add_batch(spec.child_exprs_, eval_ctx, tmp_brs,
+                                                         stored_rows_count))) {
+        LOG_WARN("add batch failed", K(ret));
+      } else if (OB_UNLIKELY(stored_rows_count != cur_pos - start_pos)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("stored rows count not equal to size", K(ret), K(stored_rows_count), K(cur_pos - start_pos));
+      } else {
+        start_pos = cur_pos;
+        store_rows_ += stored_rows_count;
+        in_mem_rows_ += stored_rows_count;
+        if (start_pos >= size) { break; }
+      }
+    } else {
+      cur_pos++;
+    }
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::add_batch(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  const ObPxMSReceiveVecSpec &spec = ms_receive_op_.my_spec();
+  ObExpr *aggr_code = spec.aggr_code_;
+  ObEvalCtx &eval_ctx = ms_receive_op_.eval_ctx_;
+
+  if (aggr_code->get_format(eval_ctx) == VEC_UNIFORM) {
+    ret = inner_add_batch<ObUniformFormat<false>>(size);
+  } else if (aggr_code->get_format(eval_ctx) == VEC_FIXED) {
+    ret = inner_add_batch<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(size);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid format", K(ret), K(aggr_code->get_format(eval_ctx)));
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::get_next_batch(const int64_t max_rows,
+                                                            const int32_t aggr_code,
+                                                            int64_t &read_rows)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = ms_receive_op_.eval_ctx_;
+  const ObPxMSReceiveVecSpec &spec = ms_receive_op_.my_spec();
+  if (OB_UNLIKELY(aggr_code < 0 || aggr_code >= ms_receive_op_.my_spec().max_ordered_aggr_code_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid aggr code", K(ret), K(aggr_code));
+  } else if (aggr_code != cur_aggr_code_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid aggr code", K(ret), K(aggr_code), K(cur_aggr_code_));
+  } else if (OB_ISNULL(stores_.at(aggr_code))) {
+    read_rows = 0;
+  } else if (OB_FAIL(read_iter_.get_next_batch(spec.child_exprs_, eval_ctx, max_rows, read_rows))) {
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+      read_rows = 0;
+    } else {
+      LOG_WARN("get next batch failed", K(ret));
+    }
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::begin(const int32_t aggr_code)
+{
+  int ret = OB_SUCCESS;
+  // read_iter_.reset();
+  if (OB_UNLIKELY(cur_aggr_code_ != aggr_code)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid aggr code", K(ret), K(cur_aggr_code_), K(aggr_code));
+  } else if (OB_ISNULL(stores_.at(aggr_code))) {
+    // do nothing
+  } else if (OB_ISNULL(stores_.at(aggr_code))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null store", K(ret), K(aggr_code));
+  } else if (OB_FAIL(stores_.at(aggr_code)->finish_add_row(false))) {
+    LOG_WARN("finish add row failed", K(ret));
+  } else if (OB_FAIL(stores_.at(aggr_code)->begin(read_iter_))) {
+    LOG_WARN("failed to begin read iter", K(ret));
+  }
+  return ret;
+}
+
+void ObPxMSReceiveVecOp::OrderedAggCodeStore::destroy()
+{
+  read_iter_.reset();
+  store_rows_ = 0;
+  cur_aggr_code_ = -1;
+  for (int i = 0; i < stores_.count(); i++) {
+    if (stores_.at(i) != nullptr) {
+      stores_.at(i)->~ObTempColumnStore();
+      stores_.at(i) = nullptr;
+    }
+  }
+}
+
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::create_one_store(const int32_t aggr_code)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  const ObPxMSReceiveVecSpec &spec = ms_receive_op_.my_spec();
+  ObMemAttr mem_attr(ms_receive_op_.ctx_.get_my_session()->get_effective_tenant_id(), "MSRecvStore", ObCtxIds::WORK_AREA);
+  if (OB_UNLIKELY(aggr_code < 0 || aggr_code >= ms_receive_op_.my_spec().max_ordered_aggr_code_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid aggr code", K(ret), K(aggr_code));
+  } else if (stores_.at(aggr_code) != nullptr) {
+    // do nothing
+  } else if (OB_ISNULL(buf = ms_receive_op_.ctx_.get_allocator().alloc(sizeof(ObTempColumnStore)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    stores_.at(aggr_code) = new (buf) ObTempColumnStore(&ms_receive_op_.mem_context_->get_malloc_allocator());
+    if (OB_FAIL(stores_.at(aggr_code)->init(spec.child_exprs_, spec.max_batch_size_, mem_attr, 0, true,
+                                    true, ObCompressorType::NONE_COMPRESSOR))) {
+      LOG_WARN("init store failed", K(ret));
+    } else {
+      stores_.at(aggr_code)->set_allocator(ms_receive_op_.mem_context_->get_malloc_allocator());
+      stores_.at(aggr_code)->set_callback(&ms_receive_op_.sql_mem_processor_);
+      stores_.at(aggr_code)->set_io_event_observer(&ms_receive_op_.io_event_observer_);
+      stores_.at(aggr_code)->set_dir_id(ms_receive_op_.sql_mem_processor_.get_dir_id());
+    }
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::OrderedAggCodeStore::clear_store(const int32_t aggr_code)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(aggr_code < 0 || aggr_code >= ms_receive_op_.my_spec().max_ordered_aggr_code_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid aggr code", K(ret), K(aggr_code));
+  } else if (OB_ISNULL(stores_.at(aggr_code))) {
+    // do nothing
+  } else {
+    read_iter_.reset();
+    stores_.at(aggr_code)->reuse();
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::eval_child_exprs(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  skip_->reset(size);
+  ObBatchRows tmp_brs;
+  tmp_brs.skip_ = skip_;
+  tmp_brs.size_ = size;
+  tmp_brs.all_rows_active_ = true;
+  for (int i = 0; OB_SUCC(ret) && i < MY_SPEC.child_exprs_.count(); i++) {
+    ObExpr *expr = MY_SPEC.child_exprs_.at(i);
+    if (OB_FAIL(expr->eval_vector(eval_ctx_, tmp_brs))) {
+      LOG_WARN("failed to eval batch for expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+template<typename InputColumnFmt, typename OutputColumnFmt>
+static void inner_do_decode_expr(InputColumnFmt *from_vec, OutputColumnFmt *to_vec, const int64_t size)
+{
+  for (int i = 0; i < size; i++) {
+    if (from_vec->is_null(i)) {
+      to_vec->set_null(i);
+    } else {
+      const char *payload = nullptr;
+      int32_t payload_len = 0;
+      from_vec->get_payload(i, payload, payload_len);
+      to_vec->set_payload_shallow(i, payload, payload_len);
+    }
+  }
+}
+
+template<typename ColumnFmt>
+int ObPxMSReceiveVecOp::do_decode_expr(ObExpr *from_expr, ObExpr *to_expr, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  ColumnFmt *to_vec = static_cast<ColumnFmt *>(to_expr->get_vector(eval_ctx_));
+  if (from_expr->get_format(eval_ctx_) == VEC_DISCRETE) {
+    ObDiscreteFormat *from_vec = static_cast<ObDiscreteFormat *>(from_expr->get_vector(eval_ctx_));
+    inner_do_decode_expr<ObDiscreteFormat, ColumnFmt>(from_vec, to_vec, size);
+  } else if (from_expr->get_format(eval_ctx_) == VEC_UNIFORM) {
+    ObUniformFormat<false> *from_vec = static_cast<ObUniformFormat<false> *>(from_expr->get_vector(eval_ctx_));
+    inner_do_decode_expr<ObUniformFormat<false>, ColumnFmt>(from_vec, to_vec, size);
+  } else if (from_expr->get_format(eval_ctx_) == VEC_CONTINUOUS) {
+    ObContinuousFormat *from_vec = static_cast<ObContinuousFormat *>(from_expr->get_vector(eval_ctx_));
+    inner_do_decode_expr<ObContinuousFormat, ColumnFmt>(from_vec, to_vec, size);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid format", K(ret), K(from_expr->get_format(eval_ctx_)));
+  }
+  return ret;
+}
+
+int ObPxMSReceiveVecOp::setup_and_copy_encoded_exprs(const int64_t size, const int64_t aggr_code)
+{
+#define DO_DECODE_EXPR(vec_tc)                                                                     \
+  case vec_tc: {                                                                                   \
+    ret = do_decode_expr<ObFixedLengthFormat<RTCType<vec_tc>>>(encoded_dup_expr, decoded_dup_expr, size);  \
+  } break;
+
+  int ret = OB_SUCCESS;
+  skip_->reset(size);
+  ObBatchRows tmp_brs;
+  tmp_brs.skip_ = skip_;
+  tmp_brs.size_ = size;
+  tmp_brs.all_rows_active_ = true;
+  for (int i = 0; OB_SUCC(ret) && i < MY_SPEC.dup_expr_list_.count(); i++) {
+    if (i == aggr_code) {
+      continue;
+    }
+    ObExpr *dup_expr = MY_SPEC.dup_expr_list_.at(i);
+    if (OB_ISNULL(dup_expr)) {
+      // do nothing
+    } else if (OB_FAIL(dup_expr->init_vector_default(eval_ctx_, size))) {
+      LOG_WARN("init vector default failed", K(ret));
+    } else {
+      dup_expr->get_nulls(eval_ctx_).set_all(size);
+      dup_expr->get_vector(eval_ctx_)->set_has_null();
+      dup_expr->set_evaluated_projected(eval_ctx_);
+    }
+  }
+  ObExpr *encoded_dup_expr = MY_SPEC.encoded_dup_expr_;
+  ObExpr *decoded_dup_expr = MY_SPEC.dup_expr_list_.at(aggr_code);
+  if (OB_FAIL(ret)) {
+  } else if (aggr_code == 0 && OB_ISNULL(MY_SPEC.dup_expr_list_.at(aggr_code))) {
+  } else if (OB_FAIL(encoded_dup_expr->eval_vector(eval_ctx_, tmp_brs))) {
+    LOG_WARN("failed to eval encoded dup expr", K(ret));
+  } else if (is_fixed_length_vec(encoded_dup_expr->get_vec_value_tc())) {
+    if (OB_UNLIKELY(!is_fixed_length_vec(decoded_dup_expr->get_vec_value_tc()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid format", K(ret), K(encoded_dup_expr->get_vec_value_tc()),
+               K(decoded_dup_expr->get_vec_value_tc()));
+    } else {
+      VectorHeader &from_vec_header = encoded_dup_expr->get_vector_header(eval_ctx_);
+      VectorHeader &to_vec_header = decoded_dup_expr->get_vector_header(eval_ctx_);
+      if (OB_FAIL(to_vec_header.assign(from_vec_header))) {
+        LOG_WARN("assign vector header failed", K(ret));
+      } else {
+        ObEvalInfo &from_info = encoded_dup_expr->get_eval_info(eval_ctx_);
+        ObEvalInfo &to_info = decoded_dup_expr->get_eval_info(eval_ctx_);
+        to_info = from_info;
+        to_info.cnt_ = size;
+        decoded_dup_expr->set_evaluated_projected(eval_ctx_);
+      }
+    }
+  } else if (OB_FAIL(decoded_dup_expr->init_vector_default(eval_ctx_, size))) {
+    LOG_WARN("init vector default failed", K(ret));
+  } else {
+    VectorFormat dst_fmt = decoded_dup_expr->get_format(eval_ctx_);
+    if (dst_fmt == VEC_DISCRETE) {
+      ret = do_decode_expr<ObDiscreteFormat>(encoded_dup_expr, decoded_dup_expr, size);
+    } else if (dst_fmt == VEC_FIXED) {
+      VecValueTypeClass vec_tc = decoded_dup_expr->get_vec_value_tc();
+      switch (vec_tc) {
+        LST_DO_CODE(DO_DECODE_EXPR, FIXED_VEC_TC_LIST);
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid type class", K(ret), K(dst_fmt), K(vec_tc));
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid format", K(ret), K(dst_fmt));
+    }
+    if (OB_SUCC(ret)) {
+      decoded_dup_expr->set_evaluated_projected(eval_ctx_);
+    }
   }
   return ret;
 }

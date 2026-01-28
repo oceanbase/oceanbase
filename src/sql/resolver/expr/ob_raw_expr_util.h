@@ -1133,7 +1133,14 @@ public:
                                  const ObSQLSessionInfo &session_info,
                                  ObRawExpr *&out);
   static int build_grouping_id(ObRawExprFactory &factory, const ObSQLSessionInfo &session_info,
-                               ObOpPseudoColumnRawExpr *&out);
+                               ObOpPseudoColumnRawExpr *&out, bool is_three_stage_grouping_id = false);
+
+  static int build_encoded_dup(ObRawExprFactory &factory, const ObSQLSessionInfo &session_info,
+                               const ObRawExprResType &res_type, ObOpPseudoColumnRawExpr *&out);
+
+  static int build_hash_val_expr(ObRawExprFactory &factory, const ObSQLSessionInfo &session_info,
+                                 ObOpPseudoColumnRawExpr *&out);
+
   static bool is_pseudo_column_like_expr(const ObRawExpr &expr);
   static bool is_sharable_expr(const ObRawExpr &expr);
 

@@ -474,6 +474,7 @@
 #include "ob_expr_void.h"
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
 #include "ob_expr_vector_similarity.h"
+#include "ob_expr_max_pt.h"
 #include "ob_expr_usec_to_time.h"
 #include "ob_expr_collect_file_list.h"
 #include "ob_expr_left.h"
@@ -1472,7 +1473,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVectorSimilarity::calc_similarity,                            /* 874 */
   ObExprVecVisible::generate_vec_visible,                             /* 875 */
   NULL, // ObExprArrayContains::eval_array_contains_int32_t           /* 876 */
-  NULL, // ObExprMaxPt::eval_max_pt,                                  /* 877 */
+  ObExprMaxPt::eval_max_pt,                                           /* 877 */
   ObExprDateTrunc::eval_date_trunc,                                   /* 878 */
   ObExprToDate::calc_to_date_with_format,                             /* 879 */
   ObExprEditDistance::calc_edit_distance,                             /* 880 */

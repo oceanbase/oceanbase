@@ -14,12 +14,13 @@
 #include "ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/json/ob_json_print_utils.h"
+#include "lib/string/ob_sql_string.h"
 #include "pl/ob_pl_resolver.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif
 #include "sql/resolver/dml/ob_inlist_resolver.h"
-
+#include "sql/engine/expr/ob_expr_max_pt.h"
 namespace oceanbase
 {
 using namespace common;
@@ -8328,6 +8329,84 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
       }
       break;
     }
+    case T_FUN_SYS_MAX_PT: {
+      if (1 != func_expr.get_param_count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("unexpected param count", K(ret), K(func_expr.get_param_count()));
+      } else {
+        ObRawExpr *param_expr = func_expr.get_param_expr(0);
+        if (OB_ISNULL(param_expr)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("param expr is null", K(ret));
+        } else if (OB_UNLIKELY(!param_expr->is_const_raw_expr())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("param expr is not const expr", K(ret));
+        } else {
+          ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(param_expr);
+          const ObObj &value = const_expr->get_value();
+          if (!value.is_string_type()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("param expr is not string type", K(ret));
+          } else {
+            ObString name_str;
+            ObString table_name;
+            ObString database_name;
+            const ObTableSchema *table_schema = NULL;
+            if (OB_FAIL(value.get_string(name_str))) {
+              LOG_WARN("failed to get string", K(ret));
+            } else if (OB_ISNULL(ctx_.session_info_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("session info is null", K(ret));
+            } else if (OB_FAIL(ObExprMaxPt::resolve_table_name_and_schema(param_expr->get_collation_type(),
+                                                         ctx_.session_info_,
+                                                         name_str,
+                                                         database_name,
+                                                         table_name,
+                                                         table_schema))) {
+              LOG_WARN("failed to resolve table name schema", K(ret));
+            } else if (database_name.empty()) {
+              // if database name is empty, use current database name
+              ObString current_db_name = ctx_.session_info_->get_database_name();
+              if (OB_UNLIKELY(current_db_name.empty())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("current db name is empty", K(ret));
+              } else {
+                ObString sources[3];
+                sources[0] = current_db_name;
+                sources[1] = ObString(".");
+                sources[2] = table_name;
+
+                ObString new_table_name;
+                if (OB_FAIL(ob_concat_string(ctx_.expr_factory_.get_allocator(), new_table_name, 3, sources, true))) {
+                  LOG_WARN("failed to concat database name and table name", K(ret));
+                } else {
+                  ObObj new_value;
+                  new_value.set_string(value.get_type(), new_table_name);
+                  new_value.set_collation_type(const_expr->get_value().get_collation_type());
+                  const_expr->set_value(new_value);
+                }
+              }
+            }
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else {
+              // add dependency table to plan cache
+              ObSchemaObjVersion table_version;
+              table_version.object_id_ = table_schema->get_table_id();
+              table_version.object_type_ = DEPENDENCY_TABLE;
+              table_version.version_ = table_schema->get_schema_version();
+              table_version.is_db_explicit_ = !database_name.empty();
+              if (OB_ISNULL(ctx_.stmt_)) {
+                // skip add dependency table to plan cache like: SET @max_pt_val = MAX_PT('t_int')
+              } else if (OB_FAIL(ctx_.stmt_->add_global_dependency_table(table_version))) {
+                LOG_WARN("failed to add dependency table", K(ret), K(table_version));
+              }
+            }
+          }
+        }
+      }
+      break;
+    }
     case T_OP_CNN: {
       if (lib::is_oracle_mode() && 2 != func_expr.get_param_count()) {
         ret = OB_INVALID_ARGUMENT_NUM;
@@ -8339,6 +8418,7 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
   }
   return ret;
 }
+
 
 int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &udf_info)
 {

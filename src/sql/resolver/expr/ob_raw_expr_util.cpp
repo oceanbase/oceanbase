@@ -8707,7 +8707,9 @@ int ObRawExprUtils::build_pseudo_random(ObRawExprFactory &factory,
 }
 
 int ObRawExprUtils::build_grouping_id(ObRawExprFactory &factory,
-                                      const ObSQLSessionInfo &session_info, ObOpPseudoColumnRawExpr *&out)
+                                      const ObSQLSessionInfo &session_info,
+                                      ObOpPseudoColumnRawExpr *&out,
+                                      bool is_three_stage_grouping_id /*false*/)
 {
   int ret = OB_SUCCESS;
   ObOpPseudoColumnRawExpr *expr = NULL;
@@ -8715,7 +8717,49 @@ int ObRawExprUtils::build_grouping_id(ObRawExprFactory &factory,
   res_type.set_int();
   res_type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
   res_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
-  OZ(build_op_pseudo_column_expr(factory, T_PSEUDO_ROLLUP_GROUPING_ID, "GROUPING_ID", res_type, expr));
+  if (!is_three_stage_grouping_id) {
+    OZ(build_op_pseudo_column_expr(factory, T_PSEUDO_ROLLUP_GROUPING_ID, "GROUPING_ID", res_type, expr));
+  } else {
+    OZ(build_op_pseudo_column_expr(factory, T_PSEUDO_ROLLUP_GROUPING_ID, "AGGR_CODE", res_type, expr));
+  }
+  OZ(expr->formalize(&session_info));
+  OZ(expr->add_flag(IS_INNER_ADDED_EXPR));
+  if (OB_SUCC(ret)) {
+    out = expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_encoded_dup(ObRawExprFactory &factory,
+                                      const ObSQLSessionInfo &session_info,
+                                      const ObRawExprResType &res_type,
+                                      ObOpPseudoColumnRawExpr *&out)
+{
+  int ret = OB_SUCCESS;
+  ObOpPseudoColumnRawExpr *expr = NULL;
+  if (OB_FAIL(build_op_pseudo_column_expr(factory, T_PSEUDO_ENCODE_DUP_EXPR, "ENCODE_DUP", res_type, expr))) {
+    LOG_WARN("failed to build encoded dup expr", K(ret));
+  } else if (OB_FAIL(expr->formalize(&session_info))) {
+    LOG_WARN("failed to formalize encoded dup expr", K(ret));
+  } else if (OB_FAIL(expr->add_flag(IS_INNER_ADDED_EXPR))) {
+    LOG_WARN("failed to add flag to encoded dup expr", K(ret));
+  } else {
+    out = expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_hash_val_expr(ObRawExprFactory &factory,
+                                        const ObSQLSessionInfo &session_info,
+                                        ObOpPseudoColumnRawExpr *&out)
+{
+  int ret = OB_SUCCESS;
+  ObOpPseudoColumnRawExpr *expr = NULL;
+  ObRawExprResType res_type;
+  res_type.set_uint64();
+  res_type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
+  res_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  OZ(build_op_pseudo_column_expr(factory, T_PSEUDO_ENCODE_DUP_EXPR, "ENCODE_HASH_VAL", res_type, expr));
   OZ(expr->formalize(&session_info));
   OZ(expr->add_flag(IS_INNER_ADDED_EXPR));
   if (OB_SUCC(ret)) {

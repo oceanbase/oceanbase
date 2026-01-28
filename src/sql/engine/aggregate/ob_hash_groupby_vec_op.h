@@ -30,6 +30,8 @@ namespace oceanbase
 namespace sql
 {
 
+class ObHashPartInfrasVecMgr;
+class ObHashPartInfrastructureVecImpl;
 struct LlcEstimate
 {
 public:
@@ -82,6 +84,13 @@ public:
   }
   int add_group_expr(ObExpr *expr);
   inline void set_est_group_cnt(const int64_t cnt) { est_group_cnt_ = cnt; }
+
+  bool is_gby_with_ordered_grouping_id() const { return grouping_id_ != nullptr; }
+  bool has_non_distinct_aggr_params() const
+  {
+    return group_distinct_exprs_.count() > 0 && group_distinct_exprs_.at(0).count() == 0;
+  }
+
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObHashGroupByVecSpec);
@@ -97,7 +106,7 @@ public:
   ObExpr *grouping_id_;
   ObFixedArray<ExprFixedArray, common::ObIAllocator> group_distinct_exprs_;
   ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
-  ObExpr *limit_expr_;
+  ObExpr *limit_expr_; // limit pushdown from parent Limit operator (limit + offset combined)
   ObExpr *hash_val_expr_;
 };
 
@@ -206,7 +215,20 @@ public:
       popular_map_(),
       by_pass_agg_rows_(0),
       stores_mgr_(),
-      part_idxes_(nullptr)
+      part_idxes_(nullptr),
+      first_group_vec_holder_(nullptr),
+      child_vec_holder_(nullptr),
+      first_group_brs_(nullptr),
+      mock_child_brs_(nullptr),
+      cur_grouping_id_(-1),
+      ordered_gby_state_(OrderedGbyState::ITER_END),
+      child_iter_end_(false),
+      read_first_group_(false),
+      hp_infras_(nullptr),
+      distinct_bypass_ctrl_(),
+      extend_bkt_num_push_down_(0),
+      real_group_exprs_(exec_ctx.get_allocator()),
+      runtime_limit_(-1)
   {
   }
   void reset(bool for_rescan);
@@ -331,7 +353,8 @@ private:
   int next_batch(bool is_from_row_store,
                  ObTempRowStore::Iterator &row_store_iter,
                  int64_t max_row_cnt,
-                 const ObBatchRows *&child_brs);
+                 const ObBatchRows *&child_brs,
+                 bool &found_new_group_id);
   int eval_groupby_exprs_batch(const ObCompactRow **store_rows,
                                const RowMeta *meta,
                                const ObBatchRows &child_brs);
@@ -365,6 +388,32 @@ private:
   int by_pass_return_batch(int64_t op_max_batch_size);
   int update_popular_map();
 
+  int update_group_id_if_needed(const ObBatchRows &brs, bool &found_new_group_id);
+
+  int get_next_batch_from_child(const int64_t max_row_cnt, const ObBatchRows *&child_brs);
+
+  int reset_for_ordered_rescan();
+
+  int do_inner_get_next_batch(const int64_t max_row_cnt);
+
+  int init_ordered_gby_env();
+
+  int init_one_hp_infras();
+  int get_ordered_first_stage_batch(const int64_t batch_size);
+  void set_runtime_limit(const int64_t limit) { runtime_limit_ = limit; }
+  int64_t get_runtime_limit() const { return runtime_limit_; }
+
+  int setup_aggr_code();
+  int setup_null_dup_exprs();
+  int get_gby_exprs(ObIArray<ObExpr *> &gby_exprs);
+private:
+    enum class OrderedGbyState
+    {
+      PROCESS,
+      STAGE_ITER_END,
+      RESCAN,
+      ITER_END
+    };
 private:
   int by_pass_prepare_one_batch(const int64_t batch_size);
   int by_pass_get_next_permutation_batch(int64_t &nth_group, bool &last_group,
@@ -472,6 +521,19 @@ private:
   common::ObFixedArray<NullHashFuncTypeForTc, ObIAllocator> null_hash_func_for_expr_;
   BatchTempRowStoresMgr stores_mgr_;
   int64_t *part_idxes_;
+  ObVectorsResultHolder *first_group_vec_holder_;
+  ObVectorsResultHolder *child_vec_holder_;
+  ObBatchRows *first_group_brs_;
+  ObBatchRows *mock_child_brs_;
+  int64_t cur_grouping_id_;
+  OrderedGbyState ordered_gby_state_;
+  bool child_iter_end_;
+  bool read_first_group_;
+  ObHashPartInfrastructureVecImpl *hp_infras_;
+  ObAdaptiveByPassCtrl distinct_bypass_ctrl_;
+  int64_t extend_bkt_num_push_down_;
+  ObFixedArray<ObExpr *, ObIAllocator> real_group_exprs_; // used for gby with ordered grouping id
+  int64_t runtime_limit_;
 };
 
 } // end namespace sql

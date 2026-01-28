@@ -236,6 +236,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_pushdown_filter.cpp
   engine/basic/ob_ra_datum_store.cpp
   engine/basic/ob_ra_row_store.cpp
+  engine/basic/ob_rescan_op.cpp
   engine/basic/ob_temp_block_store.cpp
   engine/basic/ob_select_into_op.cpp
   engine/basic/ob_select_into_basic.cpp
@@ -936,6 +937,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_bucket.cpp
   engine/expr/ob_expr_void.cpp
   engine/expr/ob_expr_ai/ob_expr_ai_prompt.cpp
+  engine/expr/ob_expr_max_pt.cpp
   engine/expr/ob_expr_string_searcher.cpp
   engine/expr/ob_expr_date_trunc.cpp
   engine/expr/ob_expr_is_nan.cpp
@@ -1288,6 +1290,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/file_prune/ob_lake_table_file_map.cpp
   optimizer/file_prune/ob_lake_table_fwd.cpp
   optimizer/ob_lake_table_partition_info.cpp
+  optimizer/ob_log_rescan.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache

@@ -28,6 +28,7 @@
 #include "ob_log_subplan_filter.h"
 #include "ob_log_join_filter.h"
 #include "ob_log_temp_table_access.h"
+#include "ob_log_rescan.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/optimizer/ob_del_upd_log_plan.h"
@@ -1923,7 +1924,8 @@ int ObLogicalOperator::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to append filter exprs", K(ret));
   } else if (OB_FAIL(append_array_no_dup(all_exprs, get_startup_exprs()))) {
     LOG_WARN("failed to get start up exprs", K(ret));
-  } else if (is_plan_root() && OB_FAIL(append_array_no_dup(all_exprs, get_output_exprs()))) {
+  } else if ((is_plan_root() || (OB_NOT_NULL(get_parent()) && get_parent()->is_plan_root() && log_op_def::LOG_RESCAN == get_parent()->get_type()))
+              && OB_FAIL(append_array_no_dup(all_exprs, get_output_exprs()))) {
     LOG_WARN("failed to get output exprs", K(ret));
   } else { /*do noting*/ }
   return ret;
@@ -2423,6 +2425,15 @@ int ObLogicalOperator::allocate_expr_post(ObAllocExprContext &ctx)
     } else if (OB_FAIL(child->get_output_exprs().assign(parent->get_output_exprs()))) {
       LOG_WARN("failed to push back exprs", K(ret));
     } else { /*do nothing*/ }
+  } else if (log_op_def::LOG_RESCAN == type_) {
+    if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(child), K(ret));
+    // } else if (OB_FAIL(output_exprs_.assign(parent->get_output_exprs()))) {
+    //   LOG_WARN("failed to assign output exprs", K(ret));
+    } else if (OB_FAIL(child->get_output_exprs().assign(get_output_exprs()))) {
+      LOG_WARN("failed to push back exprs", K(ret));
+    } else { /*do nothing*/ }
   } else {
     ObIArray<ExprProducer> &producers = ctx.expr_producers_;
 
@@ -2449,7 +2460,9 @@ int ObLogicalOperator::allocate_expr_post(ObAllocExprContext &ctx)
         } else { /*do nothing*/ }
 
         if (OB_SUCC(ret) && OB_INVALID_ID != producers.at(i).producer_branch_ && producers.at(i).consumer_id_ > id_) {
-          if (!is_plan_root() && (is_child_output_exprs(expr) || producers.at(i).producer_id_ == id_)) {
+          if (!is_plan_root()
+              && !(OB_NOT_NULL(get_parent()) && LOG_RESCAN == get_parent()->get_type() && get_parent()->is_plan_root())
+              && (is_child_output_exprs(expr) || producers.at(i).producer_id_ == id_)) {
             if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
               LOG_WARN("failed to add expr to output", K(ret));
             } else {
@@ -3638,6 +3651,7 @@ int ObLogicalOperator::project_pruning_pre()
   // delete exprs who appeared in current op's output_exprs
   // but not used by it's parent's output_exprs_
   if (NULL != parent_ && !is_plan_root() &&
+      LOG_RESCAN != parent_->type_ &&
       LOG_EXPR_VALUES != type_ &&
       !(LOG_EXCHANGE == type_ && static_cast<ObLogExchange*>(this)->get_is_remote()) &&
       LOG_VALUES_TABLE_ACCESS != type_) {
@@ -3764,12 +3778,28 @@ int ObLogicalOperator::adjust_plan_root_output_exprs()
     /*do nothing*/
   } else if (NULL == get_parent()) {
     bool need_pack = false;
-    if (OB_FAIL(check_stmt_can_be_packed(stmt, need_pack))) {
-      LOG_WARN("failed to check stmt can be pack", K(ret));
-    } else if (need_pack && OB_FAIL(build_and_put_pack_expr(output_exprs_))) {
-      LOG_WARN("failed to add pack expr to context", K(ret));
+    if (LOG_RESCAN == type_) {
+      ObLogicalOperator *child = NULL;
+      if (OB_ISNULL(child = get_child(first_child))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(child->check_stmt_can_be_packed(stmt, need_pack))) {
+        LOG_WARN("failed to check stmt can be pack", K(ret));
+      } else if (need_pack && OB_FAIL(child->build_and_put_pack_expr(child->output_exprs_))) {
+        LOG_WARN("failed to add pack expr to context", K(ret));
+      } else if (OB_FAIL(output_exprs_.assign(child->output_exprs_))) {
+        LOG_WARN("failed to re-assign rescan op's output_exprs_");
+      } else {
+        LOG_TRACE("succeed to adjust plan root output exprs", K(child->output_exprs_));
+      }
+    } else {
+      if (OB_FAIL(check_stmt_can_be_packed(stmt, need_pack))) {
+        LOG_WARN("failed to check stmt can be pack", K(ret));
+      } else if (need_pack && OB_FAIL(build_and_put_pack_expr(output_exprs_))) {
+        LOG_WARN("failed to add pack expr to context", K(ret));
+      }
+      LOG_TRACE("succeed to adjust plan root output exprs", K(output_exprs_));
     }
-    LOG_TRACE("succeed to adjust plan root output exprs", K(output_exprs_));
   }
   return ret;
 }
@@ -4687,7 +4717,9 @@ int ObLogicalOperator::allocate_startup_expr_post(int64_t child_idx)
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *child = get_child(child_idx);
-  if (OB_ISNULL(child)) {
+  if (LOG_RESCAN == get_type()) {
+    // do nothing
+  } else if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null child", K(ret));
   } else if (is_dml_operator() ||
@@ -4822,6 +4854,121 @@ void ObLogicalOperator::set_parent(ObLogicalOperator *parent)
              "before", parent_, "after", parent, K(lbt()));
   }
   parent_ = parent;
+}
+
+int ObLogicalOperator::is_top_rescan_allowed(bool &allowed)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = NULL;
+  bool is_deterministic = false;
+  const ObDMLStmt *stmt = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  ObLogicalOperator *root = NULL;
+  allowed = true;
+
+  // filter inner sqls
+  if (OB_ISNULL(plan = get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Unexpected null", K(ret));
+  } else if (session_info->is_inner()) {
+    allowed = false;
+    // filter statements except for select
+  } else if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!plan->is_final_root_plan()
+             || plan->get_optimizer_context().has_var_assign()
+             || stmt->has_sequence()
+             || !stmt->is_select_stmt()
+             || stmt::T_NONE != stmt->get_query_ctx()->get_literal_stmt_type()) {
+    allowed = false;
+  } else if (OB_FAIL(reinterpret_cast<const ObSelectStmt *>(stmt)->is_query_deterministic(is_deterministic))) {
+    LOG_WARN("failed to check is_query_deterministic", K(ret));
+  } else if (!is_deterministic) {
+    allowed = false;
+    // filter according to the plan nodes
+  } else if (OB_ISNULL(root = plan->get_plan_root())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (log_op_def::LOG_RESCAN == root->get_type()
+             || (NULL != root->get_parent() && log_op_def::LOG_RESCAN == root->get_parent()->get_type())
+             || log_op_def::LOG_TEMP_TABLE_TRANSFORMATION == root->get_type()
+             || log_op_def::LOG_SELECT_INTO == root->get_type()) {
+    allowed = false;
+    // filter remote execution plan, rescan is not allowed on top of EXCHANGE IN REMOTE
+  } else if (log_op_def::LOG_EXCHANGE == root->get_type()) {
+    ObLogExchange *exchange_op = static_cast<ObLogExchange*>(root);
+    if (exchange_op->is_consumer() && exchange_op->get_is_remote()) {
+      allowed = false;
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::allocate_rescan_as_top(ObLogicalOperator *&top,
+                                              const uint64_t rescan_cnt)
+{
+  int ret = OB_SUCCESS;
+  // add rescan operator on the top of the tree
+  ObLogRescan *rescan_op = NULL;
+  ObLogPlan *plan = NULL;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(plan = get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(rescan_op = static_cast<ObLogRescan*>(plan->get_log_op_factory().allocate(*plan, LOG_RESCAN)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate material operator", K(ret));
+  } else {
+    rescan_op->set_rescan_cnt(rescan_cnt);
+
+    if (NULL != top->get_parent()) {
+      ObLogicalOperator *parent = top->get_parent();
+      rescan_op->set_parent(parent);
+      for (int i = 0; i < parent->child_.count(); i++) {
+        if (parent->child_.at(i) == top) {
+          parent->child_.at(i) = rescan_op;
+          break;
+        }
+      }
+    }
+    rescan_op->set_child(ObLogicalOperator::first_child, top);
+    top = rescan_op;
+
+    if (OB_FAIL(rescan_op->compute_property())) {
+      LOG_WARN("failed to compute property", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::allocate_rescan_node_above(uint64_t rescan_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (is_plan_root()) {
+    // If current node is the root node, allocate a rescan node as new root
+    ObLogicalOperator* top = this;
+    if (OB_ISNULL(get_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Get unexpected null", K(ret), K(get_plan()));
+    } else if (OB_FAIL(allocate_rescan_as_top(top, rescan_cnt))) {
+      LOG_WARN("failed to allocate rescan as top", K(ret));
+    } else if (OB_FAIL(top->get_output_exprs().assign(output_exprs_))) {
+      LOG_WARN("failed to assign output exprs", K(ret));
+    } else {
+      set_parent(top);
+      get_plan()->set_plan_root(top);
+      set_is_plan_root(false);
+      top->mark_is_plan_root();
+    }
+  } else { /*do nothing*/ }
+
+  return ret;
 }
 
 int ObLogicalOperator::allocate_material_node_above()

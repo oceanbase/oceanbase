@@ -1078,6 +1078,65 @@ int ObSqlPlan::print_constraint_info(char *buf,
   return ret;
 }
 
+void ObSqlPlan::filter_rescan_op(ObIArray<ObSqlPlanItem*> &sql_plan_infos)
+{
+  int64_t rescan_idx = -1;
+  ObSqlPlanItem *rescan_item = NULL;
+  for (int i = 0; i < sql_plan_infos.count(); i++) {
+    ObSqlPlanItem *plan_item = sql_plan_infos.at(i);
+    if (0 == MEMCMP(log_op_def::get_op_name(log_op_def::LOG_RESCAN), plan_item->operation_, plan_item->operation_len_)) {
+      rescan_item = plan_item;
+      rescan_idx = i;
+
+      // change the child_node's parent_id
+      if (i + 1 < sql_plan_infos.count()) {
+        ObSqlPlanItem *child = sql_plan_infos.at(i+1);
+        // used hint
+        if (OB_ISNULL(child->other_tag_)) {
+          child->other_tag_ = rescan_item->other_tag_;
+          child->other_tag_len_ = rescan_item->other_tag_len_;
+        }
+        // qb_name trace
+        if (OB_ISNULL(child->remarks_)) {
+          child->remarks_ = rescan_item->remarks_;
+          child->remarks_len_ = rescan_item->remarks_len_;
+        }
+        // outline
+        if (OB_ISNULL(child->other_xml_)) {
+          child->other_xml_ = rescan_item->other_xml_;
+          child->other_xml_len_ = rescan_item->other_xml_len_;
+        }
+        // plan note / parameters / constrains
+        if (OB_ISNULL(child->other_)) {
+          child->other_ = rescan_item->other_;
+          child->other_len_ = rescan_item->other_len_;
+        }
+      }
+      for (int j = i + 1; j < sql_plan_infos.count(); j++) {
+        ObSqlPlanItem *item = sql_plan_infos.at(j);
+        if (item->parent_id_ >= rescan_item->id_) {
+          item->parent_id_--;
+        }
+        if (item->id_ >= rescan_item->id_) {
+          item->id_--;
+        }
+      }
+
+      // change depth of rescan child ops
+      for (int j = i + 1; j < sql_plan_infos.count(); j++) {
+        ObSqlPlanItem *child_plan_item = sql_plan_infos.at(j);
+        if (child_plan_item->depth_ <= rescan_item->depth_) {
+          break;
+        }
+        child_plan_item->depth_--;
+      }
+      // in case rescan_op -> rescan_op
+      sql_plan_infos.remove(rescan_idx);
+      i--;
+    }
+  }
+}
+
 int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
                               ExplainType type,
                               const ObExplainDisplayOpt& option,
@@ -1091,6 +1150,10 @@ int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
   } else if (sql_plan_infos.empty()) {
     //do nothing
   } else {
+    // filter the rescan op if not explain extended
+    if (EXPLAIN_EXTENDED != type && EXPLAIN_EXTENDED_NOADDR != type) {
+      filter_rescan_op(sql_plan_infos);
+    }
     if (EXPLAIN_PLAN_TABLE == type) {
       if (OB_FAIL(format_plan_table(sql_plan_infos, false, option, plan_text))) {
         LOG_WARN("failed to print plan", K(ret));

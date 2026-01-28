@@ -3197,6 +3197,7 @@ DEF_BOOL(_enable_streaming_cursor_prefetch, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_ss_garbage_collector_defensive_check, OB_TENANT_PARAMETER, "False",
          "Enable or disable defensive checks for garbage collection on shared storage.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(_ss_macro_block_check_interval, OB_TENANT_PARAMETER, "1d", "[30s,365d]",
          "Control the period of macro block check in shared dir."
          "Range: [30s, 365d]",
@@ -3227,6 +3228,17 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
 DEF_INT(_fuse_row_cache_activate_threshold, OB_TENANT_PARAMETER, "6", "[0, 100]",
          "Determine if queries should use fuse_row_cache based on a configurable cache hit rate threshold.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+
+DEF_STR_WITH_CHECKER(_use_distinct_with_expansion, OB_TENANT_PARAMETER, "AUTO",\
+        common::ObConfigUseDistinctWithExpansionChecker,
+         "policy of distinct aggregation with expansion plan:"\
+         "AUTO: auto select the best policy based on the cost;"\
+         "DISABLED: disable distinct aggregation with expansion;"\
+         "NORMAL: using distinct aggregation with expansion, without materialization of expansion;"\
+         "ORDERED: using distinct aggregation with expansion, with materialization of expansion",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "auto, normal, ordered, disabled");
+
 DEF_INT(_ss_garbage_collect_concurrency, OB_TENANT_PARAMETER, "0", "[0, 100]",
         "Controls the number of worker threads for shared-storage garbage collection (GC). "
         "Changes take effect at the start of the next GC run. "
@@ -3342,6 +3354,10 @@ DEF_CAP(_write_throttle_by_pending_log_size_limit, OB_TENANT_PARAMETER, "0", "[0
 DEF_TIME(_write_throttle_by_pending_log_sleep_interval, OB_TENANT_PARAMETER, "20ms", "[0ms, 1h]",
          "the sleep interval when write throttle by pending log size. Range: [0ms, 1h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_hash_gby_limit_pushdown, OB_TENANT_PARAMETER, "True",
+         "Enable or disable hash group by limit pushdown.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_large_query_cpu_quota_adjustment_step, OB_TENANT_PARAMETER, "0", "[0,100]",
         "Large Query CPU Quota Tuning Step. Range: [0,100]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

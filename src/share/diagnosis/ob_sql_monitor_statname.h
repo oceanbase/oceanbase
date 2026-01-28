@@ -181,6 +181,7 @@ SQL_MONITOR_STATNAME_DEF(IS_HIT_PLAN, metric::Unit::INT, "is hit plan", "is hit 
 SQL_MONITOR_STATNAME_DEF(CPU_TIME, metric::Unit::TIME_NS, "cpu time", "cpu time", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(DTL_BLOCKING_TIME, metric::Unit::TIME_NS, "dtl blocking time", "receive block dtl channel time", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(DUMP_RW_TIME, metric::Unit::CPU_CYCLE, "read/write time for dumped data", "read/write time for dumped data", M_AVG | E_MIN | E_MAX, metric::Level::AD_HOC)
+SQL_MONITOR_STATNAME_DEF(PX_MS_RECV_STORED_ROWS, metric::Unit::INT, "temp stored row cnt", "stored row cnt in px ms recv", M_SUM | E_MAX | E_MIN | E_STDDEV, metric::Level::STANDARD)
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)

@@ -256,6 +256,51 @@ private:
   private:
     DISALLOW_COPY_AND_ASSIGN(Compare);
   };
+  enum class OrderedAggStatus {
+    INIT,
+    READ_CHAN,
+    READ_STORE,
+    READ_NEXT_STORE_FIRST,
+    END
+  };
+
+  class OrderedAggCodeStore
+  {
+  public:
+    OrderedAggCodeStore(ObPxMSReceiveVecOp &ms_receive_op) :
+      ms_receive_op_(ms_receive_op),
+      stores_(ms_receive_op.ctx_.get_allocator()), store_rows_(0), in_mem_rows_(0),
+      cur_aggr_code_(ms_receive_op.my_spec().max_ordered_aggr_code_)
+    {}
+    int init();
+    int add_batch(const int64_t size);
+    int dec_aggr_code();
+
+    int begin(const int32_t aggr_code);
+    int get_next_batch(const int64_t max_rows, const int32_t aggr_code, int64_t &read_rows);
+
+    int clear_store(const int32_t aggr_code);
+
+    int process_dump();
+    void destroy();
+    void reset() { destroy(); }
+
+    int64_t get_store_rows() const { return store_rows_; }
+
+    int64_t get_row_cnt_in_memory() const { return in_mem_rows_; }
+
+  private:
+    template<typename ColumnFmt>
+    int inner_add_batch(const int64_t size);
+
+    int create_one_store(const int32_t aggr_code);
+    ObPxMSReceiveVecOp &ms_receive_op_;
+    ObFixedArray<ObTempColumnStore *, common::ObIAllocator> stores_;
+    ObTempColumnStore::Iterator read_iter_;
+    int64_t store_rows_;
+    int64_t in_mem_rows_;
+    int32_t cur_aggr_code_;
+  };
 
   virtual int inner_open() override;
   virtual void destroy() override;
@@ -268,6 +313,11 @@ private:
 
   OB_INLINE virtual int64_t get_channel_count() { return task_channels_.count(); }
 private:
+  friend class OrderedAggCodeStore;
+  bool use_ordered_aggr_opt() const
+  {
+    return MY_SPEC.max_ordered_aggr_code_ > 0;
+  }
   int new_local_order_input(MergeSortInput *&out_msi);
   int get_all_rows_from_channels(ObPhysicalPlanCtx *phy_plan_ctx);
   int get_all_rows_from_one_channel(int64_t got_channel_idx,
@@ -276,6 +326,7 @@ private:
                             common::ObIArray<ObTempRowStore *> &full_dump_array,
                             common::ObIArray<ObCompactRow *> &last_store_row_array);
   int eval_all_exprs(const int64_t size);
+  int eval_child_exprs(const int64_t size);
   int try_link_channel() override;
   int init_merge_sort_input(int64_t n_channel);
   int release_merge_inputs();
@@ -285,6 +336,11 @@ private:
     const ObIArray<ObExpr*> &exprs,
     ObEvalCtx &eval_ctx,
     const ObCompactRow *&store_row);
+  int inner_get_next_ordered_aggr_batch(const int64_t max_row_cnt);
+  int get_next_chan_idx(int64_t &chan_idx, bool &all_eof);
+  int setup_and_copy_encoded_exprs(const int64_t size, const int64_t aggr_code);
+  template<typename ColumnFmt>
+  int do_decode_expr(ObExpr *from_expr, ObExpr *to_expr, const int64_t size);
 private:
   static const int64_t MAX_INPUT_NUMBER = 10000L;
   dtl::ObDtlChannelLoop *ptr_row_msg_loop_;
@@ -305,6 +361,11 @@ private:
   const ObCompactRow **stored_compact_rows_;
   ObTempRowStore output_store_;
   ObTempRowStore::Iterator output_iter_;
+  OrderedAggCodeStore *ordered_agg_store_;
+  int32_t aggr_code_;
+  int64_t last_chan_idx_;
+  ObFixedArray<int32_t, ObIAllocator> min_aggr_codes_;
+  OrderedAggStatus ordered_agg_status_;
 };
 
 } // end namespace sql

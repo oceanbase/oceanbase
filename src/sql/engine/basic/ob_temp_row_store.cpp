@@ -39,6 +39,20 @@ int ObTempRowStoreBase<false>::RowBlock::get_store_row(int64_t &cur_pos, const O
   return ret;
 }
 
+template <>
+int ObTempRowStoreBase<false>::RowBlock::get_store_rows(int64_t &cur_pos,
+                                                        const ObCompactRow **stored_rows,
+                                                        const int64_t max_rows, int64_t &read_rows)
+{
+  int ret = OB_SUCCESS;
+  read_rows = std::min(max_rows, static_cast<int64_t>(rows()));
+  for (int64_t i = 0; i < read_rows; i++) {
+    stored_rows[i] = reinterpret_cast<const ObCompactRow *>(&payload_[cur_pos]);
+    cur_pos += stored_rows[i]->get_row_size();
+  }
+  return ret;
+}
+
 template<bool RA>
 int ObTempRowStoreBase<RA>::RowBlock::add_row(
     ShrinkBuffer &buf,

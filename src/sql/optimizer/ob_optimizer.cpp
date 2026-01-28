@@ -986,6 +986,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     }
     if (tenant_config.is_valid()) {
       ctx_.set_partition_wise_plan_enabled(tenant_config->_partition_wise_plan_enabled);
+      ctx_.set_enable_hash_groupby_limit_pushdown(tenant_config->_enable_hash_gby_limit_pushdown);
     }
     if (exists_partition_wise_plan_enabled_hint) {
       ctx_.set_partition_wise_plan_enabled(partition_wise_plan_enabled);

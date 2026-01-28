@@ -31,7 +31,7 @@ public:
   Processor(sql::ObEvalCtx &eval_ctx, ObIArray<ObAggrInfo> &aggr_infos, const lib::ObLabel &label,
             sql::ObMonitorNode &monitor_info, const int64_t tenant_id) :
     inited_(false),
-    support_fast_single_row_agg_(false), has_distinct_(false), has_order_by_(false), dir_id_(-1),
+    has_distinct_(false), has_order_by_(false), dir_id_(-1),
     op_eval_infos_(nullptr),
     allocator_(label, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id, ObCtxIds::WORK_AREA),
     agg_ctx_(eval_ctx, tenant_id, aggr_infos, label),
@@ -135,14 +135,10 @@ public:
   {
     __builtin_prefetch(row, 0/* read */, 2 /*high temp locality*/);
   }
-  inline void set_support_fast_single_row_agg(const bool support_fast_single_row_agg)
-  {
-    support_fast_single_row_agg_ = support_fast_single_row_agg;
-  }
 
   inline bool support_fast_single_row_agg() const
   {
-    return support_fast_single_row_agg_;
+    return true;
   }
 
   inline void set_dir_id(const int64_t dir_id)
@@ -294,7 +290,6 @@ private:
   using add_one_row_fn = int (*)(IAggregate *, RuntimeContext &, const int32_t, AggrRowPtr,
                                  ObIVector *, const int64_t, const int64_t);
   bool inited_;
-  bool support_fast_single_row_agg_;
   bool has_distinct_;
   bool has_order_by_;
   int64_t dir_id_;

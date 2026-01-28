@@ -1803,6 +1803,17 @@ bool ObConfigServerFullSchemaRefreshParallelismChecker::check(const ObConfigItem
          || 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_OBJECT);
 }
 
+bool ObConfigUseDistinctWithExpansionChecker::check(const ObConfigItem &t) const
+{
+  int bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("normal")
+          || 0 == tmp_str.case_compare("ordered")
+          || 0 == tmp_str.case_compare("disabled")
+          || 0 == tmp_str.case_compare("auto"));
+  return bret;
+}
+
 bool ObConfigDefaultDeltaFormatChecker::check(const ObConfigItem &t) const
 {
   int ret = OB_SUCCESS;

@@ -336,6 +336,9 @@ int ObLogExchange::print_annotation_keys(char *buf,
       LOG_WARN("failed to BUF_PRINTF", K(ret));
     }
   }
+  if (OB_SUCC(ret) && encoded_dup_expr_ != NULL) {
+    ret = BUF_PRINTF("use encoding shuffle opt, ");
+  }
   return ret;
 }
 
@@ -647,6 +650,8 @@ int ObLogExchange::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (NULL != ddl_slice_id_expr_ && OB_FAIL(all_exprs.push_back(ddl_slice_id_expr_))) {
     LOG_WARN("failed to push back exprs", K(ret));
   } else if (NULL != random_expr_ && OB_FAIL(all_exprs.push_back(random_expr_))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else if (NULL != encoded_dup_expr_ && OB_FAIL(all_exprs.push_back(encoded_dup_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < hash_dist_exprs_.count(); i++) {
@@ -1050,7 +1055,8 @@ int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
                expr == partition_id_expr_ ||
                expr == ddl_slice_id_expr_ ||
                expr == random_expr_ ||
-               T_OP_OUTPUT_PACK == expr->get_expr_type();
+               T_OP_OUTPUT_PACK == expr->get_expr_type() ||
+               expr == encoded_dup_expr_;
     for (int64_t i = 0; OB_SUCC(ret) && !is_fixed && i < hash_dist_exprs_.count(); i++) {
       if (OB_ISNULL(hash_dist_exprs_.at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1123,6 +1129,33 @@ int ObLogExchange::check_use_child_ordering(bool &used, int64_t &inherit_child_o
   inherit_child_ordering_index = first_child;
   if (is_producer() || !is_merge_sort()) {
     used = false;
+  }
+  return ret;
+}
+
+int ObLogExchange::generate_final_shuffle_exprs(common::ObIArray<ObRawExpr *> &real_shuffle_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (encoded_dup_expr_ == nullptr || dup_expr_list_.empty()) {
+    ret = real_shuffle_exprs.assign(get_output_exprs());
+  } else {
+    real_shuffle_exprs.reset();
+    for (int i = 0; i < get_output_exprs().count() && OB_SUCC(ret); ++i) {
+      ObRawExpr *expr = get_output_exprs().at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get_output_exprs().at(i) is null", K(ret));
+      } else if (has_exist_in_array(dup_expr_list_, expr)) {
+        // do nothing
+      } else if (OB_FAIL(real_shuffle_exprs.push_back(expr))) {
+        LOG_WARN("fail to push back real_shuffle_exprs", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!has_exist_in_array(real_shuffle_exprs, encoded_dup_expr_)
+               && OB_FAIL(real_shuffle_exprs.push_back(encoded_dup_expr_))) {
+      LOG_WARN("fail to push back encoded_dup_expr_", K(ret));
+    }
   }
   return ret;
 }

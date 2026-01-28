@@ -292,6 +292,9 @@ private:
   const char* get_tree_line(int type);
 
 public:
+  void filter_rescan_op(ObIArray<ObSqlPlanItem*> &sql_plan_infos);
+
+public:
   static int format_one_output_expr(char *buf,
                                     int64_t buf_len,
                                     int64_t &pos,

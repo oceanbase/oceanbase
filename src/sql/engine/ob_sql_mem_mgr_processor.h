@@ -22,6 +22,33 @@ namespace sql {
 
 class ObSqlMemMgrProcessor : public ObSqlMemoryCallback
 {
+public:
+  template <typename T>
+  struct DefaultPeriodicCheckOp
+  {
+    DefaultPeriodicCheckOp(T &store) : store_(store)
+    {}
+    bool operator()(int64_t cur_cnt) const
+    {
+      return store_.get_row_cnt_in_memory() > cur_cnt;
+    }
+
+  private:
+    T &store_;
+  };
+
+  struct DefaultMemExtendCheckOp
+  {
+    DefaultMemExtendCheckOp(ObSqlMemMgrProcessor &sql_mem_processor) : sql_mem_processor_(sql_mem_processor)
+    {}
+    bool operator()(int64_t max_memory_size) const
+    {
+      return sql_mem_processor_.get_data_size() > max_memory_size;
+    }
+  private:
+    ObSqlMemMgrProcessor &sql_mem_processor_;
+  };
+
 private:
   using PredFunc = std::function<bool(int64_t)>;
 public:

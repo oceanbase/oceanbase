@@ -537,6 +537,7 @@
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_format_profile.h"
+#include "sql/engine/expr/ob_expr_max_pt.h"
 #include "sql/engine/expr/ob_expr_date_trunc.h"
 
 using namespace oceanbase::common;
@@ -1361,6 +1362,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprBucket, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprVectorL2Squared, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprAIPrompt, SHORT_CIRCUIT_EVALUATION);
+    REG_OP(ObExprMaxPt, EAGER_EVALUATION);
     REG_OP(ObExprDateTrunc, EAGER_EVALUATION);
     REG_OP(ObExprToDate, SHORT_CIRCUIT_EVALUATION);
     REG_SAME_OP(T_FUN_SYS_DATE_FORMAT, T_FUN_SYS_FORMAT_DATE_TIME, N_FORMAT_DATE_TIME, i, true);
@@ -1718,6 +1720,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprFormatProfile, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprCheckLocationAccess, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprEnhancedAesEncrypt, SHORT_CIRCUIT_EVALUATION);
+  REG_OP_ORCL(ObExprMaxPt, EAGER_EVALUATION);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

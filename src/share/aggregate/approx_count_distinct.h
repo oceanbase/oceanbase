@@ -49,30 +49,11 @@ public:
   {
     int ret = OB_SUCCESS;
     if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-      char *llc_bitmap_buf = EXTRACT_MEM_ADDR(agg_cell);
       const char *payload = nullptr;
       int32_t len = 0;
       columns.get_payload(row_num, payload, len);
-      if (OB_UNLIKELY(len != llc_num_buckets_)) {
-        ret = OB_INVALID_ARGUMENT;
-        SQL_LOG(WARN, "unexpected length of input", K(ret), K(len));
-      } else if (OB_ISNULL(llc_bitmap_buf)) {
-        // not calculated before, copy from payload
-        llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
-        if (OB_ISNULL(llc_bitmap_buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          SQL_LOG(WARN, "allocate memory failed", K(ret));
-        } else {
-          MEMSET(llc_bitmap_buf, 0, llc_num_buckets_);
-          MEMCPY(llc_bitmap_buf, payload, llc_num_buckets_);
-          STORE_MEM_ADDR(llc_bitmap_buf, agg_cell);
-          *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = llc_num_buckets_;
-        }
-      } else {
-        for (int i = 0; i < llc_num_buckets_; i++) {
-          llc_bitmap_buf[i] =
-            std::max(static_cast<uint8_t>(llc_bitmap_buf[i]), static_cast<uint8_t>(payload[i]));
-        }
+      if (OB_FAIL(approx_merge_row(agg_ctx, agg_cell, payload, len))) {
+        SQL_LOG(WARN, "approx merge row failed", K(ret));
       }
     } else {
       const char *payload = nullptr;
@@ -81,7 +62,7 @@ public:
       ObDatum tmp_datum;
       uint64_t hash_val = 0;
       if (OB_ISNULL(tmp_res)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_LOG(WARN, "invalid null tmp result", K(ret));
       } else {
         columns.get_payload(row_num, payload, len);
@@ -335,30 +316,12 @@ public:
       SQL_LOG(WARN, "allocate llc bitmap buf failed", K(ret), K(*this));
     } else if (OB_LIKELY(agg_ctx.aggr_infos_.at(agg_col_idx).param_exprs_.count() == 1)) {
       if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-        if (OB_UNLIKELY(data_len != llc_num_buckets_)) {
-          ret = OB_ERR_UNEXPECTED;
-          SQL_LOG(WARN, "unexpected input length", K(ret));
-        } else if (!is_null) {
-          char *llc_bitmap_buf = EXTRACT_MEM_ADDR(agg_cell);
-          if (OB_ISNULL(llc_bitmap_buf)) {
-            // not calculated before
-            llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
-            if (OB_ISNULL(llc_bitmap_buf)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              SQL_LOG(WARN, "allocate memory failed", K(ret));
-            } else {
-              MEMSET(llc_bitmap_buf, 0, llc_num_buckets_);
-              MEMCPY(llc_bitmap_buf, data, llc_num_buckets_);
-              STORE_MEM_ADDR(llc_bitmap_buf, agg_cell);
-              *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = llc_num_buckets_;
-            }
+        if (!is_null) {
+          if (OB_FAIL(approx_merge_row(agg_ctx, agg_cell, data, data_len))) {
+            SQL_LOG(WARN, "approx merge row failed", K(ret));
           } else {
-            for (int i = 0; i < llc_num_buckets_; i++) {
-              llc_bitmap_buf[i] =
-                std::max(static_cast<uint8_t>(llc_bitmap_buf[i]), static_cast<uint8_t>(data[i]));
-            }
+            agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell).set(agg_col_idx);
           }
-          agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell).set(agg_col_idx);
         }
       } else {
         const ObExpr *param_expr = agg_ctx.aggr_infos_.at(agg_col_idx).param_exprs_.at(0);
@@ -468,19 +431,50 @@ public:
   }
   TO_STRING_KV("aggregate", "approx_count_distinct", K(in_tc), K(out_tc), K(agg_func));
 private:
+  int approx_merge_row(RuntimeContext &agg_ctx, char *agg_cell, const char *payload, int32_t len)
+  {
+    int ret = OB_SUCCESS;
+    char *llc_bitmap_buf = EXTRACT_MEM_ADDR(agg_cell);
+    if (OB_ISNULL(llc_bitmap_buf)) {
+      llc_bitmap_buf = (char *)agg_ctx.allocator_.alloc(llc_num_buckets_);
+      if (OB_ISNULL(llc_bitmap_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate memory failed", K(ret));
+      } else {
+        MEMSET(llc_bitmap_buf, 0, llc_num_buckets_);
+        STORE_MEM_ADDR(llc_bitmap_buf, agg_cell);
+        *reinterpret_cast<int32_t *>(agg_cell + sizeof(char *)) = llc_num_buckets_;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (len == llc_num_buckets_) {
+      for (int i = 0; i < llc_num_buckets_; i++) {
+        llc_bitmap_buf[i] = std::max(static_cast<uint8_t>(llc_bitmap_buf[i]), static_cast<uint8_t>(payload[i]));
+      }
+    } else if (len == sizeof(uint64_t)) {
+      if (OB_FAIL(llc_add_value(*reinterpret_cast<const uint64_t *>(payload), llc_bitmap_buf, llc_num_buckets_))) {
+        SQL_LOG(WARN, "add value failed", K(ret));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_LOG(WARN, "invalid length of input", K(ret), K(len));
+    }
+    return ret;
+  }
+
   OB_INLINE int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size)
   {
     // copy from `ObAggregateProcessor::llv_add_value`
     int ret = OB_SUCCESS;
-    uint64_t bucket_index = value >> (64 - llc_bucket_bits());
+    int64_t llc_bucket_bits = __builtin_ctz(size);
+    uint64_t bucket_index = value >> (64 - llc_bucket_bits);
     uint64_t pmax = 0;
-    if (0 == value << llc_bucket_bits()) {
+    if (0 == value << llc_bucket_bits) {
       // do nothing
     } else {
-      pmax = ObExprEstimateNdv::llc_leading_zeros(value << llc_bucket_bits(), 64 - llc_bucket_bits()) + 1;
+      pmax = ObExprEstimateNdv::llc_leading_zeros(value << llc_bucket_bits, 64 - llc_bucket_bits) + 1;
     }
     ObString::obstr_size_t llc_num_buckets = size;
-    OB_ASSERT(size == llc_num_buckets_);
     OB_ASSERT(ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets));
     OB_ASSERT(llc_num_buckets > bucket_index);
     if (pmax > static_cast<uint8_t>(llc_bitmap_buf[bucket_index])) {
@@ -489,10 +483,7 @@ private:
     }
     return ret;
   }
-  int64_t llc_bucket_bits() const
-  {
-    return __builtin_ctz(llc_num_buckets_);
-  }
+
 private:
   int64_t llc_num_buckets_;
 };

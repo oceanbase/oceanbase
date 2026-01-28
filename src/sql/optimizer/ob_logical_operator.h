@@ -540,6 +540,7 @@ struct ObExchangeInfo
   int64_t parallel_;
   int64_t server_cnt_;
   common::ObSEArray<common::ObAddr, 4> server_list_;
+  bool is_ordered_agg_;
   // Hidden primary key expression for PDML heap table insert scenario.
   // Needs to be passed through exchange but not used for hash calculation.
   ObRawExpr *hidden_pk_expr_;
@@ -570,6 +571,7 @@ struct ObExchangeInfo
                K_(parallel),
                K_(server_cnt),
                K_(server_list),
+               K_(is_ordered_agg),
                K_(hidden_pk_expr));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
@@ -1388,6 +1390,10 @@ public:
   int alloc_nodes_above(AllocOpContext& ctx, const uint64_t &flags);
   int allocate_material_node_above();
   int allocate_monitoring_dump_node_above(uint64_t flags, uint64_t line_id);
+  int allocate_rescan_node_above(uint64_t rescan_cnt);
+  int is_top_rescan_allowed(bool &allowed);
+  int allocate_rescan_as_top(ObLogicalOperator *&top,
+                             const uint64_t rescan_cnt);
 
   virtual int gen_location_constraint(void *ctx);
 

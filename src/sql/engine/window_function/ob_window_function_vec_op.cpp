@@ -3259,7 +3259,6 @@ int WinFuncColExpr::init_aggregate_ctx(const int64_t tenant_id)
     } else if (OB_FAIL(agg_expr->aggr_processor_->init())) {
       LOG_WARN("processor init failed", K(ret), K(wf_info_.aggr_info_));
     } else if (FALSE_IT(agg_expr->aggr_processor_->set_io_event_observer(&op_.io_event_observer_))) {
-    } else if (FALSE_IT(agg_expr->aggr_processor_->set_support_fast_single_row_agg(true))) {
     } else if (FALSE_IT(agg_expr->aggr_processor_->set_hp_infras_mgr(&op_.hp_infras_mgr_))) {
     } else if (FALSE_IT(agg_ctx_ = agg_expr->aggr_processor_->get_rt_ctx())) {
     } else if (FALSE_IT(agg_expr->aggr_processor_->set_in_window_func())) {

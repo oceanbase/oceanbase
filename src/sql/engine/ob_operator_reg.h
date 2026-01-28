@@ -805,6 +805,14 @@ REGISTER_OPERATOR(ObLogExpand, PHY_EXPAND, ObExpandVecSpec, ObExpandVecOp, NOINP
                   0, /*version*/
                   SUPPORT_RICH_FORMAT, "PHY_VEC_EXPAND");
 
+// rescan op
+class ObLogRescan;
+class ObRescanSpec;
+class ObRescanOp;
+REGISTER_OPERATOR(ObLogRescan, PHY_RESCAN, ObRescanSpec, ObRescanOp,
+                  NOINPUT, VECTORIZED_OP, 0,
+                  SUPPORT_RICH_FORMAT);
+
 // table-direct-insert
 class ObLogInsert;
 class ObTableDirectInsertSpec;

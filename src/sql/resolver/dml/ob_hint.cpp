@@ -1082,6 +1082,20 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                  && val.get_int() <= 16;
       break;
     }
+    case PARTITION_ORDERED: {
+      is_valid = val.is_varchar()
+                 && (0 == val.get_varchar().case_compare("asc")
+                     || 0 == val.get_varchar().case_compare("desc"));
+      break;
+    }
+    case USE_DISTINCT_WITH_EXPANSION: {
+      is_valid = val.is_varchar()
+                 && (0 == val.get_varchar().case_compare("disabled")
+                     || 0 == val.get_varchar().case_compare("normal")
+                     || 0 == val.get_varchar().case_compare("ordered")
+                     || 0 == val.get_varchar().case_compare("auto"));
+      break;
+    }
     case JOIN_ORDER_ENUM_THRESHOLD:
     case OPTIMIZER_MAX_PERMUTATIONS:
     case IDP_STEP_REDUCTION_THRESHOLD: {
@@ -1219,6 +1233,25 @@ int ObOptParamHint::get_hash_rollup_param(ObObj &val, bool &has_param) const
       LOG_WARN("get opt param failed", K(ret));
     } else {
       has_param = is_param_val_valid(USE_HASH_ROLLUP, val);
+    }
+  }
+  return ret;
+}
+
+
+int ObOptParamHint::get_distinct_with_expansion_param(ObString &policy, bool &has_param) const
+{
+  int ret = OB_SUCCESS;
+  ObObj obj;
+  has_param = false;
+  if (OB_FAIL(has_opt_param(USE_DISTINCT_WITH_EXPANSION, has_param))) {
+    LOG_WARN("failed to check param", K(ret));
+  } else if (has_param) {
+    if (OB_FAIL(get_opt_param(OptParamType::USE_DISTINCT_WITH_EXPANSION, obj))) {
+      LOG_WARN("failed to get opt param", K(ret));
+    } else if (FALSE_IT(has_param = is_param_val_valid(USE_DISTINCT_WITH_EXPANSION, obj))) {
+    } else if (has_param) {
+      policy = obj.get_string();
     }
   }
   return ret;

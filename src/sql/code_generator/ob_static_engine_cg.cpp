@@ -142,6 +142,8 @@
 #include "sql/engine/basic/ob_values_table_access_op.h"
 #include "sql/engine/direct_load/ob_table_direct_insert_op.h"
 #include "sql/code_generator/ob_enable_rich_format_flags.h"
+#include "sql/optimizer/ob_log_rescan.h"
+#include "sql/engine/basic/ob_rescan_op.h"
 #include "share/ob_heap_organized_table_util.h"
 
 namespace oceanbase
@@ -1493,6 +1495,67 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct &op, ObHashDistinctVecSpec &sp
         } else if (OB_FAIL(spec.distinct_exprs_.push_back(expr))) {
           LOG_WARN("failed to push back expr", K(ret));
         }
+      }
+    }
+
+    // generate group distinct exprs
+    if (OB_SUCC(ret) && op.get_group_distinct_exprs().count() > 0) {
+      ObSEArray<ObExpr *, 4> distinct_exprs;
+      ObExpr *rt_expr = nullptr;
+      if (OB_FAIL(spec.group_distinct_exprs_.prepare_allocate(op.get_group_distinct_exprs().count()))) {
+        LOG_WARN("failed to prepare allocate group distinct exprs", K(ret));
+      } else if (OB_FAIL(spec.group_sort_collations_.prepare_allocate(op.get_group_distinct_exprs().count()))) {
+        LOG_WARN("failed to prepare allocate group sort collations", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < op.get_group_distinct_exprs().count(); ++i) {
+        ObIArray<ObRawExpr *> &raw_distinct_exprs = op.get_group_distinct_exprs().at(i);
+        if (OB_FAIL(spec.group_distinct_exprs_.at(i).init(raw_distinct_exprs.count() + additional_exprs.count()))) {
+          LOG_WARN("failed to init group distinct exprs", K(ret));
+        }
+        for (int j = 0; OB_SUCC(ret) && j < raw_distinct_exprs.count(); ++j) {
+          if (OB_ISNULL(raw_distinct_exprs.at(j))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("null raw expr", K(ret));
+          } else if (OB_FAIL(generate_rt_expr(*raw_distinct_exprs.at(j), rt_expr))) {
+            LOG_WARN("failed to generate rt expr", K(ret));
+          } else if (OB_FAIL(spec.group_distinct_exprs_.at(i).push_back(rt_expr))) {
+            LOG_WARN("push back distinct expr failed", K(ret));
+          }
+        }
+        for (int j = 0; OB_SUCC(ret) && j < additional_exprs.count(); ++j) {
+          ObRawExpr *raw_expr = additional_exprs.at(j);
+          if (OB_ISNULL(raw_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("null raw expr", K(ret));
+          } else if (raw_expr->is_aggr_expr()) {// do nothing
+          } else if (OB_FAIL(generate_rt_expr(*raw_expr, rt_expr))) {
+            LOG_WARN("failed to generate rt expr", K(ret));
+          } else if (OB_FAIL(spec.group_distinct_exprs_.at(i).push_back(rt_expr))) {
+            LOG_WARN("failed to push back distinct expr", K(ret));
+          }
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < op.get_group_distinct_exprs().count(); ++i) {
+        ObIArray<ObRawExpr *> &row_distinct_exprs = op.get_group_distinct_exprs().at(i);
+        if (OB_FAIL(spec.group_sort_collations_.at(i).init(row_distinct_exprs.count()))) {
+          LOG_WARN("failed to init group sort collations", K(ret));
+        }
+        for (int j = 0; OB_SUCC(ret) && j < row_distinct_exprs.count(); ++j) {
+          ObExpr *rt_expr = spec.group_distinct_exprs_.at(i).at(j);
+          ObSortFieldCollation field_collation(j, rt_expr->datum_meta_.cs_type_, true, default_null_pos());
+          if (OB_FAIL(spec.group_sort_collations_.at(i).push_back(field_collation))) {
+            LOG_WARN("failed to push back sort collation", K(ret));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(op.get_grouping_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null grouping id", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*op.get_grouping_id(), rt_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret));
+      } else if (FALSE_IT(spec.grouping_id_ = rt_expr)) {
+      } else if (FALSE_IT(spec.has_non_distinct_aggr_params_ = op.get_has_non_distinct_aggr_params())) {
       }
     }
   }
@@ -4693,6 +4756,17 @@ int ObStaticEngineCG::generate_basic_transmit_spec(
     }
     OZ(spec.sampling_saving_row_.assign(sampling_saving_row));
   }
+  if (OB_FAIL(ret)) {
+  } else if (!spec.use_rich_format_ || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+    spec.real_trans_exprs_.reset();
+  } else {
+    ObSEArray<ObRawExpr *, 8> real_trans_exprs;
+    if (OB_FAIL(op.generate_final_shuffle_exprs(real_trans_exprs))) {
+      LOG_WARN("failed to generate final shuffle exprs", K(ret));
+    } else if (OB_FAIL(generate_rt_exprs(real_trans_exprs, spec.real_trans_exprs_))) {
+      LOG_WARN("failed to generate real trans exprs", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -4720,13 +4794,31 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
     if (!spec.use_rich_format_) {
       const_cast<ObOpSpec *> (spec.get_left())->use_rich_format_ = false;
     }
-    if (OB_FAIL(spec.child_exprs_.init(spec.get_child()->output_.count()))) {
+    ObSEArray<ObRawExpr *, 8> real_raw_recv_exprs;
+    ObSEArray<ObExpr *, 8> real_recv_exprs;
+    if (!spec.use_rich_format_ && OB_FAIL(real_recv_exprs.assign(spec.get_child()->output_))) {
+      LOG_WARN("failed to assign child exprs", K(ret));
+    } else if (spec.use_rich_format_) {
+      const ObPxTransmitSpec *transmit_spec = dynamic_cast<const ObPxTransmitSpec *>(spec.get_child());
+      if (op.get_encoded_dup_expr() == nullptr) {
+        if (OB_FAIL(real_recv_exprs.assign(spec.get_child()->output_))) {
+          LOG_WARN("assign child exprs failed", K(ret));
+        }
+      } else if (OB_ISNULL(transmit_spec)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("transmit spec is null", K(ret));
+      } else if (OB_FAIL(real_recv_exprs.assign(transmit_spec->real_trans_exprs_))) {
+        LOG_WARN("failed to assign child exprs", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(spec.child_exprs_.init(real_recv_exprs.count()))) {
       LOG_WARN("failed to init child exprs", K(ret));
     } else if (OB_FAIL(spec.bloom_filter_id_array_.assign(op.get_bloom_filter_ids()))) {
       LOG_WARN("failed to append bloom filter ids", K(ret));
-    } else if (OB_FAIL(spec.child_exprs_.assign(spec.get_child()->output_))) {
+    } else if (OB_FAIL(spec.child_exprs_.assign(real_recv_exprs))) {
       LOG_WARN("failed to append child exprs", K(ret));
-    } else if (OB_FAIL(init_recieve_dynamic_exprs(spec.get_child()->output_, spec))) {
+    } else if (OB_FAIL(init_recieve_dynamic_exprs(real_recv_exprs, spec))) {
       LOG_WARN("fail to init receive dynamic expr", K(ret));
     } else if (IS_PX_COORD(spec.get_type())) {
       ObPxCoordSpec *coord = static_cast<ObPxCoordSpec*>(&spec);
@@ -4894,6 +4986,44 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxMSReceiveVecSpec &spe
   } else {
     spec.local_order_ = op.is_sort_local_order();
   }
+  if (OB_FAIL(ret)) {
+  } else if (op.get_max_ordered_aggr_code() > 0) {
+    if (OB_ISNULL(op.get_ordered_aggr_code())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ordered aggr code is null", K(ret));
+    } else if (OB_FAIL(generate_rt_expr(*op.get_ordered_aggr_code(), spec.aggr_code_))) {
+      LOG_WARN("failed to generate aggr code", K(ret));
+    } else {
+      spec.max_ordered_aggr_code_ = op.get_max_ordered_aggr_code();
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (op.get_encoded_dup_expr() != nullptr) {
+    if (OB_FAIL(generate_rt_expr(*op.get_encoded_dup_expr(), spec.encoded_dup_expr_))) {
+      LOG_WARN("failed to generate encoded dup expr", K(ret));
+    } else if (OB_UNLIKELY(op.get_dup_expr_list().count() <= 0
+                           || op.get_dup_expr_list().count() != spec.max_ordered_aggr_code_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dup expr list is empty", K(ret), K(op.get_dup_expr_list().count()), K(spec.max_ordered_aggr_code_));
+    } else if (OB_FAIL(spec.dup_expr_list_.init(op.get_dup_expr_list().count()))) {
+      LOG_WARN("failed to init dup expr list", K(ret));
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < op.get_dup_expr_list().count(); i++) {
+        ObRawExpr *raw_expr = op.get_dup_expr_list().at(i);
+        ObExpr *rt_expr = nullptr;
+        if (i == 0 && OB_ISNULL(raw_expr)) {
+          ret = spec.dup_expr_list_.push_back(nullptr);
+        } else if (OB_ISNULL(raw_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null expr", K(ret));
+        } else if (OB_FAIL(generate_rt_expr(*raw_expr, rt_expr))) {
+          LOG_WARN("failed to generate dup expr", K(ret));
+        } else {
+          ret = spec.dup_expr_list_.push_back(rt_expr);
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -4924,6 +5054,39 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxDistTransmitSpec &spe
     } else if (OB_FAIL(generate_popular_values_hash(
                 spec.dist_hash_funcs_.at(0), *op.get_popular_values(), spec.popular_values_hash_))){
       LOG_WARN("fail generate popular values", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (op.get_encoded_dup_expr() != nullptr) {
+    if (OB_FAIL(generate_rt_expr(*op.get_encoded_dup_expr(), spec.encoded_dup_expr_))) {
+      LOG_WARN("failed to generate encoded dup expr", K(ret));
+    } else if (OB_ISNULL(op.get_ordered_aggr_code())
+               || op.get_dup_expr_list().count() != op.get_max_ordered_aggr_code()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid aggr code", K(ret), K(op.get_ordered_aggr_code()),
+               K(op.get_dup_expr_list().count()), K(op.get_max_ordered_aggr_code()));
+    } else if (OB_FAIL(generate_rt_expr(*op.get_ordered_aggr_code(), spec.aggr_code_expr_))) {
+      LOG_WARN("failed to generate aggr code expr", K(ret));
+    } else {
+      spec.max_aggr_code_ = op.get_max_ordered_aggr_code();
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(spec.dup_expr_list_.init(op.get_dup_expr_list().count()))) {
+      LOG_WARN("failed to init dup expr list", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && i < op.get_dup_expr_list().count(); i++) {
+      ObRawExpr *raw_expr = op.get_dup_expr_list().at(i);
+      ObExpr *rt_expr = nullptr;
+      if (i == 0 && OB_ISNULL(raw_expr)) {
+        ret = spec.dup_expr_list_.push_back(nullptr);
+      } else if (OB_ISNULL(raw_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null expr", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*raw_expr, rt_expr))) {
+        LOG_WARN("failed to generate dup expr", K(ret));
+      } else {
+        ret = spec.dup_expr_list_.push_back(rt_expr);
+      }
     }
   }
   return ret;
@@ -5769,7 +5932,75 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
 
 int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupByVecSpec &spec, const bool in_root_job)
 {
-  return generate_spec(op, reinterpret_cast<ObHashGroupBySpec &> (spec), in_root_job);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(generate_spec(op, reinterpret_cast<ObHashGroupBySpec &> (spec), in_root_job))) {
+    LOG_WARN("fail to generate spec", K(ret));
+  } else if (op.is_gby_with_ordered_grouping_id()) {
+    if (OB_ISNULL(op.get_grouping_id())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("grouping id is null", K(ret));
+    } else if (OB_FAIL(generate_rt_expr(*op.get_grouping_id(), spec.grouping_id_))) {
+      LOG_WARN("failed to generate grouping id", K(ret));
+    }
+  }
+  if (op.get_group_distinct_exprs().count() > 0) {
+    if (OB_FAIL(spec.group_distinct_exprs_.prepare_allocate(op.get_group_distinct_exprs().count()))) {
+      LOG_WARN("prepare allocate failed", K(ret));
+    } else if (OB_FAIL(spec.group_sort_collations_.prepare_allocate(op.get_group_distinct_exprs().count()))) {
+      LOG_WARN("prepare allocate failed", K(ret));
+    }
+  }
+  ObExpr *rt_expr = nullptr;
+  ObSEArray<ObExpr *, 4> implict_aggr_exprs;
+  for (int i = 0; OB_SUCC(ret) && i < spec.aggr_infos_.count(); i++) {
+    if (spec.aggr_infos_.at(i).is_implicit_first_aggr()
+        && OB_FAIL(implict_aggr_exprs.push_back(spec.aggr_infos_.at(i).expr_))) {
+      LOG_WARN("push back implicit aggr expr failed", K(ret));
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < op.get_group_distinct_exprs().count(); i++) {
+    if (op.get_group_distinct_exprs().at(i).count() == 0) {
+      // non distinct aggr
+      continue;
+    }
+    if (OB_FAIL(spec.group_distinct_exprs_.at(i).init(op.get_group_distinct_exprs().at(i).count() + implict_aggr_exprs.count()))) {
+      LOG_WARN("init failed", K(ret));
+    } else if (OB_FAIL(spec.group_sort_collations_.at(i).init(op.get_group_distinct_exprs().at(i).count()))) {
+      LOG_WARN("init failed", K(ret));
+    }
+    for (int j = 0; OB_SUCC(ret) && j < op.get_group_distinct_exprs().at(i).count(); j++) {
+      ObRawExpr *distinct_raw_expr = op.get_group_distinct_exprs().at(i).at(j);
+      if (OB_ISNULL(distinct_raw_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("distinct raw expr is null", K(ret));
+      } else if (OB_FAIL(generate_rt_expr(*distinct_raw_expr, rt_expr))) {
+        LOG_WARN("generate rt expr failed", K(ret));
+      } else if (OB_FAIL(spec.group_distinct_exprs_.at(i).push_back(rt_expr))) {
+        LOG_WARN("push back distinct expr failed", K(ret));
+      } else {
+        ObSortFieldCollation field_collation(j, rt_expr->datum_meta_.cs_type_, true, default_null_pos());
+        if (OB_FAIL(spec.group_sort_collations_.at(i).push_back(field_collation))) {
+          LOG_WARN("push back sort collation failed", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(spec.group_distinct_exprs_.at(i), implict_aggr_exprs))) {
+      LOG_WARN("append implict aggr exprs failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && NULL != op.get_limit_expr()) {
+    if (OB_FAIL(generate_rt_expr(*op.get_limit_expr(), spec.limit_expr_))) {
+      LOG_WARN("generate limit expr failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (op.is_three_stage_expand_aggr() && op.get_first_stage_hash_val_expr() != nullptr) {
+    if (OB_FAIL(generate_rt_expr(*op.get_first_stage_hash_val_expr(), spec.hash_val_expr_))) {
+      LOG_WARN("generate rt expr failed", K(ret));
+    }
+  }
+  return ret;
 }
 
 // copy from ObCodeGeneratorImpl::convert_normal_table_scan
@@ -6663,6 +6894,17 @@ int ObStaticEngineCG::construct_hash_elements_for_connect_by(ObLogJoin &op, ObNL
         }
       }
     }
+  }
+  return ret;
+}
+int ObStaticEngineCG::generate_spec(ObLogRescan &op, ObRescanSpec &spec, const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(in_root_job);
+  spec.rescan_cnt_ = op.get_rescan_cnt();
+  if (spec.rescan_cnt_ < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rescan cnt is less than 1", K(ret), K(spec.rescan_cnt_));
   }
   return ret;
 }
@@ -8052,6 +8294,7 @@ int ObStaticEngineCG::fill_aggr_infos(ObLogGroupBy &op,
                                aggr_info,
                                group_exprs,
                                rollup_exprs,
+                               spec.use_rich_format_,
                                op.get_hash_rollup_info(),
                                op.get_grouping_set_info()))) {
       LOG_WARN("failed to fill_aggr_info", K(ret));
@@ -8097,10 +8340,12 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
     ObExpr &expr, ObAggrInfo &aggr_info,
     common::ObIArray<ObExpr *> *group_exprs/*NULL*/,
     common::ObIArray<ObExpr *> *rollup_exprs/*NULL*/,
+    const bool enable_rich_format,
     const ObHashRollupInfo *hash_rollup_info /*nullptr*/,
     const ObGroupingSetInfo *grouping_set_info /* nullptr */)
 {
   int ret = OB_SUCCESS;
+  aggr_info.enable_fast_bypass_ = is_simple_aggr_expr(raw_expr.get_expr_type(), enable_rich_format);
   if (T_FUN_TOP_FRE_HIST == raw_expr.get_expr_type() &&
              OB_FAIL(generate_top_fre_hist_expr_operator(raw_expr, aggr_info))) {
     LOG_WARN("failed to generate_top_fre_hist_expr_operator", K(ret));
@@ -8894,7 +9139,7 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpe
           LOG_WARN("count of window_exprs is not equal to count of pushdowns", K(ret),
                   K(op.get_window_exprs().count()), K(op.get_pushdown_info().count()));
         } else if (OB_FAIL(fill_wf_info(
-                  all_expr, *wf_expr, wf_info, op.is_push_down() && op.get_pushdown_info().at(i)))) {
+                  all_expr, *wf_expr, wf_info, op.is_push_down() && op.get_pushdown_info().at(i), spec.use_rich_format_))) {
           LOG_WARN("failed to generate window function info", K(ret));
         }
       }
@@ -8988,7 +9233,7 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionVec
 }
 
 int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr *> &all_expr,
-    ObWinFunRawExpr &win_expr, WinFuncInfo &wf_info, const bool can_push_down)
+    ObWinFunRawExpr &win_expr, WinFuncInfo &wf_info, const bool can_push_down, const bool enable_rich_format)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *agg_raw_expr = win_expr.get_agg_expr();
@@ -9013,7 +9258,7 @@ int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr *> &all_expr,
       //do nothing
     } else if (OB_FAIL(fill_aggr_info(*static_cast<ObAggFunRawExpr *>(agg_raw_expr),
                                       *expr,
-                                      wf_info.aggr_info_, nullptr, nullptr))) {
+                                      wf_info.aggr_info_, nullptr, nullptr, enable_rich_format))) {
       LOG_WARN("failed to fill_aggr_info", K(ret));
     } else {
       wf_info.aggr_info_.real_aggr_type_ = agg_raw_expr->get_expr_type();
@@ -10733,6 +10978,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       type = PHY_EXPAND;
       break;
     }
+    case log_op_def::LOG_RESCAN: {
+      type = PHY_RESCAN;
+      break;
+    }
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown logical operator", K(log_op.get_type()), K(lbt()));
@@ -11304,7 +11553,8 @@ int ObStaticEngineCG::check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaG
          } else if (aggr_expr->get_expr_type() == T_FUN_GROUP_CONCAT
                     && aggr_expr->get_real_param_count() > 1
                     && aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1) != NULL
-                    && !aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)->is_const_expr()) {
+                    && !aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)->is_const_expr()
+                    && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
            // as following listagg aggr can't use vectorize:
            //  create table t1(c1 int, c2 varchar2(2), c3 varchar2(2), c4 int, primary key(c1));
            //  select c3, listagg(c1,c3) within group (order by c1) from t1 group by rollup(c3);
@@ -11421,6 +11671,15 @@ int ObStaticEngineCG::generate_expand_spec(ObExpandVecSpec &spec, ObGroupingSetI
   } else if (OB_FAIL(spec.dup_expr_pairs_.assign(dup_expr_pairs))) {
     LOG_WARN("assign array failed", K(ret));
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (grouping_set_info->hash_val_expr_ != nullptr) {
+    if (OB_FAIL(generate_rt_expr(*grouping_set_info->hash_val_expr_, spec.hash_val_expr_))) {
+      LOG_WARN("generate rt expr failed", K(ret));
+    } else if (OB_FAIL(generate_rt_exprs(grouping_set_info->common_group_exprs_, spec.gby_exprs_))) {
+      LOG_WARN("generate rt exprs failed", K(ret));
+    }
+  }
   return ret;
 }
 int ObStaticEngineCG::generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, const bool in_root_job)
@@ -11434,6 +11693,8 @@ int ObStaticEngineCG::generate_spec(ObLogExpand &op, ObExpandVecSpec &spec, cons
   } else if (OB_NOT_NULL(grouping_set_info = op.get_grouping_set_info())) {
     if (OB_FAIL(generate_expand_spec(spec, grouping_set_info))) {
       LOG_WARN("generate expand spec failed", K(ret));
+    } else {
+      spec.is_ordered_output_ = op.is_ordered_output();
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

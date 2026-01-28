@@ -22,6 +22,7 @@
 #include "sql/engine/px/ob_px_coord_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
 #include "sql/engine/basic/ob_select_into_op.h"
+#include "sql/engine/basic/ob_rescan_op.h"
 #include "sql/engine/dml/ob_table_lock_op.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
 

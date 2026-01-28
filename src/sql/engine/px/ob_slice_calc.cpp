@@ -1178,9 +1178,13 @@ int ObHashSliceIdCalc::calc_slice_idx<true>(ObEvalCtx &eval_ctx, int64_t slice_s
   int64_t batch_size = eval_ctx.get_batch_size();
   EvalBound eval_bound(batch_size, batch_idx, batch_idx + 1, all_rows_active);
   for (int64_t i = 0; OB_SUCC(ret) && i < n_keys_; ++i) {
+    bool skip_hash_calc = false;
     const ObExpr* dist_expr = hash_dist_exprs_->at(i);
     LOG_DEBUG("[VEC2.0 PX]calc hash slice idx", KPC(dist_expr));
-    if (OB_FAIL(dist_expr->eval_vector(eval_ctx, *skip, eval_bound))) {
+    if (OB_FAIL(check_skipping_dup_expr_hash_calc(eval_ctx, *skip, eval_bound, dist_expr, skip_hash_calc))) {
+      LOG_WARN("failed to check skipping dup expr hash calc", K(ret));
+    } else if (skip_hash_calc) {
+    } else if (OB_FAIL(dist_expr->eval_vector(eval_ctx, *skip, eval_bound))) {
       LOG_WARN("eval vector failed", K(ret));
     } else {
       ObIVector *vec = dist_expr->get_vector(eval_ctx);
@@ -1255,8 +1259,12 @@ int ObHashSliceIdCalc::calc_hash_value<true>(ObEvalCtx &eval_ctx, uint64_t &hash
     const int64_t batch_size = eval_ctx.get_batch_size();
     EvalBound bound(batch_size, batch_idx, batch_idx + 1, false);
     for (int64_t i = 0; OB_SUCC(ret) && i < n_keys_; ++i) {
+      bool skip_hash_calc = false;
       const ObExpr* dist_expr = hash_dist_exprs_->at(i);
-      if (OB_FAIL(dist_expr->eval_vector(eval_ctx, *skip, bound))) {
+      if (OB_FAIL(check_skipping_dup_expr_hash_calc(eval_ctx, *skip, bound, dist_expr, skip_hash_calc))) {
+        LOG_WARN("failed to check skipping dup expr hash calc", K(ret));
+      } else if (skip_hash_calc) {
+      } else if (OB_FAIL(dist_expr->eval_vector(eval_ctx, *skip, bound))) {
         LOG_WARN("eval vector failed", K(ret));
       } else {
         ObIVector *vec = dist_expr->get_vector(eval_ctx);
@@ -1410,9 +1418,12 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> &
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < n_keys_; i++) {
+      bool skip_hash_calc = false;
       ObExpr *e = hash_dist_exprs_->at(i);
       const bool is_batch_seed = i > 0;
-      if (OB_FAIL(e->eval_vector(eval_ctx, skip, eval_bound))) {
+      if (OB_FAIL(check_skipping_dup_expr_hash_calc(eval_ctx, skip, eval_bound, e, skip_hash_calc))) {
+      } else if (skip_hash_calc) {
+      } else if (OB_FAIL(e->eval_vector(eval_ctx, skip, eval_bound))) {
         LOG_WARN("eval batch failed", K(ret));
       } else if (FALSE_IT(vec = e->get_vector(eval_ctx))) {
       } else if (OB_FAIL(vec->murmur_hash_v3(*e, hash_val, skip, eval_bound,
@@ -1473,6 +1484,42 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> &
       LOG_TRACE("[VEC2.0] hash slice calc", K(ObArrayWrap<int64_t>(indexes, batch_size)));
     }
   }
+  return ret;
+}
+
+int ObHashSliceIdCalc::check_skipping_dup_expr_hash_calc(ObEvalCtx &eval_ctx, const ObBitVector &skip,
+                                                        const EvalBound &bound, const ObExpr *calc_expr,
+                                                        bool &skip_hash_calc)
+{
+  int ret = OB_SUCCESS;
+  skip_hash_calc = false;
+  if (!should_skip_dup_expr_hash_by_aggr_code()) {
+  } else if (OB_UNLIKELY(bound.range_size() <= 0)) {
+    // do nothing
+  } else if (OB_FAIL(aggr_code_expr_->eval_vector(eval_ctx, skip, bound))) {
+    LOG_WARN("failed to eval aggr code expr", K(ret));
+  } else {// all  aggr code must be same
+    int64_t aggr_code = -1;
+    for (int i = bound.start(); i < bound.end(); i++) {
+      if (skip.at(i)) {
+      } else {
+        aggr_code = aggr_code_expr_->get_vector(eval_ctx)->get_int(i);
+        break;
+      }
+    }
+    if (OB_UNLIKELY(aggr_code == -1 || aggr_code >= dup_expr_list_->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected status: aggr code is invalid", K(ret));
+    } else {
+      for (int i = 0; i < dup_expr_list_->count(); i++) {
+        if (calc_expr == dup_expr_list_->at(i)) {
+          skip_hash_calc = (i != aggr_code);
+          break;
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

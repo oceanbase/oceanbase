@@ -2297,6 +2297,12 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
         if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
           SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
         }
+      } else if (0 == func_name.case_compare("max_pt")) {
+        const int64_t ARGS_NUMBER_ONE = 1;
+        bool mark_arr[ARGS_NUMBER_ONE] = {1}; //0表示参数化, 1 表示不参数化
+        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_ONE, sql_info))) {
+          SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
+        }
       }
     }
   } else if (T_OP_LIKE == tree->type_) {

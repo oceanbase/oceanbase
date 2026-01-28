@@ -43,7 +43,7 @@
 | ObThreeStageAggrInfo | 120 |
 | ObRollupAdaptiveInfo | 104 |
 | ObHashRollupInfo | 168 |
-| ObGroupingSetInfo | 288 |
+| ObGroupingSetInfo | 296 |
 | IndexDMLInfo | 488 |
 
 # location

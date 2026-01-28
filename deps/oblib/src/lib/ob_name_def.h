@@ -1297,6 +1297,7 @@
 #define N_FORMAT_PROFILE                       "format_profile"
 #define N_BUCKET "bucket"
 #define N_AI_PROMPT                         "ai_prompt"
+#define N_MAX_PT                            "max_pt"
 #define N_DATE_TRUNC                        "date_trunc"
 #define N_EDIT_DISTANCE                          "editDistance"
 #define N_EDIT_DISTANCE_UTF8                     "editDistanceUTF8"

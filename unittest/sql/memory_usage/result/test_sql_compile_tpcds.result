@@ -21,7 +21,7 @@ and s_state = 'TN'
 and ctr1.ctr_customer_sk = c_customer_sk
 order by c_customer_id
 limit 100;
-memory usage: parser = 31744, resolve = 350704, transform = 863672, optimize = 787032, total = 1958704
+memory usage: parser = 31744, resolve = 350704, transform = 863672, optimize = 794968, total = 1966640
 ***************   Case 2   ***************
 with wscs as
  (select sold_date_sk
@@ -100,7 +100,7 @@ select /*+ TPCDS_Q3 PARALLEL(128) */  dt.d_year
          ,sum_agg desc
          ,brand_id
  limit 100;
-memory usage: parser = 23808, resolve = 311024, transform = 95232, optimize = 644744, total = 1016232
+memory usage: parser = 23808, resolve = 311024, transform = 95232, optimize = 660616, total = 1032104
 ***************   Case 4   ***************
 with year_total as (
 select /*+ TPCDS_Q4 PARALLEL(128) */ c_customer_id customer_id
@@ -342,7 +342,7 @@ select /*+ TPCDS_Q5 PARALLEL(128) */ 'web channel' as channel
  order by channel
          ,id
  limit 100;
-memory usage: parser = 166656, resolve = 913680, transform = 1218872, optimize = 2356432, total = 4514344
+memory usage: parser = 166656, resolve = 913680, transform = 1218872, optimize = 2372304, total = 4530216
 ***************   Case 6   ***************
 select /*+ TPCDS_Q6 PARALLEL(128) */  a.ca_state state, count(*) cnt
  from customer_address a
@@ -387,7 +387,7 @@ select /*+ TPCDS_Q7 PARALLEL(128) */  i_item_id,
  group by i_item_id
  order by i_item_id
  limit 100;
-memory usage: parser = 23808, resolve = 355344, transform = 363032, optimize = 1444008, total = 2127616
+memory usage: parser = 23808, resolve = 355344, transform = 363032, optimize = 1459880, total = 2143488
 ***************   Case 8   ***************
 select /*+ TPCDS_Q8 PARALLEL(128) */  s_store_name
       ,sum(ss_net_profit)
@@ -494,7 +494,7 @@ select /*+ TPCDS_Q8 PARALLEL(128) */  s_store_name
  group by s_store_name
  order by s_store_name
  limit 100;
-memory usage: parser = 190464, resolve = 549360, transform = 1918672, optimize = 1426424, total = 4066536
+memory usage: parser = 190464, resolve = 549360, transform = 1918672, optimize = 1442296, total = 4082408
 ***************   Case 9   ***************
 select /*+ TPCDS_Q9 PARALLEL(128) */ case when (select count(*)
                   from store_sales
@@ -602,7 +602,7 @@ select /*+ TPCDS_Q10 PARALLEL(128) */
           cd_dep_employed_count,
           cd_dep_college_count
 limit 100;
-memory usage: parser = 63488, resolve = 1143728, transform = 6193432, optimize = 2547472, total = 9873672
+memory usage: parser = 63488, resolve = 1143728, transform = 6193432, optimize = 2563344, total = 9889544
 ***************   Case 11   ***************
 with year_total as (
 select /*+ TPCDS_Q11 PARALLEL(128) */ c_customer_id customer_id
@@ -682,7 +682,7 @@ select /*+ TPCDS_Q11 PARALLEL(128) */
          ,t_s_secyear.customer_last_name
          ,t_s_secyear.customer_email_address
 limit 100;
-memory usage: parser = 103168, resolve = 543152, transform = 1542104, optimize = 1934072, total = 4015184
+memory usage: parser = 103168, resolve = 543152, transform = 1542104, optimize = 1942008, total = 4023120
 ***************   Case 12   ***************
 select /*+ TPCDS_Q12 PARALLEL(128) */  i_item_id
       ,i_item_desc
@@ -715,7 +715,7 @@ order by
         ,i_item_desc
         ,revenueratio
 limit 100;
-memory usage: parser = 31744, resolve = 347408, transform = 156984, optimize = 684424, total = 1161984
+memory usage: parser = 31744, resolve = 347408, transform = 156984, optimize = 692360, total = 1169920
 ***************   Case 13   ***************
 select /*+ TPCDS_Q13 PARALLEL(128) */ avg(ss_quantity)
        ,avg(ss_ext_sales_price)
@@ -869,7 +869,7 @@ select /*+ TPCDS_Q14 PARALLEL(128) */  channel, i_brand_id,i_class_id,i_category
  group by channel, i_brand_id,i_class_id,i_category_id with rollup
  order by channel,i_brand_id,i_class_id,i_category_id
  limit 100;
-memory usage: parser = 166656, resolve = 858000, transform = 3177656, optimize = 5283256, total = 9170896
+memory usage: parser = 166656, resolve = 858000, transform = 3177656, optimize = 5307064, total = 9194704
 ***************   Case 15   ***************
 select /*+ TPCDS_Q15 PARALLEL(128) */  ca_zip
        ,sum(cs_sales_price)
@@ -888,7 +888,7 @@ select /*+ TPCDS_Q15 PARALLEL(128) */  ca_zip
  group by ca_zip
  order by ca_zip
  limit 100;
-memory usage: parser = 23808, resolve = 326896, transform = 635160, optimize = 1156040, total = 2083328
+memory usage: parser = 23808, resolve = 326896, transform = 635160, optimize = 1163976, total = 2091264
 ***************   Case 16   ***************
 select /*+ TPCDS_Q16 PARALLEL(128) */
    count(distinct cs_order_number) as "order count"
@@ -918,7 +918,7 @@ and not exists(select *
                where cs1.cs_order_number = cr1.cr_order_number)
 order by count(distinct cs_order_number)
 limit 100;
-memory usage: parser = 39680, resolve = 690384, transform = 441688, optimize = 1805376, total = 2918552
+memory usage: parser = 39680, resolve = 690384, transform = 441688, optimize = 1813312, total = 2926488
 ***************   Case 17   ***************
 select /*+ TPCDS_Q17 PARALLEL(128) */  i_item_id
        ,i_item_desc
@@ -962,7 +962,7 @@ select /*+ TPCDS_Q17 PARALLEL(128) */  i_item_id
          ,i_item_desc
          ,s_state
 limit 100;
-memory usage: parser = 55552, resolve = 404272, transform = 465752, optimize = 6782664, total = 7641728
+memory usage: parser = 55552, resolve = 404272, transform = 465752, optimize = 6798536, total = 7657600
 ***************   Case 18   ***************
 select /*+ TPCDS_Q18 PARALLEL(128) */  i_item_id,
         ca_country,
@@ -995,7 +995,7 @@ select /*+ TPCDS_Q18 PARALLEL(128) */  i_item_id,
         ca_county,
 	i_item_id
  limit 100;
-memory usage: parser = 55552, resolve = 404272, transform = 55832, optimize = 3698152, total = 4139360
+memory usage: parser = 55552, resolve = 404272, transform = 55832, optimize = 3706088, total = 4147296
 ***************   Case 19   ***************
 select /*+ TPCDS_Q19 PARALLEL(128) */  i_brand_id brand_id, i_brand brand, i_manufact_id, i_manufact,
 	sum(ss_ext_sales_price) ext_price
@@ -1019,7 +1019,7 @@ select /*+ TPCDS_Q19 PARALLEL(128) */  i_brand_id brand_id, i_brand brand, i_man
          ,i_manufact_id
          ,i_manufact
 limit 100 ;
-memory usage: parser = 31744, resolve = 355344, transform = 152128, optimize = 2195656, total = 2668360
+memory usage: parser = 31744, resolve = 355344, transform = 152128, optimize = 2203592, total = 2676296
 ***************   Case 20   ***************
 select /*+ TPCDS_Q20 PARALLEL(128) */  i_item_id
        ,i_item_desc
@@ -1048,7 +1048,7 @@ select /*+ TPCDS_Q20 PARALLEL(128) */  i_item_id
          ,i_item_desc
          ,revenueratio
 limit 100;
-memory usage: parser = 31744, resolve = 339472, transform = 164920, optimize = 684424, total = 1161984
+memory usage: parser = 31744, resolve = 339472, transform = 164920, optimize = 700296, total = 1177856
 ***************   Case 21   ***************
 select /*+ TPCDS_Q21 PARALLEL(128) */  *
  from(select w_warehouse_name
@@ -1077,7 +1077,7 @@ select /*+ TPCDS_Q21 PARALLEL(128) */  *
  order by w_warehouse_name
          ,i_item_id
  limit 100;
-memory usage: parser = 39680, resolve = 358640, transform = 238392, optimize = 819336, total = 1397472
+memory usage: parser = 39680, resolve = 358640, transform = 238392, optimize = 827272, total = 1405408
 ***************   Case 22   ***************
 select /*+ TPCDS_Q22 PARALLEL(128) */ i_product_name
              ,i_brand
@@ -1096,7 +1096,7 @@ select /*+ TPCDS_Q22 PARALLEL(128) */ i_product_name
                        ,i_category with rollup
 order by qoh, i_product_name, i_brand, i_class, i_category
 limit 100;
-memory usage: parser = 23808, resolve = 323600, transform = 8216, optimize = 581256, total = 878304
+memory usage: parser = 23808, resolve = 323600, transform = 8216, optimize = 589192, total = 886240
 ***************   Case 23   ***************
 with frequent_ss_items as
  (select substr(i_item_desc,1,30) itemdesc,i_item_sk item_sk,d_date solddate,count(*) cnt
@@ -1147,7 +1147,7 @@ select /*+ TPCDS_Q23 PARALLEL(128) */  sum(sales)
          and ws_item_sk in (select item_sk from frequent_ss_items)
          and ws_bill_customer_sk in (select c_customer_sk from best_ss_customer))
  limit 100;
-memory usage: parser = 71424, resolve = 557040, transform = 3365608, optimize = 3149368, total = 6928480
+memory usage: parser = 71424, resolve = 557040, transform = 3365608, optimize = 3181112, total = 6960224
 ***************   Case 24   ***************
 with ssales as
 (select c_last_name
@@ -1201,7 +1201,7 @@ order by c_last_name
         ,c_first_name
         ,s_store_name
 ;
-memory usage: parser = 55552, resolve = 428080, transform = 755672, optimize = 3436208, total = 4559144
+memory usage: parser = 55552, resolve = 428080, transform = 755672, optimize = 3444144, total = 4567080
 ***************   Case 25   ***************
 select /*+ TPCDS_Q25 PARALLEL(128) */
  i_item_id
@@ -1248,7 +1248,7 @@ select /*+ TPCDS_Q25 PARALLEL(128) */
  ,s_store_id
  ,s_store_name
  limit 100;
-memory usage: parser = 47616, resolve = 371216, transform = 224640, optimize = 6758856, total = 7327880
+memory usage: parser = 47616, resolve = 371216, transform = 224640, optimize = 6774728, total = 7343752
 ***************   Case 26   ***************
 select /*+ TPCDS_Q26 PARALLEL(128) */  i_item_id,
         avg(cs_quantity) agg1,
@@ -1268,7 +1268,7 @@ select /*+ TPCDS_Q26 PARALLEL(128) */  i_item_id,
  group by i_item_id
  order by i_item_id
  limit 100;
-memory usage: parser = 23808, resolve = 355344, transform = 363032, optimize = 1444008, total = 2127616
+memory usage: parser = 23808, resolve = 355344, transform = 363032, optimize = 1459880, total = 2143488
 ***************   Case 27   ***************
 select /*+ TPCDS_Q27 PARALLEL(128) */  i_item_id,
         s_state, grouping(s_state) g_state,
@@ -1290,7 +1290,7 @@ select /*+ TPCDS_Q27 PARALLEL(128) */  i_item_id,
  order by i_item_id
          ,s_state
  limit 100;
-memory usage: parser = 31744, resolve = 347408, transform = 32024, optimize = 1301160, total = 1653760
+memory usage: parser = 31744, resolve = 347408, transform = 32024, optimize = 1309096, total = 1661696
 ***************   Case 28   ***************
 select /*+ TPCDS_Q28 PARALLEL(128) */  *
 from (select avg(ss_list_price) B1_LP
@@ -1342,7 +1342,7 @@ from (select avg(ss_list_price) B1_LP
           or ss_coupon_amt between 2513 and 2513+1000
           or ss_wholesale_cost between 42 and 42+20)) B6
 limit 100;
-memory usage: parser = 71424, resolve = 676688, transform = 1151576, optimize = 2171752, total = 3738656
+memory usage: parser = 71424, resolve = 676688, transform = 1151576, optimize = 2179688, total = 3746592
 ***************   Case 29   ***************
 select /*+ TPCDS_Q29 PARALLEL(128) */
      i_item_id
@@ -1388,7 +1388,7 @@ select /*+ TPCDS_Q29 PARALLEL(128) */
    ,s_store_id
    ,s_store_name
  limit 100;
-memory usage: parser = 47616, resolve = 371216, transform = 232856, optimize = 6758856, total = 7336096
+memory usage: parser = 47616, resolve = 371216, transform = 232856, optimize = 6774728, total = 7351968
 ***************   Case 30   ***************
 with customer_total_return as
  (select wr_returning_customer_sk as ctr_customer_sk
@@ -1418,7 +1418,7 @@ select /*+ TPCDS_Q30 PARALLEL(128) */  c_customer_id,c_salutation,c_first_name,c
                   ,c_birth_day,c_birth_month,c_birth_year,c_birth_country,c_login,c_email_address
                   ,c_last_review_date,ctr_total_return
 limit 100;
-memory usage: parser = 55552, resolve = 420144, transform = 911960, optimize = 1320480, total = 2633688
+memory usage: parser = 55552, resolve = 420144, transform = 911960, optimize = 1328416, total = 2641624
 ***************   Case 31   ***************
 with ss as
  (select ca_county,d_qoy, d_year,sum(ss_ext_sales_price) as store_sales
@@ -1469,7 +1469,7 @@ select /*+ TPCDS_Q31 PARALLEL(128) */
     and case when ws2.web_sales > 0 then ws3.web_sales/ws2.web_sales else null end
        > case when ss2.store_sales > 0 then ss3.store_sales/ss2.store_sales else null end
  order by ss1.d_year,ss1.ca_county;
-memory usage: parser = 87296, resolve = 450576, transform = 2908952, optimize = 2497784, total = 5829360
+memory usage: parser = 87296, resolve = 450576, transform = 2908952, optimize = 2513656, total = 5845232
 ***************   Case 32   ***************
 select /*+ TPCDS_Q32 PARALLEL(128) */  sum(cs_ext_discount_amt)  as "excess discount amount"
 from
@@ -1570,7 +1570,7 @@ select /*+ TPCDS_Q33 PARALLEL(128) */  i_manufact_id ,sum(total_sales) total_sal
  group by i_manufact_id
  order by total_sales
 limit 100;
-memory usage: parser = 71424, resolve = 533232, transform = 238616, optimize = 3193912, total = 3962736
+memory usage: parser = 71424, resolve = 533232, transform = 238616, optimize = 3225656, total = 3994480
 ***************   Case 34   ***************
 select /*+ TPCDS_Q34 PARALLEL(128) */ c_last_name
        ,c_first_name
@@ -1600,7 +1600,7 @@ select /*+ TPCDS_Q34 PARALLEL(128) */ c_last_name
     where ss_customer_sk = c_customer_sk
       and cnt between 15 and 20
     order by c_last_name,c_first_name,c_salutation,c_preferred_cust_flag desc, ss_ticket_number;
-memory usage: parser = 47616, resolve = 379152, transform = 346104, optimize = 968704, total = 1667128
+memory usage: parser = 47616, resolve = 379152, transform = 346104, optimize = 976640, total = 1675064
 ***************   Case 35   ***************
 select /*+ TPCDS_Q35 PARALLEL(128) */
   ca_state,
@@ -1657,7 +1657,7 @@ select /*+ TPCDS_Q35 PARALLEL(128) */
           cd_dep_employed_count,
           cd_dep_college_count
  limit 100;
-memory usage: parser = 63488, resolve = 1178064, transform = 6176896, optimize = 2492720, total = 9836720
+memory usage: parser = 63488, resolve = 1178064, transform = 6176896, optimize = 2500656, total = 9844656
 ***************   Case 36   ***************
 select /*+ TPCDS_Q36 PARALLEL(128) */
     sum(ss_net_profit)/sum(ss_ext_sales_price) as gross_margin
@@ -1686,7 +1686,7 @@ select /*+ TPCDS_Q36 PARALLEL(128) */
   ,case when lochierarchy = 0 then i_category end
   ,rank_within_parent
   limit 100;
-memory usage: parser = 39680, resolve = 339472, transform = 16152, optimize = 779656, total = 1116384
+memory usage: parser = 39680, resolve = 339472, transform = 16152, optimize = 787592, total = 1124320
 ***************   Case 37   ***************
 select /*+ TPCDS_Q37 PARALLEL(128) */  i_item_id
        ,i_item_desc
@@ -1724,7 +1724,7 @@ select /*+ TPCDS_Q38 PARALLEL(128) */  count(*) from (
       and d_month_seq between 1212 and 1212 + 11
 ) hot_cust
 limit 100;
-memory usage: parser = 39680, resolve = 430064, transform = 254552, optimize = 2373936, total = 3031720
+memory usage: parser = 39680, resolve = 430064, transform = 254552, optimize = 2389808, total = 3047592
 ***************   Case 39   ***************
 with inv as
 (select w_warehouse_name,w_warehouse_sk,i_item_sk,d_moy
@@ -1778,7 +1778,7 @@ select /*+ TPCDS_Q40 PARALLEL(128) */
     w_state,i_item_id
  order by w_state,i_item_id
 limit 100;
-memory usage: parser = 39680, resolve = 342768, transform = 182808, optimize = 1420200, total = 1926880
+memory usage: parser = 39680, resolve = 342768, transform = 182808, optimize = 1436072, total = 1942752
 ***************   Case 41   ***************
 select /*+ TPCDS_Q41 PARALLEL(128) */  distinct(i_product_name)
  from item i1
@@ -1850,7 +1850,7 @@ select /*+ TPCDS_Q42 PARALLEL(128) */  dt.d_year
 		,item.i_category_id
 		,item.i_category
 limit 100 ;
-memory usage: parser = 23808, resolve = 311024, transform = 95232, optimize = 549512, total = 921000
+memory usage: parser = 23808, resolve = 311024, transform = 95232, optimize = 557448, total = 928936
 ***************   Case 43   ***************
 select /*+ TPCDS_Q43 PARALLEL(128) */  s_store_name, s_store_id,
         sum(case when (d_day_name='Sunday') then ss_sales_price else null end) sun_sales,
@@ -1868,7 +1868,7 @@ select /*+ TPCDS_Q43 PARALLEL(128) */  s_store_name, s_store_id,
  group by s_store_name, s_store_id
  order by s_store_name, s_store_id,sun_sales,mon_sales,tue_sales,wed_sales,thu_sales,fri_sales,sat_sales
  limit 100;
-memory usage: parser = 47616, resolve = 372528, transform = 260056, optimize = 557448, total = 1179072
+memory usage: parser = 47616, resolve = 372528, transform = 260056, optimize = 565384, total = 1187008
 ***************   Case 44   ***************
 select /*+ TPCDS_Q44 PARALLEL(128) */  asceding.rnk, i1.i_product_name best_performing, i2.i_product_name worst_performing
 from(select *
@@ -1955,7 +1955,7 @@ select /*+ TPCDS_Q46 PARALLEL(128) */  c_last_name
           ,bought_city
           ,ss_ticket_number
   limit 100;
-memory usage: parser = 55552, resolve = 399664, transform = 599320, optimize = 1662528, total = 2650552
+memory usage: parser = 55552, resolve = 399664, transform = 599320, optimize = 1678400, total = 2666424
 ***************   Case 47   ***************
 with v1 as(
 select /*+ TPCDS_Q47 PARALLEL(128) */ i_category, i_brand,
@@ -2005,7 +2005,7 @@ select /*+ TPCDS_Q47 PARALLEL(128) */  *
         case when avg_monthly_sales > 0 then abs(sum_sales - avg_monthly_sales) / avg_monthly_sales else null end > 0.1
  order by sum_sales - avg_monthly_sales, nsum
  limit 100;
-memory usage: parser = 79360, resolve = 484976, transform = 1120728, optimize = 1026528, total = 2645080
+memory usage: parser = 79360, resolve = 484976, transform = 1120728, optimize = 1050336, total = 2668888
 ***************   Case 48   ***************
 select /*+ TPCDS_Q48 PARALLEL(128) */ sum (ss_quantity)
  from store_sales, store, customer_demographics, customer_address, date_dim
@@ -2071,7 +2071,7 @@ select /*+ TPCDS_Q48 PARALLEL(128) */ sum (ss_quantity)
   )
  )
 ;
-memory usage: parser = 39680, resolve = 382448, transform = 1182600, optimize = 1544904, total = 3083120
+memory usage: parser = 39680, resolve = 382448, transform = 1182600, optimize = 1552840, total = 3091056
 ***************   Case 49   ***************
 select /*+ TPCDS_Q49 PARALLEL(128) */  channel, item, return_ratio, return_rank, currency_rank from
  (select
@@ -2199,7 +2199,7 @@ select /*+ TPCDS_Q49 PARALLEL(128) */
  )
  order by 1,4,5,2
  limit 100;
-memory usage: parser = 174592, resolve = 721136, transform = 900024, optimize = 2235120, total = 3906568
+memory usage: parser = 174592, resolve = 721136, transform = 900024, optimize = 2258928, total = 3930376
 ***************   Case 50   ***************
 select /*+ TPCDS_Q50 PARALLEL(128) */
    s_store_name
@@ -2257,7 +2257,7 @@ order by s_store_name
         ,s_state
         ,s_zip
 limit 100;
-memory usage: parser = 71424, resolve = 396336, transform = 254784, optimize = 1403528, total = 2051624
+memory usage: parser = 71424, resolve = 396336, transform = 254784, optimize = 1419400, total = 2067496
 ***************   Case 51   ***************
 WITH web_v1 as (
 select
@@ -2301,7 +2301,7 @@ where web_cumulative > store_cumulative
 order by item_sk
         ,d_date
 limit 100;
-memory usage: parser = 71424, resolve = 431408, transform = 333816, optimize = 1025968, total = 1804040
+memory usage: parser = 71424, resolve = 431408, transform = 333816, optimize = 1049776, total = 1827848
 ***************   Case 52   ***************
 select /*+ TPCDS_Q52 PARALLEL(128) */  dt.d_year
 	,item.i_brand_id brand_id
@@ -2322,7 +2322,7 @@ select /*+ TPCDS_Q52 PARALLEL(128) */  dt.d_year
 	,ext_price desc
 	,brand_id
 limit 100 ;
-memory usage: parser = 23808, resolve = 311024, transform = 95232, optimize = 549512, total = 921000
+memory usage: parser = 23808, resolve = 311024, transform = 95232, optimize = 557448, total = 928936
 ***************   Case 53   ***************
 select /*+ TPCDS_Q53 PARALLEL(128) */  * from
 (select i_manufact_id,
@@ -2404,7 +2404,7 @@ select /*+ TPCDS_Q54 PARALLEL(128) */  segment, count(*) as num_customers, segme
  group by segment
  order by segment, num_customers
  limit 100;
-memory usage: parser = 63488, resolve = 485616, transform = 159192, optimize = 4189568, total = 4756568
+memory usage: parser = 63488, resolve = 485616, transform = 159192, optimize = 4197504, total = 4764504
 ***************   Case 55   ***************
 select /*+ TPCDS_Q55 PARALLEL(128) */  i_brand_id brand_id, i_brand brand,
 	sum(ss_ext_sales_price) ext_price
@@ -2417,7 +2417,7 @@ select /*+ TPCDS_Q55 PARALLEL(128) */  i_brand_id brand_id, i_brand brand,
  group by i_brand, i_brand_id
  order by ext_price desc, i_brand_id
 limit 100 ;
-memory usage: parser = 15872, resolve = 311024, transform = 87296, optimize = 549512, total = 905128
+memory usage: parser = 15872, resolve = 311024, transform = 87296, optimize = 557448, total = 913064
 ***************   Case 56   ***************
 with ss as (
 select /*+ TPCDS_Q56 PARALLEL(128) leading(customer_address ( (view1 item) (date_dim store_sales)))*/ i_item_id,sum(ss_ext_sales_price) total_sales
@@ -2486,7 +2486,7 @@ i_item_id ,sum(total_sales) total_sales
  order by total_sales,
           i_item_id
  limit 100;
-memory usage: parser = 103168, resolve = 564976, transform = 357784, optimize = 3067232, total = 4018712
+memory usage: parser = 103168, resolve = 564976, transform = 357784, optimize = 3106912, total = 4058392
 ***************   Case 57   ***************
 with v1 as(
 select /*+ TPCDS_Q57 PARALLEL(128) */ i_category, i_brand,
@@ -2533,7 +2533,7 @@ select /*+ TPCDS_Q57 PARALLEL(128) */  *
         case when avg_monthly_sales > 0 then abs(sum_sales - avg_monthly_sales) / avg_monthly_sales else null end > 0.1
  order by sum_sales - avg_monthly_sales, nsum
  limit 100;
-memory usage: parser = 71424, resolve = 443984, transform = 1070360, optimize = 1010656, total = 2529912
+memory usage: parser = 71424, resolve = 443984, transform = 1070360, optimize = 1042400, total = 2561656
 ***************   Case 58   ***************
 with ss_items as
  (select /*+ TPCDS_Q58 PARALLEL(128) */ i_item_id item_id
@@ -2597,7 +2597,7 @@ select /*+ TPCDS_Q58 PARALLEL(128) */  ss_items.item_id
  order by ss_items.item_id
          ,ss_item_rev
  limit 100;
-memory usage: parser = 95232, resolve = 553744, transform = 183000, optimize = 2426592, total = 2992632
+memory usage: parser = 95232, resolve = 553744, transform = 183000, optimize = 2474208, total = 3040248
 ***************   Case 59   ***************
 with wss as
  (select d_week_seq,
@@ -2717,7 +2717,7 @@ select /*+ TPCDS_Q60 PARALLEL(128) */
  order by i_item_id
       ,total_sales
  limit 100;
-memory usage: parser = 71424, resolve = 533232, transform = 238616, optimize = 3292504, total = 3986544
+memory usage: parser = 71424, resolve = 533232, transform = 238616, optimize = 3324248, total = 4018288
 ***************   Case 61   ***************
 select /*+ TPCDS_Q61 PARALLEL(128) */  promotions,total,cast(promotions as decimal(15,4))/cast(total as decimal(15,4))*100
 from
@@ -2760,7 +2760,7 @@ from
    and   d_moy  = 11) all_sales
 order by promotions, total
 limit 100;
-memory usage: parser = 47616, resolve = 414192, transform = 135256, optimize = 5413688, total = 5911376
+memory usage: parser = 47616, resolve = 414192, transform = 135256, optimize = 5445432, total = 5943120
 ***************   Case 62   ***************
 select /*+ TPCDS_Q62 PARALLEL(128) */
    substr(w_warehouse_name,1,20)
@@ -2794,7 +2794,7 @@ order by substr(w_warehouse_name,1,20)
         ,sm_type
        ,web_name
 limit 100;
-memory usage: parser = 47616, resolve = 363280, transform = 243928, optimize = 1033608, total = 1629856
+memory usage: parser = 47616, resolve = 363280, transform = 243928, optimize = 1049480, total = 1645728
 ***************   Case 63   ***************
 select /*+ TPCDS_Q63 PARALLEL(128) */  *
 from (select i_manager_id
@@ -2822,7 +2822,7 @@ order by i_manager_id
         ,avg_monthly_sales
         ,sum_sales
 limit 100;
-memory usage: parser = 47616, resolve = 358640, transform = 293944, optimize = 923360, total = 1564984
+memory usage: parser = 47616, resolve = 358640, transform = 293944, optimize = 931296, total = 1572920
 ***************   Case 64   ***************
 with cs_ui as
  (select cs_item_sk
@@ -2942,7 +2942,7 @@ order by cs1.product_name
        ,cs2.cnt
        ,cs1.s1
        ,cs2.s1;
-memory usage: parser = 166656, resolve = 693168, transform = 24088, optimize = 4823648, total = 5658040
+memory usage: parser = 166656, resolve = 693168, transform = 24088, optimize = 4887136, total = 5721528
 ***************   Case 65   ***************
 select /*+ TPCDS_Q65 PARALLEL(128) */
 	s_store_name,
@@ -3232,7 +3232,7 @@ order by i_category
         ,sumsales
         ,rk
 limit 100;
-memory usage: parser = 55552, resolve = 503472, transform = 178936, optimize = 835208, total = 1506656
+memory usage: parser = 55552, resolve = 503472, transform = 178936, optimize = 843144, total = 1514592
 ***************   Case 68   ***************
 select /*+ TPCDS_Q68 PARALLEL(128) */  c_last_name
        ,c_first_name
@@ -3319,7 +3319,7 @@ select /*+ TPCDS_Q69 PARALLEL(128) */
           cd_purchase_estimate,
           cd_credit_rating
  limit 100;
-memory usage: parser = 55552, resolve = 1110672, transform = 2310840, optimize = 2635824, total = 6046376
+memory usage: parser = 55552, resolve = 1110672, transform = 2310840, optimize = 2659632, total = 6070184
 ***************   Case 70   ***************
 select /*+ TPCDS_Q70 PARALLEL(128) */
     sum(ss_net_profit) as total_sum
@@ -3356,7 +3356,7 @@ select /*+ TPCDS_Q70 PARALLEL(128) */
   ,case when lochierarchy = 0 then s_state end
   ,rank_within_parent
  limit 100;
-memory usage: parser = 47616, resolve = 371216, transform = 71768, optimize = 960768, total = 1392792
+memory usage: parser = 47616, resolve = 371216, transform = 71768, optimize = 968704, total = 1400728
 ***************   Case 71   ***************
 select /*+ TPCDS_Q71 PARALLEL(128) */ i_brand_id brand_id, i_brand brand,t_hour,t_minute,
 	sum(ext_price) ext_price
@@ -3395,7 +3395,7 @@ select /*+ TPCDS_Q71 PARALLEL(128) */ i_brand_id brand_id, i_brand brand,t_hour,
  group by i_brand, i_brand_id,t_hour,t_minute
  order by ext_price desc, i_brand_id
  ;
-memory usage: parser = 55552, resolve = 410896, transform = 444952, optimize = 2138424, total = 2983312
+memory usage: parser = 55552, resolve = 410896, transform = 444952, optimize = 2146360, total = 2991248
 ***************   Case 72   ***************
 select /*+ TPCDS_Q72 PARALLEL(128) */  i_item_desc
       ,w_warehouse_name
@@ -3423,7 +3423,7 @@ where d1.d_week_seq = d2.d_week_seq
 group by i_item_desc,w_warehouse_name,d1.d_week_seq
 order by total_cnt desc, i_item_desc, w_warehouse_name, d1.d_week_seq
 limit 100;
-memory usage: parser = 55552, resolve = 387088, transform = 24088, optimize = 1939728, total = 2356936
+memory usage: parser = 55552, resolve = 387088, transform = 24088, optimize = 1963536, total = 2380744
 ***************   Case 73   ***************
 select /*+ TPCDS_Q73 PARALLEL(128) */ c_last_name
        ,c_first_name
@@ -3510,7 +3510,7 @@ select /*+ TPCDS_Q74 PARALLEL(128) */
            > case when t_s_firstyear.year_total > 0 then t_s_secyear.year_total / t_s_firstyear.year_total else null end
  order by 2,1,3
 limit 100;
-memory usage: parser = 79360, resolve = 467792, transform = 1452344, optimize = 1838840, total = 3731024
+memory usage: parser = 79360, resolve = 467792, transform = 1452344, optimize = 1854712, total = 3746896
 ***************   Case 75   ***************
 WITH all_sales AS (
 select /*+ TPCDS_Q75 PARALLEL(128) */ d_year
@@ -3602,7 +3602,7 @@ select /*+ TPCDS_Q76 PARALLEL(128) */  channel, col_name, d_year, d_qoy, i_categ
 GROUP BY channel, col_name, d_year, d_qoy, i_category
 ORDER BY channel, col_name, d_year, d_qoy, i_category
 limit 100;
-memory usage: parser = 63488, resolve = 469136, transform = 95360, optimize = 1349072, total = 1918480
+memory usage: parser = 63488, resolve = 469136, transform = 95360, optimize = 1357008, total = 1926416
 ***************   Case 77   ***************
 with ss as
  (select s_store_sk,
@@ -3709,7 +3709,7 @@ select /*+ TPCDS_Q77 PARALLEL(128) */ 'web channel' as channel
  order by channel
          ,id
  limit 100;
-memory usage: parser = 142848, resolve = 667536, transform = 953112, optimize = 3684464, total = 5231880
+memory usage: parser = 142848, resolve = 667536, transform = 953112, optimize = 3732080, total = 5279496
 ***************   Case 78   ***************
 with ws as
   (select d_year AS ws_sold_year, ws_item_sk,
@@ -3766,7 +3766,7 @@ order by
   other_chan_sales_price,
   ratio
 limit 100;
-memory usage: parser = 103168, resolve = 553104, transform = 1498392, optimize = 3503472, total = 5517960
+memory usage: parser = 103168, resolve = 553104, transform = 1498392, optimize = 3519344, total = 5533832
 ***************   Case 79   ***************
 select /*+ TPCDS_Q79 PARALLEL(128) */
   c_last_name,c_first_name,substr(s_city,1,30),ss_ticket_number,amt,profit
@@ -3788,7 +3788,7 @@ select /*+ TPCDS_Q79 PARALLEL(128) */
     where ss_customer_sk = c_customer_sk
  order by c_last_name,c_first_name,substr(s_city,1,30), profit
 limit 100;
-memory usage: parser = 39680, resolve = 383792, transform = 491448, optimize = 905216, total = 1753624
+memory usage: parser = 39680, resolve = 383792, transform = 491448, optimize = 913152, total = 1761560
 ***************   Case 80   ***************
 with ssr as
  (select  s_store_id as store_id,
@@ -3883,7 +3883,7 @@ select /*+ TPCDS_Q80 PARALLEL(128) */ 'web channel' as channel
  order by channel
          ,id
  limit 100;
-memory usage: parser = 126976, resolve = 643728, transform = 810616, optimize = 6004048, total = 7444072
+memory usage: parser = 126976, resolve = 643728, transform = 810616, optimize = 6043728, total = 7483752
 ***************   Case 81   ***************
 with customer_total_return as
  (select cr_returning_customer_sk as ctr_customer_sk
@@ -3913,7 +3913,7 @@ select /*+ TPCDS_Q81 PARALLEL(128) */  c_customer_id,c_salutation,c_first_name,c
                    ,ca_street_type,ca_suite_number,ca_city,ca_county,ca_state,ca_zip,ca_country,ca_gmt_offset
                   ,ca_location_type,ctr_total_return
  limit 100;
-memory usage: parser = 63488, resolve = 420144, transform = 935480, optimize = 1368096, total = 2712760
+memory usage: parser = 63488, resolve = 420144, transform = 935480, optimize = 1376032, total = 2720696
 ***************   Case 82   ***************
 select /*+ TPCDS_Q82 PARALLEL(128) */  i_item_id
        ,i_item_desc
@@ -3995,7 +3995,7 @@ select /*+ TPCDS_Q83 PARALLEL(128) */  sr_items.item_id
  order by sr_items.item_id
          ,sr_item_qty
  limit 100;
-memory usage: parser = 79360, resolve = 522000, transform = 1001912, optimize = 1899752, total = 3370784
+memory usage: parser = 79360, resolve = 522000, transform = 1001912, optimize = 1923560, total = 3394592
 ***************   Case 84   ***************
 select /*+ TPCDS_Q84 PARALLEL(128) */  c_customer_id as customer_id
        , coalesce(c_last_name,'') || ', ' || coalesce(c_first_name,'') as customername
@@ -4015,7 +4015,7 @@ select /*+ TPCDS_Q84 PARALLEL(128) */  c_customer_id as customer_id
    and sr_cdemo_sk = cd_demo_sk
  order by c_customer_id
  limit 100;
-memory usage: parser = 23808, resolve = 342768, transform = 16152, optimize = 1874824, total = 2223904
+memory usage: parser = 23808, resolve = 342768, transform = 16152, optimize = 1882760, total = 2231840
 ***************   Case 85   ***************
 select /*+ TPCDS_Q85 PARALLEL(128) */  substr(r_reason_desc,1,20)
        ,avg(ws_quantity)
@@ -4098,7 +4098,7 @@ order by substr(r_reason_desc,1,20)
         ,avg(wr_refunded_cash)
         ,avg(wr_fee)
 limit 100;
-memory usage: parser = 71424, resolve = 414192, transform = 2043816, optimize = 9880920, total = 12327968
+memory usage: parser = 71424, resolve = 414192, transform = 2043816, optimize = 9920600, total = 12367648
 ***************   Case 86   ***************
 select /*+ TPCDS_Q86 PARALLEL(128) */
     sum(ws_net_paid) as total_sum
@@ -4123,7 +4123,7 @@ select /*+ TPCDS_Q86 PARALLEL(128) */
    case when lochierarchy = 0 then i_category end,
    rank_within_parent
  limit 100;
-memory usage: parser = 31744, resolve = 331536, transform = 8216, optimize = 525704, total = 838624
+memory usage: parser = 31744, resolve = 331536, transform = 8216, optimize = 533640, total = 846560
 ***************   Case 87   ***************
 select /*+ TPCDS_Q87 PARALLEL(128) */ count(*)
 from ((select distinct c_last_name, c_first_name, d_date
@@ -4265,7 +4265,7 @@ group by i_category, i_class, i_brand,
 where case when (avg_monthly_sales <> 0) then (abs(sum_sales - avg_monthly_sales) / avg_monthly_sales) else null end > 0.1
 order by sum_sales - avg_monthly_sales, s_store_name
 limit 100;
-memory usage: parser = 47616, resolve = 375856, transform = 237944, optimize = 931296, total = 1526200
+memory usage: parser = 47616, resolve = 375856, transform = 237944, optimize = 939232, total = 1534136
 ***************   Case 90   ***************
 select /*+ TPCDS_Q90 PARALLEL(128) */  cast(amc as decimal(15,4))/cast(pmc as decimal(15,4)) am_pm_ratio
  from ( select count(*) amc
@@ -4316,7 +4316,7 @@ and     hd_buy_potential like '0-500%'
 and     ca_gmt_offset           = -7
 group by cc_call_center_id,cc_name,cc_manager,cd_marital_status,cd_education_status
 order by sum(cr_net_loss) desc;
-memory usage: parser = 31744, resolve = 358640, transform = 214552, optimize = 3026664, total = 3557152
+memory usage: parser = 31744, resolve = 358640, transform = 214552, optimize = 3042536, total = 3573024
 ***************   Case 92   ***************
 select /*+ TPCDS_Q92 PARALLEL(128) */
    sum(ws_ext_discount_amt)  as "Excess Discount Amount"
@@ -4345,7 +4345,7 @@ and ws_ext_discount_amt
       )
 order by sum(ws_ext_discount_amt)
 limit 100;
-memory usage: parser = 23808, resolve = 350704, transform = 345816, optimize = 590048, total = 1251800
+memory usage: parser = 23808, resolve = 350704, transform = 345816, optimize = 597984, total = 1259736
 ***************   Case 93   ***************
 select /*+ TPCDS_Q93 PARALLEL(128) */  ss_customer_sk
             ,sum(act_sales) sumsales
@@ -4362,7 +4362,7 @@ select /*+ TPCDS_Q93 PARALLEL(128) */  ss_customer_sk
       group by ss_customer_sk
       order by sumsales, ss_customer_sk
 limit 100;
-memory usage: parser = 23808, resolve = 342768, transform = 135224, optimize = 698024, total = 1141248
+memory usage: parser = 23808, resolve = 342768, transform = 135224, optimize = 705960, total = 1149184
 ***************   Case 94   ***************
 select /*+ TPCDS_Q94 PARALLEL(128) */
    count(distinct ws_order_number) as "order count"
@@ -4390,7 +4390,7 @@ and not exists(select *
                where ws1.ws_order_number = wr1.wr_order_number)
 order by count(distinct ws_order_number)
 limit 100;
-memory usage: parser = 31744, resolve = 698320, transform = 433752, optimize = 1805376, total = 2910616
+memory usage: parser = 31744, resolve = 698320, transform = 433752, optimize = 1813312, total = 2918552
 ***************   Case 95   ***************
 with ws_wh as
 (select ws1.ws_order_number,ws1.ws_warehouse_sk wh1,ws2.ws_warehouse_sk wh2
@@ -4421,7 +4421,7 @@ and ws1.ws_order_number in (select wr_order_number
                             where wr_order_number = ws_wh.ws_order_number)
 order by count(distinct ws_order_number)
 limit 100;
-memory usage: parser = 39680, resolve = 398320, transform = 389304, optimize = 1741592, total = 2485392
+memory usage: parser = 39680, resolve = 398320, transform = 389304, optimize = 1757464, total = 2501264
 ***************   Case 96   ***************
 select /*+ TPCDS_Q96 PARALLEL(128) */  count(*)
 from store_sales
@@ -4436,7 +4436,7 @@ where ss_sold_time_sk = time_dim.t_time_sk
     and store.s_store_name = 'ese'
 order by count(*)
 limit 100;
-memory usage: parser = 15872, resolve = 311024, transform = 16152, optimize = 613000, total = 897472
+memory usage: parser = 15872, resolve = 311024, transform = 16152, optimize = 620936, total = 905408
 ***************   Case 97   ***************
 with ssci as (
 select /*+ TPCDS_Q97 PARALLEL(128) */ ss_customer_sk customer_sk
@@ -4460,7 +4460,7 @@ select /*+ TPCDS_Q97 PARALLEL(128) */  sum(case when ssci.customer_sk is not nul
 from ssci full outer join csci on (ssci.customer_sk=csci.customer_sk
                                and ssci.item_sk = csci.item_sk)
 limit 100;
-memory usage: parser = 39680, resolve = 374512, transform = 111512, optimize = 802984, total = 1270112
+memory usage: parser = 39680, resolve = 374512, transform = 111512, optimize = 810920, total = 1278048
 ***************   Case 98   ***************
 select /*+ TPCDS_Q98 PARALLEL(128) */ i_item_id
       ,i_item_desc
@@ -4492,7 +4492,7 @@ order by
         ,i_item_id
         ,i_item_desc
         ,revenueratio;
-memory usage: parser = 31744, resolve = 339472, transform = 156984, optimize = 684424, total = 1154048
+memory usage: parser = 31744, resolve = 339472, transform = 156984, optimize = 700296, total = 1169920
 ***************   Case 99   ***************
 select /*+ TPCDS_Q99 PARALLEL(128) */
    substr(w_warehouse_name,1,20)
@@ -4526,210 +4526,210 @@ order by substr(w_warehouse_name,1,20)
         ,sm_type
         ,cc_name
 limit 100;
-memory usage: parser = 47616, resolve = 363280, transform = 243928, optimize = 1033608, total = 1629856
+memory usage: parser = 47616, resolve = 363280, transform = 243928, optimize = 1049480, total = 1645728
 
 memory usage
 | query | parser | resolve | transform | optimize | total |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 31,744 | 350,704 | 863,672 | 787,032 | 1,958,704 |
+| 1 | 31,744 | 350,704 | 863,672 | 794,968 | 1,966,640 |
 | 2 | 95,232 | 543,856 | 936,216 | 820,488 | 2,337,216 |
-| 3 | 23,808 | 311,024 | 95,232 | 644,744 | 1,016,232 |
+| 3 | 23,808 | 311,024 | 95,232 | 660,616 | 1,032,104 |
 | 4 | 158,720 | 699,888 | 3,191,608 | 3,487,216 | 7,389,320 |
-| 5 | 166,656 | 913,680 | 1,218,872 | 2,356,432 | 4,514,344 |
+| 5 | 166,656 | 913,680 | 1,218,872 | 2,372,304 | 4,530,216 |
 | 6 | 31,744 | 366,576 | 293,976 | 1,366,328 | 1,950,192 |
-| 7 | 23,808 | 355,344 | 363,032 | 1,444,008 | 2,127,616 |
-| 8 | 190,464 | 549,360 | 1,918,672 | 1,426,424 | 4,066,536 |
+| 7 | 23,808 | 355,344 | 363,032 | 1,459,880 | 2,143,488 |
+| 8 | 190,464 | 549,360 | 1,918,672 | 1,442,296 | 4,082,408 |
 | 9 | 63,488 | 664,848 | 222,368 | 1,557,056 | 2,333,600 |
-| 10 | 63,488 | 1,143,728 | 6,193,432 | 2,547,472 | 9,873,672 |
-| 11 | 103,168 | 543,152 | 1,542,104 | 1,934,072 | 4,015,184 |
-| 12 | 31,744 | 347,408 | 156,984 | 684,424 | 1,161,984 |
+| 10 | 63,488 | 1,143,728 | 6,193,432 | 2,563,344 | 9,889,544 |
+| 11 | 103,168 | 543,152 | 1,542,104 | 1,942,008 | 4,023,120 |
+| 12 | 31,744 | 347,408 | 156,984 | 692,360 | 1,169,920 |
 | 13 | 47,616 | 398,320 | 1,428,616 | 2,526,056 | 4,334,096 |
-| 14 | 166,656 | 858,000 | 3,177,656 | 5,283,256 | 9,170,896 |
-| 15 | 23,808 | 326,896 | 635,160 | 1,156,040 | 2,083,328 |
-| 16 | 39,680 | 690,384 | 441,688 | 1,805,376 | 2,918,552 |
-| 17 | 55,552 | 404,272 | 465,752 | 6,782,664 | 7,641,728 |
-| 18 | 55,552 | 404,272 | 55,832 | 3,698,152 | 4,139,360 |
-| 19 | 31,744 | 355,344 | 152,128 | 2,195,656 | 2,668,360 |
-| 20 | 31,744 | 339,472 | 164,920 | 684,424 | 1,161,984 |
-| 21 | 39,680 | 358,640 | 238,392 | 819,336 | 1,397,472 |
-| 22 | 23,808 | 323,600 | 8,216 | 581,256 | 878,304 |
-| 23 | 71,424 | 557,040 | 3,365,608 | 3,149,368 | 6,928,480 |
-| 24 | 55,552 | 428,080 | 755,672 | 3,436,208 | 4,559,144 |
-| 25 | 47,616 | 371,216 | 224,640 | 6,758,856 | 7,327,880 |
-| 26 | 23,808 | 355,344 | 363,032 | 1,444,008 | 2,127,616 |
-| 27 | 31,744 | 347,408 | 32,024 | 1,301,160 | 1,653,760 |
-| 28 | 71,424 | 676,688 | 1,151,576 | 2,171,752 | 3,738,656 |
-| 29 | 47,616 | 371,216 | 232,856 | 6,758,856 | 7,336,096 |
-| 30 | 55,552 | 420,144 | 911,960 | 1,320,480 | 2,633,688 |
-| 31 | 87,296 | 450,576 | 2,908,952 | 2,497,784 | 5,829,360 |
+| 14 | 166,656 | 858,000 | 3,177,656 | 5,307,064 | 9,194,704 |
+| 15 | 23,808 | 326,896 | 635,160 | 1,163,976 | 2,091,264 |
+| 16 | 39,680 | 690,384 | 441,688 | 1,813,312 | 2,926,488 |
+| 17 | 55,552 | 404,272 | 465,752 | 6,798,536 | 7,657,600 |
+| 18 | 55,552 | 404,272 | 55,832 | 3,706,088 | 4,147,296 |
+| 19 | 31,744 | 355,344 | 152,128 | 2,203,592 | 2,676,296 |
+| 20 | 31,744 | 339,472 | 164,920 | 700,296 | 1,177,856 |
+| 21 | 39,680 | 358,640 | 238,392 | 827,272 | 1,405,408 |
+| 22 | 23,808 | 323,600 | 8,216 | 589,192 | 886,240 |
+| 23 | 71,424 | 557,040 | 3,365,608 | 3,181,112 | 6,960,224 |
+| 24 | 55,552 | 428,080 | 755,672 | 3,444,144 | 4,567,080 |
+| 25 | 47,616 | 371,216 | 224,640 | 6,774,728 | 7,343,752 |
+| 26 | 23,808 | 355,344 | 363,032 | 1,459,880 | 2,143,488 |
+| 27 | 31,744 | 347,408 | 32,024 | 1,309,096 | 1,661,696 |
+| 28 | 71,424 | 676,688 | 1,151,576 | 2,179,688 | 3,746,592 |
+| 29 | 47,616 | 371,216 | 232,856 | 6,774,728 | 7,351,968 |
+| 30 | 55,552 | 420,144 | 911,960 | 1,328,416 | 2,641,624 |
+| 31 | 87,296 | 450,576 | 2,908,952 | 2,513,656 | 5,845,232 |
 | 32 | 23,808 | 342,768 | 345,816 | 590,048 | 1,243,864 |
-| 33 | 71,424 | 533,232 | 238,616 | 3,193,912 | 3,962,736 |
-| 34 | 47,616 | 379,152 | 346,104 | 968,704 | 1,667,128 |
-| 35 | 63,488 | 1,178,064 | 6,176,896 | 2,492,720 | 9,836,720 |
-| 36 | 39,680 | 339,472 | 16,152 | 779,656 | 1,116,384 |
+| 33 | 71,424 | 533,232 | 238,616 | 3,225,656 | 3,994,480 |
+| 34 | 47,616 | 379,152 | 346,104 | 976,640 | 1,675,064 |
+| 35 | 63,488 | 1,178,064 | 6,176,896 | 2,500,656 | 9,844,656 |
+| 36 | 39,680 | 339,472 | 16,152 | 787,592 | 1,124,320 |
 | 37 | 23,808 | 334,832 | 8,216 | 974,664 | 1,307,872 |
-| 38 | 39,680 | 430,064 | 254,552 | 2,373,936 | 3,031,720 |
+| 38 | 39,680 | 430,064 | 254,552 | 2,389,808 | 3,047,592 |
 | 39 | 63,488 | 445,296 | 1,645,784 | 819,072 | 2,916,184 |
-| 40 | 39,680 | 342,768 | 182,808 | 1,420,200 | 1,926,880 |
+| 40 | 39,680 | 342,768 | 182,808 | 1,436,072 | 1,942,752 |
 | 41 | 71,424 | 461,808 | 484,088 | 312,584 | 1,296,256 |
-| 42 | 23,808 | 311,024 | 95,232 | 549,512 | 921,000 |
-| 43 | 47,616 | 372,528 | 260,056 | 557,448 | 1,179,072 |
+| 42 | 23,808 | 311,024 | 95,232 | 557,448 | 928,936 |
+| 43 | 47,616 | 372,528 | 260,056 | 565,384 | 1,187,008 |
 | 44 | 55,552 | 469,744 | 1,516,408 | 915,720 | 2,867,104 |
 | 45 | 31,744 | 350,704 | 452,632 | 1,266,880 | 2,068,312 |
-| 46 | 55,552 | 399,664 | 599,320 | 1,662,528 | 2,650,552 |
-| 47 | 79,360 | 484,976 | 1,120,728 | 1,026,528 | 2,645,080 |
-| 48 | 39,680 | 382,448 | 1,182,600 | 1,544,904 | 3,083,120 |
-| 49 | 174,592 | 721,136 | 900,024 | 2,235,120 | 3,906,568 |
-| 50 | 71,424 | 396,336 | 254,784 | 1,403,528 | 2,051,624 |
-| 51 | 71,424 | 431,408 | 333,816 | 1,025,968 | 1,804,040 |
-| 52 | 23,808 | 311,024 | 95,232 | 549,512 | 921,000 |
+| 46 | 55,552 | 399,664 | 599,320 | 1,678,400 | 2,666,424 |
+| 47 | 79,360 | 484,976 | 1,120,728 | 1,050,336 | 2,668,888 |
+| 48 | 39,680 | 382,448 | 1,182,600 | 1,552,840 | 3,091,056 |
+| 49 | 174,592 | 721,136 | 900,024 | 2,258,928 | 3,930,376 |
+| 50 | 71,424 | 396,336 | 254,784 | 1,419,400 | 2,067,496 |
+| 51 | 71,424 | 431,408 | 333,816 | 1,049,776 | 1,827,848 |
+| 52 | 23,808 | 311,024 | 95,232 | 557,448 | 928,936 |
 | 53 | 47,616 | 358,640 | 293,944 | 923,360 | 1,564,984 |
-| 54 | 63,488 | 485,616 | 159,192 | 4,189,568 | 4,756,568 |
-| 55 | 15,872 | 311,024 | 87,296 | 549,512 | 905,128 |
-| 56 | 103,168 | 564,976 | 357,784 | 3,067,232 | 4,018,712 |
-| 57 | 71,424 | 443,984 | 1,070,360 | 1,010,656 | 2,529,912 |
-| 58 | 95,232 | 553,744 | 183,000 | 2,426,592 | 2,992,632 |
+| 54 | 63,488 | 485,616 | 159,192 | 4,197,504 | 4,764,504 |
+| 55 | 15,872 | 311,024 | 87,296 | 557,448 | 913,064 |
+| 56 | 103,168 | 564,976 | 357,784 | 3,106,912 | 4,058,392 |
+| 57 | 71,424 | 443,984 | 1,070,360 | 1,042,400 | 2,561,656 |
+| 58 | 95,232 | 553,744 | 183,000 | 2,474,208 | 3,040,248 |
 | 59 | 95,232 | 588,784 | 1,484,120 | 709,944 | 2,819,504 |
-| 60 | 71,424 | 533,232 | 238,616 | 3,292,504 | 3,986,544 |
-| 61 | 47,616 | 414,192 | 135,256 | 5,413,688 | 5,911,376 |
-| 62 | 47,616 | 363,280 | 243,928 | 1,033,608 | 1,629,856 |
-| 63 | 47,616 | 358,640 | 293,944 | 923,360 | 1,564,984 |
-| 64 | 166,656 | 693,168 | 24,088 | 4,823,648 | 5,658,040 |
+| 60 | 71,424 | 533,232 | 238,616 | 3,324,248 | 4,018,288 |
+| 61 | 47,616 | 414,192 | 135,256 | 5,445,432 | 5,943,120 |
+| 62 | 47,616 | 363,280 | 243,928 | 1,049,480 | 1,645,728 |
+| 63 | 47,616 | 358,640 | 293,944 | 931,296 | 1,572,920 |
+| 64 | 166,656 | 693,168 | 24,088 | 4,887,136 | 5,721,528 |
 | 65 | 47,616 | 395,024 | 990,264 | 700,888 | 2,076,336 |
 | 66 | 317,440 | 1,255,056 | 1,575,928 | 2,162,200 | 5,194,256 |
-| 67 | 55,552 | 503,472 | 178,936 | 835,208 | 1,506,656 |
+| 67 | 55,552 | 503,472 | 178,936 | 843,144 | 1,514,592 |
 | 68 | 55,552 | 391,728 | 600,120 | 1,675,488 | 2,656,376 |
-| 69 | 55,552 | 1,110,672 | 2,310,840 | 2,635,824 | 6,046,376 |
-| 70 | 47,616 | 371,216 | 71,768 | 960,768 | 1,392,792 |
-| 71 | 55,552 | 410,896 | 444,952 | 2,138,424 | 2,983,312 |
-| 72 | 55,552 | 387,088 | 24,088 | 1,939,728 | 2,356,936 |
+| 69 | 55,552 | 1,110,672 | 2,310,840 | 2,659,632 | 6,070,184 |
+| 70 | 47,616 | 371,216 | 71,768 | 968,704 | 1,400,728 |
+| 71 | 55,552 | 410,896 | 444,952 | 2,146,360 | 2,991,248 |
+| 72 | 55,552 | 387,088 | 24,088 | 1,963,536 | 2,380,744 |
 | 73 | 47,616 | 371,216 | 306,424 | 960,768 | 1,619,512 |
-| 74 | 79,360 | 467,792 | 1,452,344 | 1,838,840 | 3,731,024 |
+| 74 | 79,360 | 467,792 | 1,452,344 | 1,854,712 | 3,746,896 |
 | 75 | 119,040 | 617,936 | 1,453,848 | 2,677,672 | 4,794,048 |
-| 76 | 63,488 | 469,136 | 95,360 | 1,349,072 | 1,918,480 |
-| 77 | 142,848 | 667,536 | 953,112 | 3,684,464 | 5,231,880 |
-| 78 | 103,168 | 553,104 | 1,498,392 | 3,503,472 | 5,517,960 |
-| 79 | 39,680 | 383,792 | 491,448 | 905,216 | 1,753,624 |
-| 80 | 126,976 | 643,728 | 810,616 | 6,004,048 | 7,444,072 |
-| 81 | 63,488 | 420,144 | 935,480 | 1,368,096 | 2,712,760 |
+| 76 | 63,488 | 469,136 | 95,360 | 1,357,008 | 1,926,416 |
+| 77 | 142,848 | 667,536 | 953,112 | 3,732,080 | 5,279,496 |
+| 78 | 103,168 | 553,104 | 1,498,392 | 3,519,344 | 5,533,832 |
+| 79 | 39,680 | 383,792 | 491,448 | 913,152 | 1,761,560 |
+| 80 | 126,976 | 643,728 | 810,616 | 6,043,728 | 7,483,752 |
+| 81 | 63,488 | 420,144 | 935,480 | 1,376,032 | 2,720,696 |
 | 82 | 23,808 | 334,832 | 8,216 | 974,664 | 1,307,872 |
-| 83 | 79,360 | 522,000 | 1,001,912 | 1,899,752 | 3,370,784 |
-| 84 | 23,808 | 342,768 | 16,152 | 1,874,824 | 2,223,904 |
-| 85 | 71,424 | 414,192 | 2,043,816 | 9,880,920 | 12,327,968 |
-| 86 | 31,744 | 331,536 | 8,216 | 525,704 | 838,624 |
+| 83 | 79,360 | 522,000 | 1,001,912 | 1,923,560 | 3,394,592 |
+| 84 | 23,808 | 342,768 | 16,152 | 1,882,760 | 2,231,840 |
+| 85 | 71,424 | 414,192 | 2,043,816 | 9,920,600 | 12,367,648 |
+| 86 | 31,744 | 331,536 | 8,216 | 533,640 | 846,560 |
 | 87 | 39,680 | 430,064 | 254,552 | 1,929,520 | 2,587,304 |
 | 88 | 182,528 | 704,528 | 1,239,992 | 2,223,680 | 4,101,784 |
-| 89 | 47,616 | 375,856 | 237,944 | 931,296 | 1,526,200 |
+| 89 | 47,616 | 375,856 | 237,944 | 939,232 | 1,534,136 |
 | 90 | 39,680 | 374,512 | 325,784 | 799,216 | 1,447,752 |
-| 91 | 31,744 | 358,640 | 214,552 | 3,026,664 | 3,557,152 |
-| 92 | 23,808 | 350,704 | 345,816 | 590,048 | 1,251,800 |
-| 93 | 23,808 | 342,768 | 135,224 | 698,024 | 1,141,248 |
-| 94 | 31,744 | 698,320 | 433,752 | 1,805,376 | 2,910,616 |
-| 95 | 39,680 | 398,320 | 389,304 | 1,741,592 | 2,485,392 |
-| 96 | 15,872 | 311,024 | 16,152 | 613,000 | 897,472 |
-| 97 | 39,680 | 374,512 | 111,512 | 802,984 | 1,270,112 |
-| 98 | 31,744 | 339,472 | 156,984 | 684,424 | 1,154,048 |
-| 99 | 47,616 | 363,280 | 243,928 | 1,033,608 | 1,629,856 |
+| 91 | 31,744 | 358,640 | 214,552 | 3,042,536 | 3,573,024 |
+| 92 | 23,808 | 350,704 | 345,816 | 597,984 | 1,259,736 |
+| 93 | 23,808 | 342,768 | 135,224 | 705,960 | 1,149,184 |
+| 94 | 31,744 | 698,320 | 433,752 | 1,813,312 | 2,918,552 |
+| 95 | 39,680 | 398,320 | 389,304 | 1,757,464 | 2,501,264 |
+| 96 | 15,872 | 311,024 | 16,152 | 620,936 | 905,408 |
+| 97 | 39,680 | 374,512 | 111,512 | 810,920 | 1,278,048 |
+| 98 | 31,744 | 339,472 | 156,984 | 700,296 | 1,169,920 |
+| 99 | 47,616 | 363,280 | 243,928 | 1,049,480 | 1,645,728 |
 
 max memory usage
 | query | parser | resolve | transform | optimize | total |
 | --- | --- | --- | --- | --- | --- |
-| 1 | 31,744 | 413,352 | 2,912,728 | 897,136 | 3,311,368 |
+| 1 | 31,744 | 413,352 | 2,912,728 | 905,072 | 3,311,368 |
 | 2 | 95,232 | 642,736 | 2,937,624 | 1,014,920 | 3,592,904 |
-| 3 | 23,808 | 373,672 | 654,320 | 731,632 | 1,177,888 |
-| 4 | 158,720 | 754,600 | 8,697,736 | 3,783,120 | 9,572,536 |
-| 5 | 166,656 | 1,012,560 | 3,140,760 | 2,520,904 | 4,836,304 |
+| 3 | 23,808 | 373,672 | 662,264 | 747,504 | 1,193,760 |
+| 4 | 158,720 | 754,600 | 8,697,744 | 3,783,120 | 9,572,544 |
+| 5 | 166,656 | 1,012,560 | 3,140,760 | 2,536,776 | 4,852,176 |
 | 6 | 31,744 | 449,600 | 2,343,032 | 1,568,408 | 2,757,544 |
-| 7 | 23,808 | 410,056 | 2,375,768 | 1,542,504 | 2,771,112 |
-| 8 | 190,464 | 659,624 | 3,959,792 | 1,571,352 | 4,780,928 |
+| 7 | 23,808 | 410,056 | 2,375,768 | 1,558,376 | 2,771,112 |
+| 8 | 190,464 | 659,624 | 3,959,792 | 1,587,224 | 4,780,928 |
 | 9 | 63,488 | 722,856 | 288,024 | 1,756,352 | 2,699,440 |
-| 10 | 63,488 | 1,260,480 | 8,107,384 | 2,692,400 | 10,101,304 |
-| 11 | 103,168 | 597,864 | 4,435,608 | 3,294,520 | 5,475,328 |
-| 12 | 31,744 | 410,056 | 2,277,528 | 774,984 | 2,672,872 |
-| 13 | 47,616 | 548,264 | 8,176,968 | 2,601,336 | 8,639,096 |
-| 14 | 166,656 | 980,688 | 8,439,736 | 5,764,968 | 9,967,600 |
-| 15 | 23,808 | 389,544 | 2,963,896 | 1,254,536 | 3,330,792 |
+| 10 | 63,488 | 1,260,480 | 8,107,384 | 2,708,272 | 10,117,176 |
+| 11 | 103,168 | 597,864 | 4,435,616 | 3,302,456 | 5,483,264 |
+| 12 | 31,744 | 410,056 | 2,277,528 | 790,856 | 2,672,872 |
+| 13 | 47,616 | 548,264 | 8,176,976 | 2,601,336 | 8,639,104 |
+| 14 | 166,656 | 980,688 | 8,455,896 | 5,788,776 | 9,991,408 |
+| 15 | 23,808 | 389,544 | 2,971,840 | 1,262,472 | 3,338,736 |
 | 16 | 39,680 | 821,024 | 2,120,824 | 2,300,800 | 3,488,744 |
-| 17 | 55,552 | 458,984 | 2,837,832 | 6,881,160 | 7,822,928 |
-| 18 | 55,552 | 458,984 | 2,152,568 | 3,796,648 | 4,320,560 |
-| 19 | 31,744 | 410,056 | 1,722,672 | 2,282,544 | 2,837,952 |
-| 20 | 31,744 | 410,056 | 2,285,464 | 782,920 | 2,672,872 |
-| 21 | 39,680 | 413,352 | 2,351,000 | 906,224 | 2,765,512 |
+| 17 | 55,552 | 458,984 | 2,853,712 | 6,897,032 | 7,838,800 |
+| 18 | 55,552 | 458,984 | 2,152,568 | 3,804,584 | 4,328,496 |
+| 19 | 31,744 | 410,056 | 1,730,616 | 2,290,480 | 2,845,888 |
+| 20 | 31,744 | 410,056 | 2,285,464 | 798,792 | 2,672,872 |
+| 21 | 39,680 | 413,352 | 2,351,000 | 914,160 | 2,765,512 |
 | 22 | 23,808 | 378,312 | 2,104,672 | 679,752 | 2,468,272 |
-| 23 | 71,424 | 687,664 | 7,514,496 | 3,569,128 | 8,159,152 |
-| 24 | 55,552 | 526,976 | 6,813,512 | 3,642,248 | 7,313,336 |
-| 25 | 47,616 | 425,928 | 2,572,912 | 6,857,352 | 7,509,080 |
-| 26 | 23,808 | 410,056 | 2,375,768 | 1,542,504 | 2,771,112 |
-| 27 | 31,744 | 410,056 | 2,136,696 | 1,399,656 | 2,532,040 |
-| 28 | 71,424 | 712,080 | 2,152,568 | 2,499,168 | 4,415,048 |
-| 29 | 47,616 | 425,928 | 2,573,192 | 6,857,352 | 7,517,296 |
-| 30 | 55,552 | 474,856 | 2,913,368 | 1,430,584 | 3,405,256 |
-| 31 | 87,296 | 497,352 | 4,985,880 | 2,787,896 | 6,227,104 |
-| 32 | 23,808 | 449,600 | 2,810,256 | 2,276,992 | 3,193,024 |
-| 33 | 71,424 | 616,240 | 2,112,888 | 3,393,208 | 4,244,736 |
+| 23 | 71,424 | 687,664 | 7,570,056 | 3,600,872 | 8,214,712 |
+| 24 | 55,552 | 526,976 | 6,845,264 | 3,658,120 | 7,345,088 |
+| 25 | 47,616 | 425,928 | 2,604,664 | 6,873,224 | 7,524,952 |
+| 26 | 23,808 | 410,056 | 2,375,768 | 1,558,376 | 2,771,112 |
+| 27 | 31,744 | 410,056 | 2,136,696 | 1,407,592 | 2,532,040 |
+| 28 | 71,424 | 712,080 | 2,152,568 | 2,507,104 | 4,422,984 |
+| 29 | 47,616 | 425,928 | 2,604,944 | 6,873,224 | 7,533,168 |
+| 30 | 55,552 | 474,856 | 2,913,368 | 1,438,520 | 3,405,256 |
+| 31 | 87,296 | 497,352 | 5,017,632 | 2,811,704 | 6,250,912 |
+| 32 | 23,808 | 449,600 | 2,818,200 | 2,276,992 | 3,200,968 |
+| 33 | 71,424 | 616,240 | 2,112,888 | 3,424,952 | 4,276,480 |
 | 34 | 47,616 | 441,800 | 2,419,000 | 1,067,200 | 2,861,960 |
-| 35 | 63,488 | 1,240,712 | 7,804,352 | 2,637,648 | 10,064,352 |
-| 36 | 39,680 | 397,480 | 2,120,824 | 889,760 | 2,516,168 |
+| 35 | 63,488 | 1,240,712 | 7,812,296 | 2,645,584 | 10,072,288 |
+| 36 | 39,680 | 397,480 | 2,120,824 | 897,696 | 2,516,168 |
 | 37 | 23,808 | 389,544 | 2,112,888 | 1,061,552 | 2,487,720 |
-| 38 | 39,680 | 497,200 | 2,120,824 | 2,518,864 | 3,259,352 |
-| 39 | 63,488 | 500,008 | 5,175,608 | 1,005,568 | 5,700,584 |
-| 40 | 39,680 | 397,480 | 2,303,352 | 1,507,088 | 2,701,992 |
+| 38 | 39,680 | 497,200 | 2,120,824 | 2,534,736 | 3,275,224 |
+| 39 | 63,488 | 500,008 | 5,191,488 | 1,005,568 | 5,716,464 |
+| 40 | 39,680 | 397,480 | 2,303,352 | 1,522,960 | 2,701,992 |
 | 41 | 71,424 | 765,968 | 2,580,824 | 411,080 | 3,130,248 |
-| 42 | 23,808 | 373,672 | 606,704 | 636,400 | 1,082,656 |
-| 43 | 47,616 | 419,304 | 2,348,856 | 655,944 | 2,785,192 |
+| 42 | 23,808 | 373,672 | 606,712 | 644,336 | 1,090,592 |
+| 43 | 47,616 | 419,304 | 2,348,856 | 663,880 | 2,785,192 |
 | 44 | 55,552 | 552,752 | 3,599,616 | 1,178,944 | 4,141,104 |
-| 45 | 31,744 | 425,792 | 3,145,112 | 1,437,808 | 3,543,752 |
-| 46 | 55,552 | 462,312 | 4,293,872 | 1,761,024 | 4,765,280 |
-| 47 | 79,360 | 536,240 | 5,602,272 | 1,240,504 | 6,182,800 |
-| 48 | 39,680 | 468,904 | 5,058,920 | 1,620,184 | 5,497,240 |
-| 49 | 174,592 | 804,144 | 2,861,656 | 2,399,592 | 4,203,600 |
-| 50 | 71,424 | 451,048 | 1,517,296 | 1,502,024 | 2,232,824 |
-| 51 | 71,424 | 498,544 | 2,390,776 | 1,170,896 | 2,909,800 |
-| 52 | 23,808 | 373,672 | 606,704 | 636,400 | 1,082,656 |
-| 53 | 47,616 | 421,288 | 2,398,616 | 1,013,920 | 2,821,064 |
-| 54 | 63,488 | 584,496 | 2,112,888 | 4,449,688 | 5,174,176 |
-| 55 | 15,872 | 373,672 | 598,768 | 636,400 | 1,066,784 |
-| 56 | 103,168 | 647,984 | 2,128,760 | 3,297,680 | 4,331,864 |
-| 57 | 71,424 | 498,696 | 5,550,240 | 1,224,632 | 6,081,840 |
-| 58 | 95,232 | 624,328 | 2,120,824 | 2,825,072 | 3,673,240 |
+| 45 | 31,744 | 425,792 | 3,153,056 | 1,437,808 | 3,551,696 |
+| 46 | 55,552 | 462,312 | 4,301,816 | 1,776,896 | 4,773,224 |
+| 47 | 79,360 | 536,240 | 5,729,256 | 1,264,312 | 6,309,784 |
+| 48 | 39,680 | 468,904 | 5,058,928 | 1,628,120 | 5,497,248 |
+| 49 | 174,592 | 804,144 | 2,861,656 | 2,415,464 | 4,219,472 |
+| 50 | 71,424 | 451,048 | 1,525,240 | 1,517,896 | 2,248,696 |
+| 51 | 71,424 | 498,544 | 2,390,776 | 1,194,704 | 2,909,800 |
+| 52 | 23,808 | 373,672 | 606,712 | 644,336 | 1,090,592 |
+| 53 | 47,616 | 421,288 | 2,398,616 | 1,021,856 | 2,821,064 |
+| 54 | 63,488 | 584,496 | 2,112,888 | 4,457,624 | 5,182,112 |
+| 55 | 15,872 | 373,672 | 598,776 | 644,336 | 1,074,720 |
+| 56 | 103,168 | 647,984 | 2,128,760 | 3,329,424 | 4,363,608 |
+| 57 | 71,424 | 498,696 | 5,677,224 | 1,256,376 | 6,208,824 |
+| 58 | 95,232 | 624,328 | 2,120,824 | 2,872,688 | 3,720,856 |
 | 59 | 95,232 | 640,048 | 3,509,368 | 904,376 | 4,209,576 |
-| 60 | 71,424 | 616,240 | 2,112,888 | 3,499,736 | 4,351,264 |
-| 61 | 47,616 | 468,904 | 2,120,824 | 5,544,704 | 6,150,024 |
-| 62 | 47,616 | 417,992 | 2,356,536 | 1,132,104 | 2,783,624 |
+| 60 | 71,424 | 616,240 | 2,112,888 | 3,531,480 | 4,383,008 |
+| 61 | 47,616 | 468,904 | 2,120,824 | 5,568,512 | 6,173,832 |
+| 62 | 47,616 | 417,992 | 2,356,536 | 1,147,976 | 2,783,624 |
 | 63 | 47,616 | 421,288 | 2,398,616 | 1,021,856 | 2,821,064 |
-| 64 | 166,656 | 747,880 | 2,120,824 | 5,044,112 | 5,936,280 |
+| 64 | 166,656 | 747,880 | 2,120,824 | 5,107,600 | 5,999,768 |
 | 65 | 47,616 | 449,736 | 3,055,192 | 799,384 | 3,514,024 |
 | 66 | 317,440 | 1,306,320 | 3,672,664 | 2,295,520 | 5,460,136 |
-| 67 | 55,552 | 558,184 | 2,104,672 | 945,312 | 2,671,952 |
-| 68 | 55,552 | 446,440 | 4,255,440 | 1,773,984 | 4,718,912 |
-| 69 | 55,552 | 1,252,544 | 4,788,920 | 2,792,360 | 6,285,616 |
-| 70 | 47,616 | 449,600 | 2,178,544 | 1,105,696 | 2,613,568 |
-| 71 | 55,552 | 465,608 | 2,562,256 | 2,260,136 | 3,187,728 |
-| 72 | 55,552 | 449,736 | 2,112,888 | 2,049,832 | 2,571,720 |
+| 67 | 55,552 | 558,184 | 2,104,672 | 953,248 | 2,671,952 |
+| 68 | 55,552 | 446,440 | 4,255,448 | 1,773,984 | 4,718,920 |
+| 69 | 55,552 | 1,252,544 | 4,820,672 | 2,816,168 | 6,309,424 |
+| 70 | 47,616 | 449,600 | 2,178,544 | 1,113,632 | 2,613,568 |
+| 71 | 55,552 | 465,608 | 2,570,200 | 2,268,072 | 3,195,664 |
+| 72 | 55,552 | 449,736 | 2,112,888 | 2,073,640 | 2,571,720 |
 | 73 | 47,616 | 425,928 | 2,379,320 | 1,059,264 | 2,814,344 |
-| 74 | 79,360 | 522,504 | 4,316,880 | 3,231,032 | 5,222,912 |
-| 75 | 119,040 | 685,072 | 6,334,616 | 2,860,496 | 7,087,784 |
-| 76 | 63,488 | 520,400 | 162,136 | 1,435,960 | 2,080,136 |
-| 77 | 142,848 | 734,672 | 2,890,872 | 3,984,560 | 5,764,248 |
-| 78 | 103,168 | 607,816 | 7,440,592 | 3,679,552 | 8,113,056 |
-| 79 | 39,680 | 438,504 | 2,504,184 | 1,003,712 | 2,943,848 |
-| 80 | 126,976 | 710,864 | 2,843,736 | 6,125,760 | 7,723,272 |
+| 74 | 79,360 | 522,504 | 4,324,824 | 3,238,968 | 5,230,848 |
+| 75 | 119,040 | 685,072 | 6,334,624 | 2,860,496 | 7,087,792 |
+| 76 | 63,488 | 520,400 | 162,136 | 1,443,896 | 2,088,072 |
+| 77 | 142,848 | 734,672 | 2,890,872 | 4,040,112 | 5,819,800 |
+| 78 | 103,168 | 607,816 | 7,496,152 | 3,695,424 | 8,168,616 |
+| 79 | 39,680 | 438,504 | 2,504,184 | 1,011,648 | 2,943,848 |
+| 80 | 126,976 | 710,864 | 2,843,736 | 6,165,440 | 7,762,952 |
 | 81 | 63,488 | 474,856 | 2,944,824 | 1,478,200 | 3,444,648 |
 | 82 | 23,808 | 389,544 | 2,112,888 | 1,061,552 | 2,487,720 |
-| 83 | 79,360 | 589,136 | 3,107,840 | 2,214,528 | 3,818,120 |
+| 83 | 79,360 | 589,136 | 3,107,840 | 2,238,336 | 3,841,928 |
 | 84 | 23,808 | 389,544 | 2,120,824 | 1,984,928 | 2,503,592 |
-| 85 | 71,424 | 476,840 | 28,540,424 | 10,004,520 | 29,042,232 |
-| 86 | 31,744 | 389,544 | 2,104,672 | 635,808 | 2,484,144 |
+| 85 | 71,424 | 476,840 | 28,611,856 | 10,044,200 | 29,113,664 |
+| 86 | 31,744 | 389,544 | 2,104,672 | 643,744 | 2,484,144 |
 | 87 | 39,680 | 497,200 | 2,120,824 | 2,093,992 | 2,834,480 |
-| 88 | 182,528 | 739,920 | 5,575,328 | 2,607,088 | 6,478,576 |
-| 89 | 47,616 | 422,632 | 2,358,488 | 1,029,792 | 2,798,152 |
+| 88 | 182,528 | 739,920 | 5,583,272 | 2,607,088 | 6,486,520 |
+| 89 | 47,616 | 422,632 | 2,358,488 | 1,037,728 | 2,798,152 |
 | 90 | 39,680 | 421,288 | 2,415,872 | 988,528 | 2,846,256 |
-| 91 | 31,744 | 421,288 | 3,290,664 | 3,125,160 | 3,738,352 |
-| 92 | 23,808 | 457,536 | 2,826,128 | 2,284,928 | 3,216,832 |
-| 93 | 23,808 | 381,608 | 2,239,896 | 796,520 | 2,622,664 |
+| 91 | 31,744 | 421,288 | 3,306,544 | 3,141,032 | 3,754,224 |
+| 92 | 23,808 | 457,536 | 2,826,136 | 2,284,928 | 3,216,840 |
+| 93 | 23,808 | 381,608 | 2,239,896 | 804,456 | 2,622,664 |
 | 94 | 31,744 | 828,960 | 2,112,888 | 2,300,800 | 3,480,808 |
 | 95 | 39,680 | 489,280 | 2,358,904 | 2,292,864 | 3,136,360 |
-| 96 | 15,872 | 357,800 | 2,112,608 | 699,888 | 2,455,696 |
-| 97 | 39,680 | 429,224 | 2,112,888 | 926,584 | 2,543,272 |
-| 98 | 31,744 | 410,056 | 2,277,528 | 782,920 | 2,664,936 |
-| 99 | 47,616 | 417,992 | 2,356,536 | 1,132,104 | 2,783,624 |
+| 96 | 15,872 | 357,800 | 2,112,608 | 707,824 | 2,455,696 |
+| 97 | 39,680 | 429,224 | 2,112,888 | 934,520 | 2,543,272 |
+| 98 | 31,744 | 410,056 | 2,277,528 | 798,792 | 2,664,936 |
+| 99 | 47,616 | 417,992 | 2,356,536 | 1,147,976 | 2,783,624 |
