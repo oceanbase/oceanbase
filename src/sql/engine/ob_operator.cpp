@@ -1241,15 +1241,16 @@ int ObOperator::setup_op_feedback_info()
   } else {
     ObExecFeedbackInfo &fb_info = ctx_.get_feedback_info();
     common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
-    int64_t &total_db_time = fb_info.get_total_db_time();
-    uint64_t db_time = op_monitor_info_.calc_db_time();
-    static const uint64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
-    db_time = (db_time * scale) >> 20;
-    total_db_time += db_time;
+    int64_t &total_cpu_time = fb_info.get_total_cpu_time();
+    op_monitor_info_.covert_to_static_node();
+    uint64_t db_time = op_monitor_info_.db_time_;
+    uint64_t block_time = op_monitor_info_.block_time_;
+    uint64_t cpu_time = db_time - block_time;
+    total_cpu_time += cpu_time;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
       ObExecFeedbackNode &node = nodes.at(fb_node_idx_);
-      node.block_time_ = (op_monitor_info_.block_time_ * scale) >> 20;
-      node.db_time_ = db_time;
+      node.block_time_ = block_time;
+      node.cpu_time_ = cpu_time;
       node.op_close_time_ = op_monitor_info_.close_time_;
       node.op_first_row_time_ = op_monitor_info_.first_row_time_;
       node.op_last_row_time_ = op_monitor_info_.last_row_time_;

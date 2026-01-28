@@ -1604,7 +1604,7 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
         }
         plan_item->real_cardinality_ = feedback_node.output_row_count_;
         plan_item->real_cost_ = real_cost > 0 ? real_cost : 0;
-        plan_item->cpu_cost_ = feedback_node.db_time_;
+        plan_item->cpu_cost_ = feedback_node.cpu_time_;
         plan_item->io_cost_ = feedback_node.block_time_;
         plan_item->search_columns_ = feedback_node.worker_count_;
       }

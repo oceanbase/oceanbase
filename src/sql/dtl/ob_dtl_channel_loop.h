@@ -117,6 +117,7 @@ public:
   }
   void set_interm_result(bool flag) { use_interm_result_ = flag; }
 private:
+  friend class ObDtlBasicChannel;
   static const int64_t INTERRUPT_CHECK_TIMES = 16;
   static const int64_t SERVER_ALIVE_CHECK_TIMES = 4096;
   Proc *proc_map_[MAX_PROCS];
