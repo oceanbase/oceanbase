@@ -1907,7 +1907,7 @@ int ObPLContext::del_tx_cursor_idx_from_local_state(ObSQLSessionInfo &session_in
   CK (OB_NOT_NULL(state->get_tx_cursor_idx_set()));
   CK (state->get_tx_cursor_idx_set()->created());
   OZ (state->get_tx_cursor_idx_set()->erase_refactored(cursor_index));
-  if (state->get_tx_cursor_idx_set()->empty()) {
+  if (OB_SUCC(ret) && state->get_tx_cursor_idx_set()->empty()) {
     OX (state->set_has_tx_cursor(false));
   }
   return ret;
