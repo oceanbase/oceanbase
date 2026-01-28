@@ -14615,7 +14615,7 @@ int ObCheckBackupDestRWConsistencyArg::init(const uint64_t tenant_id, const ObSt
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObRemoteCheckBackupDestValidityArg, tenant_id_, dest_type_, backup_dest_str_, need_format_file_);
+OB_SERIALIZE_MEMBER(ObRemoteCheckBackupDestValidityArg, tenant_id_, dest_type_, backup_dest_str_, need_format_file_, need_check_permission_);
 bool ObRemoteCheckBackupDestValidityArg::is_valid() const
 {
   return is_valid_tenant_id(tenant_id_)
@@ -14634,6 +14634,7 @@ int ObRemoteCheckBackupDestValidityArg::assign(const ObRemoteCheckBackupDestVali
     dest_type_ = arg.dest_type_;
     backup_dest_str_ = arg.backup_dest_str_;
     need_format_file_ = arg.need_format_file_;
+    need_check_permission_ = arg.need_check_permission_;
   }
   return ret;
 }
@@ -14642,7 +14643,8 @@ int ObRemoteCheckBackupDestValidityArg::init(
     const uint64_t tenant_id,
     const int64_t dest_type,
     const ObString &backup_dest_str,
-    const bool need_format_file)
+    const bool need_format_file,
+    const bool need_check_permission)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id)
@@ -14655,6 +14657,7 @@ int ObRemoteCheckBackupDestValidityArg::init(
     dest_type_ = dest_type;
     backup_dest_str_ = backup_dest_str;
     need_format_file_ = need_format_file;
+    need_check_permission_ = need_check_permission;
   }
   return ret;
 }
