@@ -227,6 +227,8 @@
   RPC_S(PR5 push_ss_gc_last_succ_scn, OB_PUSH_SS_GC_LAST_SUCC_SCN, (obrpc::ObSSGCPushLastSuccScnArg));
   RPC_S(PR5 del_ss_macro_cache, OB_DEL_SS_MACRO_CACHE, (obrpc::ObGetSSMacroBlockArg), obrpc::ObDelSSMacroCacheRes);
   RPC_S(PR5 del_ss_tablet_macro_cache, OB_DEL_SS_TABLET_MACRO_CACHE, (obrpc::ObDelSSTabletMacroCacheArg), obrpc::ObDelSSTabletMacroCacheRes);
+  RPC_S(PR5 get_ss_gc_detect_infos, OB_GET_SS_GC_DETECT_INFOS, (obrpc::ObSSGCDetectInfoArg), obrpc::ObSSGCDetectInfoRes);
+  RPC_S(PR5 get_ss_gc_start_scn_items, OB_GET_SS_GC_START_SCN_ITEMS, (obrpc::ObSSGCStartSCNArg), obrpc::ObSSGCStartSCNRes);
   #endif
   RPC_S(PR5 remote_write_ddl_inc_commit_log, OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG, (obrpc::ObRpcRemoteWriteDDLIncCommitLogArg), ObRpcRemoteWriteDDLIncCommitLogRes);
   RPC_S(PR5 check_ls_can_offline, OB_CHECK_LS_CAN_OFFLINE, (obrpc::ObCheckLSCanOfflineArg));

@@ -164,6 +164,8 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcPushSSGCLastSuccScnP, gctx_);
     RPC_PROCESSOR(ObDelSSMacroCacheP, gctx_);
     RPC_PROCESSOR(ObDelSSTabletMacroCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcGetSSGCDetectInfosP, gctx_);
+    RPC_PROCESSOR(ObRpcGetSSGCStartScnItemsP, gctx_);
 #endif
     RPC_PROCESSOR(ObRebuildTabletP, gctx_);
     RPC_PROCESSOR(ObNotifySharedStorageInfoP, gctx_);

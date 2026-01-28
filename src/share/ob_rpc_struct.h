@@ -12334,6 +12334,52 @@ public:
   LastSuccSCNs last_succ_scns_;
 };
 
+struct ObSSGCDetectInfoArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSGCDetectInfoArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  explicit ObSSGCDetectInfoArg(const uint64_t tenant_id) : tenant_id_(tenant_id) {}
+  ~ObSSGCDetectInfoArg() {}
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_; }
+  TO_STRING_KV(K_(tenant_id));
+public:
+  uint64_t tenant_id_;
+};
+
+struct ObSSGCDetectInfoRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSGCDetectInfoRes() : detect_gc_infos_() {}
+  TO_STRING_KV(K_(detect_gc_infos));
+public:
+  common::ObSEArray<storage::ObSSPreciseGCInfo, 16> detect_gc_infos_;
+};
+
+struct ObSSGCStartSCNArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSGCStartSCNArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  explicit ObSSGCStartSCNArg(const uint64_t tenant_id) : tenant_id_(tenant_id) {}
+  ~ObSSGCStartSCNArg() {}
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_; }
+  TO_STRING_KV(K_(tenant_id));
+public:
+  uint64_t tenant_id_;
+};
+
+struct ObSSGCStartSCNRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSSGCStartSCNRes() : start_scn_items_() {}
+  TO_STRING_KV(K_(start_scn_items));
+public:
+  common::ObSEArray<storage::ObSSGCStartSCNItem, 16> start_scn_items_;
+};
+
 #endif
 struct ObRpcRemoteWriteDDLIncCommitLogArg final
 {

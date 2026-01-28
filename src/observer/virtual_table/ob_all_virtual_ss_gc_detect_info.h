@@ -15,6 +15,8 @@
 
 #include "observer/omt/ob_multi_tenant_operator.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
+#include "lib/container/ob_se_array.h"
+#include "lib/hash/ob_hashmap.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/garbage_collector/ob_ss_garbage_collector_define.h"
 #endif
@@ -56,8 +58,9 @@ private:
 #endif
 private:
 #ifdef OB_BUILD_SHARED_STORAGE
-  SSGCDetectInfoIter detect_info_iter_;
-  ObSSPreciseGCInfo gc_info_;
+  common::ObSEArray<ObSSGCStartSCNItem, 16> start_scn_items_;
+  common::hash::ObHashMap<ObSSPreciseGCTablet, ObSSPreciseGCInfo> detect_gc_info_map_;
+  int64_t start_scn_idx_;
 #endif
   char ip_buf_[common::OB_IP_STR_BUFF];
 

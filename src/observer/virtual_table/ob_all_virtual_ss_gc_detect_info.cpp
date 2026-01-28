@@ -20,7 +20,12 @@ namespace oceanbase
 {
 namespace observer
 {
-ObAllVirtualSSGCDetectInfo::ObAllVirtualSSGCDetectInfo() : ObVirtualTableScannerIterator() {}
+ObAllVirtualSSGCDetectInfo::ObAllVirtualSSGCDetectInfo() : ObVirtualTableScannerIterator()
+{
+#ifdef OB_BUILD_SHARED_STORAGE
+  start_scn_idx_ = 0;
+#endif
+}
 
 ObAllVirtualSSGCDetectInfo::~ObAllVirtualSSGCDetectInfo()
 {
@@ -31,19 +36,39 @@ void ObAllVirtualSSGCDetectInfo::reset()
 {
   omt::ObMultiTenantOperator::reset();
   ObVirtualTableScannerIterator::reset();
+#ifdef OB_BUILD_SHARED_STORAGE
+  start_scn_items_.reset();
+  detect_gc_info_map_.destroy();
+  start_scn_idx_ = 0;
+#endif
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObAllVirtualSSGCDetectInfo::prepare_start_to_read()
 {
   int ret = OB_SUCCESS;
+  common::ObSEArray<ObSSPreciseGCInfo, 16> detect_gc_infos;
 
   if (OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
-  } else if (OB_FAIL(MTL(ObSSGarbageCollectorService *)->get_detect_gc_infos_iter(detect_info_iter_))) {
-    SERVER_LOG(WARN, "get last_succ_scns failed", KR(ret));
+  } else if (OB_FAIL(MTL(ObSSGarbageCollectorService *)->get_detect_gc_infos(detect_gc_infos))) {
+    SERVER_LOG(WARN, "get detect gc infos failed", KR(ret));
+  } else if (OB_FAIL(MTL(ObSSGarbageCollectorService *)->get_gc_start_scn_items(start_scn_items_))) {
+    SERVER_LOG(WARN, "get gc start scn items failed", KR(ret));
+  } else if (OB_FAIL(detect_gc_info_map_.create(
+               MAX(1L, detect_gc_infos.count()), "SSGCDetectMap", "SSGCDetectMap", MTL_ID()))) {
+    SERVER_LOG(WARN, "create detect gc info map failed", KR(ret), K(detect_gc_infos.count()));
   } else {
+    for (int64_t i = 0; i < detect_gc_infos.count() && OB_SUCC(ret); ++i) {
+      const ObSSPreciseGCInfo &gc_info = detect_gc_infos.at(i);
+      if (OB_FAIL(detect_gc_info_map_.set_refactored(gc_info.gc_tablet_, gc_info, 0, 0, 1))) {
+        SERVER_LOG(WARN, "set detect gc info map failed", KR(ret), K(gc_info));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    start_scn_idx_ = 0;
     start_to_read_ = true;
   }
   return ret;
@@ -76,7 +101,9 @@ bool ObAllVirtualSSGCDetectInfo::is_need_process(uint64_t tenant_id)
 void ObAllVirtualSSGCDetectInfo::release_last_tenant()
 {
 #ifdef OB_BUILD_SHARED_STORAGE
-  detect_info_iter_.reset();
+  start_scn_items_.reset();
+  detect_gc_info_map_.destroy();
+  start_scn_idx_ = 0;
 #endif
   start_to_read_ = false;
 }
@@ -87,21 +114,19 @@ int ObAllVirtualSSGCDetectInfo::process_curr_tenant(ObNewRow *&row)
 #ifndef OB_BUILD_SHARED_STORAGE
   ret = OB_ITER_END;
 #else
-  const common::hash::ObHashMap<ObSSPreciseGCTablet, share::SCN> &gc_start_scn_map =
-    MTL(ObSSGarbageCollectorService *)->get_gc_start_scn_map();
   if (!GCTX.is_shared_storage_mode()) {
     ret = OB_ITER_END;
   } else if (!start_to_read_ && OB_FAIL(prepare_start_to_read())) {
     SERVER_LOG(WARN, "prepare start to read failed", K(ret));
     ret = OB_ITER_END;  // to avoid throw error code to client
-  } else if (OB_FAIL(detect_info_iter_.get_next(gc_info_))) {
-    if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "get next last_succ_scn failed", K(ret));
-    }
-    ret = OB_ITER_END;  // to avoid throw error code to client
+  } else if (start_scn_idx_ >= start_scn_items_.count()) {
+    ret = OB_ITER_END;
   } else {
     const int64_t col_count = output_column_ids_.count();
-    const ObSSPreciseGCTablet gc_tablet = gc_info_.gc_tablet_;
+    const ObSSGCStartSCNItem &start_scn_item = start_scn_items_.at(start_scn_idx_++);
+    const ObSSPreciseGCTablet gc_tablet = start_scn_item.gc_tablet_;
+    const share::SCN gc_start_scn = start_scn_item.gc_start_scn_;
+    const ObSSPreciseGCInfo *gc_info = detect_gc_info_map_.get(gc_tablet);
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
@@ -122,33 +147,32 @@ int ObAllVirtualSSGCDetectInfo::process_curr_tenant(ObNewRow *&row)
         break;
       }
       case IS_COLLECTED: {
-        cur_row_.cells_[i].set_bool(gc_info_.is_collected_);
+        cur_row_.cells_[i].set_bool(OB_ISNULL(gc_info) ? false : gc_info->is_collected_);
         break;
       }
       case GC_END_SCN: {
-        const share::SCN *gc_end_scn_last_time = gc_start_scn_map.get(gc_tablet);
-        const share::SCN gc_start_scn = OB_ISNULL(gc_end_scn_last_time) ? share::SCN::min_scn() : *gc_end_scn_last_time;
         cur_row_.cells_[i].set_int(gc_start_scn.get_val_for_inner_table_field());
         break;
       }
       case SVR_IP: {
         // svr_ip
-        if (gc_info_.addr_.ip_to_string(ip_buf_, sizeof(ip_buf_))) {
+        if (OB_NOT_NULL(gc_info) && gc_info->addr_.ip_to_string(ip_buf_, sizeof(ip_buf_))) {
           cur_row_.cells_[i].set_varchar(ip_buf_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         } else {
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "fail to execute ip_to_string", K(ret));
+          cur_row_.cells_[i].set_varchar("");
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         }
         break;
       }
       case SVR_PORT: {
         // svr_port
-        cur_row_.cells_[i].set_int(gc_info_.addr_.get_port());
+        cur_row_.cells_[i].set_int(OB_ISNULL(gc_info) ? 0 : gc_info->addr_.get_port());
         break;
       }
       case SAFE_RECYCLE_SCN: {
-        cur_row_.cells_[i].set_int(gc_info_.row_scn_.get_val_for_inner_table_field());
+        const share::SCN gc_end_scn = OB_ISNULL(gc_info) ? share::SCN::min_scn() : gc_info->row_scn_;
+        cur_row_.cells_[i].set_int(gc_end_scn.get_val_for_inner_table_field());
         break;
       }
       default: {

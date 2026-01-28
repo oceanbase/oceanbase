@@ -12083,6 +12083,10 @@ OB_SERIALIZE_MEMBER(ObSetSSCacheSizeRatioArg, tenant_id_, micro_cache_size_ratio
 OB_SERIALIZE_MEMBER(ObSSGCLastSuccScnArg, tenant_id_, is_for_sslog_table_);
 OB_SERIALIZE_MEMBER(ObSSGCPushLastSuccScnArg, tenant_id_, succ_scn_ns_);
 OB_SERIALIZE_MEMBER(ObSSGCLastSuccSCNsRes, last_succ_scns_);
+OB_SERIALIZE_MEMBER(ObSSGCDetectInfoArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObSSGCDetectInfoRes, detect_gc_infos_);
+OB_SERIALIZE_MEMBER(ObSSGCStartSCNArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObSSGCStartSCNRes, start_scn_items_);
 OB_SERIALIZE_MEMBER(ObDelSSTabletMacroCacheArg, tenant_id_, tablet_id_);
 OB_SERIALIZE_MEMBER(ObDelSSMacroCacheRes, ret_);
 OB_SERIALIZE_MEMBER(ObDelSSTabletMacroCacheRes, macro_read_cache_cnt_, macro_write_cache_cnt_);

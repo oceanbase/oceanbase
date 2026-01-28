@@ -2638,6 +2638,50 @@ int ObRpcGetSSGCLastSuccScnsP::process()
   return ret;
 }
 
+int ObRpcGetSSGCDetectInfosP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ObSSGCDetectInfoArg is invalid", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService is null", KR(ret), K_(arg));
+      } else if (OB_FAIL(ss_gc_srv->get_detect_gc_infos(result_.detect_gc_infos_))) {
+        LOG_WARN("get detect gc infos failed", KR(ret), K_(arg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRpcGetSSGCStartScnItemsP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ObSSGCStartSCNArg is invalid", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSGarbageCollectorService is null", KR(ret), K_(arg));
+      } else if (OB_FAIL(ss_gc_srv->get_gc_start_scn_items(result_.start_scn_items_))) {
+        LOG_WARN("get gc start scn items failed", KR(ret), K_(arg));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRpcPushSSGCLastSuccScnP::process()
 {
   int ret = OB_SUCCESS;
