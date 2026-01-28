@@ -2123,12 +2123,13 @@
 #  logging.info('check rebalance task success')
 #
 ## 4. 检查集群状态
-#def check_cluster_status(query_cur):
+#def check_cluster_status(query_cur, timeout):
 #  # 4.1 检查是否非合并状态
+#  select_query_timeout = timeout * 1000 * 1000 if timeout > 0 else 2000000000
 #  (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
+#  (desc, results) = query_cur.exec_query("""select /*+ query_timeout({0}) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""".format(select_query_timeout))
 #  if results[0][0] > 0 :
 #    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
 #  logging.info('check cluster status success')
@@ -2696,7 +2697,7 @@
 #      check_data_version(query_cur)
 #      check_paxos_replica(query_cur)
 #      check_rebalance_task(query_cur)
-#      check_cluster_status(query_cur)
+#      check_cluster_status(query_cur, timeout)
 #      check_tenant_status(query_cur)
 #      check_restore_job_exist(query_cur)
 #      check_tenant_primary_zone(query_cur)
