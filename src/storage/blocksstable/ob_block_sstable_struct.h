@@ -51,10 +51,6 @@ const int64_t BF_MICRO_BLOCK_HEADER_MAGIC = 1015;
 const int64_t SERVER_SUPER_BLOCK_MAGIC = 1018;
 const int64_t LINKED_MACRO_BLOCK_HEADER_MAGIC = 1019;
 
-const int64_t MICRO_BLOCK_HEADER_VERSION_1 = 1;
-const int64_t MICRO_BLOCK_HEADER_VERSION_2 = 2;
-const int64_t MICRO_BLOCK_HEADER_VERSION_3 = 3;
-const int64_t MICRO_BLOCK_HEADER_VERSION = MICRO_BLOCK_HEADER_VERSION_3;
 const int64_t LINKED_MACRO_BLOCK_HEADER_VERSION = 1;
 const int64_t BF_MACRO_BLOCK_HEADER_VERSION = 1;
 const int64_t BF_MICRO_BLOCK_HEADER_VERSION = 1;
@@ -851,6 +847,7 @@ public:
   int64_t master_key_id_;
   const char *encrypt_key_;
 };
+
 }//end namespace blocksstable
 }//end namespace oceanbase
 #endif

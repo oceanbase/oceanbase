@@ -417,7 +417,8 @@ int ObIndexBlockTreeCursor::init(
     }
     }
 
-    if (OB_FAIL(ret)) {
+    if (FAILEDx(curr_path_item_->block_data_.prepare_micro_header())) {
+      LOG_WARN("failed to prepare micro header", K(ret), K(curr_path_item_->block_data_.micro_header_));
     } else if (FALSE_IT(root_row_store_type = curr_path_item_->block_data_.get_store_type())) {
     } else if (FALSE_IT(curr_path_item_->row_store_type_ = root_row_store_type)) {
     } else if (OB_FAIL(row_.init(allocator, rowkey_column_cnt_ + 1))) {
@@ -1481,7 +1482,7 @@ int ObIndexBlockTreeCursor::load_micro_block_data(const MacroBlockId &macro_bloc
       } else if (ObStoreFormat::is_row_store_type_with_cs_encoding(static_cast<ObRowStoreType>(header.row_store_type_))) {
         if (OB_FAIL(macro_reader.decrypt_and_full_transform_data(
             header, block_des_meta, src_block_buf, src_buf_size,
-            curr_path_item_->block_data_.get_buf(), curr_path_item_->block_data_.get_buf_size(),
+            curr_path_item_->block_data_,
             cursor_path_.get_allocator()))) {
           LOG_WARN("fail to decrypt_and_full_transform_data", K(ret), K(header), K(block_des_meta));
         } else {
@@ -1492,8 +1493,7 @@ int ObIndexBlockTreeCursor::load_micro_block_data(const MacroBlockId &macro_bloc
         if (OB_FAIL(macro_reader.do_decrypt_and_decompress_data(
             header, block_des_meta,
             src_block_buf, src_buf_size,
-            curr_path_item_->block_data_.get_buf(),
-            curr_path_item_->block_data_.get_buf_size(),
+            curr_path_item_->block_data_,
             is_compressed,
             true, /* need deep copy */
             cursor_path_.get_allocator()))) {

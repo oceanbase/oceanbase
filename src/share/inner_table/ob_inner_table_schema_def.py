@@ -17953,8 +17953,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15260'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15261', all_def_keywords['__all_virtual_apply_stat'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15262', all_def_keywords['__all_virtual_archive_stat'])))
 
-# 15263: __all_virtual_kv_ttl_task
-# 15264: __all_virtual_kv_ttl_task_history
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15263', all_def_keywords['__all_virtual_kv_ttl_task']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15264', all_def_keywords['__all_virtual_kv_ttl_task_history']))
 # 15265: __all_tenant_datafile
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15266', all_def_keywords['__all_virtual_ls_status']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15267', all_def_keywords['__all_virtual_ls_recovery_stat']))
@@ -45407,10 +45407,160 @@ FROM
 # 21700: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
 # 21701: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
 
-# 21702: DBA_OB_TTL_TASKS
-# 21703: DBA_OB_TTL_TASK_HISTORY
-# 21704: CDB_OB_TTL_TASKS
-# 21705: CDB_OB_TTL_TASK_HISTORY
+def_table_schema(
+  owner           = 'lixia.yq',
+  table_name      = 'DBA_OB_TTL_TASKS',
+  table_id        = '21702',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as MODIFIED_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 6 then "SKIP"
+        when 7 then "FAILED"
+        when 15 then "TRIGGERING"
+        when 16 then "SUSPENDING"
+        when 17 then "CANCELING"
+        when 18 then "MOVING"
+        else "INVALID" END AS STATUS,
+      a.ret_code as RET_CODE,
+      case a.task_type
+        when 4 then "COMPACTION"
+        else "INVALID" END AS TASK_TYPE
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()
+          where a.task_type=4
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'lixia.yq',
+  table_name      = 'DBA_OB_TTL_TASK_HISTORY',
+  table_id        = '21703',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as MODIFIED_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 6 then "SKIP"
+        else "INVALID" END AS STATUS,
+      a.ret_code as RET_CODE,
+      case a.task_type
+        when 4 then "COMPACTION"
+        else "INVALID" END AS TASK_TYPE
+      FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()
+          where a.task_type=4
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'lixia.yq',
+  table_name      = 'CDB_OB_TTL_TASKS',
+  table_id        = '21704',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as MODIFIED_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 5 then "MOVED"
+        when 6 then "SKIP"
+        when 7 then "FAILED"
+        when 15 then "TRIGGERING"
+        when 16 then "SUSPENDING"
+        when 17 then "CANCELING"
+        when 18 then "MOVING"
+        else "INVALID" END AS STATUS,
+      a.ret_code as RET_CODE,
+      case a.task_type
+        when 4 then "COMPACTION"
+        else "INVALID" END AS TASK_TYPE
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+          where a.task_type=4
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'lixia.yq',
+  table_name      = 'CDB_OB_TTL_TASK_HISTORY',
+  table_id        = '21705',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as MODIFIED_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 6 then "SKIP"
+        else "INVALID" END AS STATUS,
+      a.ret_code as RET_CODE,
+      case a.task_type
+        when 4 then "COMPACTION"
+        else "INVALID" END AS TASK_TYPE
+      FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+          where a.task_type=4
+""".replace("\n", " ")
+)
 # 21706: CDB_OB_SYNC_STANDBY_DEST
 # 21707: DBA_OB_SYNC_STANDBY_DEST
 
@@ -73310,7 +73460,8 @@ def_table_schema(
       BASE_MAJOR_STATUS,
       CO_MERGE_TYPE,
       MDS_FILTER_INFO,
-      EXECUTE_TIME
+      EXECUTE_TIME,
+      FILTER_ROW_COUNT
     FROM SYS.ALL_VIRTUAL_TABLET_COMPACTION_HISTORY
 """.replace("\n", " ")
 )
@@ -73364,7 +73515,8 @@ def_table_schema(
       BASE_MAJOR_STATUS,
       CO_MERGE_TYPE,
       MDS_FILTER_INFO,
-      EXECUTE_TIME
+      EXECUTE_TIME,
+      FILTER_ROW_COUNT
     FROM SYS.GV$OB_TABLET_COMPACTION_HISTORY
     WHERE
         SVR_IP=HOST_IP()
@@ -80045,8 +80197,86 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 28292: DBA_OB_TTL_TASKS
-# 28293: DBA_OB_TTL_TASK_HISTORY
+def_table_schema(
+  owner           = 'lixia.yq',
+  table_name      = 'DBA_OB_TTL_TASKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28292',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.task_id as TASK_ID,
+      a.task_start_time as START_TIME,
+      a.task_update_time as MODIFIED_TIME,
+      (case a.trigger_type
+        when 0 then 'PERIODIC'
+        when 1 then 'USER'
+        else 'INVALID' END) AS TRIGGER_TYPE,
+      (case a.status
+        when 2 then 'PENDING'
+        when 3 then 'CANCELED'
+        when 4 then 'FINISHED'
+        when 5 then 'MOVED'
+        when 6 then 'SKIP'
+        when 7 then 'FAILED'
+        when 15 then 'TRIGGERING'
+        when 16 then 'SUSPENDING'
+        when 17 then 'CANCELING'
+        when 18 then 'MOVING'
+        else 'INVALID' END) AS STATUS,
+      a.ret_code as RET_CODE,
+      (case a.task_type
+        when 2 then 'COMPACTION'
+        else 'INVALID' END) AS TASK_TYPE
+      FROM SYS.ALL_VIRTUAL_KV_TTL_TASK a left outer JOIN SYS.ALL_VIRTUAL_CORE_ALL_TABLE b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()
+          where a.task_type=4
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'lixia.yq',
+  table_name      = 'DBA_OB_TTL_TASK_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28293',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      b.table_name as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.task_id as TASK_ID,
+      a.task_start_time as START_TIME,
+      a.task_update_time as MODIFIED_TIME,
+      (case a.trigger_type
+        when 0 then 'PERIODIC'
+        when 1 then 'USER'
+        else 'INVALID' END) AS TRIGGER_TYPE,
+      (case a.status
+        when 3 then 'CANCELED'
+        when 4 then 'FINISHED'
+        when 6 then 'SKIP'
+        else 'INVALID' END) AS STATUS,
+      a.ret_code as RET_CODE,
+      (case a.task_type
+        when 2 then 'COMPACTION'
+        else 'INVALID' END) AS TASK_TYPE
+      FROM SYS.ALL_VIRTUAL_KV_TTL_TASK_HISTORY a left outer JOIN SYS.ALL_VIRTUAL_CORE_ALL_TABLE b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()
+          where a.task_type=4
+""".replace("\n", " ")
+)
 # 28294: DBA_OB_SYNC_STANDBY_DEST
 # 28295: DBA_OB_ROUTINE_LOAD_JOB
 

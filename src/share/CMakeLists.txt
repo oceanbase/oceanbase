@@ -877,6 +877,10 @@ ob_set_subtarget(ob_share ai_service
   ai_service/ob_ai_service_executor.cpp
 )
 
+ob_set_subtarget(ob_share compaction_ttl
+  compaction_ttl/ob_compaction_ttl_util.cpp
+)
+
 ob_add_new_object_target(ob_share ob_share)
 ob_add_new_object_target(ob_share_extra ob_share_extra)
 

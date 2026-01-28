@@ -44,6 +44,7 @@ struct ObConstMetaHeader
 
   ObConstMetaHeader() { reset(); }
   void reset() { memset(this, 0, sizeof(*this)); }
+  bool is_valid() const { return OB_CONST_META_HEADER_V1 == version_; }
 
   TO_STRING_KV(K_(version), K_(count), K_(const_ref), K_(row_id_byte), K_(attr), K_(offset));
 }__attribute__((packed));

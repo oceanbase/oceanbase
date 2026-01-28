@@ -16,6 +16,8 @@
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/access/ob_pushdown_aggregate_vec.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
+#include "sql/engine/basic/ob_ttl_filter_struct.h"
+#include "sql/engine/basic/ob_base_version_filter_struct.h"
 
 namespace oceanbase
 {
@@ -1349,7 +1351,7 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::init(
 {
   int ret = OB_SUCCESS;
   // can be init twice
-  if (OB_UNLIKELY(block_data.get_buf_size() <= 0)) {
+  if (OB_UNLIKELY(!block_data.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(block_data));
   } else {
@@ -1613,6 +1615,7 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::compare_rowkey(const ObDatumRange &
 
 template<bool IS_MULTI_VERSION>
 int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_decoder_cache_size(
+  const ObMicroBlockHeader &micro_header,
   const char *block, const int64_t block_size, int64_t &size)
 {
   int ret = OB_SUCCESS;
@@ -1620,12 +1623,11 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_decoder_cache_size(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(block), K(block_size));
   } else {
-    const ObMicroBlockHeader *header = reinterpret_cast<const ObMicroBlockHeader *>(block);
     const ObCSColumnHeader *col_header = reinterpret_cast<const ObCSColumnHeader *>(
-      block + header->header_size_ + sizeof(ObAllColumnHeader));
+      block + micro_header.header_size_ + sizeof(ObAllColumnHeader));
     size = sizeof(ObBlockCachedCSDecoderHeader);
     const int64_t offset_size = sizeof(ObBlockCachedCSDecoderHeader::Col);
-    for (int64_t i = 0; size < MAX_CACHED_DECODER_BUF_SIZE && i < header->column_count_; i++) {
+    for (int64_t i = 0; size < MAX_CACHED_DECODER_BUF_SIZE && i < micro_header.column_count_; i++) {
       if (size + offset_size + cs_decoder_sizes[col_header[i].type_] >
         MAX_CACHED_DECODER_BUF_SIZE) {
         break;
@@ -1633,7 +1635,7 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_decoder_cache_size(
       size += offset_size + cs_decoder_sizes[col_header[i].type_];
     }
     if constexpr (IS_MULTI_VERSION) {
-      int64_t size_to_add = offset_size + cs_decoder_sizes[col_header[header->column_count_].type_];
+      int64_t size_to_add = offset_size + cs_decoder_sizes[col_header[micro_header.column_count_].type_];
       if (size + size_to_add < MAX_CACHED_DECODER_BUF_SIZE) {
         size += size_to_add;
       }
@@ -1643,8 +1645,12 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_decoder_cache_size(
 }
 
 template<bool IS_MULTI_VERSION>
-int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::cache_decoders(char *buf,
-    const int64_t size, const char *block, const int64_t block_size)
+int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::cache_decoders(
+  const ObMicroBlockHeader &micro_header,
+  char *buf,
+  const int64_t size,
+  const char *block,
+  const int64_t block_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == buf || size <= sizeof(ObBlockCachedCSDecoderHeader) ||
@@ -1653,12 +1659,11 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::cache_decoders(char *buf,
     LOG_WARN(
       "invalid argument", K(ret), KP(buf), K(size), KP(block), K(block_size));
   } else {
-    const ObMicroBlockHeader *header = reinterpret_cast<const ObMicroBlockHeader *>(block);
-    block += header->header_size_ + sizeof(ObAllColumnHeader);
+    block += micro_header.header_size_ + sizeof(ObAllColumnHeader);
     const ObCSColumnHeader *col_header = reinterpret_cast<const ObCSColumnHeader *>(block);
     MEMSET(buf, 0, size);
     ObBlockCachedCSDecoderHeader *h = reinterpret_cast<ObBlockCachedCSDecoderHeader *>(buf);
-    h->col_count_ = header->column_count_;
+    h->col_count_ = micro_header.column_count_;
     h->col_count_ += IS_MULTI_VERSION ? 1 : 0;
     int64_t used = sizeof(*h);
     int64_t offset = 0;
@@ -1669,7 +1674,7 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::cache_decoders(char *buf,
       offset += decoder_size;
       h->count_++;
     }
-    LOG_DEBUG("cache decoders", K(size), K(header->column_count_), "cached_col_cnt", h->count_);
+    LOG_DEBUG("cache decoders", K(size), K(micro_header.column_count_), "cached_col_cnt", h->count_);
 
     ObDecoderArrayAllocator allocator(reinterpret_cast<char *>(&h->col_[h->count_]));
     const ObIColumnCSDecoder *d = nullptr;
@@ -1898,9 +1903,12 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::filter_pushdown_filter(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Null pointer of decoder ctx or decoder", KR(ret), KP(col_cs_decoder->ctx_));
   } else {
+    sql::ObWhitePushdownFilterDecoderGuard white_filter_guard(&filter, ret);
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     col_cs_decoder->ctx_->get_base_ctx().set_col_param(col_params.at(0));
-    if (filter.null_param_contained()
+    if (OB_FAIL(white_filter_guard.get_ret())) {
+      LOG_WARN("Failed to reverse filter if rowscn", K(ret), K(filter));
+    } else if (filter.null_param_contained()
         && (op_type != sql::WHITE_OP_NU)
         && (op_type != sql::WHITE_OP_NN)) {
     } else if (filter.is_semistruct_filter_node() && col_cs_decoder->decoder_->get_type() != ObCSColumnHeader::SEMISTRUCT) {
@@ -2031,6 +2039,140 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::filter_black_filter_batch(
       }
     }
   }
+  return ret;
+}
+
+template<bool IS_MULTI_VERSION>
+int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::filter_pushdown_single_column_mds_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+
+  bool filter_applied = false;
+  storage::ObTableAccessContext *context = pd_filter_info.context_;
+  ObIMDSFilterExecutor *mds_executor = nullptr;
+
+  if (OB_UNLIKELY(pd_filter_info.start_ < 0 ||
+                  pd_filter_info.start_ + pd_filter_info.count_ > row_count_ ||
+                  !filter.is_mds_node())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(row_count_), K(pd_filter_info.start_), K(pd_filter_info.count_));
+  } else if (OB_ISNULL(mds_executor = ObIMDSFilterExecutor::cast(&filter)) || OB_UNLIKELY(mds_executor->get_col_idx() < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mds executor", K(ret), K(filter));
+  } else {
+    sql::ObWhitePushdownFilterDecoderGuard white_filter_guard(static_cast<sql::ObWhiteFilterExecutor *>(&filter), ret);
+    ObColumnCSDecoder *col_cs_decoder = nullptr;
+    int64_t col_offset = mds_executor->get_col_idx();
+
+    if (OB_FAIL(white_filter_guard.get_ret())) {
+      LOG_WARN("Failed to reverse filter if rowscn", K(ret), K(filter));
+    } else if (OB_UNLIKELY(col_offset < 0 || col_offset >= column_count_)) {
+      ret = OB_INDEX_OUT_OF_RANGE;
+      LOG_WARN("column offset out of range", K(ret), K(column_count_), K(col_offset));
+    } else if (FALSE_IT(col_cs_decoder = decoders_ + col_offset)) {
+    } else if (OB_ISNULL(col_cs_decoder->ctx_) || OB_ISNULL(col_cs_decoder->decoder_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Null pointer of decoder ctx or decoder", KR(ret), KP(col_cs_decoder->ctx_));
+    } else if (OB_FAIL(col_cs_decoder->decoder_->pushdown_operator(
+                   parent,
+                   *col_cs_decoder->ctx_,
+                   static_cast<sql::ObWhiteFilterExecutor &>(filter),
+                   pd_filter_info,
+                   result_bitmap))) {
+      if (OB_LIKELY(ret == OB_NOT_SUPPORTED)) {
+        LOG_TRACE("[PUSHDOWN] Column specific operator failed, switch to retrograde filter pushdown", K(ret), K(filter));
+        // reuse result bitmap as null objs set
+        result_bitmap.reuse();
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to pushdown operator", K(ret), K(filter));
+      }
+    } else {
+      filter_applied = true;
+    }
+    LOG_TRACE("[MDS INFO] micro block single column mds pushdown filter row",
+              K(ret),
+              K(pd_filter_info),
+              K(result_bitmap.popcnt()),
+              K(result_bitmap),
+              KPC(transform_helper_.get_micro_block_header()),
+              K(filter));
+  }
+
+  // TODO(menglan): very slow path for white filter pushdown, should repair
+  if (OB_SUCC(ret) && !filter_applied) {
+    ObStorageDatum datum[1];
+    const bool is_trans_version_column = transform_helper_.get_micro_block_header()->is_trans_version_column_idx(mds_executor->get_col_idx());
+    for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
+      int64_t row_idx = offset + pd_filter_info.start_;
+      bool filtered = false;
+      if (nullptr != parent && parent->can_skip_filter(offset)) {
+      } else {
+        datum[0].reuse();
+        if (OB_FAIL(decoders_[mds_executor->get_col_idx()].decode(row_idx, datum[0]))) {
+          LOG_WARN("decode cell failed", K(ret), K(row_idx), K(datum[0]));
+        } else if (OB_UNLIKELY(is_trans_version_column) && OB_FAIL(storage::reverse_trans_version_val(datum[0]))) {
+          LOG_WARN("Failed to reverse trans version val", K(ret));
+        } else if (OB_FAIL(mds_executor->filter(datum, 1, filtered))) {
+          LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
+        } else if (!filtered) {
+          if (OB_FAIL(result_bitmap.set(offset))) {
+            LOG_WARN("Failed to set result bitmap", K(ret), K(offset));
+          }
+        }
+      }
+    }
+    LOG_TRACE("[MDS FILTER INFO] micro block single column mds pushdown filter row",
+              K(ret),
+              K(pd_filter_info),
+              K(result_bitmap.popcnt()),
+              K(result_bitmap),
+              K(transform_helper_.get_micro_block_header()),
+              K(filter));
+  }
+
+  return ret;
+}
+
+template<bool IS_MULTI_VERSION>
+int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::filter_pushdown_ttl_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!filter.is_ttl_filter_node())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ttl filter type", K(ret), K(filter));
+  } else if (OB_FAIL(filter_pushdown_single_column_mds_filter(parent, filter, pd_filter_info, result_bitmap))) {
+    LOG_WARN("Failed to do single column mds pushdown filter", K(ret), K(filter));
+  }
+
+  return ret;
+}
+
+template<bool IS_MULTI_VERSION>
+int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::filter_pushdown_base_version_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!filter.is_base_version_node())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected base version filter type", K(ret), K(filter));
+  } else if (OB_FAIL(filter_pushdown_single_column_mds_filter(parent, filter, pd_filter_info, result_bitmap))) {
+    LOG_WARN("Failed to do single column mds pushdown filter", K(ret), K(filter));
+  }
+
   return ret;
 }
 
@@ -2664,7 +2806,7 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_col_data(const int32_t col_id, 
   if (OB_FAIL(decoders_[col_id].decode_vector(vector_ctx))) {
     LOG_WARN("fail to get datums from decoder", K(ret),  K(column_count_), K(col_id), K(vector_ctx));
   } else if (OB_UNLIKELY(transform_helper_.get_micro_block_header()->is_trans_version_column_idx(cols_index.at(col_id))) &&
-             OB_FAIL(storage::reverse_trans_version_val(vector_ctx.get_vector(), vector_ctx.row_cap_))) {
+             OB_FAIL(storage::reverse_trans_version_val(vector_ctx.get_vector(), vector_ctx.row_cap_, vector_ctx.vec_offset_))) {
      LOG_WARN("Failed to reverse trans version val", K(ret));
   }
   return ret;

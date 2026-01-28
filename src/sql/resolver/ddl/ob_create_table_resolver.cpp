@@ -24,6 +24,7 @@
 #include "share/ob_vec_index_builder_util.h"
 #include "share/ob_heap_organized_table_util.h"
 #include "share/ob_license_utils.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 
 namespace oceanbase
@@ -1111,6 +1112,20 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       if (!table_schema.get_kv_attributes().empty() &&
           OB_FAIL(ObTTLUtil::check_kv_attributes(table_schema, index_arg_list, params_.is_htable_))) {
         LOG_WARN("failed to check kv attributes", K(ret));
+      }
+    }
+
+
+    if (OB_SUCC(ret)) {
+      ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+      if (OB_ISNULL(schema_checker_) || OB_ISNULL(schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "schema_checker_ or schema guard is null.", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_create_append_only_engine_valid(table_schema, tenant_id))) {
+        LOG_WARN("fail to check append_only engine valid", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_create_ttl_schema_valid(
+                     table_schema, tenant_id))) {
+        LOG_WARN("fail to check ttl schema valid", K(ret));
       }
     }
   }

@@ -18,6 +18,7 @@
 #include "share/tablet/ob_tablet_to_table_history_operator.h" // ObTabletToTableHistoryOperator
 #include "share/tablet/ob_tablet_to_ls_operator.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_lob_access_utils.h" // ObTextStringIter
 #include "lib/roaringbitmap/ob_rb_utils.h" // ObRbUtils
 
@@ -456,6 +457,8 @@ int ObPartitionExchange::check_partition_exchange_conditions_(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("exchange partition table is not user table", K(ret), K(base_table_schema.is_user_table()), K(base_table_schema.is_ctas_tmp_table()), K(inc_table_schema.is_user_table()), K(inc_table_schema.is_ctas_tmp_table()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Partition exchange operations for non-user tables are");
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_exchange_partition_for_append_only_valid(base_table_schema, inc_table_schema))) {
+    LOG_WARN("failed to check exchange partition for append only valid", K(ret), K(base_table_schema), K(inc_table_schema), K(arg.tenant_id_));
   } else if (OB_UNLIKELY(arg.base_table_part_name_.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("base table part name should not be empty", K(ret), K(arg.base_table_part_name_));
@@ -743,6 +746,8 @@ int ObPartitionExchange::check_table_conditions_in_common_(
       LOG_WARN("table flags of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_table_flags()), K(inc_table_schema.get_table_flags()));
     } else if (OB_UNLIKELY(0 != base_table_schema.get_ttl_definition().compare(inc_table_schema.get_ttl_definition()))) {
       LOG_WARN("ttl definition of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_ttl_definition()), K(inc_table_schema.get_ttl_definition()));
+    } else if (OB_UNLIKELY(base_table_schema.get_ttl_flag().flag_ != inc_table_schema.get_ttl_flag().flag_)) {
+      LOG_WARN("ttl flag of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_ttl_flag()), K(inc_table_schema.get_ttl_flag()));
     } else if (OB_UNLIKELY(0 != base_table_schema.get_kv_attributes().compare(inc_table_schema.get_kv_attributes()))) {
       LOG_WARN("kv attributes of exchanging partition tables are not equal", K(ret), K(base_table_schema.get_kv_attributes()), K(inc_table_schema.get_kv_attributes()));
     } else if (OB_UNLIKELY(base_table_schema.get_index_using_type() != inc_table_schema.get_index_using_type())) {

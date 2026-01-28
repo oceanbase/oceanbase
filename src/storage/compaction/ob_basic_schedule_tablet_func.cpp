@@ -132,7 +132,7 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
   const int64_t schedule_scn,
   const ObTabletStatusCache &tablet_status,
   bool &can_merge,
-  const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type)
+  const ObCOMajorMergeStrategy &co_major_merge_strategy)
 {
   const ObLSID &ls_id = ls_status_.ls_id_;
   can_merge = false;
@@ -161,7 +161,7 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
     } else if (need_force_freeze) {
       tablet_cnt_.force_freeze_cnt_++;
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_type)))) {
+      if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_strategy)))) {
         LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(tablet_id));
       }
     }

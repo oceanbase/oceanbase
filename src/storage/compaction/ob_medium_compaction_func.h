@@ -44,8 +44,9 @@ public:
       weak_read_ts_(weak_read_ts.get_val_for_tx()),
       medium_info_list_(&medium_info_list),
       schedule_tablet_cnt_(schedule_tablet_cnt),
-      merge_reason_(merge_reason),
       least_medium_snapshot_(least_medium_snapshot),
+      table_id_(OB_INVALID_ID),
+      merge_reason_(merge_reason),
       window_decision_log_info_(window_decision_log_info)
   {}
   ~ObMediumCompactionScheduleFunc() {}
@@ -76,7 +77,8 @@ public:
     const int64_t schema_version,
     const int64_t data_version,
     ObIAllocator &allocator,
-    storage::ObStorageSchema &storage_schema);
+    storage::ObStorageSchema &storage_schema,
+    uint64_t &table_id);
   static int batch_check_medium_finish(
     const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,
@@ -202,11 +204,12 @@ protected:
     int64_t &schema_version);
   int get_adaptive_reason(const int64_t schedule_major_snapshot);
   int fill_mds_filter_info(ObMediumCompactionInfo &medium_info);
+  int fill_mlog_purge_scn(ObMediumCompactionInfo &medium_info);
   int fill_window_decision_log_info(ObMediumCompactionInfo &medium_info);
   static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60_s;
   static constexpr double SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD = 0.2;
   static const int64_t SCHEDULE_RANGE_ROW_COUNT_THRESHOLD = 1000 * 1000L; // 100w
-  static const int64_t RECYCLE_TRUNCATE_INFO_INTERVAL = 2 * 60 * 1000L * 1000L * 1000L;
+  static const int64_t RECYCLE_MDS_INFO_INTERVAL = 2 * 60 * 1000L * 1000L * 1000L;
 #ifdef ERRSIM
   int errsim_choose_medium_snapshot(
     const int64_t max_sync_medium_scn,
@@ -221,8 +224,9 @@ private:
   const int64_t weak_read_ts_; // weak_read_ts_ should get before tablet
   const ObMediumCompactionInfoList *medium_info_list_;
   ObScheduleTabletCnt *schedule_tablet_cnt_;
-  ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   int64_t least_medium_snapshot_; // choosen medium snapshot should >= least_medium_snapshot_
+  uint64_t table_id_; // for mlog
+  ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
   const ObWindowCompactionDecisionLogInfo *window_decision_log_info_; // optional debug payload from window compaction
 };
 

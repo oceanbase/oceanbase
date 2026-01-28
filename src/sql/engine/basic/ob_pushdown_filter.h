@@ -76,6 +76,9 @@ enum PushdownFilterType //FARM COMPAT WHITELIST
   TRUNCATE_OR_FILTER,
   TRUNCATE_AND_FILTER,
   SEMISTRUCT_FILTER,
+  TTL_WHITE_FILTER,
+  TTL_AND_FILTER,
+  BASE_VERSION_FILTER,
   MAX_FILTER_TYPE
 };
 
@@ -93,6 +96,9 @@ enum PushdownExecutorType //FARM COMPAT WHITELIST
   TRUNCATE_OR_FILTER_EXECUTOR,
   TRUNCATE_AND_FILTER_EXECUTOR,
   SEMISTRUCT_FILTER_EXECUTOR,
+  TTL_WHITE_FILTER_EXECUTOR,
+  TTL_AND_FILTER_EXECUTOR,
+  BASE_VERSION_FILTER_EXECUTOR,
   MAX_EXECUTOR_TYPE
 };
 
@@ -391,6 +397,34 @@ enum ObWhiteFilterOperatorType
   // WHITE_OP_LI, // like
   WHITE_OP_MAX,
 };
+
+static constexpr ObWhiteFilterOperatorType REVERSED_WHITE_OP_TYPE[WHITE_OP_MAX + 1] = {
+  WHITE_OP_EQ,  // reversed == is ==
+  WHITE_OP_GE,  // reversed <= is >=
+  WHITE_OP_GT,  // reversed < is >
+  WHITE_OP_LE,  // reversed >= is <=
+  WHITE_OP_LT,  // reversed > is <
+  WHITE_OP_NE,  // reversed <> is <>
+  WHITE_OP_MAX, // reversed WHITE_OP_BT is not supported
+  WHITE_OP_IN,  // reversed in is in
+  WHITE_OP_NU,  // reversed is null is is null
+  WHITE_OP_NN,  // reversed is not null is is not null
+  WHITE_OP_MAX, // reversed WHITE_OP_MAX is not supported
+};
+
+//! ensure the ObWhiteFilterOperatorType and REVERSED_WHITE_OP_TYPE are consistent
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_EQ] == WHITE_OP_EQ, "EQ => EQ");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_LE] == WHITE_OP_GE, "LE => GE");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_LT] == WHITE_OP_GT, "LT => GT");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_GE] == WHITE_OP_LE, "GE => LE");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_GT] == WHITE_OP_LT, "GT => LT");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_NE] == WHITE_OP_NE, "NE => NE");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_IN] == WHITE_OP_IN, "IN => IN");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_NU] == WHITE_OP_NU, "NU => NU");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_NN] == WHITE_OP_NN, "NN => NN");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_BT] == WHITE_OP_MAX, "Not support BT");
+static_assert(REVERSED_WHITE_OP_TYPE[WHITE_OP_MAX] == WHITE_OP_MAX, "Not support MAX");
+
 class ObPushdownWhiteFilterNode : public ObPushdownFilterNode
 {
   OB_UNIS_VERSION_V(1);
@@ -693,21 +727,29 @@ public:
   }
   virtual OB_INLINE bool is_filter_white_node() const
   {
-    return type_ == WHITE_FILTER_EXECUTOR || type_ == DYNAMIC_FILTER_EXECUTOR || type_ == TRUNCATE_WHITE_FILTER_EXECUTOR || type_ == SEMISTRUCT_FILTER_EXECUTOR;
+    return type_ == WHITE_FILTER_EXECUTOR || type_ == DYNAMIC_FILTER_EXECUTOR || type_ == TRUNCATE_WHITE_FILTER_EXECUTOR || type_ == SEMISTRUCT_FILTER_EXECUTOR || type_ == TTL_WHITE_FILTER_EXECUTOR || type_ == BASE_VERSION_FILTER_EXECUTOR;
   }
-  virtual OB_INLINE bool is_truncate_node() const { return type_ >= TRUNCATE_WHITE_FILTER_EXECUTOR and type_ <= TRUNCATE_AND_FILTER_EXECUTOR; }
+  virtual OB_INLINE bool is_mds_node() const
+  {
+    return is_truncate_node() || is_ttl_node() || is_base_version_node();
+  }
+  virtual OB_INLINE bool is_truncate_node() const { return type_ >= TRUNCATE_WHITE_FILTER_EXECUTOR && type_ <= TRUNCATE_AND_FILTER_EXECUTOR; }
+  virtual OB_INLINE bool is_ttl_node() const { return type_ >= TTL_WHITE_FILTER_EXECUTOR && type_ <= TTL_AND_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_sample_node() const { return type_ == HYBRID_SAMPLE_FILTER_EXECUTOR || type_ == TRIVAL_SAMPLE_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_semistruct_filter_node() const { return type_ == SEMISTRUCT_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_filter_node() const { return is_filter_black_node() || is_filter_white_node() || is_sample_node(); }
-  virtual OB_INLINE bool is_logic_and_node() const { return type_ == AND_FILTER_EXECUTOR || type_ == TRUNCATE_AND_FILTER_EXECUTOR; }
+  virtual OB_INLINE bool is_logic_and_node() const { return type_ == AND_FILTER_EXECUTOR || type_ == TRUNCATE_AND_FILTER_EXECUTOR || type_ == TTL_AND_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_logic_or_node() const { return type_ == OR_FILTER_EXECUTOR || type_ == TRUNCATE_OR_FILTER_EXECUTOR; }
-  virtual OB_INLINE bool is_logic_op_node() const { return is_logic_and_node() || is_logic_or_node() || is_truncate_logic_op_node(); }
+  virtual OB_INLINE bool is_logic_op_node() const { return is_logic_and_node() || is_logic_or_node() || is_truncate_logic_op_node() || is_ttl_logic_and_node(); }
   OB_INLINE bool is_filter_dynamic_node() const { return type_ == DYNAMIC_FILTER_EXECUTOR; }
   virtual OB_INLINE bool filter_can_continuous_filter() const { return true; }
   OB_INLINE bool is_truncate_logic_op_node() const { return is_truncate_logic_or_node() || is_truncate_logic_and_node(); }
   OB_INLINE bool is_truncate_logic_or_node() const { return type_ == TRUNCATE_OR_FILTER_EXECUTOR; }
   OB_INLINE bool is_truncate_logic_and_node() const { return type_ == TRUNCATE_AND_FILTER_EXECUTOR; }
+  OB_INLINE bool is_ttl_logic_and_node() const { return type_ == TTL_AND_FILTER_EXECUTOR; }
   OB_INLINE bool is_truncate_filter_node() const { return type_ == TRUNCATE_BLACK_FILTER_EXECUTOR || type_ == TRUNCATE_WHITE_FILTER_EXECUTOR; }
+  OB_INLINE bool is_ttl_filter_node() const { return type_ == TTL_WHITE_FILTER_EXECUTOR; }
+  OB_INLINE bool is_base_version_node() const { return type_ == BASE_VERSION_FILTER_EXECUTOR; }
   int prepare_skip_filter(bool disable_bypass);
   OB_INLINE bool can_skip_filter(int64_t row) const
   {
@@ -1134,7 +1176,7 @@ public:
                         ObPushdownWhiteFilterNode &filter,
                         ObPushdownOperator &op)
       : ObPhysicalFilterExecutor(alloc, op, PushdownExecutorType::WHITE_FILTER_EXECUTOR),
-        cmp_func_(nullptr), null_param_contained_(false), datum_params_(alloc), filter_(filter),
+        cmp_func_(nullptr), null_param_contained_(false), is_reversed_(false), datum_params_(alloc), filter_(filter),
         param_obj_meta_(), col_obj_meta_()
       {}
   virtual ~ObWhiteFilterExecutor()
@@ -1162,8 +1204,9 @@ public:
   OB_INLINE bool null_param_contained() const { return null_param_contained_; }
   virtual int exist_in_set(const common::ObDatum &datum, bool &is_exist) const;
   int exist_in_datum_array(const common::ObDatum &datum, bool &is_exist, const int64_t offset = 0) const;
+  int reverse_filter_if_rowscn();
   OB_INLINE ObWhiteFilterOperatorType get_op_type() const
-  { return filter_.get_op_type(); }
+  { return is_reversed_ ? REVERSED_WHITE_OP_TYPE[filter_.get_op_type()] : filter_.get_op_type(); }
   bool is_cmp_op_with_null_ref_value() const;
   INHERIT_TO_STRING_KV("ObPushdownWhiteFilterExecutor", ObPushdownFilterExecutor,
                        K_(null_param_contained), K_(datum_params), K_(param_set),
@@ -1178,6 +1221,19 @@ public:
       param_set_.destroy();
     }
   }
+
+  OB_INLINE int reverse_op_type()
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(REVERSED_WHITE_OP_TYPE[filter_.get_op_type()] == WHITE_OP_MAX)) {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "unsupported reversed filter operator type", K(ret), K(filter_));
+    } else {
+      is_reversed_ = !is_reversed_;
+    }
+    return ret;
+  }
+
 protected:
   OB_INLINE bool is_null_param(const ObDatum &datum, const ObObjMeta obj_meta)
   {
@@ -1191,6 +1247,7 @@ public:
   common::ObDatumCmpFuncType cmp_func_;
 protected:
   bool null_param_contained_;
+  bool is_reversed_;
   common::ObFixedArray<common::ObDatum, common::ObIAllocator> datum_params_;
   ObWhiteFilterParamHashSet param_set_;
   ObPushdownWhiteFilterNode &filter_;
@@ -1513,7 +1570,8 @@ struct PushdownFilterInfo
       param_(nullptr),
       context_(nullptr),
       disable_bypass_(false),
-      first_batch_(false)
+      first_batch_(false),
+      contain_rowscn_(false)
   {}
   ~PushdownFilterInfo();
   void reset();
@@ -1521,7 +1579,7 @@ struct PushdownFilterInfo
   OB_INLINE bool is_valid()
   {
     bool ret = is_inited_;
-    if (is_pd_filter_ && !orig_filter_is_null_ && !filter_->is_sample_node() && !filter_->is_truncate_node()) {
+    if (is_pd_filter_ && !orig_filter_is_null_ && !filter_->is_sample_node() && !filter_->is_mds_node()) {
       ret = ret && (nullptr != datum_buf_);
     }
     if (0 < batch_size_) {
@@ -1563,9 +1621,11 @@ struct PushdownFilterInfo
     common::ObIAllocator *allocator_;
   };
 
+  static int is_filter_contain_rowscn(sql::ObPushdownFilterExecutor *filter, bool &contain_rowscn);
+
   TO_STRING_KV(K_(is_pd_filter), K_(is_pd_to_cg), K_(orig_filter_is_null), K_(start), K_(count), K_(col_capacity), K_(batch_size),
                KP_(datum_buf), KP_(filter), KP_(cell_data_ptrs), KP_(row_ids), KP_(ref_bitmap),
-               KP_(param), KP_(context), KP_(skip_bit));
+               KP_(param), KP_(context), KP_(skip_bit), K_(contain_rowscn));
 
   bool is_inited_;
   bool is_pd_filter_;
@@ -1591,6 +1651,8 @@ struct PushdownFilterInfo
   storage::ObTableAccessContext *context_;
   bool disable_bypass_;
   bool first_batch_;
+  bool contain_rowscn_; // indicate whether the filter contains rowscn, notice that this will be
+                        // changed when combine filter with mds filter
 };
 
 template<typename T>
@@ -1610,6 +1672,34 @@ int ObPushdownFilterExecutor::init_array_param(common::ObFixedArray<T, common::O
   }
   return ret;
 }
+
+class ObWhitePushdownFilterDecoderGuard
+{
+public:
+  ObWhitePushdownFilterDecoderGuard(ObWhiteFilterExecutor *executor, int &ret)
+      : executor_(executor), ret_(ret)
+  {
+    if (OB_LIKELY(ret_ == OB_SUCCESS) && OB_NOT_NULL(executor_)) {
+      if (OB_UNLIKELY(OB_SUCCESS != (ret_ = executor_->reverse_filter_if_rowscn()))) {
+        STORAGE_LOG_RET(WARN, ret_, "Failed to reverse filter for rowscn", K(ret_), KPC(executor_));
+      }
+    }
+  }
+
+  ~ObWhitePushdownFilterDecoderGuard()
+  {
+    if (OB_LIKELY(ret_ == OB_SUCCESS) && OB_NOT_NULL(executor_)) {
+      if (OB_UNLIKELY(OB_SUCCESS != (ret_ = executor_->reverse_filter_if_rowscn()))) {
+        STORAGE_LOG_RET(WARN, ret_, "Failed to reverse filter for rowscn", K(ret_), KPC(executor_));
+      }
+    }
+  }
+
+  OB_INLINE int get_ret() const { return ret_; }
+
+  ObWhiteFilterExecutor *executor_;
+  int &ret_;
+};
 
 }
 }

@@ -2322,7 +2322,7 @@ int ObTransferReplaceTableTask::put_sstables_to_shared_tablet_(ObBatchUpdateTabl
               compaction::ObMergeType::MEDIUM_MERGE/*merge_type*/,
               SCN::min_scn()/*clog_checkpoint_scn*/,
               true/*need_report*/,
-              mig_param->has_truncate_info_)))) {
+              mig_param->has_merged_with_mds_info_)))) {
     LOG_WARN("failed to init with compaction info", KR(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < batch_param.tables_handle_.get_count(); ++i) {

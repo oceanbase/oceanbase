@@ -15,6 +15,7 @@
 #include "share/ob_license_utils.h"
 #include "sql/resolver/ddl/ob_create_mlog_resolver.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -297,6 +298,8 @@ int ObCreateMLogResolver::resolve_table_name_node(
     LOG_WARN("create materialized view log on a non-user table or mview is not supported",
         KR(ret), K(data_table_schema->get_table_type()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on a non-user table or mview is");
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_create_mlog_for_ttl_valid(*data_table_schema))) {
+    LOG_WARN("failed to check create mlog for ttl valid", KR(ret), K(*data_table_schema));
   }
 
   if (OB_SUCC(ret)) {

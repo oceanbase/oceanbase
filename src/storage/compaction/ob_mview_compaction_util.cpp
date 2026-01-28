@@ -79,10 +79,10 @@ int ObMviewMergeParameter::init(const ObMergeParameter &merge_param)
   } else {
     database_id_ = table_schema->get_database_id();
   }
-  if (FAILEDx(refresh_scn_range_.start_scn_.convert_for_sql(merge_param.merge_version_range_.base_version_))) {
-    LOG_WARN("Failed to convert to scn", K(ret), K(merge_param.merge_version_range_));
-  } else if (OB_FAIL(refresh_scn_range_.end_scn_.convert_for_sql(merge_param.merge_version_range_.snapshot_version_))) {
-    LOG_WARN("Failed to convert to scn", K(ret), K(merge_param.merge_version_range_));
+  if (FAILEDx(refresh_scn_range_.start_scn_.convert_for_sql(merge_param.get_merge_version_range().base_version_))) {
+    LOG_WARN("Failed to convert to scn", K(ret), K(merge_param.get_merge_version_range()));
+  } else if (OB_FAIL(refresh_scn_range_.end_scn_.convert_for_sql(merge_param.get_merge_version_range().snapshot_version_))) {
+    LOG_WARN("Failed to convert to scn", K(ret), K(merge_param.get_merge_version_range()));
   } else if (OB_UNLIKELY(!refresh_scn_range_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected refresh scn range", K(ret), K_(refresh_scn_range));

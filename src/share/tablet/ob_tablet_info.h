@@ -93,6 +93,7 @@ public:
   inline int64_t get_required_size() const { return required_size_; }
   inline int64_t get_report_scn() const { return report_scn_; }
   inline ScnStatus get_status() const { return status_; }
+  inline int64_t get_ddl_create_snapshot() const { return ddl_create_snapshot_; }
   int init(
       const uint64_t tenant_id,
       const common::ObTabletID &tablet_id,

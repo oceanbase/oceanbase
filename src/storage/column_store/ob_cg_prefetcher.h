@@ -36,7 +36,9 @@ public:
       cur_micro_data_read_idx_(-1),
       agg_group_(nullptr),
       sstable_index_filter_(nullptr)
-  {}
+  {
+    prefetcher_sstable_type_ = ObIndexTreeMultiPassPrefetcher::CG_PREFETCH;
+  }
   virtual ~ObCGPrefetcher()
   { ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_); }
   virtual void reset() override;

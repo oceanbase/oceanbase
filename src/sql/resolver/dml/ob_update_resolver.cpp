@@ -888,6 +888,8 @@ int ObUpdateResolver::resolve_update_constraints()
           OB_ISNULL(table_item = update_stmt->get_table_item_by_id(table_info->table_id_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_item), K(ret));
+      } else if (OB_FAIL(resolve_check_merge_engine(table_item))) {
+        LOG_WARN("failed to resolve check merge engine", K(ret));
       } else if (!update_stmt->has_instead_of_trigger() &&
                  OB_FAIL(resolve_view_check_exprs(table_item->table_id_, table_item, false, table_info->view_check_exprs_))) {
         LOG_WARN("failed to resolve view check exprs", K(ret));
@@ -919,6 +921,33 @@ int ObUpdateResolver::resolve_update_constraints()
       }
     }
   }
+  return ret;
+}
+
+int ObUpdateResolver::resolve_check_merge_engine(const TableItem* table_item)
+{
+  int ret = OB_SUCCESS;
+
+  const ObTableSchema *table_schema = NULL;
+  if (OB_ISNULL(table_item) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_item), K(schema_checker_));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info_ is null", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                       table_item->get_base_table_item().ref_id_,
+                                                       table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_item->get_base_table_item().ref_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fail to get tale schema", K(ret), K(table_schema));
+  } else if (table_schema->is_append_only_merge_engine()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("update append_only table is not supported", K(ret), KPC(table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "update append_only table is");
+  }
+
   return ret;
 }
 

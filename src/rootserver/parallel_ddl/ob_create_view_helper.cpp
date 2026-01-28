@@ -27,6 +27,7 @@
  #include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
  #include "share/ob_rpc_struct.h"
  #include "pl/ob_pl_persistent.h"
+ #include "share/compaction_ttl/ob_compaction_ttl_util.h"
  using namespace oceanbase::lib;
  using namespace oceanbase::common;
  using namespace oceanbase::share;
@@ -533,6 +534,10 @@ int ObCreateViewHelper::generate_schemas_()
     LOG_WARN("new view schema is null", KR(ret));
   } else {
     new_view_schema_->set_table_id(object_id);
+  }
+  if (FAILEDx(ObCompactionTTLUtil::check_create_mview_for_ttl_valid(
+                 *new_view_schema_))) {
+    LOG_WARN("fail to check create mview for ttl valid", K(ret));
   }
   if (FAILEDx(print_view_expanded_definition_())) {
     LOG_WARN("fail to print view expanded definition", KR(ret));

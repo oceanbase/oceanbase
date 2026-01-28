@@ -61,6 +61,7 @@ public:
   // resolve opt_backup_id_list
 
   static int resolve_tablet_id(const ParseNode *opt_tablet_id, ObTabletID &tablet_id);
+  static int resolve_table_id(const ParseNode *opt_table_id, uint64_t &table_id);
   static int resolve_tenant(const ParseNode &tenants_node, 
                             const uint64_t tenant_id,
                             common::ObSArray<uint64_t> &tenant_ids,
@@ -93,7 +94,8 @@ public:
                                              ObString &logservice_access_point);
   static int resolve_shared_storage_info(const ParseNode *parse_tree,
                                          ObString &shared_storage_info);
-  static int check_tablet_id_effective(const uint64_t tenant_id, const common::ObTabletID &tablet_id);
+  static int check_tablet_id_effective(const uint64_t tenant_id, const ObTabletID &tablet_id);
+  static int check_table_id_effective(const uint64_t tenant_id, const uint64_t table_id);
 };
 
 typedef common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1> Task_Id;
@@ -283,7 +285,7 @@ private:
                             ParseNode *opt_server_list,
                             ParseNode *opt_zone_desc);
 
-  int resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_or_ls_or_tablet_id);
+  int resolve_tenant_ls_tablet_or_table_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_or_ls_or_tablet_id);
   int resolve_server_list_(ObFreezeStmt *freeze_stmt, ParseNode *opt_server_list);
 
 };

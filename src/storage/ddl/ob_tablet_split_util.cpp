@@ -18,6 +18,7 @@
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/truncate_info/ob_tablet_truncate_info_reader.h"
+#include "storage/compaction_ttl/ob_tablet_ttl_filter_info_reader.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 
@@ -818,6 +819,8 @@ int ObTabletSplitUtil::build_mds_sstable(
                  (ObTabletMediumInfoReader, medium_info_reader)) {
     HEAP_VARS_2 ((ObTableScanParam, truncate_info_scan_param),
                  (ObTabletTruncateInfoReader, truncate_info_reader)) {
+    HEAP_VARS_2 ((ObTableScanParam, ttl_filter_info_scan_param),
+                 (ObTabletTTLFilterInfoReader, ttl_filter_info_reader)) {
       ObMacroSeqParam macro_seq_param;
       macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
       int64_t index_tree_start_seq = 0;
@@ -860,6 +863,16 @@ int ObTabletSplitUtil::build_mds_sstable(
         LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(source_tablet_id));
       } else if (OB_FAIL(truncate_info_reader.init(*source_tablet_handle.get_obj(), truncate_info_scan_param))) {
         LOG_WARN("failed to init truncate info reader", K(ret));
+      } else if (OB_FAIL((ObMdsScanParamHelper::build_customized_scan_param<ObTTLFilterInfoKey, ObTTLFilterInfo>(
+          allocator,
+          ls_id,
+          source_tablet_id,
+          ObMdsScanParamHelper::get_whole_read_version_range(),
+          unused_collector,
+          ttl_filter_info_scan_param)))) {
+        LOG_WARN("fail to build scan param", K(ret), K(ls_id), K(source_tablet_id));
+      } else if (OB_FAIL(ttl_filter_info_reader.init(*source_tablet_handle.get_obj(), ttl_filter_info_scan_param))) {
+        LOG_WARN("failed to init ttl filter info reader", K(ret));
       } else {
         bool has_mds_row = false;
         mds::MdsDumpKV *kv = nullptr;
@@ -888,25 +901,32 @@ int ObTabletSplitUtil::build_mds_sstable(
           LOG_INFO("not restore tenant, no medium info lost", "tenant_id", MTL_ID(),
               "source_tablet_id", source_tablet_handle.get_obj()->get_tablet_id(), K(dest_tablet_id));
         }
-        // append truncate info mds rows, mds_unit_id=5
-        while (OB_SUCC(ret)) {
-          iter_arena.reuse();
-          if (OB_FAIL(truncate_info_reader.get_next_mds_kv(iter_arena, kv))) {
-            if (OB_ITER_END != ret) {
-              LOG_WARN("iter medium mds failed", K(ret), K(ls_id), K(source_tablet_id));
-            } else {
-              ret = OB_SUCCESS;
-              break;
-            }
-          } else if (OB_FAIL(op(*kv))) {
-            LOG_WARN("write medium row failed", K(ret));
-          } else {
-            kv->mds::MdsDumpKV::~MdsDumpKV();
-            iter_arena.free(kv);
-            kv = nullptr;
-            has_mds_row = true;
-          }
+        // append mds info rows, mds_unit_id=5
+#define APPEND_MDS_ROWS(reader)                                                           \
+        while (OB_SUCC(ret)) {                                                            \
+          iter_arena.reuse();                                                             \
+          if (OB_FAIL(reader.get_next_mds_kv(iter_arena, kv))) {                          \
+            if (OB_ITER_END != ret) {                                                     \
+              LOG_WARN("iter medium mds failed", K(ret), K(ls_id), K(source_tablet_id));  \
+            } else {                                                                      \
+              ret = OB_SUCCESS;                                                           \
+              break;                                                                      \
+            }                                                                             \
+          } else if (OB_FAIL(op(*kv))) {                                                  \
+            LOG_WARN("write medium row failed", K(ret));                                  \
+          } else {                                                                        \
+            kv->mds::MdsDumpKV::~MdsDumpKV();                                             \
+            iter_arena.free(kv);                                                          \
+            kv = nullptr;                                                                 \
+            has_mds_row = true;                                                           \
+          }                                                                               \
         }
+
+        APPEND_MDS_ROWS(truncate_info_reader);
+        APPEND_MDS_ROWS(ttl_filter_info_reader);
+
+#undef APPEND_MDS_ROWS
+
         if (OB_SUCC(ret)) {
           if (!has_mds_row) {
             LOG_INFO("no need to build lost mds sstable", K(ls_id), K(source_tablet_id), K(dest_tablet_id));
@@ -930,6 +950,7 @@ int ObTabletSplitUtil::build_mds_sstable(
           }
         }
       }
+    }
     }
     }
     }
@@ -1005,7 +1026,9 @@ int ObTabletSplitUtil::check_and_build_mds_sstable_merge_ctx(
       tablet_merge_ctx.static_desc_.reorganization_scn_ = end_scn;
     }
     int32_t private_transfer_epoch = -1;
-    if (OB_FAIL(dest_tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch))) {
+    if (OB_FAIL(static_param.init_merge_version_range(static_param.version_range_))) {
+      LOG_WARN("failed to init merge version_range", K(ret), K(static_param));
+    } else if (OB_FAIL(dest_tablet_handle.get_obj()->get_private_transfer_epoch(private_transfer_epoch))) {
       LOG_WARN("failed to get private transfer epoch", K(ret), K(dest_tablet_handle));
     } else if (FALSE_IT(static_param.private_transfer_epoch_ = private_transfer_epoch)) {
     } else if (FALSE_IT(tablet_merge_ctx.static_desc_.private_transfer_epoch_ = private_transfer_epoch)) {

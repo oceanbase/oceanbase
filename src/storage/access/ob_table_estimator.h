@@ -34,12 +34,14 @@ struct ObTableEstimateBaseInput {
       const uint64_t table_id,
       const transaction::ObTransID tx_id,
       const ObTableArray &tables,
-      const ObTabletHandle &tablet_handle) :
+      const ObTabletHandle &tablet_handle,
+      const int64_t base_version) :
       query_flag_(query_flag),
       table_id_(table_id),
       tx_id_(tx_id),
       tables_(tables),
-      tablet_handle_(tablet_handle) {}
+      tablet_handle_(tablet_handle),
+      base_version_(base_version) {}
 
   OB_INLINE bool is_table_invalid() {
     return !is_valid_id(table_id_) || tables_.count() <= 0;
@@ -50,6 +52,7 @@ struct ObTableEstimateBaseInput {
   const transaction::ObTransID tx_id_;
   const ObTableArray &tables_;
   const ObTabletHandle &tablet_handle_;
+  const int64_t base_version_;
 };
 
 class ObTableEstimator

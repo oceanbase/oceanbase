@@ -57,9 +57,15 @@ public:
   virtual void update_and_analyze_progress() override;
   virtual int create_sstable(const blocksstable::ObSSTable *&new_sstable) override;
   virtual int collect_running_info() override;
-  const ObSSTableMergeHistory &get_merge_history() { return merge_info_.get_merge_history(); }
-  void update_block_info(const ObMergeBlockInfo &block_info, const int64_t cost_time);
-  void update_block_info_with_sstable_block_info(const ObMergeBlockInfo &block_info, const int64_t cost_time, ObIArray<ObSSTableMergeBlockInfo> &array);
+  virtual ObSSTableMergeHistory &get_merge_history() override { return merge_info_.get_merge_history(); }
+  void update_block_info(
+    const ObMergeBlockInfo &block_info,
+    const int64_t cost_time);
+  void update_block_info_with_sstable_block_info(
+    const ObMergeBlockInfo &block_info,
+    const int64_t cost_time,
+    ObIArray<ObSSTableMergeBlockInfo> &array);
+
   INHERIT_TO_STRING_KV("ObBasicTabletMergeCtx", ObBasicTabletMergeCtx, K_(merge_info));
   storage::ObTableHandleV2 merged_table_handle_;
   ObTabletMergeInfo merge_info_;
@@ -102,12 +108,14 @@ protected:
   virtual int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result) override;
   virtual int cal_merge_param() override;
   int get_tables_by_key(ObGetMergeTablesResult &get_merge_table_result);
-  virtual int prepare_compaction_filter() override; // for tx_minor
+  virtual int prepare_compaction_filter() override;
+  virtual int64_t get_recycle_version() const override;
 private:
   int init_static_param_tx_id();
   int prepare_tx_table_compaction_filter_();
   int prepare_reorg_info_table_compaction_filter_();
   int init_tx_table_compaction_filter_(ObTxDataMinorFilter *compaction_filter);
+  int prepare_rowscn_compaction_filter_();
 };
 
 struct ObTabletMajorMergeCtx : public ObTabletMergeCtx
@@ -119,7 +127,7 @@ protected:
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
   virtual int cal_merge_param() override {
     return ObBasicTabletMergeCtx::cal_major_merge_param(
-        has_filter() /*force_full_merge*/, progressive_merge_mgr_);
+        false/*force_full_merge*/, progressive_merge_mgr_);
   }
   virtual int prepare_compaction_filter() override
   { return alloc_mds_info_compaction_filter(); }

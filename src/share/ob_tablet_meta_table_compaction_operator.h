@@ -130,6 +130,11 @@ public:
       const bool add_report_scn_filter,
       common::ObTabletID &end_tablet_id,
       ObIArray<ObTabletInfo> &tablet_infos);
+  static int batch_get_tablet_info(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const common::ObIArray<ObTabletLSPair> &tablet_ls_pairs,
+      ObIArray<ObTabletInfo> &tablet_infos);
 private:
   static int inner_range_scan_for_compaction(
       const uint64_t tenant_id,

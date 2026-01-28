@@ -22,6 +22,7 @@
 #include "storage/mview/ob_mview_refresh.h"
 #include "share/table/ob_ttl_util.h"
 #include "share/ob_license_utils.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -477,6 +478,17 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         } else if (OB_FAIL(table_schema.set_view_definition(expanded_view))) {
           LOG_WARN("fail to set view definition", K(expanded_view), K(ret));
         }
+      }
+    }
+
+    if (OB_SUCC(ret) && is_materialized_view) {
+      if (OB_ISNULL(schema_checker_) || OB_ISNULL(schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema checker or schema guard is null", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_create_mview_for_ttl_valid(
+              table_schema,
+              ttl_definition_))) {
+        LOG_WARN("fail to check create mview for ttl valid", K(ret));
       }
     }
 

@@ -1270,7 +1270,7 @@ private: // member functions
   int build_column_expr(ObRawExprFactory &expr_factory,
                         const share::schema::ObColumnSchemaV2 &column_schema,
                         ObColumnRefRawExpr *&column_expr);
-  int check_is_delete_insert_scan(bool &is_delete_insert_scan) const;
+  int get_merge_engine_type(ObMergeEngineType &merge_engine_type, bool &enable_delete_insert_scan) const;
   int extract_plugin_external_table_pushdown_filters(ObIArray<ObRawExpr*> &filters,
                                                      ObString external_properties_str,
                                                      ObIArray<ObRawExpr*> &nonpushdown_filters,

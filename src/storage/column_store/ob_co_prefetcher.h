@@ -38,7 +38,9 @@ public:
       block_scan_state_(ROW_STORE_SCAN),
       block_scan_start_row_id_(OB_INVALID_CS_ROW_ID),
       block_scan_border_row_id_(OB_INVALID_CS_ROW_ID)
-  {}
+  {
+    prefetcher_sstable_type_ = ObIndexTreeMultiPassPrefetcher::CO_PREFETCH;
+  }
   virtual ~ObCOPrefetcher()
   {}
   virtual void reset() override final;

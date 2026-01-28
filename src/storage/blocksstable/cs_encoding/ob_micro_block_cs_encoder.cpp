@@ -108,7 +108,7 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::alloc_and_init_encoder_(const int64
 
 template<bool IS_MULTI_VERSION>
 ObMicroBlockCSEncoder<IS_MULTI_VERSION>::ObMicroBlockCSEncoder()
-  : allocator_("CSEncAlloc", OB_MALLOC_MIDDLE_BLOCK_SIZE),
+  : ObIMicroBlockWriter(), allocator_("CSEncAlloc", OB_MALLOC_MIDDLE_BLOCK_SIZE),
     ctx_(), row_buf_holder_(), data_buffer_(), all_string_data_buffer_(),
     all_col_datums_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     pivot_allocator_(lib::ObMemAttr(MTL_ID(), blocksstable::OB_ENCODING_LABEL_PIVOT), OB_MALLOC_MIDDLE_BLOCK_SIZE),
@@ -168,6 +168,14 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::init(const ObMicroBlockEncodingCtx 
     LOG_WARN("reserve array failed", K(ret), "size", stored_column_count);
   } else if (OB_FAIL(init_all_col_values_(ctx))) {
     LOG_WARN("init all_col_values failed", K(ret), K(ctx));
+  } else if (OB_FAIL(micro_header_.init(
+      ctx.major_working_cluster_version_,
+      ctx.column_cnt_,
+      ctx.rowkey_column_cnt_,
+      ctx.row_store_type_,
+      ctx.need_calc_column_chksum_))) {
+    LOG_WARN("failed to init micro header", KR(ret), K(ctx.major_working_cluster_version_),
+      K(ctx.column_cnt_), K(ctx.rowkey_column_cnt_), K(ctx.row_store_type_), K(ctx.need_calc_column_chksum_));
   } else if (OB_FAIL(checksum_helper_.init(ctx.col_descs_, true/*need_opt_row_checksum*/))) {
     LOG_WARN("fail to init checksum_helper", K(ret), K(ctx));
   } else if (FALSE_IT(ctx_ = ctx)) {
@@ -187,7 +195,7 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::init(const ObMicroBlockEncodingCtx 
   }
   if (OB_SUCC(ret)) {
     all_headers_size_ =
-      ObMicroBlockHeader::get_serialize_size(ctx.column_cnt_, ctx.need_calc_column_chksum_) +
+      micro_header_.get_serialize_size() +
       sizeof(ObAllColumnHeader) + sizeof(ObCSColumnHeader) * (ctx.column_cnt_ + (IS_MULTI_VERSION ? 1 : 0));
     for (int64_t i = 0; i < ctx.column_cnt_; ++i) {
       if (!need_check_lob_ && ctx.col_descs_->at(i).col_type_.is_lob_storage()) {
@@ -533,13 +541,13 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::append_row(const ObDatumRow &row)
         LOG_WARN("copy and append row failed", K(ret));
       }
     } else {
-      if (get_header(data_buffer_)->has_column_checksum_) {
+      if (micro_header_.has_column_checksum_) {
         if constexpr (IS_MULTI_VERSION) {
           // currently column checksum should only be calculated on major sstables
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("calculate column checksum on minor sstables", K(ret));
         } else {
-          if (OB_FAIL(checksum_helper_.cal_column_checksum(row, get_header(data_buffer_)->column_checksums_))) {
+          if (OB_FAIL(checksum_helper_.cal_column_checksum(row, micro_header_.column_checksums_))) {
             LOG_WARN("cal column checksum failed", K(ret), K(row));
           }
         }
@@ -614,8 +622,8 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::append_batch(const ObBatchDatumRows
       } else if (OB_UNLIKELY(0 == appended_batch_count_)) {
         reuse();
       }
-    } else if (get_header(data_buffer_)->has_column_checksum_ && OB_FAIL(checksum_helper_.cal_column_checksum(
-          vec_batch.vectors_, start, row_count, get_header(data_buffer_)->column_checksums_))) {
+    } else if (micro_header_.has_column_checksum_ && OB_FAIL(checksum_helper_.cal_column_checksum(
+          vec_batch.vectors_, start, row_count, micro_header_.column_checksums_))) {
       LOG_WARN("cal column checksum failed", K(ret));
     } else {
       // multi version data does not support batch, no need to call this
@@ -1190,29 +1198,24 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::reserve_header_(const ObMicroBlockE
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column_count was invalid", K(ret), K(ctx));
   } else {
-    // reserve ObMicroBlockHeader
-    int32_t header_size =
-      ObMicroBlockHeader::get_serialize_size(ctx.column_cnt_, ctx.need_calc_column_chksum_);
+    micro_header_.reuse();
+    micro_header_.compressor_type_ = ctx.compressor_type_;
+    micro_header_.has_column_checksum_ = ctx.need_calc_column_chksum_;
 
-    if (OB_FAIL(data_buffer_.write_nop(header_size, true))) {
-      LOG_WARN("data buffer fail to advance headers size.", K(ret), K(header_size));
-    } else {
-      ObMicroBlockHeader *header = get_header(data_buffer_);
-      header->magic_ = MICRO_BLOCK_HEADER_MAGIC;
-      header->version_ = MICRO_BLOCK_HEADER_VERSION;
-      header->header_size_ = header_size;
-      header->row_store_type_ = ctx.row_store_type_;
-      header->column_count_ = ctx.column_cnt_;
-      header->rowkey_column_count_ = ctx.rowkey_column_cnt_;
-      header->compressor_type_ = ctx.compressor_type_;
-      header->has_column_checksum_ = ctx.need_calc_column_chksum_;
-      if (header->has_column_checksum_) {
-        header->column_checksums_ = reinterpret_cast<int64_t *>(
-          data_buffer_.data() + ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET);
-      } else {
-        header->column_checksums_ = nullptr;
+    if (micro_header_.has_column_checksum_) {
+      if (!column_checksum_buffer_.is_inited()) {
+        const int64_t col_checksum_buf_len = micro_header_.get_column_checksum_buf_len();
+        if (OB_FAIL(column_checksum_buffer_.init(col_checksum_buf_len, col_checksum_buf_len))) {
+          LOG_WARN("fail to init column checksum buffer", K(ret), K_(micro_header), K(col_checksum_buf_len));
+        }
+      }
+      if (FAILEDx(ObIMicroBlockWriter::reserve_micro_header_col_ckm_buffer())) {
+        LOG_WARN("column checksum buffer fail to advance header size.", K(ret), K_(micro_header));
       }
     }
+    if (FAILEDx(data_buffer_.write_nop(micro_header_.get_serialize_size(), true/*is_zero*/))) {
+      LOG_WARN("data buffer fail to advance header size.", K(ret), K_(micro_header));
+    } // serialize_size may changed if micro header has column checksum array
   }
   return ret;
 }
@@ -1413,7 +1416,7 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::build_block(char *&buf, int64_t &si
   } else if (OB_FAIL(data_buffer_.write_nop(all_column_header_size + column_headers_size))) {
     LOG_WARN("fail to ensure space", K(ret), K_(data_buffer), K(all_column_header_size), K(column_headers_size));
   } else {
-    LOG_DEBUG("build micro block", K_(estimate_size), K_(all_headers_size),
+    LOG_DEBUG("build micro block", K_(estimate_size), K_(all_headers_size), K(data_buffer_.length()),
         K(column_headers_size), K_(expand_pct), K_(appended_row_count), K(ctx_));
 
     int64_t column_data_offset = 0;
@@ -1430,10 +1433,8 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::build_block(char *&buf, int64_t &si
     // <3> store stream offsets
     } else if (OB_FAIL(store_stream_offsets_(stream_offsets_length))) {
       LOG_WARN("fail to store stream offsets", K(ret));
-
     } else {
-      ObMicroBlockHeader *header = get_header(data_buffer_);
-      const int64_t header_size = header->header_size_;
+      const int64_t header_size = micro_header_.header_size_;
       char *tmp_buf = data_buffer_.data() + header_size;
       ObAllColumnHeader *all_column_header = reinterpret_cast<ObAllColumnHeader*>(tmp_buf);
       ObCSColumnHeader *column_headers = reinterpret_cast<ObCSColumnHeader*>(tmp_buf + sizeof(ObAllColumnHeader));
@@ -1450,18 +1451,17 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::build_block(char *&buf, int64_t &si
         all_column_header->set_is_all_string_compressed();
       }
       // <6> fill micro header
-      header->row_count_ = appended_row_count_;
-      header->has_string_out_row_ = has_string_out_row_;
-      header->all_lob_in_row_ = !has_lob_out_row_;
-      header->max_merged_trans_version_ = max_merged_trans_version_;
+      micro_header_.row_count_ = appended_row_count_;
+      micro_header_.has_string_out_row_ = has_string_out_row_;
+      micro_header_.all_lob_in_row_ = !has_lob_out_row_;
+      micro_header_.max_merged_trans_version_ = max_merged_trans_version_;
       if constexpr (IS_MULTI_VERSION) {
-        header->single_version_rows_ = last_rows_count_ == header->row_count_;
-        header->max_merged_trans_version_ = max_merged_trans_version_;
-        header->has_min_merged_trans_version_ = 1;
-        header->min_merged_trans_version_ = min_merged_trans_version_;
-        header->contain_uncommitted_rows_ = contain_uncommitted_row_;
-        header->is_last_row_last_flag_ = is_last_row_last_flag_;
-        header->has_row_header_ = IS_MULTI_VERSION;
+        micro_header_.single_version_rows_ = last_rows_count_ == micro_header_.row_count_;
+        micro_header_.has_min_merged_trans_version_ = 1;
+        micro_header_.min_merged_trans_version_ = min_merged_trans_version_;
+        micro_header_.contain_uncommitted_rows_ = contain_uncommitted_row_;
+        micro_header_.is_last_row_last_flag_ = is_last_row_last_flag_;
+        micro_header_.has_row_header_ = IS_MULTI_VERSION;
       }
 
       // update encoding context

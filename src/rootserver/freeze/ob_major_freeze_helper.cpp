@@ -137,6 +137,167 @@ int ObMajorFreezeHelper::tablet_major_freeze(const ObTabletMajorFreezeParam &par
   return ret;
 }
 
+int ObMajorFreezeHelper::send_tablets_major_freeze_by_ls(
+  const obrpc::ObTableMajorFreezeRpcProxy &proxy,
+  const uint64_t tenant_id,
+  const int64_t ls_id,
+  const common::ObIArray<uint64_t> &tablet_ids,
+  const bool is_rebuild_column_group)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || ls_id <= 0 || tablet_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for send tablets major freeze by ls", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids.count()));
+  } else if (OB_UNLIKELY(nullptr == GCTX.location_service_ )) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, location service or net frame is nullptr", KR(ret), KP(GCTX.location_service_));
+  } else {
+    const int64_t start_time = ObTimeUtility::fast_current_time();
+    ObAddr leader;
+    obrpc::ObTableMajorFreezeRequest req(tenant_id, ls_id, tablet_ids, is_rebuild_column_group);
+    obrpc::ObMajorFreezeResponse resp;
+    share::ObLSID ls_id_obj(ls_id);
+    for (int64_t i = 0; (OB_SUCC(ret) || OB_EAGAIN == ret || OB_LEADER_NOT_EXIST == ret || ret == OB_TIMEOUT) && (i <  MAX_RETRY_COUNT); ++i) {
+      const int64_t LEADER_WAIT_TIMEOUT = 1000 * 1000; // 1s
+      if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id, tenant_id, ls_id_obj, leader, LEADER_WAIT_TIMEOUT))) {
+        LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id), K(ls_id_obj));
+      } else if (OB_FAIL(proxy.to(leader)
+                              .trace_time(true)
+                              .max_process_handler_time(MAX_PROCESS_TIME_US)
+                              .by(tenant_id)
+                              .dst_cluster_id(GCONF.cluster_id)
+                              .table_major_freeze(req, resp))) {
+        LOG_WARN("failed to send table major freeze command",  KR(ret), K(tenant_id), K(ls_id_obj), "ori_leader", leader, K(req), K(i));
+        if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
+          const int64_t idle_time = 200 * 1000 * (i + 1);
+          USLEEP(idle_time);
+        }
+      } else {
+        break;
+      }
+    } // end for
+    if (OB_SUCC(ret) && resp.err_code_ != OB_SUCCESS ) {
+      ret = resp.err_code_;
+      LOG_WARN("failed to send tablets major freeze by ls", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids), K(is_rebuild_column_group));
+    }
+    const int64_t cost_time = ObTimeUtility::current_time() - start_time;
+    LOG_INFO("send tablets major freeze by ls finished", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids), K(is_rebuild_column_group), K(cost_time));
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::get_next_batch_schedule_tablets(
+  common::sqlclient::ObMySQLResult &result,
+  bool & no_need_call_next,
+  int64_t & cur_ls_id,
+  common::ObArray<uint64_t> &batch_schedule_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  int64_t ls_id = 0;
+  int64_t tablet_id = 0;
+  batch_schedule_tablet_ids.reuse();
+  while (OB_SUCC(ret)) {
+    if (no_need_call_next) { // no need call next, skip
+    } else if (OB_SUCC(result.next())) {
+    } else if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+      break;
+    } else {
+      LOG_WARN("failed to get next row", KR(ret));
+    }
+    if (OB_SUCC(ret)) {
+      EXTRACT_INT_FIELD_MYSQL(result, "ls_id", ls_id, int64_t);
+      EXTRACT_INT_FIELD_MYSQL(result, "tablet_id", tablet_id, int64_t);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to extract field", KR(ret), K(ls_id), K(tablet_id));
+      } else {
+        if (no_need_call_next || cur_ls_id == 0) { // set cur_ls_id when no need call next or cur_ls_id is 0
+          no_need_call_next = false;
+          cur_ls_id = ls_id;
+        }
+        if (ls_id == cur_ls_id && batch_schedule_tablet_ids.count() < BATCH_SCHEDULE_TABLET_COUNT) {
+          if (OB_FAIL(batch_schedule_tablet_ids.push_back(static_cast<uint64_t>(tablet_id)))) {
+            LOG_WARN("failed to push tablet_id to batch schedule tablet ids", KR(ret), K(static_cast<uint64_t>(tablet_id)));
+          }
+        } else { // batch reach limit, no need call next when next loop, break
+          no_need_call_next = true;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::get_ls_tablets_result_by_sql(
+  const uint64_t tenant_id,
+  const uint64_t table_id,
+  ObMySQLProxy::MySQLResult &res,
+  common::sqlclient::ObMySQLResult *&result)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, sql proxy is nullptr", KR(ret));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT distinct ls_id, tablet_id FROM oceanbase.__all_tablet_to_ls WHERE table_id = %ld order by ls_id asc;", table_id))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(table_id));
+  } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, sql.ptr()))) {
+    LOG_WARN("failed to read sql", KR(ret), K(sql), K(tenant_id));
+  } else if (OB_ISNULL(result = res.get_result())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null result for table major freeze", KR(ret), K(sql), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObMajorFreezeHelper::table_major_freeze(
+  const ObTableMajorFreezeArg &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for table major freeze", KR(ret), K(param));
+  } else if (OB_ISNULL(GCTX.net_frame_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, net frame is nullptr", KR(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      ObTableMajorFreezeRpcProxy proxy;
+      if (OB_FAIL(proxy.init(GCTX.net_frame_->get_req_transport()))) {
+        LOG_WARN("failed to init proxy for send tablets major freeze by ls", K(ret));
+      } else if (OB_FAIL(get_ls_tablets_result_by_sql(param.tenant_id_, param.table_id_, res, result))) {
+        LOG_WARN("failed to get ls tablets result by sql", KR(ret), K(param));
+      } else {
+        int64_t cur_ls_id = 0;
+        bool no_need_call_next = false;
+        bool partial_failed = false;
+        ObArray<uint64_t> batch_schedule_tablet_ids;
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(get_next_batch_schedule_tablets(*result, no_need_call_next, cur_ls_id, batch_schedule_tablet_ids))) {
+            LOG_WARN("failed to get next batch schedule tablets", KR(ret), K(cur_ls_id), K(batch_schedule_tablet_ids));
+          } else if (!batch_schedule_tablet_ids.empty()) {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(send_tablets_major_freeze_by_ls(proxy, param.tenant_id_, cur_ls_id, batch_schedule_tablet_ids, param.is_rebuild_column_group_))) {
+              partial_failed = true;
+              LOG_WARN("failed to send tablets major freeze by ls", KR(tmp_ret), K(param), K(cur_ls_id), K(batch_schedule_tablet_ids), K(batch_schedule_tablet_ids.count()));
+            }
+          } else { // no more tablets to freeze, break
+            break;
+          }
+        }
+        if (OB_SUCC(ret) && partial_failed) {
+          ret = OB_PARTIAL_FAILED;
+          LOG_WARN("[WARN] tablets of table do major freeze partially failed", KR(ret), K(param), K(cur_ls_id));
+          LOG_USER_ERROR(OB_PARTIAL_FAILED, "[WARN] tablets of table do major freeze partially failed");
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMajorFreezeHelper::get_freeze_info(
     const ObMajorFreezeParam &param,
     ObIArray<obrpc::ObSimpleFreezeInfo> &freeze_info_array)

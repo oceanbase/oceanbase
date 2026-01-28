@@ -52,6 +52,8 @@ int ObTruncateInfoKey::mds_deserialize(const char *buf, const int64_t buf_len,
   } else {
     magic_number = buf[pos++];
     if (magic_number != MAGIC_NUMBER) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("magic number mismatch", K(magic_number), K(MAGIC_NUMBER));
       ob_abort(); // compat case, just abort for fast fail
     } else if (OB_FAIL(ObMdsSerializeUtil::mds_key_deserialize(buf, buf_len, pos, tmp))) {
       LOG_WARN("failed to serialize tx_id", KR(ret));

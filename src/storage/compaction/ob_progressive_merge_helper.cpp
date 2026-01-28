@@ -303,11 +303,11 @@ int ObProgressiveMergeHelper::open_macro_iter(
 }
 
 int ObProgressiveMergeHelper::check_macro_block_op(const ObMacroBlockDesc &macro_desc,
-                                                   ObMacroBlockOp &block_op)
+                                                   ObBlockOp &block_op)
 {
   int ret = OB_SUCCESS;
 
-  block_op.reset();
+  block_op.set_none();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObProgressiveMergeHelper not init", K(ret));
@@ -338,7 +338,7 @@ int ObProgressiveMergeHelper::check_macro_block_op(const ObMacroBlockDesc &macro
       } else if (data_version_ < DATA_VERSION_4_3_2_0) {
         block_op.set_rewrite();
       } else {
-        block_op.set_reorg();
+        block_op.set_open();
         LOG_INFO("check macro block op", K(ret), "data_zsize", macro_desc.macro_meta_->val_.data_zsize_, K(table_idx_));
       }
     }

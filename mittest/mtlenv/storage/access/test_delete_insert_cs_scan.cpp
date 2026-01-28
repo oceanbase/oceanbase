@@ -73,43 +73,6 @@ using namespace palf;
 namespace storage
 {
 
-ObSEArray<ObTxData, 8> TX_DATA_ARR;
-
-int ObTxTable::insert(ObTxData *&tx_data)
-{
-  int ret = OB_SUCCESS;
-  ret = TX_DATA_ARR.push_back(*tx_data);
-  return ret;
-}
-
-int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; i < TX_DATA_ARR.count(); i++)
-  {
-    if (read_tx_data_arg.tx_id_ == TX_DATA_ARR.at(i).tx_id_) {
-      if (TX_DATA_ARR.at(i).state_ == ObTxData::RUNNING) {
-        SCN tmp_scn;
-        tmp_scn.convert_from_ts(30);
-        ObTxCCCtx tmp_ctx(ObTxState::PREPARE, tmp_scn);
-        ret = fn(TX_DATA_ARR[i], &tmp_ctx);
-      } else {
-        ret = fn(TX_DATA_ARR[i]);
-      }
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "check with tx data failed", KR(ret), K(read_tx_data_arg), K(TX_DATA_ARR.at(i)));
-      }
-      break;
-    }
-  }
-  return ret;
-}
-
-void clear_tx_data()
-{
-  TX_DATA_ARR.reset();
-};
-
 class ObMockWhiteFilterExecutor : public ObWhiteFilterExecutor
 {
 public:
@@ -491,7 +454,6 @@ public:
 class TestDeleteInsertCSScan : public TestMergeBasic, public ::testing::WithParamInterface<bool>
 {
 public:
-  static const int64_t MAX_PARALLEL_DEGREE = 10;
   TestDeleteInsertCSScan();
   virtual ~TestDeleteInsertCSScan() {}
 
@@ -510,9 +472,6 @@ public:
                              const ObITableReadInfo &read_info,
                              ObPushdownFilterExecutor *&pushdown_filter);
   void prepare_txn(ObStoreCtx *store_ctx, const int64_t prepare_version);
-
-  void fake_freeze_info();
-  void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
   int convert_to_co_sstable(ObTableHandleV2 &row_store, ObTableHandleV2 &co_store);
   void test_keep_order_blockscan(
       const char **major_data,
@@ -595,24 +554,6 @@ void TestDeleteInsertCSScan::SetUp()
   const bool use_cs_encoding = GetParam();
   row_store_type_ = use_cs_encoding ? CS_ENCODING_ROW_STORE : FLAT_ROW_STORE;
   ObMultiVersionSSTableTest::SetUp();
-}
-
-void TestDeleteInsertCSScan::fake_freeze_info()
-{
-  share::ObFreezeInfoList &info_list = MTL(ObTenantFreezeInfoMgr *)->freeze_info_mgr_.freeze_info_;
-  info_list.reset();
-
-  share::SCN frozen_val;
-  frozen_val.val_ = 1;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 100;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 200;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 400;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-
-  info_list.latest_snapshot_gc_scn_.val_ = 500;
 }
 
 void TestDeleteInsertCSScan::TearDown()
@@ -723,6 +664,8 @@ void TestDeleteInsertCSScan::prepare_scan_param(
   access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
   access_param_.iter_param_.is_delete_insert_ = true;
+  access_param_.iter_param_.filter_canbe_handle_in_di_ = true;
+  access_param_.iter_param_.merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
   access_param_.iter_param_.set_use_column_store();
 
   prepare_output_expr(output_cols_project_, tmp_col_descs);
@@ -880,16 +823,6 @@ int TestDeleteInsertCSScan::create_pushdown_filter(
   return ret;
 }
 
-void TestDeleteInsertCSScan::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
-{
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
-}
-
 int create_cg_sstables(ObCOTabletMergeCtx &ctx, const int64_t start_cg_idx, const int64_t end_cg_idx)
 {
   int ret = OB_SUCCESS;
@@ -919,7 +852,7 @@ int TestDeleteInsertCSScan::convert_to_co_sstable(ObTableHandleV2 &row_store, Ob
   trans_version_range.base_version_ = 1;
   //prepare merge_ctx
   TestMergeBasic::prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
-  merge_context.static_param_.co_static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, true/*only_use_row_store*/);
   merge_context.static_param_.data_version_ = DATA_VERSION_4_3_0_0;
   merge_context.static_param_.dag_param_.merge_version_ = trans_version_range.snapshot_version_;
   int32_t base_cg_idx = -1;
@@ -940,8 +873,8 @@ int TestDeleteInsertCSScan::convert_to_co_sstable(ObTableHandleV2 &row_store, Ob
     STORAGE_LOG(WARN, "Fail to prepare index builder", K(ret));
   } else if (OB_FAIL(merge_context.get_schema()->get_base_rowkey_column_group_index(base_cg_idx))) {
     STORAGE_LOG(WARN, "Fail to get base rowkey column group index", K(ret));
-  } else if (OB_FAIL(merge_context.static_param_.init_co_merge_flags())) {
-    STORAGE_LOG(WARN, "Fail to init co merge flags", K(ret));
+  } else if (OB_FAIL(merge_context.init_major_sstable_status())) {
+    STORAGE_LOG(WARN, "Fail to init major sstable status", K(ret));
   } else {
     merge_context.base_rowkey_cg_idx_ = base_cg_idx;
     ObCOMergeDagParam *dag_param = static_cast<ObCOMergeDagParam *>(&merge_context.static_param_.dag_param_);

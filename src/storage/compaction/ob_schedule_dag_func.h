@@ -37,10 +37,6 @@ class ObComplementDataDag;
 class ObTablet;
 }
 
-namespace share
-{
-class ObTenantDagScheduler;
-}
 namespace compaction
 {
 struct ObTabletMergeDagParam;

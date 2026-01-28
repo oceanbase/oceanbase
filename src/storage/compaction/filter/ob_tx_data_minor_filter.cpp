@@ -36,7 +36,6 @@ int ObTxDataMinorFilter::init(const SCN &filter_val, const int64_t filter_col_id
   } else {
     filter_val_ = filter_val;
     filter_col_idx_ = filter_col_idx;
-    max_filtered_end_scn_.set_min();
     is_inited_ = true;
   }
   return ret;
@@ -44,7 +43,7 @@ int ObTxDataMinorFilter::init(const SCN &filter_val, const int64_t filter_col_id
 
 int ObTxDataMinorFilter::filter(
     const blocksstable::ObDatumRow &row,
-    ObFilterRet &filter_ret)
+    ObFilterRet &filter_ret) const
 {
   int ret = OB_SUCCESS;
   filter_ret = FILTER_RET_MAX;
@@ -64,10 +63,9 @@ int ObTxDataMinorFilter::filter(
       LOG_WARN("failed to convert for tx", K(ret), K(trans_end_scn_storage_val));
     } else if (trans_end_scn <= filter_val_) {
       filter_ret = FILTER_RET_REMOVE;
-      max_filtered_end_scn_ = SCN::max(max_filtered_end_scn_, trans_end_scn);
       LOG_DEBUG("filter row", K(ret), K(row), K(filter_val_));
     } else {
-      filter_ret = FILTER_RET_NOT_CHANGE;
+      filter_ret = FILTER_RET_KEEP;
     }
   }
   return ret;

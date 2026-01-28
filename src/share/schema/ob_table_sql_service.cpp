@@ -18,6 +18,7 @@
 #include "src/share/vector_index/ob_vector_index_util.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/storage_cache_policy/ob_storage_cache_partition_sql_helper.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_mview_args.h"
 
 namespace oceanbase
@@ -3243,10 +3244,14 @@ int ObTableSqlService::gen_table_dml_without_check(
   const char *semistruct_properties = table.get_semistruct_properties().empty() ?
       "" : table.get_semistruct_properties().ptr();
   ObString local_session_var;
+  ObString ttl_flag_str;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA_OB_SCHEMA_ARENA);
   if (table.is_materialized_view() && data_version >= DATA_VERSION_4_3_3_0
       && OB_FAIL(table.get_local_session_var().gen_local_session_var_str(allocator, local_session_var))) {
     LOG_WARN("fail to gen local session var str", K(ret));
+  } else if (data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION
+             && OB_FAIL(table.get_ttl_flag().write_string(allocator, ttl_flag_str))) {
+    LOG_WARN("fail to write ttl flag str", K(ret));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
             exec_tenant_id, table.get_tenant_id())))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -3386,6 +3391,8 @@ int ObTableSqlService::gen_table_dml_without_check(
         && OB_FAIL(dml.add_column("semistruct_properties", ObHexEscapeSqlStr(semistruct_properties))))
       || (data_version >= DATA_VERSION_4_4_1_0
           && OB_FAIL(dml.add_column("micro_block_format_version", table.get_micro_block_format_version())))
+      || (data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION
+          && OB_FAIL(dml.add_column("ttl_flag", ObHexEscapeSqlStr(ttl_flag_str))))
       || (data_version >= DATA_VERSION_4_5_1_0
           && OB_FAIL(dml.add_column("delta_format",
             ObHexEscapeSqlStr(ObStoreFormat::get_delta_format_name(table.get_minor_row_store_type())))))
@@ -3536,6 +3543,8 @@ int ObTableSqlService::gen_table_dml(
   } else if (data_version < DATA_VERSION_4_5_1_0 && !ObStoreFormat::is_row_store_type_with_flat(table.get_minor_row_store_type())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can't set non-flat delta format in current version", K(data_version), "minor_row_store_type", table.get_minor_row_store_type());
+  } else if (OB_FAIL(table.check_ttl_definition_valid())) {
+    LOG_WARN("failed to check ttl definition valid", KR(ret), K(table));
   } else if (OB_FAIL(gen_table_dml_without_check(exec_tenant_id, table,
           update_object_status_ignore_version, data_version, dml))) {
     LOG_WARN("failed to gen_table_dml_with_data_version", KR(ret), KDV(data_version));

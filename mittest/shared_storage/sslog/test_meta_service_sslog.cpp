@@ -372,7 +372,7 @@ int ObTestSSLogMetaService::build_update_table_store_param_(ObArenaAllocator &al
                       merge_type,
                       clog_checkpoint_scn,
                       false /*need_report*/,
-                      tablet_handle.get_obj()->has_truncate_info())))) {
+                      tablet_handle.get_obj()->has_merged_with_mds_info())))) {
       LOG_WARN("failed to init with compaction info", KR(ret));
     } else {
       LOG_INFO("success to init ObUpdateTableStoreParam", KR(ret), K(param), KPC(param.sstable_));

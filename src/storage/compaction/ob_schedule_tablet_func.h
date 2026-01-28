@@ -50,18 +50,18 @@ struct ObScheduleTabletFunc : public ObBasicScheduleTabletFunc
   INHERIT_TO_STRING_KV("ObScheduleTabletFunc", ObBasicScheduleTabletFunc,
     K_(merge_reason), K_(schedule_mode), K_(is_window_compaction_active), K_(tablet_status), K_(time_guard));
 protected:
-int check_with_schedule_scn(
+  virtual int check_with_schedule_scn(
     const storage::ObTablet &tablet,
     const int64_t schedule_scn,
     const ObTabletStatusCache &tablet_status,
     bool &can_merge,
-    const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE) override;
-int schedule_merge_dag(
+    const ObCOMajorMergeStrategy &co_major_merge_strategy) override;
+  virtual int schedule_merge_dag(
     const ObLSID &ls_id,
     const ObTablet &tablet,
     const ObMergeType merge_type,
     const int64_t schedule_scn,
-    const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type,
+    const ObCOMajorMergeStrategy &co_major_merge_strategy,
     const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason) override;
   int try_schedule_tablet_new_round(storage::ObTabletHandle &tablet_handle);
   int schedule_tablet_new_round(
@@ -75,7 +75,7 @@ private:
   int get_schedule_execute_info(
     storage::ObTablet &tablet,
     int64_t &schedule_scn,
-    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type,
+    ObCOMajorMergeStrategy &co_major_merge_strategy,
     ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason);
 protected:
   ObTabletStatusCache tablet_status_;

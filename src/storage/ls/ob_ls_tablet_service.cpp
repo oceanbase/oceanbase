@@ -53,6 +53,7 @@
 #include "storage/access/ob_old_row_check_dumper.h"
 #include "storage/lob/ob_lob_tablet_dml.h"
 #include "rootserver/truncate_info/ob_truncate_info_service.h"
+#include "rootserver/compaction_ttl/ob_compaction_ttl_service.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -1304,7 +1305,7 @@ int ObLSTabletService::build_new_tablet_from_mds_table(
                                           mds_sstable,
                                           false/*allow_duplicate_sstable*/);
         if (FAILEDx(mds_param.init_with_compaction_info(
-          ObCompactionTableStoreParam(ctx.get_merge_type(), mds_sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/, false/*has_truncate_info*/)))) {
+          ObCompactionTableStoreParam(ctx.get_merge_type(), mds_sstable->get_end_scn()/*clog_checkpoint_scn*/, false/*need_report*/, false/*has_merged_with_mds_info*/)))) {
           LOG_WARN("failed to init with compaction info", KR(ret));
         } else if (OB_FAIL(tmp_tablet->init_with_mds_sstable(allocator, *old_tablet, flush_scn, mds_param))) {
           LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet), K(flush_scn), KPC(mds_sstable));
@@ -3333,8 +3334,48 @@ int ObLSTabletService::set_truncate_info(
 
       if (OB_FAIL(tablet_handle.get_obj()->set_truncate_info(arg.truncate_info_.key_, arg.truncate_info_, ctx, timeout_us))) {
         LOG_WARN("fail to set truncate info", K(ret), K(tablet_id), K(arg), K(timeout_us));
+      }
+    }
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(EN_SET_TTL_INFO_HANG);
+int ObLSTabletService::set_ttl_filter_info(
+  const common::ObTabletID &tablet_id,
+  const rootserver::ObTTLFilterInfoArg &arg,
+  mds::MdsCtx &ctx,
+  const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(arg));
+  } else {
+    ObTabletHandle tablet_handle;
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+    if (OB_FAIL(lock_guard.get_ret())) {
+      LOG_WARN("fail to get lock", K(ret));
+    } else if (OB_FAIL(direct_get_tablet(tablet_id, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        ret = OB_EAGAIN;
+        LOG_WARN("this tablet has been deleted, skip it", K(ret), K(tablet_id));
       } else {
-        LOG_INFO("succeeded to set truncate info", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id), K(arg), K(timeout_us));
+        LOG_WARN("fail to get tablet", K(ret));
+      }
+    } else {
+      while (EN_SET_TTL_INFO_HANG) {
+        ob_usleep(1000 * 1000);
+        LOG_INFO("Errsim: set ttl filter info hang", K(ret), K(tablet_id), K(arg), K(timeout_us));
+      }
+
+      if (OB_FAIL(tablet_handle.get_obj()->set_ttl_filter_info(arg.ttl_filter_info_.key_, arg.ttl_filter_info_, ctx, timeout_us))) {
+        LOG_WARN("fail to set ttl filter info", K(ret), K(tablet_id), K(arg), K(timeout_us));
+      } else {
+        LOG_INFO("succeeded to set ttl filter info", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id), K(arg.ttl_filter_info_), K(timeout_us));
       }
     }
   }
@@ -3500,6 +3541,40 @@ int ObLSTabletService::replay_set_truncate_info(
       LOG_WARN("fail to set truncate info", K(ret), K(tablet_id), K(arg), K(scn));
     } else {
       LOG_INFO("succeeded to set truncate info", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id), K(arg), K(scn));
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::replay_set_ttl_filter_info(
+  const common::ObTabletID &tablet_id,
+  const share::SCN &scn,
+  const rootserver::ObTTLFilterInfoArg &arg,
+  mds::MdsCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(arg));
+  } else {
+    ObTabletHandle tablet_handle;
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+    if (OB_FAIL(lock_guard.get_ret())) {
+      LOG_WARN("fail to get lock", K(ret));
+    } else if (OB_FAIL(direct_get_tablet(tablet_id, tablet_handle))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        ret = OB_EAGAIN;
+        LOG_WARN("this tablet has been deleted, skip it", K(ret), K(tablet_id));
+      } else {
+        LOG_WARN("fail to get tablet", K(ret));
+      }
+    } else if (OB_FAIL(tablet_handle.get_obj()->replay_set_ttl_filter_info(scn, arg.ttl_filter_info_.key_, arg.ttl_filter_info_, ctx))) {
+      LOG_WARN("fail to set ttl filter info", K(ret), K(tablet_id), K(arg), K(scn));
+    } else {
+      LOG_INFO("succeeded to set ttl filter info", K(ret), "ls_id", ls_->get_ls_id(), K(tablet_id), K(arg), K(scn));
     }
   }
   return ret;
@@ -6960,12 +7035,12 @@ int ObLSTabletService::estimate_row_count(
   } else {
     const int64_t snapshot_version = -1 == param.frozen_version_ ?
         GET_BATCH_ROWS_READ_SNAPSHOT_VERSION : param.frozen_version_;
+    int64_t major_version = -1;
     if (OB_FAIL(get_read_tables(param.tablet_id_, timeout_us, snapshot_version, snapshot_version, tablet_iter, false/*allow_no_ready_read*/, true/*need_split_src_table*/, true/*need_split_dst_table*/))) {
       if (OB_TABLET_NOT_EXIST != ret) {
         LOG_WARN("failed to get tablet_iter", K(ret), K(snapshot_version), K(param));
       }
     } else {
-      int64_t major_version = -1;
       while(OB_SUCC(ret)) {
         ObITable *table = nullptr;
         if (OB_FAIL(tablet_iter.table_iter()->get_next(table))) {
@@ -6997,7 +7072,7 @@ int ObLSTabletService::estimate_row_count(
       }
     }
     if (OB_SUCC(ret) && tables.count() > 0) {
-      ObTableEstimateBaseInput base_input(param.scan_flag_, param.index_id_, param.tx_id_, tables, tablet_iter.get_tablet_handle());
+      ObTableEstimateBaseInput base_input(param.scan_flag_, param.index_id_, param.tx_id_, tables, tablet_iter.get_tablet_handle(), major_version);
       if (scan_range.is_get()) {
         if (OB_FAIL(ObTableEstimator::estimate_row_count_for_get(base_input, scan_range.get_rowkeys(), batch_est))) {
           LOG_WARN("failed to estimate row count", K(ret), K(param), K(scan_range));
@@ -8454,11 +8529,11 @@ int ObLSTabletService::ObDmlSplitCtx::prepare_write_dst(
       true/*need_split_src_table*/,
       false/*need_split_dst_table*/))) {
     LOG_WARN("failed to get relative table read tables", K(ret));
-  } else if (schema_param->get_read_info().need_truncate_filter()
-      && OB_FAIL(dst_relative_table_.prepare_truncate_part_filter(
-        allocator_,
-        store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()))) {
-    LOG_WARN("failed to prepare truncate part filter", K(ret));
+  } else if (OB_FAIL(dst_relative_table_.prepare_mds_filter(
+                 allocator_,
+                 store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
+                 schema_param->get_read_info().need_truncate_filter()))) {
+    LOG_WARN("failed to prepare mds filter", K(ret));
   }
   LOG_INFO("prepare write dst", K(ret), K(src_tablet_id), K(dst_tablet_id));
   return ret;

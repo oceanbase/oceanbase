@@ -862,6 +862,18 @@ int ObRpcTabletMajorFreezeP::process()
   return ret;
 }
 
+int ObRpcTableMajorFreezeP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->table_major_freeze(arg_, result_);
+  }
+  return ret;
+}
+
 int ObRpcCheckSchemaVersionElapsedP::process()
 {
   int ret = OB_SUCCESS;

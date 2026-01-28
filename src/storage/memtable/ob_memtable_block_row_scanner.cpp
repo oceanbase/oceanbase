@@ -74,7 +74,7 @@ int ObMemtableBlockRowScanner::prefetch()
     current_ = start_;
     last_ = memtable_reader_->get_row_count() - 1;
     can_ignore_multi_version_ = memtable_reader_->is_single_version_rows();
-    use_private_bitmap_ = param_->is_delete_insert_ && nullptr != param_->pushdown_filter_;
+    use_private_bitmap_ = param_->is_memtable_can_blockscan() && nullptr != block_row_store_ && block_row_store_->get_pd_filter_info().filter_ != nullptr;
     if (use_private_bitmap_) {
       if (OB_FAIL(init_bitmap(filter_bitmap_, true/*is_all_true*/))) {
         LOG_WARN("Failed to init bitmap", K(ret));

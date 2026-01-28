@@ -460,10 +460,13 @@ int ObTabletTTLScheduler::check_and_generate_tablet_tasks()
   hash::ObHashMap<uint64_t, table::ObTTLTaskParam> param_map; // table_id, task param
   ObMemAttr bucket_attr(tenant_id_, "TTLTaskParBuck");
   ObMemAttr node_attr(tenant_id_, "TTLTasParkNode");
+  uint64_t tenant_data_version = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet ttl mgr not init", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+    LOG_WARN("fail to get min data version", K(ret));
   } else if (OB_FAIL(ObTTLUtil::get_tenant_table_ids(tenant_id_, table_id_array))) {
     LOG_WARN("fail to get tenant table ids", KR(ret), K_(tenant_id));
   } else if (!table_id_array.empty() && OB_FAIL(tablet_table_pairs_.reserve(DEFAULT_TABLET_PAIR_SIZE))) {
@@ -499,7 +502,7 @@ int ObTabletTTLScheduler::check_and_generate_tablet_tasks()
           LOG_ERROR("fail to check is ttl table", KR(ret), K(table_schema->get_table_name()));
           // skip this error table to prevent one table from causing TTL unavailability.
           ret = OB_SUCCESS; // ignore error
-        } else if (is_ttl_table) {
+        } else if (is_ttl_table) { // is_deleting_ttl_table
           ObArray<ObTabletID> tablet_ids;
           ObTTLTaskParam ttl_param;
           if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
@@ -1083,11 +1086,18 @@ int ObTabletTTLScheduler::construct_task_record_filter(const uint64_t& task_id,
   partition_id_field.type_ = ObTTLStatusField::UINT_TYPE;
   partition_id_field.data_.uint_ = tablet_id.id();
 
+  ObTTLStatusField ttl_task_type_field;
+  ttl_task_type_field.field_name_ = ObString("task_type");
+  ttl_task_type_field.type_ = ObTTLStatusField::INT_TYPE;
+  ttl_task_type_field.data_.int_ = static_cast<int64_t>(get_ttl_type());
+
   if (OB_FAIL(filter.push_back(task_id_field))) {
     LOG_WARN("failt to push back", KR(ret));
   } else if (OB_FAIL(filter.push_back(table_id_field))) {
     LOG_WARN("failt to push back", KR(ret));
   } else if (OB_FAIL(filter.push_back(partition_id_field))) {
+    LOG_WARN("failt to push back", KR(ret));
+  } else if (OB_FAIL(filter.push_back(ttl_task_type_field))) {
     LOG_WARN("failt to push back", KR(ret));
   }
   return ret;
@@ -1279,7 +1289,7 @@ int ObTabletTTLScheduler::reload_tenant_task()
     LOG_WARN("not init", KR(ret));
   } else if (!is_leader_) {
     // do nothing
-  } else if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id_, get_tenant_task_table_id(), *sql_proxy_, tenant_task))) {
+  } else if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id_, get_tenant_task_table_id(), get_ttl_type(), *sql_proxy_, tenant_task))) {
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
       local_tenant_task_.reuse();

@@ -250,18 +250,16 @@ int ObMicroBlockBufferHelper::prepare_micro_block_reader(
   int ret = OB_SUCCESS;
   micro_reader = nullptr;
   ObMicroBlockData block_data;
-  block_data.buf_ = buf;
-  block_data.size_ = size;
-  const ObMicroBlockHeader *header = reinterpret_cast<const ObMicroBlockHeader *>(buf);
-  ObRowStoreType row_store_type = static_cast<ObRowStoreType>(header->row_store_type_);
-  if (OB_FAIL(check_reader_helper_.get_reader(*header, micro_reader))) {
-    STORAGE_LOG(WARN, "failed to get micro reader", K(ret), K(row_store_type));
+  if (OB_FAIL(block_data.init_with_prepare_micro_header(buf, size))) {
+    STORAGE_LOG(WARN, "failed to prepare micro header", KR(ret));
+  } else if (OB_FAIL(check_reader_helper_.get_reader(*block_data.get_micro_header(), micro_reader))) {
+    STORAGE_LOG(WARN, "failed to get micro reader", K(ret), K(block_data.micro_header_));
   } else if (OB_ISNULL(micro_reader)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected null micro reader", K(ret), KP(micro_reader));
   } else if (OB_FAIL(micro_reader->init(block_data, nullptr))) {
     STORAGE_LOG(WARN, "failed to init micro block reader",
-        K(ret), K(block_data), KPC(header));
+        K(ret), K(block_data));
   }
   return ret;
 }
@@ -1368,10 +1366,7 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
       LOG_ERROR("Unexpected current row trans version in major merge", K(ret), K(cur_row_version), K(row),
         "snapshot_version", data_store_desc_->get_snapshot_version());
     } else if (!row.mvcc_row_flag_.is_uncommitted_row()) { // update max commit version
-      const int64_t cluster_version = data_store_desc_->get_major_working_cluster_version();
-      if (data_store_desc_->is_major_merge_type() && not_compat_for_queuing_mode_42x(cluster_version) && cluster_version < DATA_VERSION_4_3_0_0) {
-        micro_writer_->update_max_merged_trans_version(-cur_row_version);
-      }
+      micro_writer_->update_merged_trans_version(-cur_row_version);
       // TODO: zhanghuidong.zhd, remove defensive code later
       // check committed rows write right trans version
       if (OB_UNLIKELY(!transaction::is_effective_trans_version(-cur_row_version))) {
@@ -1440,7 +1435,6 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
         }
       }
     }
-
     if (OB_ROWKEY_ORDER_ERROR == ret || OB_ERR_UNEXPECTED == ret || OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
       dump_micro_block(*micro_writer_); // print micro block have output
     }
@@ -1532,13 +1526,7 @@ int ObMacroBlockWriter::update_micro_commit_info(const ObDatumRow &row)
     const int64_t trans_version_col_idx = data_store_desc_->get_schema_rowkey_col_cnt();
     const int64_t cur_row_version = row.storage_datums_[trans_version_col_idx].get_int();
     const int64_t cluster_version = data_store_desc_->get_major_working_cluster_version();
-    if (!data_store_desc_->is_major_merge_type() || cluster_version >= DATA_VERSION_4_3_0_0) {
-      // see ObMicroBlockWriter::build_block, column_checksums_ and min_merged_trans_version_ share the same memory space.
-      // Only major merge set column_checksums_, so we can set min_merged_trans_version_ regardless of data version.
-      micro_writer_->update_merged_trans_version(-cur_row_version);
-    } else if (!not_compat_for_queuing_mode_42x(cluster_version)) {
-      micro_writer_->update_max_merged_trans_version(-cur_row_version);
-    }
+    micro_writer_->update_merged_trans_version(-cur_row_version);
   }
   return ret;
 }
@@ -1701,9 +1689,9 @@ int ObMacroBlockWriter::build_micro_block()
   const bool need_data_aggregate = (nullptr != data_aggregator_) && micro_writer_->micro_block_row_data_buffered();
   int64_t block_size = 0;
   ObMicroBlockDesc micro_block_desc;
-  if (micro_writer_->get_row_count() <= 0) {
+  if (OB_UNLIKELY(nullptr == micro_writer_ || micro_writer_->get_row_count() <= 0)) {
     ret = OB_INNER_STAT_ERROR;
-    STORAGE_LOG(WARN, "micro_block_writer is empty", K(ret));
+    STORAGE_LOG(WARN, "micro_block_writer is empty", K(ret), KPC_(micro_writer));
   } else if (OB_FAIL(micro_writer_->build_micro_block_desc(micro_block_desc))) {
     STORAGE_LOG(WARN, "failed to build micro block desc", K(ret));
   } else if (need_data_aggregate && OB_FAIL(data_aggregator_->eval(*micro_writer_))) {
@@ -1721,7 +1709,7 @@ int ObMacroBlockWriter::build_micro_block()
   }
 
 #ifdef ERRSIM
-  if (data_store_desc_->encoding_enabled()) {
+  if (nullptr != data_store_desc_ && data_store_desc_->encoding_enabled()) {
     ret = OB_E(EventTable::EN_BUILD_DATA_MICRO_BLOCK) ret;
   }
 #endif
@@ -1826,7 +1814,7 @@ int ObMacroBlockWriter::build_micro_block_desc_with_rewrite(
     bool is_compressed = false;
 
     if (OB_FAIL(macro_reader_.decrypt_and_decompress_data(micro_des_meta, micro_block.data_.get_buf(),
-        micro_block.data_.get_buf_size(), decompressed_data.get_buf(), decompressed_data.get_buf_size(), is_compressed))) {
+        micro_block.data_.get_buf_size(), decompressed_data, is_compressed))) {
       LOG_WARN("fail to decrypt and decompress data", K(ret));
     } else if (OB_FAIL(reader_helper_.get_reader(*decompressed_data.get_micro_header(), reader))) {
       LOG_WARN("fail to get reader", K(ret), K(micro_block));
@@ -2759,7 +2747,7 @@ int ObMacroBlockWriter::merge_micro_block(const ObMicroBlock &micro_block)
 
     micro_reader->reset();
     if (OB_FAIL(macro_reader_.decrypt_and_decompress_data(micro_des_meta, micro_block.data_.get_buf(),
-        micro_block.data_.get_buf_size(), decompressed_data.get_buf(), decompressed_data.get_buf_size(), is_compressed))) {
+        micro_block.data_.get_buf_size(), decompressed_data, is_compressed))) {
       STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
     } else if (OB_FAIL(micro_reader->init(decompressed_data, nullptr))) {
       STORAGE_LOG(WARN, "micro_block_reader init failed", K(micro_block), K(ret));
@@ -2944,8 +2932,11 @@ void ObMacroBlockWriter::dump_micro_block(ObIMicroBlockWriter &micro_writer)
     if (data_store_desc_->encoding_enabled()) {
       micro_writer.dump_diagnose_info();
     } else {
+      int64_t pos = 0;
       if (OB_FAIL(micro_writer.build_block(buf, size))) {
         STORAGE_LOG(WARN, "failed to build micro block", K(ret));
+      } else if (OB_FAIL(micro_writer.micro_header_.serialize(buf, size, pos))) {
+        STORAGE_LOG(WARN, "failed to serialize micro header", KR(ret), K(micro_writer));
       } else if (OB_FAIL(micro_helper_.dump_micro_block_writer_buffer(buf, size))) {
         STORAGE_LOG(WARN, "failed to dump micro block", K(ret));
       }
@@ -2988,7 +2979,7 @@ void ObMacroBlockWriter::dump_macro_block(ObMacroBlock &macro_block)
         bool is_compressed = false;
         if (OB_FAIL(macro_reader_.decrypt_and_decompress_data(micro_des_meta,
             micro_data.get_buf(), micro_data.get_buf_size(),
-            decompressed_data.get_buf(), decompressed_data.get_buf_size(), is_compressed))) {
+            decompressed_data, is_compressed))) {
           STORAGE_LOG(WARN, "fail to decrypt and decomp data", K(ret), K(micro_des_meta));
         } else if (OB_FAIL(micro_helper_.dump_micro_block_writer_buffer(
             decompressed_data.get_buf(), decompressed_data.get_buf_size()))) {
@@ -3049,7 +3040,7 @@ void ObMacroBlockWriter::release_pre_agg_util()
 int ObMacroBlockWriter::agg_micro_block(const ObMicroIndexData &micro_index_data)
 {
   int ret = OB_SUCCESS;
-  if (micro_index_data.is_pre_aggregated() && nullptr != data_aggregator_) {
+  if (nullptr != data_aggregator_) {
     if (OB_FAIL(data_aggregator_->ObISkipIndexAggregator::eval(micro_index_data.agg_row_buf_,
         micro_index_data.agg_buf_size_, micro_index_data.get_row_count()))) {
       LOG_WARN("Fail to evaluate by micro block", K(ret), K(micro_index_data));

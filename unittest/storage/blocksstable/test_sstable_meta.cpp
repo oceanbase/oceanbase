@@ -128,16 +128,11 @@ void TestRootBlockInfo::prepare_block_root()
   row.count_ = COLUMN_CNT;
   ASSERT_EQ(OB_SUCCESS, writer.append_row(row));
   ObMicroBlockDesc micro_desc;
-  ASSERT_EQ(OB_SUCCESS, writer.build_micro_block_desc(micro_desc));
+  ASSERT_EQ(OB_SUCCESS, writer.build_micro_block_desc_in_unittest(micro_desc));
 
   ObMicroBlockHeader *header = const_cast<ObMicroBlockHeader *>(micro_desc.header_);
   ASSERT_NE(nullptr, header);
   ASSERT_EQ(true, header->is_valid());
-  header->data_length_ = micro_desc.buf_size_;
-  header->data_zlength_ = micro_desc.buf_size_;
-  header->data_checksum_ = ob_crc64_sse42(0, micro_desc.buf_, micro_desc.buf_size_);
-  header->original_length_ = micro_desc.buf_size_;
-  header->set_header_checksum();
 
   const int64_t size = header->header_size_ + micro_desc.buf_size_;
   char *buf = static_cast<char *>(allocator_.alloc(size));
@@ -462,7 +457,8 @@ TEST_F(TestRootBlockInfo, test_serialize_and_deserialize)
   ObMetaDiskAddr addr;
   addr.type_ = ObMetaDiskAddr::MEM;
   addr.size_ = block_data_.size_;
-  ObMicroBlockData block_data(block_data_.buf_, block_data_.size_);
+  ObMicroBlockData block_data;
+  ASSERT_EQ(OB_SUCCESS, block_data.init_with_prepare_micro_header(block_data_.buf_, block_data_.size_));
   block_data.type_ = ObMicroBlockData::INDEX_BLOCK;
   const ObRowStoreType row_store_type = ObRowStoreType::ENCODING_ROW_STORE;
   ASSERT_EQ(OB_SUCCESS, root_info_.init_root_block_info(allocator_, addr, block_data, row_store_type));

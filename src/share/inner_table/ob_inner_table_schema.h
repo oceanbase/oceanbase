@@ -1460,6 +1460,8 @@ public:
   static int all_virtual_replay_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_apply_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_archive_stat_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_kv_ttl_task_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_kv_ttl_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_recovery_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_election_reference_info_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2190,6 +2192,10 @@ public:
   static int gv_ob_external_catalog_client_pool_stat_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_external_catalog_client_pool_stat_schema(share::schema::ObTableSchema &table_schema);
   static int dba_tables_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ttl_tasks_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_ttl_tasks_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
@@ -2729,6 +2735,8 @@ public:
   static int dba_ob_sensitive_rules_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_sensitive_columns_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_sensitive_rule_plainaccess_users_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ttl_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ttl_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -4799,6 +4807,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_replay_stat_ora_schema,
   ObInnerTableSchema::all_virtual_apply_stat_ora_schema,
   ObInnerTableSchema::all_virtual_archive_stat_ora_schema,
+  ObInnerTableSchema::all_virtual_kv_ttl_task_ora_schema,
+  ObInnerTableSchema::all_virtual_kv_ttl_task_history_ora_schema,
   ObInnerTableSchema::all_virtual_ls_status_ora_schema,
   ObInnerTableSchema::all_virtual_ls_recovery_stat_ora_schema,
   ObInnerTableSchema::all_virtual_ls_election_reference_info_ora_schema,
@@ -5644,6 +5654,10 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::gv_ob_external_catalog_client_pool_stat_schema,
   ObInnerTableSchema::v_ob_external_catalog_client_pool_stat_schema,
   ObInnerTableSchema::dba_tables_schema,
+  ObInnerTableSchema::dba_ob_ttl_tasks_schema,
+  ObInnerTableSchema::dba_ob_ttl_task_history_schema,
+  ObInnerTableSchema::cdb_ob_ttl_tasks_schema,
+  ObInnerTableSchema::cdb_ob_ttl_task_history_schema,
   ObInnerTableSchema::gv_ob_tablet_replica_info_schema,
   ObInnerTableSchema::v_ob_tablet_replica_info_schema,
   ObInnerTableSchema::dba_synonyms_schema,
@@ -6183,6 +6197,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_sensitive_rules_ora_schema,
   ObInnerTableSchema::dba_ob_sensitive_columns_ora_schema,
   ObInnerTableSchema::dba_ob_sensitive_rule_plainaccess_users_ora_schema,
+  ObInnerTableSchema::dba_ob_ttl_tasks_ora_schema,
+  ObInnerTableSchema::dba_ob_ttl_task_history_ora_schema,
   NULL,};
 
 const schema_create_func core_index_table_schema_creators [] = {
@@ -7155,6 +7171,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_REPLAY_STAT_ORA_TID,
   OB_ALL_VIRTUAL_APPLY_STAT_ORA_TID,
   OB_ALL_VIRTUAL_ARCHIVE_STAT_ORA_TID,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_ORA_TID,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_ORA_TID,
   OB_ALL_VIRTUAL_LS_STATUS_ORA_TID,
   OB_ALL_VIRTUAL_LS_RECOVERY_STAT_ORA_TID,
   OB_ALL_VIRTUAL_LS_ELECTION_REFERENCE_INFO_ORA_TID,
@@ -7729,6 +7747,10 @@ const uint64_t tenant_space_tables [] = {
   OB_GV_OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
   OB_V_OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TID,
   OB_DBA_TABLES_TID,
+  OB_DBA_OB_TTL_TASKS_TID,
+  OB_DBA_OB_TTL_TASK_HISTORY_TID,
+  OB_CDB_OB_TTL_TASKS_TID,
+  OB_CDB_OB_TTL_TASK_HISTORY_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -8266,6 +8288,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_SENSITIVE_RULES_ORA_TID,
   OB_DBA_OB_SENSITIVE_COLUMNS_ORA_TID,
   OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_ORA_TID,
+  OB_DBA_OB_TTL_TASKS_ORA_TID,
+  OB_DBA_OB_TTL_TASK_HISTORY_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
   OB_ALL_TABLE_IDX_TB_NAME_TID,
@@ -9236,6 +9260,8 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_REPLAY_STAT_TID,
   OB_ALL_VIRTUAL_APPLY_STAT_TID,
   OB_ALL_VIRTUAL_ARCHIVE_STAT_TID,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_TID,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_TID,
   OB_ALL_VIRTUAL_LS_STATUS_TID,
   OB_ALL_VIRTUAL_LS_RECOVERY_STAT_TID,
   OB_ALL_VIRTUAL_LS_ELECTION_REFERENCE_INFO_TID,
@@ -9429,6 +9455,8 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_REPLAY_STAT_ORA_TID
 ,  OB_ALL_VIRTUAL_APPLY_STAT_ORA_TID
 ,  OB_ALL_VIRTUAL_ARCHIVE_STAT_ORA_TID
+,  OB_ALL_VIRTUAL_KV_TTL_TASK_ORA_TID
+,  OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_ORA_TID
 ,  OB_ALL_VIRTUAL_LS_STATUS_ORA_TID
 ,  OB_ALL_VIRTUAL_LS_RECOVERY_STAT_ORA_TID
 ,  OB_ALL_VIRTUAL_LS_ELECTION_REFERENCE_INFO_ORA_TID
@@ -10364,6 +10392,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_REPLAY_STAT_ORA_TNAME,
   OB_ALL_VIRTUAL_APPLY_STAT_ORA_TNAME,
   OB_ALL_VIRTUAL_ARCHIVE_STAT_ORA_TNAME,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_ORA_TNAME,
+  OB_ALL_VIRTUAL_KV_TTL_TASK_HISTORY_ORA_TNAME,
   OB_ALL_VIRTUAL_LS_STATUS_ORA_TNAME,
   OB_ALL_VIRTUAL_LS_RECOVERY_STAT_ORA_TNAME,
   OB_ALL_VIRTUAL_LS_ELECTION_REFERENCE_INFO_ORA_TNAME,
@@ -10938,6 +10968,10 @@ const char* const tenant_space_table_names [] = {
   OB_GV_OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TNAME,
   OB_V_OB_EXTERNAL_CATALOG_CLIENT_POOL_STAT_TNAME,
   OB_DBA_TABLES_TNAME,
+  OB_DBA_OB_TTL_TASKS_TNAME,
+  OB_DBA_OB_TTL_TASK_HISTORY_TNAME,
+  OB_CDB_OB_TTL_TASKS_TNAME,
+  OB_CDB_OB_TTL_TASK_HISTORY_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -11475,6 +11509,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_SENSITIVE_RULES_ORA_TNAME,
   OB_DBA_OB_SENSITIVE_COLUMNS_ORA_TNAME,
   OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_ORA_TNAME,
+  OB_DBA_OB_TTL_TASKS_ORA_TNAME,
+  OB_DBA_OB_TTL_TASK_HISTORY_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
   OB_ALL_TABLE_IDX_TB_NAME_TNAME,

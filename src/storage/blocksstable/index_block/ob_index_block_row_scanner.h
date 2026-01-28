@@ -100,7 +100,9 @@ int fix_micro_header_and_transform(
     ObMicroBlockData &transformed_data,
     ObIAllocator &allocator,
     char *&allocated_buf);
-  static int get_transformed_upper_mem_size(const ObITableReadInfo *table_read_info, const char *raw_block_data, int64_t &mem_limit);
+  static int get_transformed_upper_mem_size(
+    const ObMicroBlockHeader &micro_block_header,
+    const ObITableReadInfo *table_read_info, const char *raw_block_data, int64_t &mem_limit);
 private:
   int get_reader(const ObMicroBlockHeader &header, ObIMicroBlockReader *&micro_reader);
 private:

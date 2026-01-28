@@ -78,6 +78,7 @@
 #include "parallel_ddl/ob_htable_ddl_handler.h" // ObUpdateIndexStatusHelper
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "storage/ddl/ob_tablet_split_util.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "rootserver/ob_ai_model_ddl_service.h"
 #include "parallel_ddl/ob_drop_tablegroup_helper.h" // ObDropTableGroupHelper
 #include "parallel_ddl/ob_create_tablegroup_helper.h" // ObCreateTableGroupHelper

@@ -40,6 +40,7 @@ public:
       skip_scanner_(nullptr),
       skip_state_(),
       range_idx_(0),
+      mv_io_micro_data_scanner_(nullptr),
       is_di_base_iter_(false),
       cur_range_idx_(-1)
   {
@@ -139,6 +140,7 @@ protected:
   ObISkipScanner *skip_scanner_;
   ObIndexSkipState skip_state_;
   int64_t range_idx_;
+  ObMultiVersionIOMicroBlockRowScanner *mv_io_micro_data_scanner_;
 private:
   bool is_di_base_iter_;
   int64_t cur_range_idx_;

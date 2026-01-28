@@ -32,7 +32,6 @@ class ObCachedTableHandle;
 class ObStorageMetaHandle;
 struct ObTabletHAStatus;
 class ObLS;
-class ObIncMajorDDLAggregateCOSSTable;
 
 enum class ObGetReadTablesMode : uint8_t
 {
@@ -63,12 +62,6 @@ public:
       const ObTablet &tablet,
       const ObUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
-#ifdef OB_BUILD_SHARED_STORAGE
-  // init for shared storage major compaction
-  int init_for_shared_storage(
-      common::ObArenaAllocator &allocator,
-      const ObUpdateTableStoreParam &param);
-#endif
   // init temp table store with address for serialize, no memtable array
   // need get all member variables from old table store
   int init(

@@ -136,9 +136,9 @@ TEST_F(TestMicroBlockWriter, test_init)
   //success
   ret = writer.init(1024, 2, 5);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(sizeof(ObMicroBlockHeader)+4, writer.get_block_size());
+  ASSERT_EQ(writer.micro_header_.get_serialize_size() + 4, writer.get_block_size());
   ASSERT_EQ(0, writer.get_row_count());
-  ASSERT_EQ(sizeof(ObMicroBlockHeader), writer.get_data_size());
+  ASSERT_EQ(writer.micro_header_.get_serialize_size(), writer.get_data_size());
 }
 
 TEST_F(TestMicroBlockWriter, append_success)
@@ -160,10 +160,11 @@ TEST_F(TestMicroBlockWriter, append_success)
     convert_to_multi_version_row(row, row_generate_.get_schema(), SNAPSHOT_VERSION, multi_version_row);
     ASSERT_EQ(OB_SUCCESS, writer.append_row(multi_version_row));
   }
-  char *buf = NULL;
-  int64_t size = 0;
-  ret = writer.build_block(buf, size);
+  ObMicroBlockDesc micro_block_desc;
+  ret = writer.build_micro_block_desc_in_unittest(micro_block_desc);
   ASSERT_EQ(OB_SUCCESS, ret);
+  const char *buf = writer.data_buffer_.data();
+  const int64_t size = writer.data_buffer_.size();
 
   //check ObMicroBlockWriter right by ObMicroBlockReader and ObRowGenerate
   ObArray<ObColDesc> columns;
@@ -172,7 +173,8 @@ TEST_F(TestMicroBlockWriter, append_success)
   ASSERT_EQ(OB_SUCCESS, read_info_.init(
       allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
   ObMicroBlockReader<> reader;
-  ObMicroBlockData block(buf, size);
+  ObMicroBlockData block;
+  ASSERT_EQ(OB_SUCCESS, block.init_with_prepare_micro_header(buf, size));
   ret = reader.init(block, read_info_);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObDatumRow read_row;

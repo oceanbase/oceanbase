@@ -130,6 +130,8 @@ public:
 
   static int tablet_major_freeze(const ObTabletMajorFreezeParam &param);
 
+  static int table_major_freeze(const obrpc::ObTableMajorFreezeArg &param);
+
   static int suspend_merge(const ObTenantAdminMergeParam &param);
 
   static int resume_merge(const ObTenantAdminMergeParam &param);
@@ -181,7 +183,25 @@ private:
       const char *buf);
 
 private:
+  static int get_ls_tablets_result_by_sql(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      ObMySQLProxy::MySQLResult &res,
+      common::sqlclient::ObMySQLResult *&result);
+  static int get_next_batch_schedule_tablets(
+      common::sqlclient::ObMySQLResult &result,
+      bool & need_call_next,
+      int64_t & cur_ls_id,
+      common::ObArray<uint64_t> &batch_schedule_tablet_ids);
+  static int send_tablets_major_freeze_by_ls(
+      const obrpc::ObTableMajorFreezeRpcProxy &proxy,
+      const uint64_t tenant_id,
+      const int64_t ls_id,
+      const common::ObIArray<uint64_t> &tablet_ids,
+      const bool is_rebuild_column_group);
   static const int64_t MAX_PROCESS_TIME_US = 10 * 1000 * 1000L;
+  static const int64_t BATCH_SCHEDULE_TABLET_COUNT = 100;
+  static const int64_t MAX_RETRY_COUNT = 5;
 };
 
 class ObGlobalCompactionSchemaHelper final

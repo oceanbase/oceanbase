@@ -346,6 +346,7 @@ public:
   int deep_copy(const ObDatumRow &src, common::ObIAllocator &allocator);
   int from_store_row(const storage::ObStoreRow &store_row);
   int shallow_copy(const ObDatumRow &other);
+  int shallow_copy_with_local_storage_datum(const ObDatumRow &other);
   //only for unittest
   bool operator==(const ObDatumRow &other) const;
   bool operator==(const common::ObNewRow &other) const;

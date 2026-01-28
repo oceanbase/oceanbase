@@ -67,6 +67,7 @@ private:
   int check_safe_update_mode(ObUpdateStmt *update_stmt);
   int resolve_update_constraints();
   int generate_batched_stmt_info();
+  int resolve_check_merge_engine(const TableItem* table_item);
 };
 
 } // namespace sql

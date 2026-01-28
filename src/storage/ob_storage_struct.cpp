@@ -423,7 +423,7 @@ ObCompactionTableStoreParam::ObCompactionTableStoreParam()
     clog_checkpoint_scn_(SCN::min_scn()),
     major_ckm_info_(),
     need_report_(false),
-    has_truncate_info_(false)
+    has_merged_with_mds_info_(false)
 {
 }
 
@@ -431,12 +431,12 @@ ObCompactionTableStoreParam::ObCompactionTableStoreParam(
     const compaction::ObMergeType merge_type,
     const share::SCN clog_checkpoint_scn,
     const bool need_report,
-    const bool has_truncate_info)
+    const bool has_merged_with_mds_info)
   : merge_type_(merge_type),
     clog_checkpoint_scn_(clog_checkpoint_scn),
     major_ckm_info_(),
     need_report_(need_report),
-    has_truncate_info_(has_truncate_info)
+    has_merged_with_mds_info_(has_merged_with_mds_info)
 {
 }
 
@@ -459,7 +459,7 @@ int ObCompactionTableStoreParam::assign(
     merge_type_ = other.merge_type_;
     clog_checkpoint_scn_ = other.clog_checkpoint_scn_;
     need_report_ = other.need_report_;
-    has_truncate_info_ = other.has_truncate_info_;
+    has_merged_with_mds_info_ = other.has_merged_with_mds_info_;
   }
   return ret;
 }

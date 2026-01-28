@@ -17,6 +17,7 @@
 #include "storage/compaction/filter/ob_tx_data_minor_filter.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/compaction/filter/ob_reorg_info_minor_filter.h"
+#include "storage/compaction/filter/ob_rowscn_filter.h"
 
 namespace oceanbase
 {
@@ -24,6 +25,7 @@ using namespace share;
 using namespace blocksstable;
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_MINOR_RECYCLE_ROWS);
 /*
  *  ----------------------------------------------ObTabletMergeCtx--------------------------------------------------
  */
@@ -98,9 +100,9 @@ void ObTabletMergeCtx::update_block_info(
 }
 
 void ObTabletMergeCtx::update_block_info_with_sstable_block_info(
-    const ObMergeBlockInfo &block_info,
-    const int64_t cost_time,
-    ObIArray<ObSSTableMergeBlockInfo> &array)
+  const ObMergeBlockInfo &block_info,
+  const int64_t cost_time,
+  ObIArray<ObSSTableMergeBlockInfo> &array)
 {
   merge_info_.get_merge_history().update_block_info_with_sstable_block_info(block_info, false/*without_row_cnt*/, array);
   merge_info_.get_merge_history().update_execute_time(cost_time);
@@ -122,7 +124,6 @@ int ObTabletMiniMergeCtx::prepare_schema()
     } else {
       static_param_.schema_ = schema;
       static_param_.set_full_merge_and_level(true/*is_full_merge*/);
-      static_param_.read_base_version_ = 0;
     }
   } else if (OB_FAIL(update_storage_schema_by_memtable(get_tables_handle(), *schema))) {
     LOG_WARN("failed to update storage schema by memtable", KR(ret), KPC(schema));
@@ -258,7 +259,7 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
       // no need to schedule minor merge
     } else if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
         static_param_.ls_handle_, tablet_handle))) {
-      if (OB_SIZE_OVERFLOW != tmp_ret) {
+      if (OB_SIZE_OVERFLOW != tmp_ret && OB_NO_NEED_MERGE != tmp_ret) {
         LOG_WARN_RET(tmp_ret, "failed to schedule special tablet minor merge",
                      "ls_id", get_ls_id(), "tablet_id", get_tablet_id());
       }
@@ -428,9 +429,14 @@ int ObTabletExeMergeCtx::get_tables_by_key(ObGetMergeTablesResult &get_merge_tab
 int ObTabletExeMergeCtx::prepare_compaction_filter()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   const ObTabletID &tablet_id = get_tablet_id();
-  if (!get_tablet_id().is_ls_inner_tablet()) {
+  if (!is_minor_merge(static_param_.get_merge_type())) {
     // do nothing
+  } else if (!get_tablet_id().is_ls_inner_tablet()) {
+    if (OB_TMP_FAIL(prepare_rowscn_compaction_filter_())) {
+      LOG_WARN("failed to prepare rowscn filter", K(tmp_ret));
+    }
   } else if (tablet_id.is_ls_tx_data_tablet()) {
     if (OB_FAIL(prepare_tx_table_compaction_filter_())) {
       LOG_WARN("failed to prepare tx table compaction filter", K(ret));
@@ -555,6 +561,43 @@ int ObTabletExeMergeCtx::prepare_reorg_info_table_compaction_filter_()
   return ret;
 }
 
+int ObTabletExeMergeCtx::prepare_rowscn_compaction_filter_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t recycle_version = static_param_.version_range_.base_version_;
+  if (recycle_version > 1 && get_is_ha_compeleted() && !(EN_COMPACTION_DISABLE_MINOR_RECYCLE_ROWS)) {
+    const int64_t filter_col_idx = get_schema()->get_rowkey_column_num();
+    bool need_create_filter = false;
+    const ObICompactionFilter::CompactionFilterType filter_type = ObICompactionFilter::ROWSCN_FILTER;
+    if (OB_FAIL(check_need_create_compaction_filter(recycle_version, need_create_filter))) {
+      LOG_WARN("failed to check need create compaction filter", KR(ret), K(recycle_version));
+    } else if (!need_create_filter) {
+      // do nothing
+    } else if (OB_FAIL(ObCompactionFilterFactory::alloc_compaction_filter<ObRowscnFilter>(
+      mem_ctx_.get_allocator(),
+      filter_ctx_.compaction_filter_,
+      recycle_version,
+      filter_col_idx,
+      filter_type))) {
+      LOG_WARN("failed to alloc rowscn filter", K(ret), K(recycle_version), K(filter_col_idx));
+    } else {
+      FLOG_INFO("[COMPACTION FILTER] success to alloc rowscn filter", K(ret), K(recycle_version), K(filter_col_idx));
+    }
+  }
+  return ret;
+}
+
+int64_t ObTabletExeMergeCtx::get_recycle_version() const
+{
+  int64_t recycle_version = 0;
+  if (!get_tablet_id().is_ls_inner_tablet()
+    && has_filter()
+    && get_compaction_filter()->get_filter_type() == ObRowscnFilter::ROWSCN_FILTER) {
+    recycle_version = static_param_.version_range_.base_version_;
+  }
+  return recycle_version;
+}
+
 /*
  *  ----------------------------------------------ObTabletMajorMergeCtx--------------------------------------------------
  */
@@ -572,11 +615,11 @@ int ObTabletMajorMergeCtx::prepare_schema()
   } else {
     ObArenaAllocator allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObMediumCompactionInfo *medium_info = nullptr;
-    if (OB_FAIL(OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(), *get_tablet(), allocator, medium_info)))) {
-    LOG_WARN("fail to get medium info with merge version", K(ret), KPC(this));
+    if (OB_FAIL(ObTabletMediumInfoReader::get_medium_info_with_merge_version(get_merge_version(), *get_tablet(), allocator, medium_info))) {
+      LOG_WARN("fail to get medium info with merge version", KR(ret), KPC(this));
     } else if (OB_FAIL(prepare_from_medium_compaction_info(medium_info))) {
       // have checked medium info inside
-      LOG_WARN("failed to get medium compaction info", KR(ret), KPC(this), KPC(medium_info));
+      LOG_WARN("failed to prepare from medium compaction info", KR(ret), KPC(this), KPC(medium_info));
     }
     ObTabletObjLoadHelper::free(allocator, medium_info);
   }

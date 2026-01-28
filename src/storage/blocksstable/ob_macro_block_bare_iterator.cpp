@@ -259,8 +259,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_data_and_offset(ObMicroBlockD
         micro_buf,
         micro_buf_size,
         false,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K(macro_block_header_));
     }
@@ -383,8 +382,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
         micro_buf,
         micro_buf_size,
         false,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K(macro_block_header_));
     } else if (OB_FAIL(last_row.init(allocator, column_cnt_ + 1))) {
@@ -563,8 +561,7 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
         micro_buf,
         micro_buf_size,
         true,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K(macro_block_header_));
     } else if (OB_FAIL(last_row.init(allocator, column_cnt_ + 1))) {
@@ -653,8 +650,7 @@ int ObMicroBlockBareIterator::get_macro_meta(ObDataMacroBlockMeta *&macro_meta, 
                                                              meta_block_buf,
                                                              meta_block_buf_size,
                                                              false/*need deep copy*/,
-                                                             meta_block.get_buf(),
-                                                             meta_block.get_buf_size(),
+                                                             meta_block,
                                                              is_compressed))) {
     LOG_WARN("decrypt and decompress meta block fail", K(ret));
   } else if (OB_FAIL(micro_reader_helper.init(allocator))) {
@@ -716,15 +712,15 @@ int ObMicroBlockBareIterator::get_index_block(ObMicroBlockData &micro_block,
     } else if (OB_FAIL(header.check_record(micro_buf, micro_buf_size, MICRO_BLOCK_HEADER_MAGIC))) {
       LOG_WARN("Fail to check record header", K(ret), K(header));
     } else if (!need_deserialize_ && !force_deserialize) {
-      micro_block.get_buf() = micro_buf;
-      micro_block.get_buf_size() = micro_buf_size;
+      if (OB_FAIL(micro_block.init_with_prepare_micro_header(micro_buf, micro_buf_size))) {
+        LOG_WARN("Fail to init micro data", K(ret), K(micro_buf), K(micro_buf_size));
+      }
     } else if (OB_FAIL(index_reader_.decrypt_and_decompress_data(
         macro_block_header_,
         micro_buf,
         micro_buf_size,
         false,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K_(macro_block_header));
     }

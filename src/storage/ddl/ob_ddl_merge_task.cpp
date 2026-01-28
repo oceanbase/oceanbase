@@ -1430,7 +1430,7 @@ int ObTabletDDLUtil::update_ddl_table_store(
             ObCompactionTableStoreParam(is_major_sstable ? compaction::MEDIUM_MERGE : compaction::MINI_MERGE,
                                         share::SCN::min_scn(),
                                         is_major_sstable /*need_report*/,
-                                        false/*has_truncate_info*/)))) {
+                                        false/*has_mds_info*/)))) {
       /*DDL does not have verification between replicas,
         So using medium merge to force verification between replicas*/
       LOG_WARN("failed to init with compaction info", KR(ret));

@@ -279,7 +279,7 @@ int ObMViewRefreshExecutor::do_refresh()
           purge_param.tenant_id_ = tenant_id_;
           purge_param.master_table_id_ = dep.get_ref_obj_id();
           purge_param.purge_log_parallel_ = arg_->refresh_parallel_; // reuse refresh_parallel_ in purge_log
-          if (OB_TMP_FAIL(purger.init(*ctx_, purge_param))) {
+          if (OB_TMP_FAIL(purger.init(*ctx_, purge_param, true /*purge_data_by_sql */ ))) {
             LOG_WARN("fail to init mlog purger", KR(tmp_ret), K(purge_param));
           } else if (OB_TMP_FAIL(purger.purge())) { // mlog may dropped, ignore
             LOG_WARN("fail to do purge", KR(tmp_ret), K(purge_param));

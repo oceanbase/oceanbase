@@ -669,6 +669,7 @@ ob_set_subtarget(ob_storage access
   access/ob_multiple_merge.cpp
   access/ob_multiple_multi_scan_merge.cpp
   access/ob_multiple_scan_merge.cpp
+  access/ob_level_order_scan_merge.cpp
   access/ob_index_skip_scanner.cpp
   access/ob_multiple_mview_merge.cpp
   access/ob_table_scan_iterator.cpp
@@ -696,6 +697,8 @@ ob_set_subtarget(ob_storage access
   access/ob_skip_index_sortedness.cpp
   access/ob_old_row_check_dumper.cpp
   access/ob_di_base_sstable_row_scanner.cpp
+  access/ob_mds_filter_mgr.cpp
+  access/ob_index_block_tree_traverser.cpp
 )
 
 ob_set_subtarget(ob_storage ddl
@@ -801,6 +804,7 @@ ob_set_subtarget(ob_storage common
   ob_storage_async_rpc.cpp
   ob_partition_pre_split.cpp
   ob_inner_tablet_access_service.cpp
+  ob_trans_version_skip_index_util.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed
@@ -881,6 +885,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_schedule_status_cache.cpp
   compaction/ob_uncommit_tx_info.cpp
   compaction/ob_mds_filter_info.cpp
+  compaction/ob_block_op.cpp
   compaction/ob_window_loop.cpp
   compaction/ob_window_compaction_utils.cpp
   compaction/ob_window_schedule_tablet_func.cpp
@@ -890,6 +895,7 @@ ob_set_subtarget(ob_storage compaction_filter
   compaction/filter/ob_tx_data_minor_filter.cpp
   compaction/filter/ob_mds_info_compaction_filter.cpp
   compaction/filter/ob_reorg_info_minor_filter.cpp
+  compaction/filter/ob_rowscn_filter.cpp
 )
 
 ob_set_subtarget(ob_storage lock_wait_mgr
@@ -1149,6 +1155,17 @@ ob_set_subtarget(ob_storage truncate_info
   truncate_info/ob_truncate_partition_filter.cpp
   truncate_info/ob_mds_info_distinct_mgr.cpp
   truncate_info/ob_truncate_info_kv_cache.cpp
+)
+
+ob_set_subtarget(ob_storage compaction_ttl
+  compaction_ttl/ob_ttl_filter_info_mds_helper.cpp
+  compaction_ttl/ob_ttl_filter_info.cpp
+  compaction_ttl/ob_ttl_filter_info_array.cpp
+  compaction_ttl/ob_ttl_filter_info_mds_helper.cpp
+  compaction_ttl/ob_ttl_filter_val.cpp
+  compaction_ttl/ob_ttl_filter.cpp
+  compaction_ttl/ob_base_version_filter.cpp
+  compaction_ttl/ob_mlog_purge_info_helper.cpp
 )
 
 ob_set_subtarget(ob_storage reorganization_info_table

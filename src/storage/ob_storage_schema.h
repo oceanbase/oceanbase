@@ -268,6 +268,7 @@ public:
   virtual inline int64_t get_progressive_merge_num() const override { return progressive_merge_num_; }
   virtual inline uint64_t get_master_key_id() const override { return master_key_id_; }
   virtual inline bool is_use_bloomfilter() const override { return is_use_bloomfilter_; }
+  virtual inline bool has_ttl_definition() const override { return has_ttl_definition_; }
   virtual inline bool is_index_table() const override { return share::schema::is_index_table(table_type_); }
   virtual inline bool is_storage_index_table() const override
   {
@@ -377,13 +378,13 @@ public:
   void set_minor_row_store_type(const ObRowStoreType minor_row_store_type) { minor_row_store_type_ = minor_row_store_type; }
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
-      K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
+      K_(column_info_simplified), K_(merge_engine_type), K_(has_ttl_definition), K_(compat_mode), K_(table_type), K_(index_type),
       K_(row_store_type), K_(schema_version), K_(is_cs_replica_compat), K_(is_column_table_schema), K_(enable_macro_block_bloom_filter),
       K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
-      K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
+      K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key), K_(is_use_bloomfilter),
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
       "skip_index_cnt", skip_idx_attr_array_.count(), K_(skip_idx_attr_array),
-      "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group), K_(merge_engine_type),
+      "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group),
       K_(micro_block_format_version), K_(minor_row_store_type), K_(skip_index_level));
 public:
   static int trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
@@ -429,7 +430,7 @@ public:
   static const int32_t SS_ONE_BIT = 1;
   static const int32_t SS_HALF_BYTE = 4;
   static const int32_t SS_ONE_BYTE = 8;
-  static const int32_t SS_RESERVED_BITS = 15;
+  static const int32_t SS_RESERVED_BITS = 14;
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
@@ -448,7 +449,7 @@ public:
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
 
-  union {
+  union { //FARM COMPAT WHITELIST
     uint32_t info_;
     struct
     {
@@ -459,6 +460,7 @@ public:
       uint32_t is_cs_replica_compat_             : SS_ONE_BIT; // for storage schema on tablet
       uint32_t is_column_table_schema_           : SS_ONE_BIT;
       uint32_t enable_macro_block_bloom_filter_  : SS_ONE_BIT;
+      uint32_t has_ttl_definition_               : SS_ONE_BIT;
       uint32_t reserved_                         : SS_RESERVED_BITS;
     };
   };

@@ -186,9 +186,17 @@ public:
     MULTI_SCAN = 2,
     INVALID_TYPE
   };
+  enum ObPrefetcherSSTableType : uint8_t
+  {
+    ROW_STORE_PREFETCHER = 0,
+    CG_PREFETCH = 1,
+    CO_PREFETCH = 2,
+    INVALID_PREFETCHER_TYPE,
+  };
 public:
   ObIndexTreePrefetcher() :
       is_inited_(false),
+      prefetcher_sstable_type_(ROW_STORE_PREFETCHER),
       prefetcher_type_(BASIC),
       iter_type_(0),
       cur_level_(0),
@@ -267,6 +275,7 @@ protected:
   static const int64_t MAX_RESCAN_HOLD_LIMIT = 64;
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
   bool is_inited_;
+  ObPrefetcherSSTableType prefetcher_sstable_type_;
   ObPrefetcherType prefetcher_type_;
   int16_t iter_type_;
   int16_t cur_level_;
@@ -601,9 +610,10 @@ public:
   OB_INLINE bool can_index_filter_skip(ObMicroIndexInfo &index_info, ObSampleFilterExecutor *sample_executor)
   {
     return (nullptr == sample_executor || is_not_border(index_info))
+        && (!sstable_->is_co_sstable() || prefetcher_sstable_type_ != CO_PREFETCH || is_not_border(index_info))
         && index_info.has_agg_data()
         && (sstable_->is_major_sstable() || iter_param_->enable_inc_skip_index())
-        && (index_info.can_blockscan() || iter_param_->is_delete_insert_)
+        && (index_info.can_blockscan() || iter_param_->is_delete_insert_ || iter_param_->is_append_only_merge_engine())
         && index_info.is_filter_uncertain();
   }
   virtual bool read_wait()

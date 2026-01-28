@@ -39,49 +39,9 @@ using namespace palf;
 namespace storage
 {
 
-ObSEArray<ObTxData, 8> TX_DATA_ARR;
-
-int ObTxTable::insert(ObTxData *&tx_data)
-{
-  int ret = OB_SUCCESS;
-  ret = TX_DATA_ARR.push_back(*tx_data);
-  return ret;
-}
-
-int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; i < TX_DATA_ARR.count(); i++)
-  {
-    if (read_tx_data_arg.tx_id_ == TX_DATA_ARR.at(i).tx_id_) {
-      if (TX_DATA_ARR.at(i).state_ == ObTxData::RUNNING) {
-        SCN tmp_scn;
-        tmp_scn.convert_from_ts(30);
-        ObTxCCCtx tmp_ctx(ObTxState::PREPARE, tmp_scn);
-        ret = fn(TX_DATA_ARR[i], &tmp_ctx);
-      } else {
-        ret = fn(TX_DATA_ARR[i]);
-      }
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "check with tx data failed", KR(ret), K(read_tx_data_arg), K(TX_DATA_ARR.at(i)));
-      }
-      break;
-    }
-  }
-  return ret;
-}
-
-int clear_tx_data()
-{
-  TX_DATA_ARR.reset();
-  return OB_SUCCESS;
-};
-
-
 class TestMultiVersionMerge : public TestMergeBasic, public ::testing::WithParamInterface<bool>
 {
 public:
-  static const int64_t MAX_PARALLEL_DEGREE = 10;
   TestMultiVersionMerge();
   virtual ~TestMultiVersionMerge() {}
 
@@ -89,21 +49,21 @@ public:
   void TearDown();
   static void SetUpTestCase();
   static void TearDownTestCase();
-  void prepare_query_param(const ObVersionRange &version_range);
-
   void prepare_merge_context(const ObMergeType &merge_type,
                              const bool is_full_merge,
                              const ObVersionRange &trans_version_range,
-                             ObTabletMergeCtx &merge_context);
-  void build_sstable(
-      ObTabletMergeCtx &ctx,
-      ObSSTable *&merged_sstable);
-  void fake_freeze_info();
-  void get_tx_table_guard(ObTxTableGuard &tx_table_guard);
+                             ObTabletMergeCtx &merge_context)
+  {
+    TestMergeBasic::prepare_merge_context(
+      merge_type,is_full_merge, trans_version_range, &merge_dag_, merge_context, false/*is_delete_insert_merge*/);
+  }
   void prepare_output_expr(const ObIArray<int32_t> &projector,
                            const ObIArray<ObColDesc> &cols_desc);
   void prepare_scan_param(const ObVersionRange &version_range,
                           const ObTableStoreIterator &table_store_iter);
+  int init_parallel_merge_ctx(
+    ObMockIterator &range_iter,
+    ObTabletMergeCtx &merge_context);
 public:
   static const int64_t DATUM_ARRAY_CNT = 1024;
   static const int64_t DATUM_RES_SIZE = 10;
@@ -130,19 +90,7 @@ void TestMultiVersionMerge::SetUpTestCase()
   ObMultiVersionSSTableTest::SetUpTestCase();
   // mock sequence no
   ObClockGenerator::init();
-
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  MERGE_SCHEDULER_PTR->resume_major_merge();
-
-  // create tablet
-  share::schema::ObTableSchema table_schema;
-  uint64_t table_id = 12345;
-  ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema, table_id));
-  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema, allocator_));
+  TestMergeBasic::create_tablet();
 }
 
 void TestMultiVersionMerge::TearDownTestCase()
@@ -168,65 +116,11 @@ void TestMultiVersionMerge::SetUp()
   ObMultiVersionSSTableTest::SetUp();
 }
 
-void TestMultiVersionMerge::fake_freeze_info()
-{
-  share::ObFreezeInfoList &info_list = MTL(ObTenantFreezeInfoMgr *)->freeze_info_mgr_.freeze_info_;
-  info_list.reset();
-
-  share::SCN frozen_val;
-  frozen_val.val_ = 1;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 100;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 200;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-  frozen_val.val_ = 400;
-  ASSERT_EQ(OB_SUCCESS, info_list.frozen_statuses_.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
-
-  info_list.latest_snapshot_gc_scn_.val_ = 500;
-}
-
 void TestMultiVersionMerge::TearDown()
 {
 
   ObMultiVersionSSTableTest::TearDown();
   TRANS_LOG(INFO, "teardown success");
-}
-
-void TestMultiVersionMerge::prepare_query_param(const ObVersionRange &version_range)
-{
-  context_.reset();
-  ObLSID ls_id(ls_id_);
-  iter_param_.table_id_ = table_id_;
-  iter_param_.tablet_id_ = tablet_id_;
-  iter_param_.read_info_ = &full_read_info_;
-  iter_param_.out_cols_project_ = nullptr;
-  iter_param_.is_same_schema_column_ = true;
-  iter_param_.has_virtual_columns_ = false;
-  iter_param_.vectorized_enabled_ = false;
-  ASSERT_EQ(OB_SUCCESS,
-            store_ctx_.init_for_read(ls_id,
-                                     iter_param_.tablet_id_,
-                                     INT64_MAX, // query_expire_ts
-                                     -1, // lock_timeout_us
-                                     share::SCN::max_scn()));
-  ObQueryFlag query_flag(ObQueryFlag::Forward,
-                         true, /*is daily merge scan*/
-                         true, /*is read multiple macro block*/
-                         true, /*sys task scan, read one macro block in single io*/
-                         false /*full row scan flag, obsoleted*/,
-                         false,/*index back*/
-                         false); /*query_stat*/
-  query_flag.set_not_use_row_cache();
-  query_flag.set_not_use_block_cache();
-  //query_flag.multi_version_minor_merge_ = true;
-  ASSERT_EQ(OB_SUCCESS,
-            context_.init(query_flag,
-                          store_ctx_,
-                          allocator_,
-                          allocator_,
-                          version_range));
-  context_.limit_param_ = nullptr;
 }
 
 void TestMultiVersionMerge::prepare_output_expr(
@@ -399,45 +293,63 @@ void TestMultiVersionMerge::prepare_scan_param(
   context_.is_inited_ = true;
 }
 
-void TestMultiVersionMerge::prepare_merge_context(const ObMergeType &merge_type,
-                                                  const bool is_full_merge,
-                                                  const ObVersionRange &trans_version_range,
-                                                  ObTabletMergeCtx &merge_context)
+int TestMultiVersionMerge::init_parallel_merge_ctx(
+    ObMockIterator &range_iter,
+    ObTabletMergeCtx &merge_context)
 {
-  merge_context.merge_dag_ = &merge_dag_;
-  TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
-  merge_context.static_param_.is_delete_insert_merge_ = false;
-  merge_context.static_param_.data_version_ = DATA_VERSION_4_2_0_0;
-  ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
-  ASSERT_EQ(OB_SUCCESS, merge_context.static_param_.init_static_info(merge_context.tablet_handle_));
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_static_desc());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_read_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_sstable_builder());
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.sstable_builder_.data_store_desc_.init(merge_context.static_desc_, table_merge_schema_));
-  ASSERT_EQ(OB_SUCCESS, merge_context.merge_info_.prepare_index_builder());
-  merge_context.merge_dag_ = &merge_dag_;
-  merge_context.static_param_.for_unittest_ = true;
-}
-
-void TestMultiVersionMerge::build_sstable(
-    ObTabletMergeCtx &ctx,
-    ObSSTable *&merged_sstable)
-{
-  bool tmp_bool = false; // placeholder
-  ASSERT_EQ(OB_SUCCESS, ctx.merge_info_.create_sstable(ctx, ctx.merged_table_handle_, tmp_bool));
-  ASSERT_EQ(OB_SUCCESS, ctx.merged_table_handle_.get_sstable(merged_sstable));
-}
-
-void TestMultiVersionMerge::get_tx_table_guard(ObTxTableGuard &tx_table_guard)
-{
-  ObLSID ls_id(ls_id_);
-  ObTabletID tablet_id(tablet_id_);
-  ObLSHandle ls_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
+  int ret = OB_SUCCESS;
+  compaction::ObParallelMergeCtx &parallel_merge_ctx = merge_context.parallel_merge_ctx_;
+  parallel_merge_ctx.range_array_.reuse(); // clear old parallel ranges
+  ObIAllocator &allocator = parallel_merge_ctx.allocator_;
+  const int64_t schema_rowkey_cnt = merge_context.static_param_.rowkey_read_info_->get_schema_rowkey_count();
+  ObDatumRowkeyHelper rowkey_helper;
+  ObDatumRowkey multi_version_endkey;
+  ObDatumRange range;
+  range.end_key_.set_min_rowkey();
+  range.set_left_open();
+  range.set_right_closed();
+  const blocksstable::ObDatumRow *row = nullptr;
+  if (OB_FAIL(rowkey_helper.reserve(schema_rowkey_cnt + 1))) {
+    STORAGE_LOG(WARN, "Failed to ", K(ret), K(schema_rowkey_cnt));
+  } else if (OB_FAIL(multi_version_endkey.assign(rowkey_helper.get_datums(), schema_rowkey_cnt + 1))) {
+    STORAGE_LOG(WARN, "Failed to assign datums", K(ret), K(schema_rowkey_cnt));
+  }
+  while (OB_SUCC(range_iter.get_next_row(row))) {
+    STORAGE_LOG(INFO, "parallel_merge_ctx", KPC(row));
+    if (OB_NOT_NULL(row)) {
+      ObStorageDatum *datums = const_cast<ObStorageDatum*>(multi_version_endkey.datums_);
+      if (row->count_ < schema_rowkey_cnt) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "Unexpected row count", KR(ret), K(row->count_), K(schema_rowkey_cnt));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < schema_rowkey_cnt; i++) {
+        datums[i] = row->storage_datums_[i];
+      }
+      datums[schema_rowkey_cnt].set_max();
+      multi_version_endkey.datum_cnt_ = schema_rowkey_cnt + 1;
+      if (FAILEDx(range.end_key_.deep_copy(range.start_key_/*dst*/, allocator))) {
+        STORAGE_LOG(WARN, "Failed to deep copy rowkey", KR(ret), K(range.get_end_key()), K(range.get_start_key()));
+      } else if (OB_FAIL(multi_version_endkey.deep_copy(range.end_key_, allocator))) {
+        STORAGE_LOG(WARN, "Failed to deep copy rowkey", KR(ret), K(multi_version_endkey), K(range.get_end_key()), K(range.get_start_key()));
+      } else if (OB_FAIL(parallel_merge_ctx.range_array_.push_back(range))) {
+        STORAGE_LOG(WARN, "Failed to push range", KR(ret), K(parallel_merge_ctx.range_array_), K(range));
+      } else {
+        STORAGE_LOG(INFO, "push range", K(range), K(parallel_merge_ctx));
+      }
+    }
+  } // while
+  ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+  if (OB_SUCC(ret)) {
+    ObDatumRange &last_range = parallel_merge_ctx.range_array_.at(parallel_merge_ctx.range_array_.count() - 1);
+    last_range.end_key_.set_max_rowkey();
+    last_range.set_right_open();
+    parallel_merge_ctx.concurrent_cnt_ = parallel_merge_ctx.range_array_.count();
+    parallel_merge_ctx.parallel_type_ = ObParallelMergeCtx::PARALLEL_MAJOR;
+    parallel_merge_ctx.is_inited_ = true;
+    merge_context.static_param_.concurrent_cnt_ = parallel_merge_ctx.concurrent_cnt_;
+    STORAGE_LOG(INFO, "parallel_merge_ctx", K(parallel_merge_ctx));
+  }
+  return ret;
 }
 
 
@@ -701,24 +613,8 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i <= 1; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(i * 10);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_ = tx_data->commit_version_;
-    tx_data->state_ = ObTxData::COMMIT;
-
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, i * 10/*commit_version*/);
   }
 
   ObVersionRange trans_version_range;
@@ -761,7 +657,7 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_committed_in_minor)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -871,8 +767,8 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   const char *micro_data[2];
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint bigint   flag    multi_version_row_flag trans_id\n"
-      "0        var1  -8       0        NOP      1      EXIST   LF  trans_id_0\n"
-      "1        var1  MIN       0        10       NOP     EXIST  FU  trans_id_1\n";
+      "0        var0  -8       0        NOP      1      EXIST   LF  trans_id_0\n"
+      "1        var1  MIN      0        10       NOP    EXIST   FU  trans_id_1\n";
 
   micro_data[1] =
       "bigint   var   bigint   bigint   bigint  bigint flag    multi_version_row_flag\n"
@@ -897,7 +793,7 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   const char *micro_data2[1];
   micro_data2[0] =
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
-      "0        var1  -10       0        NOP     10     EXIST   LF\n"
+      "0        var0  -10       0        NOP     10     EXIST   LF\n"
       "2        var1  -10       0        NOP     12     EXIST   LF\n";
 
   snapshot_version = 20;
@@ -910,24 +806,8 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i <= 1; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(i * 10);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_ = tx_data->commit_version_;
-    tx_data->state_ = ObTxData::COMMIT;
-
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, i * 10/*commit_version*/);
   }
 
   ObVersionRange trans_version_range;
@@ -943,9 +823,9 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
 
   const char *result1 =
       "bigint   var   bigint   bigint   bigint  bigint  flag    multi_version_row_flag\n"
-      "0        var1  -10      -9223372036854775807  NOP      10     EXIST   SF\n"
-      "0        var1  -10      0        NOP      10     EXIST   N\n"
-      "0        var1  -8       0        NOP      1      EXIST   L\n"
+      "0        var0  -10      -9223372036854775807  NOP      10     EXIST   SF\n"
+      "0        var0  -10      0        NOP      10     EXIST   N\n"
+      "0        var0  -8       0        NOP      1      EXIST   L\n"
       "1        var1  -10      -9223372036854775807  10 3 EXIST  SCF\n"
       "1        var1  -10       0        10       NOP    EXIST   N\n"
       "1        var1  -5       0        NOP      3      EXIST   L\n"
@@ -969,7 +849,7 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_l
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1028,26 +908,9 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i <= 1; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(i * 10);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_ = tx_data->commit_version_;
-    tx_data->state_ = ObTxData::COMMIT;
-
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, i * 10/*commit_version*/);
   }
-
 
   ObVersionRange trans_version_range;
   trans_version_range.snapshot_version_ = 100;
@@ -1089,7 +952,7 @@ TEST_P(TestMultiVersionMerge, uncommit_rowkey_in_one_macro_committed_following_s
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1235,8 +1098,8 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
+  prepare_one_macro(&micro_data[2], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1255,7 +1118,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -1347,7 +1210,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1391,7 +1254,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
   prepare_one_macro(&micro_data[1], 1);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[2], 1, true);
   prepare_one_macro(&micro_data[3], 1);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
@@ -1426,11 +1289,11 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   scn_range.end_scn_.convert_for_tx(60);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data2[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data2[2], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data2[3], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data2[4], 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
+  prepare_one_macro(&micro_data2[1], 1, true);
+  prepare_one_macro(&micro_data2[2], 1, true);
+  prepare_one_macro(&micro_data2[3], 1, true);
+  prepare_one_macro(&micro_data2[4], 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -1504,7 +1367,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1550,10 +1413,10 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[3], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[4], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
+  prepare_one_macro(&micro_data[2], 1, true);
+  prepare_one_macro(&micro_data[3], 1, true);
+  prepare_one_macro(&micro_data[4], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1573,7 +1436,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -1666,7 +1529,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1773,7 +1636,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1812,7 +1675,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1833,24 +1696,8 @@ TEST_P(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i <= 4; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(i * 10 + i);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_ = tx_data->commit_version_;
-    tx_data->state_ = ObTxData::COMMIT;
-
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, i * 10 + i/*commit_version*/);
   }
 
   ObVersionRange trans_version_range;
@@ -1894,7 +1741,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2008,7 +1855,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   scn_range.end_scn_.convert_for_tx(30);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data, 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -2037,24 +1884,8 @@ TEST_P(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   trans_version_range.multi_version_start_ = 50;
   trans_version_range.base_version_ = 1;
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i <= 4; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(i * 10 + i);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_ = tx_data->commit_version_;
-    tx_data->state_ = ObTxData::COMMIT;
-
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, i * 10 + i/*commit_version*/);
   }
 
   prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
@@ -2085,7 +1916,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2115,7 +1946,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_ghost_row)
   scn_range.end_scn_.convert_for_tx(10);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data, 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -2132,7 +1963,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_ghost_row)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -2150,36 +1981,17 @@ TEST_P(TestMultiVersionMerge, test_merge_with_ghost_row)
   scn_range.end_scn_.convert_for_tx(50);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data3, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data3, 1, true);
   prepare_data_end(handle3);
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i <= 4; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
     if (i % 2 == 1) {
-      tx_data->commit_version_.convert_for_tx(INT64_MAX);
-      tx_data->start_scn_.convert_for_tx(i);
-      tx_data->end_scn_.convert_for_tx(i * 10 + i);
-      tx_data->state_ = ObTxData::ABORT;
+      insert_tx_data(i/*tx_id*/, INT64_MAX/*commit_version*/);
     } else {
-      tx_data->commit_version_.convert_for_tx(i * 10 + i);
-      tx_data->start_scn_.convert_for_tx(i);
-      tx_data->end_scn_ = tx_data->commit_version_;
-      tx_data->state_ = ObTxData::COMMIT;
+      insert_tx_data(i/*tx_id*/, i * 10 + i/*commit_version*/);
     }
-
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
   }
 
   ObVersionRange trans_version_range;
@@ -2215,7 +2027,7 @@ TEST_P(TestMultiVersionMerge, test_merge_with_ghost_row)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2552,24 +2364,8 @@ TEST_P(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i < 3; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(i * 10 + i);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_ = tx_data->commit_version_;
-    tx_data->state_ = ObTxData::COMMIT;
-
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, i * 10 + i/*commit_version*/);
   }
 
   ObVersionRange trans_version_range;
@@ -2608,7 +2404,7 @@ TEST_P(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2778,17 +2574,7 @@ TEST_P(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i < 3; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(INT64_MAX);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_.convert_for_tx(100);
-    tx_data->state_ = ObTxData::ABORT;
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, INT64_MAX/*commit_version*/);
   }
 
   ObVersionRange trans_version_range;
@@ -2827,7 +2613,7 @@ TEST_P(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -2968,8 +2754,8 @@ TEST_P(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   scn_range.end_scn_.convert_for_tx(10);
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
+  prepare_one_macro(micro_data, 1, true);
+  prepare_one_macro(&micro_data[1], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -2987,7 +2773,7 @@ TEST_P(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -3005,37 +2791,17 @@ TEST_P(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   scn_range.end_scn_.convert_for_tx(50);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data3, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data3, 1, true);
   prepare_data_end(handle3);
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i <= 4; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
     if (i % 2 == 1) {
-      tx_data->commit_version_.convert_for_tx(INT64_MAX);
-      tx_data->start_scn_.convert_for_tx(i);
-      tx_data->end_scn_.convert_for_tx(i * 10 + i);
-      tx_data->state_ = ObTxData::ABORT;
+      insert_tx_data(i/*tx_id*/, INT64_MAX/*commit_version*/);
     } else {
-      tx_data->commit_version_.convert_for_tx(i * 10 + i);
-      tx_data->start_scn_.convert_for_tx(i);
-      tx_data->end_scn_ = tx_data->commit_version_;
-      tx_data->state_ = ObTxData::COMMIT;
+      insert_tx_data(i/*tx_id*/, i * 10 + i/*commit_version*/);
     }
-
-
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
   }
 
   ObVersionRange trans_version_range;
@@ -3072,7 +2838,7 @@ TEST_P(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3140,6 +2906,14 @@ TEST_P(TestMultiVersionMerge, test_major_range_cross_macro)
   trans_version_range.multi_version_start_ = 1;
   trans_version_range.base_version_ = 1;
 
+  const char *range_data[1];
+  range_data[0] =
+      "bigint   var\n"
+      "2        var3\n"
+      "5        var1\n";
+  ObMockIterator parallel_range_iter;
+  ASSERT_EQ(OB_SUCCESS, parallel_range_iter.from_for_datum(range_data[0]));
+
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   ObDatumRow row;
   row.init(allocator_, 5);
@@ -3149,6 +2923,7 @@ TEST_P(TestMultiVersionMerge, test_major_range_cross_macro)
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
   build_sstable(merge_context, merged_sstable);
+
 
   const char *result1 =
     "bigint   var   bigint   bigint   bigint  bigint  flag    multi_version_row_flag \n"
@@ -3232,23 +3007,8 @@ TEST_P(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
   for (int64_t i = 1; i < 3; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(i * 20 + 9);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_ = tx_data->commit_version_;
-    tx_data->state_ = ObTxData::COMMIT;
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, i * 20 + 9/*commit_version*/);
   }
 
   ObVersionRange trans_version_range;
@@ -3285,7 +3045,7 @@ TEST_P(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3354,17 +3114,7 @@ TEST_P(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row2)
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   for (int64_t i = 1; i < 3; i++) {
-    ObTxData *tx_data = new ObTxData();
-    transaction::ObTransID tx_id = i;
-
-    // fill in data
-    tx_data->tx_id_ = tx_id;
-    tx_data->commit_version_.convert_for_tx(i * 20 + 9);
-    tx_data->start_scn_.convert_for_tx(i);
-    tx_data->end_scn_ = tx_data->commit_version_;
-    tx_data->state_ = ObTxData::COMMIT;
-    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-    delete tx_data;
+    insert_tx_data(i/*tx_id*/, i * 20 + 9/*commit_version*/);
   }
 
   ObVersionRange trans_version_range;
@@ -3402,7 +3152,7 @@ TEST_P(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row2)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3513,7 +3263,7 @@ TEST_P(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3569,24 +3319,7 @@ TEST_P(TestMultiVersionMerge, check_shadow_row_fuse)
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
 
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
-  ObTxData *tx_data = new ObTxData();
-  ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
-  transaction::ObTransID tx_id = 1;
-
-  // fill in data
-  tx_data->tx_id_ = tx_id;
-  tx_data->commit_version_.convert_for_tx(INT64_MAX);
-  tx_data->start_scn_.convert_for_tx(1);
-  tx_data->end_scn_.convert_for_tx(50);
-  tx_data->state_ = ObTxData::ABORT;
-  ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-  tx_data->~ObTxData();
-  delete tx_data;
+  insert_tx_data(1/*tx_id*/, INT64_MAX/*commit_version*/);
 
   ObVersionRange trans_version_range;
   trans_version_range.snapshot_version_ = 100;
@@ -3621,7 +3354,7 @@ TEST_P(TestMultiVersionMerge, check_shadow_row_fuse)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -3684,19 +3417,7 @@ TEST_P(TestMultiVersionMerge, check_shadow_row_with_first)
   get_tx_table_guard(tx_table_guard);
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
-  ObTxData *tx_data = new ObTxData();
-  ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
-  transaction::ObTransID tx_id = 1;
-
-  // fill in data
-  tx_data->tx_id_ = tx_id;
-  tx_data->commit_version_.convert_for_tx(INT64_MAX);
-  tx_data->start_scn_.convert_for_tx(1);
-  tx_data->end_scn_.convert_for_tx(50);
-  tx_data->state_ = ObTxData::ABORT;
-  ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-  tx_data->~ObTxData();
-  delete tx_data;
+  insert_tx_data(1/*tx_id*/, INT64_MAX/*commit_version*/);
 
   ObVersionRange trans_version_range;
   trans_version_range.snapshot_version_ = 100;
@@ -3733,7 +3454,7 @@ TEST_P(TestMultiVersionMerge, check_shadow_row_with_first)
   ObMockDirectReadIterator sstable_iter;
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   ASSERT_TRUE(is_equal);
   scanner->~ObStoreRowIterator();
   handle1.reset();
@@ -3759,7 +3480,7 @@ TEST_P(TestMultiVersionMerge, check_shadow_row_lost)
 
   micro_data[2] =
       "bigint   var   bigint   bigint   bigint  bigint dml        flag    multi_version_row_flag trans_id\n"
-      "2        var1  -20      MIN        2       2      T_DML_INSERT EXIST   SC         trans_id_0\n"
+      "2        var1  -20      MIN        2       2      T_DML_INSERT EXIST   SCF         trans_id_0\n"
       "2        var1  -20      0        NOP     2      T_DML_UPDATE EXIST   N         trans_id_0\n"
       "2        var1  -10      0        2       NOP    T_DML_UPDATE EXIST   N         trans_id_0\n"
       "2        var1  -5       0        1       1      T_DML_UPDATE EXIST   CL         trans_id_0\n"
@@ -3795,25 +3516,7 @@ TEST_P(TestMultiVersionMerge, check_shadow_row_lost)
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
-
-  ObTxTable *tx_table = nullptr;
-  ObTxTableGuard tx_table_guard;
-  get_tx_table_guard(tx_table_guard);
-  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
-
-  ObTxData *tx_data = new ObTxData();
-  ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
-  transaction::ObTransID tx_id = 1;
-
-  // fill in data
-  tx_data->tx_id_ = tx_id;
-  tx_data->commit_version_.convert_for_tx(INT64_MAX);
-  tx_data->start_scn_.convert_for_tx(1);
-  tx_data->end_scn_.convert_for_tx(50);
-  tx_data->state_ = ObTxData::ABORT;
-  ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
-  tx_data->~ObTxData();
-  delete tx_data;
+  insert_tx_data(1/*tx_id*/, INT64_MAX/*commit_version*/);
 
   ObVersionRange trans_version_range;
   trans_version_range.snapshot_version_ = 100;
@@ -3830,7 +3533,7 @@ TEST_P(TestMultiVersionMerge, check_shadow_row_lost)
       "bigint   var   bigint   bigint   bigint  bigint  flag    multi_version_row_flag\n"
       "0        var1  -20       0        10      1    EXIST   CLF\n"
       "1        var1  -20       0        10      1    EXIST   CLF\n"
-      "2        var1  -20      MIN        2       2      EXIST   SC\n"
+      "2        var1  -20      MIN        2       2      EXIST   SCF\n"
       "2        var1  -20      0        NOP     2      EXIST   N\n"
       "2        var1  -10      0        2       NOP     EXIST   N\n"
       "2        var1  -5       0        1       1       EXIST   CL\n"
@@ -3852,7 +3555,7 @@ TEST_P(TestMultiVersionMerge, check_shadow_row_lost)
   ObMockDirectReadIterator sstable_iter;
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   ASSERT_TRUE(is_equal);
   scanner->~ObStoreRowIterator();
   handle1.reset();
@@ -3899,10 +3602,10 @@ TEST_P(TestMultiVersionMerge, single_trans_replayed_in_multi_sst)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[2], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[3], 1, INT64_MAX, true);
-  prepare_one_macro(&micro_data[4], 1, INT64_MAX, true);
+  prepare_one_macro(&micro_data[1], 1, true);
+  prepare_one_macro(&micro_data[2], 1, true);
+  prepare_one_macro(&micro_data[3], 1, true);
+  prepare_one_macro(&micro_data[4], 1, true);
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -3922,7 +3625,7 @@ TEST_P(TestMultiVersionMerge, single_trans_replayed_in_multi_sst)
   scn_range.end_scn_.convert_for_tx(20);
   table_key_.scn_range_ = scn_range;
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data2, 1, INT64_MAX, true);
+  prepare_one_macro(micro_data2, 1, true);
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -4016,7 +3719,7 @@ TEST_P(TestMultiVersionMerge, single_trans_replayed_in_multi_sst)
   ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
-  ASSERT_EQ(OB_SUCCESS, clear_tx_data());
+  clear_tx_data();
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -4673,7 +4376,7 @@ INSTANTIATE_TEST_CASE_P(
 int main(int argc, char **argv)
 {
   system("rm -rf test_multi_version_sstable_merge.log*");
-  OB_LOGGER.set_file_name("test_multi_version_sstable_merge.log", true);
+  OB_LOGGER.set_file_name("test_multi_version_sstable_merge.log");
   OB_LOGGER.set_log_level("INFO");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

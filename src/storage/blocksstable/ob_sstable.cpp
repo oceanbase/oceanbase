@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/blocksstable/index_block/ob_sstable_index_scanner.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -66,7 +67,8 @@ ObSSTableMetaCache::ObSSTableMetaCache()
     upper_trans_version_(0),
     filled_tx_scn_(share::SCN::min_scn()),
     contain_uncommitted_row_(false),
-    rec_scn_()
+    rec_scn_(),
+    min_merged_trans_version_(0)
 {
 }
 
@@ -81,6 +83,7 @@ void ObSSTableMetaCache::reset()
   row_count_ = 0;
   occupy_size_ = 0;
   max_merged_trans_version_ = 0;
+  min_merged_trans_version_ = 0;
   data_checksum_ = 0;
   upper_trans_version_ = 0;
   filled_tx_scn_.set_min();
@@ -93,13 +96,11 @@ int ObSSTableMetaCache::init(
     const bool has_multi_version_row)
 {
   int ret = OB_SUCCESS;
-
   if (OB_UNLIKELY(NULL == meta || !meta->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), KPC(meta));
   } else {
     reset();
-    version_ = SSTABLE_META_CACHE_VERSION;
     has_multi_version_row_ = has_multi_version_row;
     status_ = NORMAL;
 
@@ -111,11 +112,13 @@ int ObSSTableMetaCache::init(
     row_count_ = meta->get_row_count();
     occupy_size_ = meta->get_occupy_size();
     max_merged_trans_version_ = meta->get_max_merged_trans_version();
+    min_merged_trans_version_ = meta->get_min_merged_trans_version();
     data_checksum_ = meta->get_data_checksum();
     upper_trans_version_ = meta->get_upper_trans_version();
     filled_tx_scn_ = meta->get_filled_tx_scn();
     contain_uncommitted_row_ = meta->contain_uncommitted_row();
     rec_scn_ = meta->get_rec_scn();
+    version_ = SSTABLE_META_CACHE_VERSION_V3;
   }
   return ret;
 }
@@ -134,41 +137,62 @@ void ObSSTableMetaCache::set_filled_tx_scn(const share::SCN &filled_tx_scn)
   filled_tx_scn_ = std::max(filled_tx_scn, filled_tx_scn_);
 }
 
-OB_DEF_SERIALIZE_SIMPLE(ObSSTableMetaCache)
+int ObSSTableMetaCache::serialize(const int64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
+  const int64_t old_pos = pos;
+  uint32_t serialize_header = header_;
+  const bool compat_serialize = data_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION;
+  if (compat_serialize) {
+    ObSSTableMetaCache tmp_cache = *this;
+    tmp_cache.version_ = SSTABLE_META_CACHE_VERSION_V2;
+    serialize_header = tmp_cache.header_;
+  }
   LST_DO_CODE(OB_UNIS_ENCODE,
-      header_,
-      data_macro_block_count_,
-      nested_size_,
-      nested_offset_,
-      total_macro_block_count_,
-      total_use_old_macro_block_count_,
-      row_count_,
-      occupy_size_,
-      max_merged_trans_version_,
-      upper_trans_version_,
-      filled_tx_scn_,
-      contain_uncommitted_row_,
-      data_checksum_,
-      rec_scn_);
+              serialize_header,
+              data_macro_block_count_,
+              nested_size_,
+              nested_offset_,
+              total_macro_block_count_,
+              total_use_old_macro_block_count_,
+              row_count_,
+              occupy_size_,
+              max_merged_trans_version_,
+              upper_trans_version_,
+              filled_tx_scn_,
+              contain_uncommitted_row_,
+              data_checksum_,
+              rec_scn_);
+  if (OB_SUCC(ret) && !compat_serialize) {
+    // use accurate length in serialization
+    const int32_t length = get_serialize_size(data_version);
+    if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, length))) {
+      LOG_WARN("fail to encode length", K(ret), K(buf_len), K(pos));
+    } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, min_merged_trans_version_))) {
+      LOG_WARN("fail to encode min_merged_trans_version", K(ret), K(buf_len), K(pos));
+    } else if (OB_UNLIKELY(pos != old_pos + length)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unxpected length", KR(ret), K(length), K(pos), K(old_pos));
+    }
+  }
   return ret;
 }
 
 OB_DEF_DESERIALIZE_SIMPLE(ObSSTableMetaCache)
 {
   int ret = OB_SUCCESS;
+  const int64_t old_pos = pos;
   LST_DO_CODE(OB_UNIS_DECODE,
-      header_,
-      data_macro_block_count_,
-      nested_size_,
-      nested_offset_,
-      total_macro_block_count_,
-      total_use_old_macro_block_count_,
-      row_count_,
-      occupy_size_,
-      max_merged_trans_version_);
-
+        header_,
+        data_macro_block_count_,
+        nested_size_,
+        nested_offset_,
+        total_macro_block_count_,
+        total_use_old_macro_block_count_,
+        row_count_,
+        occupy_size_,
+        max_merged_trans_version_);
+  const bool compat_deserialize = version_ < SSTABLE_META_CACHE_VERSION_V3;
   if (OB_FAIL(ret)) {
   } else if (SSTABLE_META_CACHE_VERSION_1 == version_) {
     // old version
@@ -181,24 +205,39 @@ OB_DEF_DESERIALIZE_SIMPLE(ObSSTableMetaCache)
       LST_DO_CODE(OB_UNIS_DECODE, data_checksum_);
     }
     rec_scn_.set_min();
-    version_ = SSTABLE_META_CACHE_VERSION;
-  } else if (SSTABLE_META_CACHE_VERSION == version_) {
+  } else if (SSTABLE_META_CACHE_VERSION_V2 == version_ || SSTABLE_META_CACHE_VERSION_V3 == version_) {
     LST_DO_CODE(OB_UNIS_DECODE,
                 upper_trans_version_,
                 filled_tx_scn_,
                 contain_uncommitted_row_,
                 data_checksum_,
                 rec_scn_);
+    if (OB_FAIL(ret)) {
+    } else if (SSTABLE_META_CACHE_VERSION_V3 == version_) {
+      if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &length_))) {
+        LOG_WARN("fail to decode length", K(ret), K(data_len), K(pos));
+      } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &min_merged_trans_version_))) {
+        LOG_WARN("fail to decode min_merged_trans_version", K(ret), K(data_len), K(pos));
+      } else if (OB_UNLIKELY(pos != old_pos + length_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unxpected length", KR(ret), K_(length), K(pos), K(old_pos));
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected version", K(ret), K(version_));
   }
+  if (OB_SUCC(ret) && compat_deserialize) {
+    version_ = SSTABLE_META_CACHE_VERSION_V3;
+    min_merged_trans_version_ = 0;
+  }
   return ret;
 }
 
-OB_DEF_SERIALIZE_SIZE_SIMPLE(ObSSTableMetaCache)
+int64_t ObSSTableMetaCache::get_serialize_size(const int64_t data_version) const
 {
   int64_t len = 0;
+  const bool new_serialize = data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       header_,
       data_macro_block_count_,
@@ -214,6 +253,10 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObSSTableMetaCache)
       contain_uncommitted_row_,
       data_checksum_,
       rec_scn_);
+  if (new_serialize) {
+    len += serialization::encoded_length_i32(length_);
+    len += serialization::encoded_length_i64(min_merged_trans_version_);
+  }
   return len;
 }
 
@@ -1122,7 +1165,6 @@ int ObSSTable::serialize_full_table(const uint64_t data_version, char *buf, cons
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
   ObSSTable::StatusForSerialize status;
-  const int64_t old_pos = pos;
 
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1178,7 +1220,6 @@ int ObSSTable::serialize(const uint64_t data_version, char *buf, const int64_t b
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
-  const int64_t old_pos = pos;
 
   if (OB_FAIL(get_meta(meta_handle))) {
     LOG_WARN("fail to get sstable meta", K(ret));
@@ -1206,7 +1247,7 @@ int ObSSTable::serialize(const uint64_t data_version, char *buf, const int64_t b
     }
     OB_UNIS_ENCODE(status.pack_);
     if (OB_FAIL(ret)) {
-    } else if (status.with_fixed_struct() && OB_FAIL(serialize_fixed_struct(buf, buf_len, pos))) {
+    } else if (status.with_fixed_struct() && OB_FAIL(serialize_fixed_struct(data_version, buf, buf_len, pos))) {
       LOG_WARN("fail to serialize fix sstable struct", K(ret), K(buf_len), K(pos));
     } else if (status.with_meta() && OB_FAIL(meta_->serialize(data_version, buf, buf_len, pos))) {
       LOG_WARN("fail to serialize sstable meta", K(ret), K(buf_len), K(pos));
@@ -1295,7 +1336,7 @@ int64_t ObSSTable::get_serialize_size(const uint64_t data_version) const
     LOG_ERROR("sstable's addr_ is invalid", K(ret), K(addr_), KPC(this));
   } else if (!addr_.is_memory()) {
     status.set_with_fixed_struct();
-    fixed_struct_serialize_size = get_sstable_fix_serialize_size();
+    fixed_struct_serialize_size = get_sstable_fix_serialize_size(data_version);
   } else {
     status.set_with_meta();
     sstable_meta_serialize_size = meta_->get_serialize_size(data_version);
@@ -1306,32 +1347,31 @@ int64_t ObSSTable::get_serialize_size(const uint64_t data_version) const
   }
   return len;
 }
-int64_t ObSSTable::get_sstable_fix_serialize_payload_size() const
+int64_t ObSSTable::get_sstable_fix_serialize_payload_size(const int64_t data_version) const
 {
   int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-      addr_,
-      meta_cache_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, addr_);
+  len += meta_cache_.get_serialize_size(data_version);
   return len;
 }
 
-int64_t ObSSTable::get_sstable_fix_serialize_size() const
+int64_t ObSSTable::get_sstable_fix_serialize_size(const int64_t data_version) const
 {
   int64_t len = 0;
-  const int64_t payload_size = get_sstable_fix_serialize_payload_size();
+  const int64_t payload_size = get_sstable_fix_serialize_payload_size(data_version);
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       SSTABLE_VERSION_V2,
       payload_size,
-      addr_,
-      meta_cache_);
+      addr_);
+  len += meta_cache_.get_serialize_size(data_version);
   return len;
 }
 
-int ObSSTable::serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTable::serialize_fixed_struct(const int64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  const int64_t len = get_sstable_fix_serialize_size();
-  const int64_t payload_size = get_sstable_fix_serialize_payload_size();
+  const int64_t len = get_sstable_fix_serialize_size(data_version);
+  const int64_t payload_size = get_sstable_fix_serialize_payload_size(data_version);
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < 0 || pos + len > buf_len)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(buf_len), K(len));
@@ -1339,8 +1379,10 @@ int ObSSTable::serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t 
     LST_DO_CODE(OB_UNIS_ENCODE,
         SSTABLE_VERSION_V2,
         payload_size,
-        addr_,
-        meta_cache_);
+        addr_);
+    if (FAILEDx(meta_cache_.serialize(data_version, buf, buf_len, pos))) {
+      LOG_WARN("failed to serialize meta cache", KR(ret), K_(meta_cache));
+    }
   }
   return ret;
 }

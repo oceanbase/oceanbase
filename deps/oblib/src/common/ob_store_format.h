@@ -250,16 +250,22 @@ static const char *MergeEngineTypeStr[] = { "PARTIAL_UPDATE",
 class ObMergeEngineStoreFormat
 {
 public:
-  static inline bool is_merge_engine_valid(const ObMergeEngineType type)
+  static OB_INLINE bool is_merge_engine_valid(const ObMergeEngineType type)
   {
     return type >= ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE && type < ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   }
-  static inline bool is_merge_engine_support_delta_sstable_skip_index(const ObMergeEngineType type)
+  static OB_INLINE bool is_default_merge_engine(const ObMergeEngineType type)
+  {
+    return type == ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  }
+
+  static OB_INLINE bool is_merge_engine_support_delta_sstable_skip_index(const ObMergeEngineType type)
   {
     return type == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT ||
            type == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY;
   }
-  static inline const char *get_merge_engine_type_name(const ObMergeEngineType merge_engine_type)
+
+  static OB_INLINE const char *get_merge_engine_type_name(const ObMergeEngineType merge_engine_type)
   {
     const int64_t merge_engine_type_idx = static_cast<int64_t>(merge_engine_type);
     const char *str = "INVALID";

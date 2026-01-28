@@ -15,13 +15,11 @@
 
 #include "lib/atomic/ob_atomic.h"
 #include "lib/container/ob_fixed_array.h"
-#include "lib/lock/ob_tc_rwlock.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_storage_struct.h"
 #include "storage/ob_storage_table_guard.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/memtable/ob_memtable.h"
-#include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_tablet_pointer_handle.h"
 #include "storage/tablet/ob_tablet_complex_addr.h"
 #include "storage/tablet/ob_tablet_member_wrapper.h"
@@ -37,7 +35,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "share/scn.h"
 #include "ob_i_tablet_mds_customized_interface.h"
-#include <type_traits>
+#include "storage/truncate_info/ob_truncate_info_array.h"
 
 namespace oceanbase
 {
@@ -105,7 +103,8 @@ class ObMacroInfoIterator;
 class ObMdsRowIterator;
 class ObMdsMiniMergeOperator;
 struct ObTabletDirectLoadInsertParam;
-struct ObTruncateInfoArray;
+class ObTruncateInfoArray;
+class ObTTLFilterInfoArray;
 class ObSSTabletTableStoreMetaInfo;
 
 struct ObTableStoreCache
@@ -175,7 +174,7 @@ class ObTablet final : public ObITabletMdsCustomizedInterface
 //   friend class ObTabletBasePointer;
   friend class ObTabletPointer;
   friend class ObTabletMediumInfoReader;
-  friend class ObTabletTruncateInfoReader;
+  template <typename, typename> friend class ObTabletMDSInfoReader;
   friend class logservice::ObTabletReplayExecutor;
   friend class ObTabletPersister;
   friend class ObTabletPointerMap;
@@ -232,7 +231,6 @@ public:
       const int64_t mds_construct_sequence,
       ObMdsMiniMergeOperator &op) const;
   int get_valid_last_major_column_count(int64_t &last_major_column_cnt) const;
-
 public:
   // first time create tablet
   int init_for_first_time_creation(
@@ -263,11 +261,6 @@ public:
       const ObTabletMeta &tablet_meta,
       const ObStorageSchema &storage_schema,
       const ObTableHandleV2 &local_empty_major);
-  int init_for_shared_merge(
-      common::ObArenaAllocator &allocator,
-      const ObUpdateTableStoreParam &param,
-      const ObTablet &old_tablet,
-      int64_t &start_macro_seq);
   int init_with_ss_tablet(
       common::ObArenaAllocator &allocator,
       const ObTablet &sstablet,
@@ -351,15 +344,13 @@ public:
       const compaction::ObMediumCompactionInfoList *&medium_info_list) const;
   void check_truncate_info_state(
       const common::ObVersionRange &read_version_range,
-      bool &has_truncate_flag,
       bool &contain_truncate_info);
-  bool has_truncate_info() const;
-  int read_truncate_info_array(
-      common::ObArenaAllocator &allocator,
+  void check_ttl_info_state(
       const common::ObVersionRange &read_version_range,
-      const bool for_access,
-      ObTruncateInfoArray &truncate_info_array);
+      bool &contain_ttl_info);
+  bool has_merged_with_mds_info() const;
   int get_truncate_info_newest_version(int64_t &newest_commit_version, int64_t &count);
+  int get_ttl_filter_info_newest_version(int64_t &newest_commit_version, int64_t &count);
   void set_tablet_addr(const ObMetaDiskAddr &tablet_addr) { tablet_addr_ = tablet_addr; }
   void set_allocator(ObArenaAllocator *allocator) { allocator_ = allocator; }
   void set_next_tablet(ObTablet* tablet) { next_tablet_ = tablet; }
@@ -368,6 +359,32 @@ public:
   bool is_empty_shell() const;
   // major merge or medium merge call
   bool is_data_complete() const;
+
+  int copy_mds_info_cache_from(ObTablet &other);
+
+  template <typename T>
+  int read_mds_info_array(ObArenaAllocator &allocator,
+                          const ObVersionRange &read_version_range,
+                          const bool for_access,
+                          T &mds_info_array)
+  {
+    if constexpr (std::is_same_v<T, ObTruncateInfoArray>) {
+      return read_truncate_info_array(allocator, read_version_range, for_access, mds_info_array);
+    } else if constexpr (std::is_same_v<T, ObTTLFilterInfoArray>) {
+      return read_ttl_filter_info_array(allocator, read_version_range, for_access, mds_info_array);
+    } else {
+      static_assert(sizeof(T) == 0, "invalid mds info array type");
+    }
+  }
+
+  int read_truncate_info_array(common::ObArenaAllocator &allocator,
+                               const common::ObVersionRange &read_version_range,
+                               const bool for_access,
+                               ObTruncateInfoArray &truncate_info_array);
+  int read_ttl_filter_info_array(common::ObArenaAllocator &allocator,
+                                 const common::ObVersionRange &read_version_range,
+                                 const bool for_access,
+                                 ObTTLFilterInfoArray &ttl_filter_info_array);
 
   // serialize & deserialize
   // TODO: change the impl of serialize and get_serialize_size after rebase
@@ -724,6 +741,16 @@ public:
       const ObTruncateInfoKey &key,
       const ObTruncateInfo &value,
       mds::MdsCtx &ctx);
+  int set_ttl_filter_info(
+      const ObTTLFilterInfoKey &key,
+      const ObTTLFilterInfo &value,
+      mds::MdsCtx &ctx,
+      const int64_t lock_timeout_us);
+  int replay_set_ttl_filter_info(
+      const share::SCN &scn,
+      const ObTTLFilterInfoKey &key,
+      const ObTTLFilterInfo &value,
+      mds::MdsCtx &ctx);
   int set_frozen_for_all_memtables();
   int set_direct_load_auto_inc_seq(
       const ObDirectLoadAutoIncSeqData &data,
@@ -833,11 +860,24 @@ private:
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet,
       ObTableHandleV2 &mds_mini_sstable);
-  int inner_read_truncate_info_array_from_mds(
+  template <typename K, typename V>
+  int inner_read_info_array_from_mds(
       common::ObArenaAllocator &allocator,
       const common::ObVersionRange &read_version_range,
-      storage::ObTruncateInfoArray &truncate_info_array,
+      storage::ObMDSInfoArray<V> &info_array,
       ObMdsReadInfoCollector &collector) const;
+
+  template <typename T, typename MDSInfoCache>
+  int inner_read_mds_info_array(common::ObArenaAllocator &allocator,
+                                const common::ObVersionRange &read_version_range,
+                                const bool for_access,
+                                storage::ObMDSInfoArray<T> &mds_info_array,
+                                MDSInfoCache &mds_info_cache);
+  template <typename T, typename MDSInfoCache>
+  int inner_get_mds_info_newest_version(MDSInfoCache &mds_info_cache,
+                                        int64_t &newest_commit_version,
+                                        int64_t &count);
+
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
@@ -1118,6 +1158,7 @@ private:
   ObTabletStatusCache tablet_status_cache_;                  // size: 24B, alignment: 8B
   ObDDLInfoCache ddl_data_cache_;                            // size: 24B, alignment: 8B
   ObTruncateInfoCache truncate_info_cache_;                  // size: 8B, alignment: 8B
+  ObTTLFilterInfoCache ttl_filter_info_cache_;               // size: 16B, alignment: 8B
   ObTableStoreCache table_store_cache_; // no need to serialize, should be initialized after table store is initialized.
                                                              // size: 48B, alignment: 8B
   // whether hold ref cnt

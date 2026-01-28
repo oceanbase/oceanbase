@@ -61,13 +61,16 @@ public:
   ~ObMLogPurger();
   DISABLE_COPY_ASSIGN(ObMLogPurger);
 
-  int init(sql::ObExecContext &exec_ctx, const ObMLogPurgeParam &purge_param);
+  int init(sql::ObExecContext &exec_ctx,
+           const ObMLogPurgeParam &purge_param,
+           const bool purge_data_by_sql = true);
   int purge();
 
 private:
   int prepare_for_purge();
   int do_purge();
-  int get_and_check_mlog_database_schema(const share::schema::ObDatabaseSchema *&database_schema);
+  int get_and_check_mlog_database_schema(
+      const share::schema::ObDatabaseSchema *&database_schema);
 
 private:
   sql::ObExecContext *ctx_;
@@ -76,6 +79,7 @@ private:
   share::schema::ObMLogInfo mlog_info_;
   bool is_oracle_mode_;
   bool need_purge_;
+  bool purge_data_by_sql_;
   share::SCN purge_scn_;
   ObSqlString purge_sql_;
   bool is_inited_;

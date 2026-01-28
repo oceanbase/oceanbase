@@ -31,8 +31,8 @@ namespace storage {
 class ObTxTable;
 class ObTxTableGuard;
 class ObTxTableGuards;
-class ObTruncatePartitionFilter;
 class ObITableReadInfo;
+class ObMDSFilterMgr;
 }
 
 namespace memtable
@@ -44,15 +44,15 @@ struct ObMvccMdsFilter final
 {
   ObMvccMdsFilter()
     : read_info_(nullptr),
-      truncate_part_filter_(nullptr)
+      mds_filter_mgr_(nullptr)
   {}
   ~ObMvccMdsFilter() { reset(); }
-  bool is_valid() const { return nullptr != read_info_ && nullptr != truncate_part_filter_; }
-  void reset() { read_info_ = nullptr; truncate_part_filter_ = nullptr; }
+  bool is_valid() const { return nullptr != read_info_ && nullptr != mds_filter_mgr_; }
+  void reset() { read_info_ = nullptr; mds_filter_mgr_ = nullptr; }
   int init(ObMvccMdsFilter &mds_filter);
-  TO_STRING_KV(KP_(read_info), KP_(truncate_part_filter));
+  TO_STRING_KV(KP_(read_info), KP_(mds_filter_mgr));
   const storage::ObITableReadInfo *read_info_;
-  storage::ObTruncatePartitionFilter *truncate_part_filter_;
+  storage::ObMDSFilterMgr *mds_filter_mgr_;
 };
 
 class ObMvccAccessCtx

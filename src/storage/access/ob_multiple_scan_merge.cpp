@@ -186,60 +186,29 @@ int ObMultipleScanMerge::prepare()
 int ObMultipleScanMerge::construct_iters()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY((iters_.count() > 0 || get_di_base_iter_cnt() > 0)
-                   && (iters_.count() + get_di_base_iter_cnt() != tables_.count()))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret),
-                      K(iters_.count()), K(get_di_base_iter_cnt()), K(tables_), KPC(di_base_sstable_row_scanner_));
-  } else if (OB_NOT_NULL(access_param_->get_op()) && access_param_->get_op()->is_vectorized() &&
-             FALSE_IT(access_param_->get_op()->get_eval_ctx().reuse(access_param_->get_op()->get_batch_size()))) {
-    // for check_skip_by_monotonicity called by initing iters in construct_iters
-  } else if (get_di_base_table_cnt() > 0 && OB_FAIL(di_base_sstable_row_scanner_->construct_iters(false/*is_multi_scan*/))) {
-    STORAGE_LOG(WARN, "fail to construct di base iters", K(ret));
+
+  // it will do some defensive check because it may reuse iters
+  // don't skip this even if tables_.count() == 0
+  if (OB_FAIL(build_iter_array_for_all_tables())) {
+    LOG_WARN("Fail to build iter array for all tables", KR(ret));
   } else if (tables_.count() > get_di_base_table_cnt()) {
-    STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()),
-                KPC_(range), K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param), KPC_(di_base_sstable_row_scanner));
-    ObITable *table = NULL;
-    ObStoreRowIterator *iter = NULL;
-    const ObTableIterParam *iter_param = NULL;
-    const bool use_cache_iter = iters_.count() > 0; // rescan with the same iters and different range
+    // build consumer array
     consumer_cnt_ = 0;
     if (OB_FAIL(set_rows_merger(tables_.count() - get_di_base_table_cnt()))) {
-      STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(get_di_base_table_cnt()), K(tables_));
+      LOG_WARN("Failed to alloc rows merger", KR(ret), K(get_di_base_table_cnt()), K(tables_));
     } else {
       const int64_t table_cnt = tables_.count() - 1;
       for (int64_t i = table_cnt; OB_SUCC(ret) && i >= get_di_base_table_cnt(); --i) {
-        if (OB_FAIL(tables_.at(i, table))) {
-          STORAGE_LOG(WARN, "Fail to get ith store, ", K(ret), K(i), K_(tables));
-        } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Fail to get access param", K(ret), K(i), KPC(table));
-        } else if (!use_cache_iter) {
-          if (OB_FAIL(table->scan(*iter_param, *access_ctx_, *range_, iter))) {
-            STORAGE_LOG(WARN, "Fail to get iterator", K(ret), K(i), KPC(table), K(*iter_param));
-          } else if (OB_FAIL(iters_.push_back(iter))) {
-            iter->~ObStoreRowIterator();
-            STORAGE_LOG(WARN, "Fail to push iter to iterator array", K(ret), K(i));
-          }
-        } else if (OB_ISNULL(iter = iters_.at(table_cnt - i))) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Unexpected null iter", K(ret), "idx", table_cnt - i, K_(iters));
-        } else if (OB_FAIL(iter->init(*iter_param, *access_ctx_, table, range_))) {
-          STORAGE_LOG(WARN, "failed to init scan iter", K(ret), "idx", table_cnt - i);
-        }
-
-        if (OB_SUCC(ret)) {
-          consumers_[consumer_cnt_++] = i - get_di_base_table_cnt();
-          STORAGE_LOG(TRACE, "add iter for consumer", K(i), KP(iter), KPC(table));
-        }
+        consumers_[consumer_cnt_++] = i - get_di_base_table_cnt();
+        LOG_TRACE("add iter for consumer", K(i), K(tables_));
       }
     }
-    STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(get_di_base_table_cnt()));
   }
 
   if (FAILEDx(prepare_blockscan_after_construct_iters())) {
-    STORAGE_LOG(WARN, "failed to prepare blockscan after construct iters", K(ret));
+    LOG_WARN("failed to prepare blockscan after construct iters", KR(ret));
   }
+
   return ret;
 }
 
@@ -263,6 +232,34 @@ int ObMultipleScanMerge::prepare_blockscan_after_construct_iters()
       STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret), K(iters_.count()), K(get_di_base_table_cnt()), K_(tables));
     }
   }
+  return ret;
+}
+
+int ObMultipleScanMerge::build_iter(ObITable *table, const ObTableIterParam *iter_param, ObStoreRowIterator *&iter)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(table) || OB_ISNULL(iter_param)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Table or iter param is null", KR(ret), KP(table), KP(iter_param));
+  } else if (OB_FAIL(table->scan(*iter_param, *access_ctx_, *range_, iter))) {
+    LOG_WARN("Fail to get iterator", KR(ret), KPC(table), K(*iter_param));
+  }
+
+  return ret;
+}
+
+int ObMultipleScanMerge::init_iter(ObITable *table, const ObTableIterParam *iter_param, ObStoreRowIterator *iter)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(table) || OB_ISNULL(iter_param) || OB_ISNULL(iter)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Table or iter param or iter is null", KR(ret), KP(table), KP(iter_param), KP(iter));
+  } else if (OB_FAIL(iter->init(*iter_param, *access_ctx_, table, range_))) {
+    LOG_WARN("Fail to init iterator", KR(ret), KPC(table), K(*iter_param));
+  }
+
   return ret;
 }
 

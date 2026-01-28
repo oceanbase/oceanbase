@@ -77,6 +77,7 @@ class ObDASUpdIterator;
 namespace rootserver
 {
 struct ObTruncateTabletArg;
+struct ObTTLFilterInfoArg;
 }
 
 namespace storage
@@ -371,6 +372,16 @@ public:
   int replay_set_truncate_info(
       const share::SCN &scn,
       const rootserver::ObTruncateTabletArg &arg,
+      mds::MdsCtx &ctx);
+  int set_ttl_filter_info(
+      const common::ObTabletID &tablet_id,
+      const rootserver::ObTTLFilterInfoArg &arg,
+      mds::MdsCtx &ctx,
+      const int64_t timeout_us);
+  int replay_set_ttl_filter_info(
+      const common::ObTabletID &tablet_id,
+      const share::SCN &scn,
+      const rootserver::ObTTLFilterInfoArg &arg,
       mds::MdsCtx &ctx);
 
   // DAS interface

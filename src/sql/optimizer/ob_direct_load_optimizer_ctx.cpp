@@ -191,6 +191,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
                     insert_mode_,
                     load_mode_,
                     load_level_,
+                    dup_action_,
                     column_ids_,
                     enable_inc_major_))) {
         LOG_WARN("fail to check support direct load", K(ret));
@@ -315,6 +316,7 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(
                                                     insert_mode_,
                                                     load_mode_,
                                                     load_level_,
+                                                    dup_action_,
                                                     column_ids_,
                                                     enable_inc_major_))) {
         LOG_WARN("fail to check support direct load", K(ret));

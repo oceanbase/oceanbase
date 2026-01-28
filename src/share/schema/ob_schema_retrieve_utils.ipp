@@ -1516,6 +1516,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, truncate_version, table_schema, int64_t, true, ignore_column_error, common::OB_INVALID_VERSION);
 
     ObString empty_str("");
+    ObString ttl_definition;
+    ObString ttl_flag;
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_file_location, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
@@ -1524,8 +1526,8 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       result, external_file_format, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, external_file_pattern, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
-    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-      result, ttl_definition, table_schema, true, ignore_column_error, "");
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+      result, "ttl_definition", ttl_definition, true, ignore_column_error, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, kv_attributes, table_schema, true, ignore_column_error, "");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
@@ -1548,6 +1550,9 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         true/*skip null error*/, true/*ignore_column_error*/, false);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, micro_block_format_version, table_schema, int64_t,
         true/*skip null error*/, true/*ignore_column_error*/, storage::ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
+    ObString ttl_flag_default("\x01");
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+          result, "ttl_flag", ttl_flag, true/*skip null*/, true/*ignore column error*/, ttl_flag_default);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, merge_engine_type, table_schema, ObMergeEngineType,
         true/*skip null*/, true/*ignore column error*/, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
@@ -1590,6 +1595,9 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     if (OB_SUCC(ret)) {
       bool with_dynamic_partition_policy = !table_schema.get_dynamic_partition_policy().empty();
       table_schema.set_with_dynamic_partition_policy(with_dynamic_partition_policy);
+      if (OB_FAIL(table_schema.set_ttl_definition(ttl_definition, ttl_flag))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to set ttl definition", K(ret));
+      }
     }
     ObString delta_format(ObStoreFormat::get_delta_format_name(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE));
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(

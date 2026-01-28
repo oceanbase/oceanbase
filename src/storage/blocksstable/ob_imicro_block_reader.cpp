@@ -297,5 +297,33 @@ int ObIMicroBlockReader::get_logical_row_cnt(const int64_t last, int64_t &row_id
   return ret;
 }
 
+
+int ObMicroBlockData::init_with_prepare_micro_header(
+    const char *buf,
+    const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  buf_ = buf;
+  size_ = size;
+  if (nullptr != buf && size > 0) {
+    if (OB_FAIL(prepare_micro_header())) {
+      LOG_WARN("failed to deserialize micro header", KR(ret));
+      reset();
+    }
+  }
+  return ret;
+}
+
+int ObMicroBlockData::prepare_micro_header()
+{
+  int ret = OB_SUCCESS;
+  ObMicroBlockHeader::simple_cast(buf_, micro_header_);
+  if (OB_UNLIKELY(nullptr == micro_header_ || !micro_header_->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid micro header", KR(ret), KP_(buf), KPC(micro_header_));
+  }
+  return ret;
+}
+
 }
 }

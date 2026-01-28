@@ -238,10 +238,6 @@ public:
       const ObMergeType merge_type,
       const int64_t schedule_scn,
       ObCSReplicaTabletStatus &cs_replica_status);
-  static int get_co_merge_type_for_compaction(
-      const int64_t merge_version,
-      const storage::ObTablet &tablet,
-      ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type);
   static int schedule_merge_dag(
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,
@@ -249,7 +245,7 @@ public:
       const int64_t &merge_snapshot_version,
       const ObExecMode exec_mode,
       const ObDagId *dag_net_id = nullptr,
-      const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE);
+      const ObCOMajorMergeStrategy &co_major_merge_strategy = ObCOMajorMergeStrategy());
   static int schedule_convert_co_merge_dag_net(
       const ObLSID &ls_id,
       const ObTablet &tablet,

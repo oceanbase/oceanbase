@@ -29,6 +29,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "rootserver/ob_location_ddl_service.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_license_utils.h"
 
 using namespace oceanbase::lib;
@@ -937,6 +938,8 @@ int ObCreateTableHelper::generate_foreign_keys_()
           } else if (!arg_.is_inner_ && parent_table->is_in_recyclebin()) {
             ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
             LOG_WARN("parent table is in recyclebin", KR(ret), K(foreign_key_arg));
+          } else if (OB_FAIL(ObCompactionTTLUtil::check_create_foreign_key_for_ttl_valid(*parent_table)) /* parent_table won't be nullptr here */) {
+            LOG_WARN("fail to check create foreign key for ttl valid", KR(ret), KPC(parent_table));
           }
           for (int64_t j = 0; OB_SUCC(ret) && j < foreign_key_arg.parent_columns_.count(); j++) {
             const ObString &column_name = foreign_key_arg.parent_columns_.at(j);

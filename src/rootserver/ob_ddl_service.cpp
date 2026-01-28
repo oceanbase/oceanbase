@@ -90,6 +90,7 @@
 #include "share/ob_heap_organized_table_util.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
 #include "share/ob_license_utils.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_mview_args.h"
 #include "storage/mview/ob_mview_refresh.h"
 #include "rootserver/mview/ob_mview_utils.h"
@@ -2260,6 +2261,21 @@ int ObDDLService::set_new_table_options(
       }
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObCompactionTTLUtil::check_alter_merge_engine_valid(
+                   orig_table_schema,
+                   alter_table_schema))) {
+      LOG_WARN("fail to check append_only engine valid", K(ret), K(new_table_schema));
+    } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_ttl_schema_valid(
+                   orig_table_schema,
+                   alter_table_schema,
+                   new_table_schema.get_tenant_id(),
+                   schema_guard))) {
+      LOG_WARN("fail to check ttl schema valid", K(ret), K(new_table_schema));
+    }
+  }
+
   LOG_DEBUG("set new table options", K(alter_table_arg), K(alter_table_schema),
             K(tenant_schema), K(new_table_schema), K(orig_table_schema));
   return ret;
@@ -2651,8 +2667,12 @@ int ObDDLService::set_raw_table_options(
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("ttl definition less than 4.2.1 not support", K(ret), K(compat_version));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl definition less than 4.2.1");
-          } else if (OB_FAIL(new_table_schema.set_ttl_definition(alter_table_schema.get_ttl_definition()))) {
+          } else if (OB_FAIL(new_table_schema.set_ttl_definition(
+              alter_table_schema.get_ttl_definition(),
+              alter_table_schema.get_ttl_flag()))) {
             LOG_WARN("fail to set ttl definition", K(ret));
+          } else {
+            need_update_index_table = true;
           }
           break;
         }
@@ -3943,6 +3963,8 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
   } else if (OB_FAIL(check_can_drop_column_instant_(orig_table_schema, alter_table_schema,
                                                     tenant_data_version, is_oracle_mode, alter_table_arg))) {
     LOG_WARN("fail to check can drop column instant", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_column_for_append_only_valid(alter_table_arg, orig_table_schema, is_oracle_mode))) {
+    LOG_WARN("fail to check alter column for append only valid", KR(ret), K(orig_table_schema), K(alter_table_schema));
   }
   for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
     if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
@@ -7837,7 +7859,7 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               } else if (OB_FAIL(index_builder.generate_schema(my_arg,
                                                                new_table_schema,
                                                                global_index_without_column_info,
-                                                               true, /*generate_id*/
+                                                               true /*generate_id*/,
                                                                index_schema))) {
                 LOG_WARN("failed to generate index schema!", K(ret));
               } else if (OB_FAIL(ddl_operator.alter_table_create_index(new_table_schema,
@@ -13891,7 +13913,7 @@ int ObDDLService::check_could_write_truncate_info_(
   bool only_ref_columns = false;
   const ObPartitionOption &part_option = orig_table_schema.get_part_option();
   const ObPartitionOption &sub_part_option = orig_table_schema.get_sub_part_option();
-  // TODO(lixia.yq) use right DATA_VERSION before merged into master
+
   if (tenant_data_version < ObTruncateInfoUtil::TRUNCATE_INFO_CMP_DATA_VERSION || !arg.is_update_global_indexes_) {
   } else {
     {
@@ -16137,6 +16159,8 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
         LOG_WARN("can not alter table force", KR(ret), K(tenant_id), K(tenant_data_version),
                 "table_id", orig_table_schema->get_table_id());
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table force is");
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_table_force_valid(*orig_table_schema))) {
+        LOG_WARN("failed to check alter table flush valid", KR(ret), KPC(orig_table_schema));
       } else if (OB_FAIL(orig_table_schema->get_unused_column_ids(unused_column_ids))) {
         LOG_WARN("get unused column ids failed", KR(ret), KPC(orig_table_schema));
       } else {
@@ -18075,6 +18099,11 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
                                                       is_drop_or_truncate && alter_table_arg.index_arg_list_.size() != 0,
                                                       is_split))) {
       LOG_WARN("failed to check index valid", K(ret), K(is_split), K(is_drop_or_truncate), K(orig_table_schema));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObCompactionTTLUtil::check_alter_partition_for_append_only_valid(orig_table_schema, alter_part_type))) {
+      LOG_WARN("failed to check alter partition for append only valid", K(ret), K(orig_table_schema), K(alter_part_type));
     }
   }
   return ret;
@@ -21811,7 +21840,7 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                 } else if (OB_FAIL(index_builder.generate_schema(*create_index_arg,
                                                           new_table_schema,
                                                           global_index_without_column_info,
-                                                          true, /*generate_id*/
+                                                          true /*generate_id*/,
                                                           index_schema))) {
                   LOG_WARN("failed to generate index schema!", K(ret));
                 } else {

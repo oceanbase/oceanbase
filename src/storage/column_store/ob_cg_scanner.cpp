@@ -40,7 +40,7 @@ int ObCGScanner::init(
   } else if (FALSE_IT(table_wrapper_ = wrapper)) {
   } else if (OB_FAIL(table_wrapper_.get_loaded_column_store_sstable(sstable_))) {
     LOG_WARN("fail to get sstable", K(ret), K(wrapper));
-  } else if (OB_UNLIKELY(!sstable_->is_normal_cg_sstable() && !sstable_->is_all_cg_base())) {
+  } else if (OB_UNLIKELY(!sstable_->is_column_store_sstable() && !sstable_->is_all_cg_base())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected sstable", K(ret), KPC_(sstable));
   } else if (OB_FAIL(prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
@@ -82,7 +82,7 @@ int ObCGScanner::switch_context(
   } else if (FALSE_IT(table_wrapper_ = wrapper)) {
   } else if (OB_FAIL(table_wrapper_.get_loaded_column_store_sstable(sstable_))) {
     LOG_WARN("fail to get sstable", K(ret), K(wrapper));
-  } else if (OB_UNLIKELY(!sstable_->is_normal_cg_sstable() && !sstable_->is_all_cg_base())) {
+  } else if (OB_UNLIKELY(!sstable_->is_column_store_sstable() && !sstable_->is_all_cg_base())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected sstable", K(ret), KPC_(sstable));
   } else {

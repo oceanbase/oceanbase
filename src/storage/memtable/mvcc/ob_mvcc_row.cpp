@@ -15,10 +15,9 @@
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/access/ob_rows_info.h"
-#include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "storage/access/ob_mds_filter_mgr.h"
 #include "storage/access/ob_rows_info.h"
 #include "ob_mvcc_trans_ctx.h"
-
 namespace oceanbase
 {
 using namespace storage;
@@ -245,14 +244,14 @@ int ObMvccRowFilter::read_row_and_check(
       TRANS_LOG(WARN, "failed to read datum row", K(ret), K(node), K_(mds_filter));
     } else if (final_result) {
       complete = true;
-    } else if (OB_FAIL(mds_filter_.truncate_part_filter_->check_filter_row_complete(datum_row_, complete))) {
+    } else if (nullptr != mds_filter_.mds_filter_mgr_ && OB_FAIL(mds_filter_.mds_filter_mgr_->check_filter_row_complete(datum_row_, complete))) {
       TRANS_LOG(WARN, "failed to check filter row complete", KR(ret), K_(datum_row), K(complete));
     }
     if (OB_FAIL(ret) || !complete) {
       ObTaskController::get().allow_next_syslog();
       TRANS_LOG(TRACE, "not complete", KR(ret), K_(datum_row), K(filtered), K(complete)); // DEBUG log, remove later
-    } else if (OB_FAIL(mds_filter_.truncate_part_filter_->filter(datum_row_, filtered, true/*check_filter*/, true/*check_version*/))) {
-      TRANS_LOG(WARN, "failed to check filtered by truncate_filter", KR(ret), K_(datum_row), K_(mds_filter));
+    } else if (nullptr != mds_filter_.mds_filter_mgr_ && OB_FAIL(mds_filter_.mds_filter_mgr_->filter(datum_row_, filtered, true/*check_filter*/, true/*check_version*/))) {
+      TRANS_LOG(WARN, "failed to check filtered by mds_filter_mgr", KR(ret), K_(datum_row), K_(mds_filter));
     } else {
       ObTaskController::get().allow_next_syslog();
       TRANS_LOG(INFO, "success to check trans node filtered", KR(ret), K_(datum_row), K(filtered)); // DEBUG log, remove later

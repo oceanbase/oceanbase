@@ -136,7 +136,7 @@ TEST_F(TestCSEncoder, test_integer_encoder)
 
   char *buf = nullptr;
   int64_t buf_size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   ObIColumnCSEncoder *e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(-50, (int64_t)e->ctx_->integer_min_);
@@ -170,7 +170,7 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed, row));
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
 
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(INT32_MIN, (int64_t)e->ctx_->integer_min_);
@@ -206,7 +206,7 @@ TEST_F(TestCSEncoder, test_integer_encoder)
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
 
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(INT32_MIN, (int64_t)e->ctx_->integer_min_);
@@ -233,7 +233,7 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(INT32_MAX, row));
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(0, (int64_t)e->ctx_->integer_min_);
@@ -254,7 +254,7 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(INT32_MAX - 1, row));
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(0, (int64_t)e->ctx_->integer_min_);
@@ -272,7 +272,7 @@ TEST_F(TestCSEncoder, test_integer_encoder)
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(0, (int64_t)e->ctx_->integer_min_);
@@ -293,7 +293,7 @@ TEST_F(TestCSEncoder, test_integer_encoder)
   for (int64_t i = 0; i < row_cnt; ++i) {
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   int_col_encoder = reinterpret_cast<ObIntegerColumnEncoder *>(e);
@@ -449,7 +449,7 @@ TEST_F(TestCSEncoder, test_big_integer_encoder)
 
   char *buf = nullptr;
   int64_t buf_size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   ObIColumnCSEncoder *e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
   ASSERT_EQ(INT64_MIN, (int64_t)e->ctx_->integer_min_);
@@ -504,7 +504,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
 
   char *buf = nullptr;
   int64_t buf_size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   ObIColumnCSEncoder *e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(64, e->ctx_->fix_data_size_);
@@ -538,7 +538,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
   row.storage_datums_[0].set_null();
   row.storage_datums_[1].set_null();
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
 
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
@@ -566,7 +566,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
   row.storage_datums_[0].set_null();
   row.storage_datums_[1].set_null();
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(-1, e->ctx_->fix_data_size_);
@@ -586,7 +586,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
     row.storage_datums_[1].set_null();
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(-1, e->ctx_->fix_data_size_);
@@ -606,7 +606,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
     row.storage_datums_[1].set_string(nullptr, 0);
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(0, e->ctx_->fix_data_size_);
@@ -631,7 +631,7 @@ TEST_F(TestCSEncoder, test_string_encoder)
     row.storage_datums_[1].set_null();
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_EQ(0, e->ctx_->fix_data_size_);
@@ -843,7 +843,7 @@ TEST_F(TestCSEncoder, test_dict_encoder)
   ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   char *buf = nullptr;
   int64_t buf_size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
 
   ObIColumnCSEncoder *e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INT_DICT);
@@ -935,7 +935,7 @@ TEST_F(TestCSEncoder, test_dict_const_ref_encoder)
   }
   char *buf = nullptr;
   int64_t buf_size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
 
   ObIColumnCSEncoder *e = encoder.encoders_[0];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INT_DICT);
@@ -1056,7 +1056,7 @@ TEST_F(TestCSEncoder, test_decimal_int_encoder)
   }
   char *buf = nullptr;
   int64_t buf_size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, buf_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder, buf, buf_size));
 
   ObIColumnCSEncoder *e = encoder.encoders_[0]; // int32_t
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::INTEGER);
@@ -1138,7 +1138,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
 	"5	    -1	    1	      UPDATE	CLF	                  \n";
 
   ASSERT_EQ(OB_SUCCESS, append_data(data));
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(block_buf, block_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder_, block_buf, block_size));
   header = reinterpret_cast<ObMicroBlockHeader *>(block_buf);
   ASSERT_EQ(5, header->row_count_);
   ASSERT_EQ(3, header->column_count_);
@@ -1159,7 +1159,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
 	"5	    -1	    1	      INSERT	ULF	                    trans_id_1\n";
 
   ASSERT_EQ(OB_SUCCESS, append_data(data));
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(block_buf, block_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder_, block_buf, block_size));
   header = reinterpret_cast<ObMicroBlockHeader *>(block_buf);
   ASSERT_EQ(5, header->row_count_);
   ASSERT_EQ(3, header->column_count_);
@@ -1179,7 +1179,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
 	"3	    -1	    1	      INSERT	CL	                  \n";
 
   ASSERT_EQ(OB_SUCCESS, append_data(data));
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(block_buf, block_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder_, block_buf, block_size));
   header = reinterpret_cast<ObMicroBlockHeader *>(block_buf);
   ASSERT_EQ(5, header->row_count_);
   ASSERT_EQ(3, header->column_count_);
@@ -1198,7 +1198,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
 	"3	    -1	    1	      INSERT	C	                      trans_id_0\n";
 
   ASSERT_EQ(OB_SUCCESS, append_data(data));
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(block_buf, block_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder_, block_buf, block_size));
   header = reinterpret_cast<ObMicroBlockHeader *>(block_buf);
   ASSERT_EQ(5, header->row_count_);
   ASSERT_EQ(3, header->column_count_);
@@ -1247,7 +1247,7 @@ TEST_F(TestMultiVersionCSEncoder, add_column)
   ASSERT_EQ(OB_SUCCESS, append_data(data1));
   ASSERT_EQ(OB_SUCCESS, append_data(data2));
   ASSERT_EQ(OB_SUCCESS, append_data(data3));
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(block_buf, block_size));
+  ASSERT_EQ(OB_SUCCESS, build_block(encoder_, block_buf, block_size));
 
   ObMicroBlockHeader *header = reinterpret_cast<ObMicroBlockHeader *>(block_buf);
   ASSERT_EQ(15, header->row_count_);

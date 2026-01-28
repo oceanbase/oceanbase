@@ -19,6 +19,7 @@
 #include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_unit_manager.h"
 #include "share/table/redis/ob_redis_common.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "observer/table/utils/ob_htable_utils.h"
 
 namespace oceanbase
@@ -53,6 +54,8 @@ enum TRIGGER_TYPE
   USER_TRIGGER = 1,
 };
 
+const char *ob_trigger_type_to_string(const TRIGGER_TYPE trigger_type);
+
 enum ObTTLTaskType
 {
   OB_TTL_TRIGGER, // todo:weiyouchao.wyc merge with rpc arg define
@@ -72,6 +75,8 @@ enum ObTTLTaskType
   OB_LOB_REPAIR_CANCEL,       // FARM COMPAT WHITELIST
   OB_LOB_REPAIR_INVALID,      // FARM COMPAT WHITELIST
 };
+
+const char *ob_ttl_task_type_to_string(const ObTTLTaskType ttl_task_type);
 
 enum ObTTLTaskStatus
 {
@@ -93,7 +98,9 @@ enum ObTTLTaskStatus
   OB_TTL_TASK_INVALID
 };
 
-enum ObTTLType
+const char *ob_ttl_task_status_to_string(const ObTTLTaskStatus ttl_task_status);
+
+enum ObTTLType // FARM COMPAT WHITELIST
 {
   NORMAL = 0,
   HBASE_ROWKEY = 1,
@@ -101,6 +108,8 @@ enum ObTTLType
   LOB_REPAIR = 3, // FARM COMPAT WHITELIST
   COMPACTION_TTL = 4,
 };
+
+const char *ob_ttl_type_to_string(const ObTTLType ttl_type);
 
 typedef struct ObTTLStatus {
   int64_t gmt_create_;
@@ -150,14 +159,14 @@ typedef struct ObTTLStatus {
               K_(task_id),
               K_(task_start_time),
               K_(task_update_time),
-              K_(trigger_type),
-              K_(status),
+              "trigger_type", ob_trigger_type_to_string(static_cast<TRIGGER_TYPE>(trigger_type_)),
+              "status", ob_ttl_task_status_to_string(static_cast<ObTTLTaskStatus>(status_)),
               K_(ttl_del_cnt),
               K_(max_version_del_cnt),
               K_(scan_cnt),
               K_(row_key),
               K_(ret_code),
-              K_(task_type),
+              "task_type", ob_ttl_type_to_string(task_type_),
               K_(scan_index));
 } ObTTLStatus;
 
@@ -169,22 +178,24 @@ typedef struct ObTTLStatusKey
   uint64_t table_id_;
   uint64_t tablet_id_;
   uint64_t task_id_;
-  uint64_t partition_cnt_;
-  explicit ObTTLStatusKey(uint64_t tenant_id,
-                          uint64_t table_id,
-                          uint64_t tablet_id,
-                          uint64_t task_id)
+  int64_t task_type_;
+  explicit ObTTLStatusKey(const uint64_t tenant_id,
+                          const uint64_t table_id,
+                          const uint64_t tablet_id,
+                          const uint64_t task_id,
+                          const int64_t task_type)
   : tenant_id_(tenant_id),
     table_id_(table_id),
     tablet_id_(tablet_id),
     task_id_(task_id),
-    partition_cnt_(OB_INVALID_ID)
+    task_type_(task_type)
   {}
 
   TO_STRING_KV(K_(tenant_id),
               K_(table_id),
               K_(tablet_id),
-              K_(task_id));
+              K_(task_id),
+              K_(task_type));
 } ObTTLStatusKey;
 
 typedef struct ObTTLStatusField {
@@ -381,7 +392,7 @@ public:
   static int update_ttl_task_all_fields(uint64_t tenant_id,
                                         const char* tname,
                                         common::ObISQLClient& proxy,
-                                        ObTTLStatus& update_task);
+                                        const ObTTLStatus& update_task);
 
   static int delete_ttl_task(uint64_t tenant_id,
                              const char* tname,
@@ -397,20 +408,20 @@ public:
                             bool for_update = false,
                             common::ObIAllocator *allocator = NULL);
 
-  static int read_tenant_ttl_task(uint64_t tenant_id,
-                                  uint64_t table_id,
+  static int read_tenant_ttl_task(const uint64_t tenant_id,
+                                  const uint64_t table_id,
+                                  const ObTTLType& task_type,
                                   common::ObISQLClient& proxy,
                                   ObTTLStatus &ttl_record,
                                   const bool for_update = false,
                                   common::ObIAllocator *allocator = NULL);
 
   static int move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
+                                        const ObTTLType& task_type,
                                         common::ObMySQLTransaction& proxy,
                                         int64_t batch_size, int64_t &move_rows);
-
-  static int move_tenant_task_to_history_table(const ObTTLStatusKey &keyObTTLStatusKey,
+  static int move_tenant_task_to_history_table(const ObTTLStatusKey &key,
                                                common::ObMySQLTransaction& proxy);
-
 
   static bool check_can_do_work();
   static bool check_can_process_tenant_tasks(uint64_t tenant_id);
@@ -422,7 +433,8 @@ public:
   static int dispatch_ttl_cmd(const ObTTLParam &param);
   static int get_ttl_info(const ObTTLParam &param, ObIArray<ObSimpleTTLInfo> &ttl_info_array);
 
-  static int check_is_normal_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
+  static int check_is_normal_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table, const bool check_recyclebin = true);
+  static int check_is_deleting_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table, const bool check_recyclebin = true);
   static int check_is_rowkey_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table);
   static int get_tenant_table_ids(const uint64_t tenant_id, common::ObIArray<uint64_t> &table_id_array);
   static int check_task_status_from_sys_table(uint64_t tenant_id, common::ObISQLClient& proxy,
@@ -481,6 +493,7 @@ public:
   const static uint64_t TTL_ROWKEY_TASK_TABLET_ID = -2;
   const static uint64_t TTL_ROWKEY_TASK_TABLE_ID = -2;
   const static uint64_t TTL_THREAD_MAX_SCORE = 100;
+  const static uint64_t COMPACTION_TTL_TABLET_ID = 0;
 private:
   static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool allow_timeseries_table, bool &is_ttl_table);
   static int check_htable_ddl_supported_(const ObKVAttr &attr, bool by_admin);
@@ -539,29 +552,59 @@ public:
   bool is_negative_;
 };
 
-class ObTableTTLChecker
+class ObSimpleTableTTLChecker
 {
 public:
-  ObTableTTLChecker()
+  ObSimpleTableTTLChecker()
   : ttl_definition_(),
     row_cell_ids_(),
-    tenant_id_(common::OB_INVALID_TENANT_ID)
+    ttl_type_(share::ObTTLDefinition::INVALID)
   {
     ttl_definition_.set_attr(ObMemAttr(MTL_ID(), "TTLCheckerDef"));
     row_cell_ids_.set_attr(ObMemAttr(MTL_ID(), "TTLCheckerCells"));
   }
-  ~ObTableTTLChecker() {}
+  virtual ~ObSimpleTableTTLChecker() {}
   // init ttl checker with table schema, if in_full_column_order is true, the checked row
   // should be in full column schema order, or you shoud set ttl cell ids explicitly.
-  int init(const share::schema::ObTableSchema &index_schema, const ObString &ttl_defination, bool in_full_column_order = true);
-  int check_row_expired(const common::ObNewRow &row, bool &is_expired);
+  virtual int init(const share::schema::ObTableSchema &table_schema, const ObString &ttl_definition, const bool in_full_column_order = true)
+  {
+    bool unused_has_datetime_col = false;
+    return inner_init(table_schema, ttl_definition, in_full_column_order, unused_has_datetime_col);
+  }
+  int init(const ObString &ttl_definition)
+  {
+    return parse_ttl_definition(ttl_definition);
+  }
+  int get_ttl_filter_us(int64_t &ttl_filter_us);
   const common::ObIArray<ObTableTTLExpr> &get_ttl_definition() const { return ttl_definition_; }
-  common::ObIArray<int64_t> &get_row_cell_ids() { return row_cell_ids_; }
-  void reset();
-private:
+  virtual void reset();
+protected:
+  int parse_ttl_definition(const ObString &ttl_definition);
+  int inner_init(
+    const share::schema::ObTableSchema &table_schema,
+    const ObString &ttl_definition,
+    const bool in_full_column_order,
+    bool &has_datetime_col);
+  int get_ttl_expr_ts(const ObTableTTLExpr &ttl_expr, const int64_t input_ts, int64_t &expire_ts);
+protected:
   common::ObSEArray<ObTableTTLExpr, 8> ttl_definition_;
   common::ObSEArray<int64_t, 8> row_cell_ids_; // cell idx scaned row for each ttl expr
-  int64_t tenant_id_;
+  share::ObTTLDefinition::ObTTLType ttl_type_;
+};
+
+class ObTableTTLChecker final : public ObSimpleTableTTLChecker
+{
+public:
+  ObTableTTLChecker()
+  : ObSimpleTableTTLChecker(),
+    tz_info_wrap_()
+  {}
+  virtual ~ObTableTTLChecker() {}
+  virtual int init(const share::schema::ObTableSchema &table_schema, const ObString &ttl_definition, const bool in_full_column_order = true) override;
+  int check_row_expired(const common::ObNewRow &row, bool &is_expired);
+  common::ObIArray<int64_t> &get_row_cell_ids() { return row_cell_ids_; }
+  virtual void reset() override;
+private:
   ObTimeZoneInfoWrap tz_info_wrap_;
 };
 

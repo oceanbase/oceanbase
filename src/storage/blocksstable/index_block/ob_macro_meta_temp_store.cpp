@@ -333,8 +333,7 @@ int ObMacroMetaTempStore::get_macro_meta_from_block_buf(const ObSSTableMacroBloc
                                                               buf,
                                                               buf_size,
                                                               false,
-                                                              meta_block.get_buf(),
-                                                              meta_block.get_buf_size(),
+                                                              meta_block,
                                                               is_compressed))) {
     LOG_WARN("failed to decrypt and decompress meta block", K(ret));
   } else if (OB_UNLIKELY(!meta_block.is_valid())) {

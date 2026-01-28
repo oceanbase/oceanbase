@@ -67,7 +67,7 @@ TEST_F(TestTruncateInfoReader, read_multi_truncate_info_from_minor)
     truncate_info_array.reset();
     ObMdsReadInfoCollector collector;
     ASSERT_EQ(OB_SUCCESS, MediumInfoCommon::get_tablet(tablet_id, tablet_handle));
-    ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->inner_read_truncate_info_array_from_mds(allocator_, ObVersionRange(100, 200), truncate_info_array, collector));
+    ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->inner_read_info_array_from_mds<ObTruncateInfoKey>(allocator_, ObVersionRange(100, 200), truncate_info_array, collector));
     ASSERT_TRUE(collector.exist_new_committed_node_);
     tablet_handle.reset();
 
@@ -112,7 +112,7 @@ TEST_F(TestTruncateInfoReader, read_multi_truncate_info_from_minor)
     // exist new node in mds_sstable
     truncate_info_array.reset();
     ObMdsReadInfoCollector collector;
-    ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->inner_read_truncate_info_array_from_mds(allocator_, ObVersionRange(100, 200), truncate_info_array, collector));
+    ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->inner_read_info_array_from_mds<ObTruncateInfoKey>(allocator_, ObVersionRange(100, 200), truncate_info_array, collector));
     ASSERT_TRUE(collector.exist_new_committed_node_);
   }
 }
@@ -144,13 +144,13 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_distinct_mgr)
   { // last truncate info have largest commit version, use last truncate info to compare
     ObTruncateInfoArray distinct_array;
     distinct_array.init_for_first_creation(allocator_);
-    ObMdsInfoDistinctMgr mgr;
+    ObTruncateInfoDistinctMgr mgr;
     ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ObVersionRange read_version_range(0, EXIST_READ_SNAPSHOT_VERSION);
     if (tablet_handle.is_valid()) {
       ASSERT_EQ(OB_SUCCESS, mgr.init(allocator_, *tablet_handle.get_obj(), nullptr/*split_extra_tablet_handles*/, read_version_range, false/*access*/));
-      ASSERT_EQ(OB_SUCCESS, mgr.get_distinct_truncate_info_array(distinct_array));
+      ASSERT_EQ(OB_SUCCESS, mgr.get_distinct_mds_info_array(distinct_array));
       ASSERT_EQ(1, distinct_array.count());
       bool equal = 0;
       COMMON_LOG(INFO, "compare", KR(ret), KPC(distinct_array.get_array().at(0)), K(info));
@@ -175,14 +175,14 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_distinct_mgr)
   { // last truncate info have largest commit version, use last truncate info to compare
     ObTruncateInfoArray distinct_array;
     distinct_array.init_for_first_creation(allocator_);
-    ObMdsInfoDistinctMgr mgr;
+    ObTruncateInfoDistinctMgr mgr;
     ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ObVersionRange read_version_range(0, EXIST_READ_SNAPSHOT_VERSION);
     if (tablet_handle.is_valid()) {
       tablet_handle.get_obj()->truncate_info_cache_.reset();
       ASSERT_EQ(OB_SUCCESS, mgr.init(allocator_, *tablet_handle.get_obj(), nullptr/*split_extra_tablet_handles*/, read_version_range, false/*access*/));
-      ASSERT_EQ(OB_SUCCESS, mgr.get_distinct_truncate_info_array(distinct_array));
+      ASSERT_EQ(OB_SUCCESS, mgr.get_distinct_mds_info_array(distinct_array));
       COMMON_LOG(INFO, "print", K(distinct_array));
       ASSERT_EQ(2, distinct_array.count());
       // first truncate info is range part
@@ -193,8 +193,8 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_distinct_mgr)
       ASSERT_EQ(equal, true);
 
       ObTruncateInfoArray cached_array;
-      ObTruncateInfoCacheKey cache_key(MTL_ID(), tablet_id, distinct_array.get_array().at(1)->schema_version_, tablet_handle.get_obj()->get_last_major_snapshot_version());
-      ASSERT_EQ(OB_SUCCESS, ObTruncateInfoKVCacheUtil::get_truncate_info_array(allocator_, cache_key, cached_array));
+      ObTruncateInfoCacheKey cache_key(MTL_ID(), tablet_id, distinct_array.get_array().at(1)->commit_version_, tablet_handle.get_obj()->get_last_major_snapshot_version());
+      ASSERT_EQ(OB_SUCCESS, ObTruncateInfoKVCacheUtil::get_mds_info_array(allocator_, cache_key, cached_array));
       COMMON_LOG(INFO, "print", K(cached_array));
       ASSERT_EQ(2, cached_array.count());
     }
@@ -254,14 +254,14 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_distinct_mgr_with_subpart)
   { // last truncate info have largest commit version, use last truncate info to compare
     ObTruncateInfoArray distinct_array;
     distinct_array.init_for_first_creation(allocator_);
-    ObMdsInfoDistinctMgr mgr;
+    ObTruncateInfoDistinctMgr mgr;
     ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ObVersionRange read_version_range(0, EXIST_READ_SNAPSHOT_VERSION);
     if (tablet_handle.is_valid()) {
       tablet_handle.get_obj()->truncate_info_cache_.reset();
       ASSERT_EQ(OB_SUCCESS, mgr.init(allocator_, *tablet_handle.get_obj(), nullptr/*split_extra_tablet_handles*/, read_version_range, false/*access*/));
-      ASSERT_EQ(OB_SUCCESS, mgr.get_distinct_truncate_info_array(distinct_array));
+      ASSERT_EQ(OB_SUCCESS, mgr.get_distinct_mds_info_array(distinct_array));
       ASSERT_EQ(1, distinct_array.count());
       bool equal = 0;
       COMMON_LOG(INFO, "compare", KR(ret), KPC(distinct_array.get_array().at(0)), K(info));
@@ -276,7 +276,7 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_distinct_mgr_with_subpart)
   {
     ObTruncateInfoArray distinct_array;
     distinct_array.init_for_first_creation(allocator_);
-    ObMdsInfoDistinctMgr mgr;
+    ObTruncateInfoDistinctMgr mgr;
     ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     ObVersionRange read_version_range(0, EXIST_READ_SNAPSHOT_VERSION);
@@ -285,7 +285,7 @@ TEST_F(TestTruncateInfoReader, test_truncate_info_distinct_mgr_with_subpart)
       ASSERT_EQ(OB_SNAPSHOT_DISCARDED, mgr.init(allocator_, *tablet_handle.get_obj(), nullptr/*split_extra_tablet_handles*/, ObVersionRange(0, 5), true/*access*/));
       tablet_handle.get_obj()->truncate_info_cache_.reset();
       ASSERT_EQ(OB_SUCCESS, mgr.init(allocator_, *tablet_handle.get_obj(), nullptr/*split_extra_tablet_handles*/, read_version_range, false/*access*/));
-      ASSERT_EQ(OB_SUCCESS, mgr.get_distinct_truncate_info_array(distinct_array));
+      ASSERT_EQ(OB_SUCCESS, mgr.get_distinct_mds_info_array(distinct_array));
       ASSERT_EQ(2, distinct_array.count());
       bool equal = 0;
       COMMON_LOG(INFO, "compare", KR(ret), KPC(distinct_array.get_array().at(1)), K(info));
@@ -462,6 +462,12 @@ TEST_F(TestTruncateInfoReader, test_put_truncate_info_into_cache)
   ASSERT_EQ(OB_SUCCESS, ret);
   if (tablet_handle.is_valid()) {
     ObTruncateInfoCache &truncate_info_cache = tablet_handle.get_obj()->truncate_info_cache_;
+    // cache is still valid becase we have copy mds cache from old tablet to new tablet
+    // but this case directly call mds->log_commit, so the cache is not set invalid
+    ASSERT_TRUE(truncate_info_cache.is_valid());
+
+    // replay truncate info should make the cache invalid, we reset cache manually
+    truncate_info_cache.reset();
     ASSERT_FALSE(truncate_info_cache.is_valid());
 
     READ_ARRAY(ObVersionRange(2000, 7000));
@@ -504,25 +510,25 @@ TEST_F(TestTruncateInfoReader, test_random_key_with_same_part_def)
   ASSERT_EQ(OB_SUCCESS, wait_mds_mini_finish(tablet_id, mock_array.at(max_cnt - 1)->commit_version_));
   ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ObMdsInfoDistinctMgr distinct_mgr;
+  ObTruncateInfoDistinctMgr distinct_mgr;
 #define READ_DISTINC_ARRAY(version_range)                                              \
   distinct_mgr.reset(); \
   ASSERT_EQ(OB_SUCCESS, distinct_mgr.init(allocator_, *tablet_handle.get_obj(), nullptr, version_range, false/*access*/));
   // read all truncate info, should get 2 distinct info
   READ_DISTINC_ARRAY(ObVersionRange(1, EXIST_READ_SNAPSHOT_VERSION));
   LOG_INFO("read all truncate info", KR(ret), K(distinct_mgr));
-  ASSERT_EQ(2, distinct_mgr.get_distinct_truncate_info_array().count());
-  ASSERT_EQ(mock_array.at(2)->commit_version_, distinct_mgr.get_distinct_truncate_info_array().at(0)->commit_version_);
-  ASSERT_EQ(mock_array.at(3)->commit_version_, distinct_mgr.get_distinct_truncate_info_array().at(1)->commit_version_);
+  ASSERT_EQ(2, distinct_mgr.get_distinct_mds_info_array().count());
+  ASSERT_EQ(mock_array.at(2)->commit_version_, distinct_mgr.get_distinct_mds_info_array().at(0)->commit_version_);
+  ASSERT_EQ(mock_array.at(3)->commit_version_, distinct_mgr.get_distinct_mds_info_array().at(1)->commit_version_);
 
   if (tablet_handle.is_valid()) {
     ObTruncateInfoCache &truncate_info_cache = tablet_handle.get_obj()->truncate_info_cache_;
     truncate_info_cache.reset();
     READ_DISTINC_ARRAY(ObVersionRange(1000, EXIST_READ_SNAPSHOT_VERSION));
     LOG_INFO("read all truncate info", KR(ret), K(distinct_mgr));
-    ASSERT_EQ(2, distinct_mgr.get_distinct_truncate_info_array().count());
-    ASSERT_EQ(mock_array.at(2)->commit_version_, distinct_mgr.get_distinct_truncate_info_array().at(0)->commit_version_);
-    ASSERT_EQ(mock_array.at(3)->commit_version_, distinct_mgr.get_distinct_truncate_info_array().at(1)->commit_version_);
+    ASSERT_EQ(2, distinct_mgr.get_distinct_mds_info_array().count());
+    ASSERT_EQ(mock_array.at(2)->commit_version_, distinct_mgr.get_distinct_mds_info_array().at(0)->commit_version_);
+    ASSERT_EQ(mock_array.at(3)->commit_version_, distinct_mgr.get_distinct_mds_info_array().at(1)->commit_version_);
   }
 }
 
@@ -532,7 +538,7 @@ TEST_F(TestTruncateInfoReader, test_random_key_with_same_part_def)
 int main(int argc, char **argv)
 {
   system("rm -f test_truncate_info_reader.log*");
-  OB_LOGGER.set_file_name("test_truncate_info_reader.log");
+  OB_LOGGER.set_file_name("test_truncate_info_reader.log", true, true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

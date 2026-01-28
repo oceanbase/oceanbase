@@ -41,6 +41,7 @@ public:
       opt_tenant_ids_(),
       opt_tablet_id_(),
       opt_ls_id_(share::ObLSID::INVALID_LS_ID),
+      opt_table_id_(0),
       rebuild_column_group_(false) {}
   ObFreezeStmt(common::ObIAllocator *name_pool)
     : ObSystemCmdStmt(name_pool, stmt::T_FREEZE),
@@ -50,6 +51,7 @@ public:
       opt_tenant_ids_(),
       opt_tablet_id_(),
       opt_ls_id_(share::ObLSID::INVALID_LS_ID),
+      opt_table_id_(0),
       rebuild_column_group_(false) {}
   virtual ~ObFreezeStmt() {}
 
@@ -68,13 +70,14 @@ public:
   inline common::ObSArray<uint64_t> &get_tenant_ids() { return opt_tenant_ids_; }
   inline common::ObZone &get_zone() { return opt_zone_; }
   inline common::ObTabletID &get_tablet_id() { return opt_tablet_id_; }
+  inline uint64_t &get_table_id() { return opt_table_id_; }
   inline int64_t &get_ls_id() { return opt_ls_id_; }
   inline int push_server(const common::ObAddr& server) {
     return opt_server_list_.push_back(server);
   }
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(major_freeze), K(freeze_all_flag_),
-               K(opt_server_list_), K(opt_tenant_ids_), K(opt_tablet_id_), K(opt_ls_id_));
+               K(opt_server_list_), K(opt_tenant_ids_), K(opt_tablet_id_), K(opt_ls_id_), K(opt_table_id_), K(rebuild_column_group_));
 private:
   bool major_freeze_;
   // for major_freeze, it is ignore server list
@@ -91,6 +94,7 @@ private:
   common::ObTabletID opt_tablet_id_;
   int64_t opt_ls_id_;
   // for major_freeze only
+  uint64_t opt_table_id_;
   bool rebuild_column_group_;
 };
 

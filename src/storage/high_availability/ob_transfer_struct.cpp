@@ -1613,6 +1613,7 @@ int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_tablet_stora
   ObTablet *tablet = nullptr;
   ObStorageSchema *storage_schema = nullptr;
   uint64_t compat_version = 0;
+  uint64_t unused_table_id = OB_INVALID_ID;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1631,7 +1632,7 @@ int ObTransferBuildTabletInfoCtx::ObTransferStorageSchemaMgr::build_tablet_stora
   } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(allocator_, storage_schema))) {
     LOG_WARN("failed to alloc storage schema", K(ret));
   } else if (OB_FAIL(compaction::ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
-      schema_service, *tablet, schema_version, compat_version, allocator_, *storage_schema))) {
+      schema_service, *tablet, schema_version, compat_version, allocator_, *storage_schema, unused_table_id))) {
     LOG_WARN("failed to get table schema to merge", K(ret), KPC(tablet), K(task_info));
   } else if (OB_FAIL(storage_schema_map_.set_refactored(tablet_id, storage_schema))) {
     LOG_WARN("failed to push storage schema into map", K(ret), K(tablet_id), KPC(storage_schema));

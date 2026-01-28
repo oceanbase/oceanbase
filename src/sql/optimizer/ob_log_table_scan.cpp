@@ -150,10 +150,11 @@ bool ObLogTableScan::use_query_range() const
   return res;
 }
 
-int ObLogTableScan::check_is_delete_insert_scan(bool &is_delete_insert_scan) const
+int ObLogTableScan::get_merge_engine_type(ObMergeEngineType &merge_engine_type, bool &enable_delete_insert_scan) const
 {
   int ret = OB_SUCCESS;
-  is_delete_insert_scan = false;
+  merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+  enable_delete_insert_scan = false;
   ObSQLSessionInfo *session = NULL;
   ObSchemaGetterGuard *schema_guard = nullptr;
   const ObTableSchema *table_schema = nullptr;
@@ -168,8 +169,9 @@ int ObLogTableScan::check_is_delete_insert_scan(bool &is_delete_insert_scan) con
   } else if (OB_UNLIKELY(NULL == table_schema)) {
     // may be fake table, skip
     LOG_DEBUG("get nullptr table schema", K(ret), K_(table_id), K_(ref_table_id), K(get_stmt()));
+  } else if (OB_FALSE_IT(merge_engine_type = table_schema->get_merge_engine_type())) {
   } else if (table_schema->is_delete_insert_merge_engine()) {
-    is_delete_insert_scan = get_plan()->get_optimizer_context().enable_delete_insert_scan();
+    enable_delete_insert_scan = get_plan()->get_optimizer_context().enable_delete_insert_scan();
   }
   return ret;
 }
@@ -2249,10 +2251,11 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else { /* Do nothing */ }
 
-    bool is_delete_insert_scan = false;
-    if (FAILEDx(check_is_delete_insert_scan(is_delete_insert_scan))) {
+    ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+    bool enable_delete_insert_scan = false;
+    if (FAILEDx(get_merge_engine_type(merge_engine_type, enable_delete_insert_scan))) {
       LOG_WARN("check is delete insert table failed", K(ret));
-    } else if (is_delete_insert_scan) {
+    } else if (enable_delete_insert_scan || merge_engine_type == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY) {
       if (OB_FAIL(BUF_PRINTF(", "))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (common::ObQueryFlag::NoOrder == scan_order_
@@ -6507,10 +6510,11 @@ int ObLogTableScan::try_adjust_scan_direction(const ObIArray<OrderItem> &sort_ke
 int ObLogTableScan::set_scan_order()
 {
   int ret = OB_SUCCESS;
-  bool is_delete_insert_scan = false;
-  if (OB_FAIL(check_is_delete_insert_scan(is_delete_insert_scan))) {
+  ObMergeEngineType merge_engine_type = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+  bool enable_delete_insert_scan = false;
+  if (OB_FAIL(get_merge_engine_type(merge_engine_type, enable_delete_insert_scan))) {
     LOG_WARN("failed to check is delete insert table", K(ret));
-  } else if (is_delete_insert_scan) {
+  } else if (enable_delete_insert_scan || merge_engine_type == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY) {
     bool order_used = false;
     if (OB_FAIL(check_op_orderding_used_by_parent(order_used))) {
       LOG_WARN("fail to check op ordering", K(ret));

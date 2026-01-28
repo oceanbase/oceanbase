@@ -644,12 +644,12 @@ void TestCOSSTableRowScanner::test_delete_insert_blockscan_random()
 void TestCOSSTableRowScanner::test_delete_insert_blockscan_without_border_rowkey_random()
 {
   const int level_cnt = 5; // Total 486 rows, without the row of border rowkey
+  const int64_t split_seed = ObRandom::rand(1, 484);
+  prepare_discontinuous_test_case(level_cnt, split_seed, false/*is_reverse*/);
   prepare_co_query_param(false/*is_reverse*/);
   ObCSRowId start_row_id = OB_INVALID_CS_ROW_ID;
   ObCSRowId end_row_id = OB_INVALID_CS_ROW_ID;
   int32_t range_idx = -1;
-  const int64_t split_seed = ObRandom::rand(1, 484);
-  prepare_discontinuous_test_case(level_cnt, split_seed, false/*is_reverse*/);
   const int64_t start = 0;
   const int64_t end = row_cnt_;
   generate_range(start, end, range_);

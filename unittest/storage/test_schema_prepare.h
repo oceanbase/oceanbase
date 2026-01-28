@@ -198,6 +198,7 @@ void TestSchemaPrepare::add_rowkey_and_each_column_group(
   }
 
   allocator.free(cg_1_ids);
+  COMMON_LOG(INFO, "dump stable schema after add_rowkey_and_each_column_group", K(table_schema));
 }
 }
 }

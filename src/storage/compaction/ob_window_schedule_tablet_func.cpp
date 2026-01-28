@@ -29,7 +29,7 @@ int ObWindowScheduleTabletFunc::refresh_window_tablet(const ObTabletCompactionSc
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(candidate));
   } else if (candidate.decision_info_.dynamic_info_.need_recycle_mds_) {
-    new_merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO;
+    new_merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::RECYCLE_MDS_INFO;
   } else {
     new_merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::WINDOW_COMPACTION;
   }

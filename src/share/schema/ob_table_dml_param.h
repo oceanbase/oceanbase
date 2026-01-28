@@ -115,7 +115,8 @@ public:
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
   OB_INLINE ObMvMode get_mv_mode() const { return mv_mode_; }
-  OB_INLINE bool is_delete_insert() const { return is_delete_insert_; }
+  OB_INLINE bool is_delete_insert() const { return static_cast<ObMergeEngineType>(merge_engine_type_) == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT; }
+  OB_INLINE bool is_append_only() const { return static_cast<ObMergeEngineType>(merge_engine_type_) == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
   OB_INLINE const common::ObString &get_index_name() const { return index_name_; }
 
   const ObColumnParam * get_column(const uint64_t column_id) const;

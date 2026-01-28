@@ -522,7 +522,7 @@ int ObMajorMergeScheduler::update_merge_status(
       }
     }
   } else {
-    const compaction::ObBasicMergeProgress &progress = progress_checker_.get_merge_progress();
+    const compaction::ObMergeProgress &progress = progress_checker_.get_merge_progress();
     LOG_INFO("succcess to update merge status", K(ret), K(global_broadcast_scn), K(progress), K(expected_epoch));
     if (OB_FAIL(handle_merge_progress(progress, global_broadcast_scn, expected_epoch))) {
       LOG_WARN("fail to handle all zone merge", KR(ret), K(global_broadcast_scn), K(expected_epoch));
@@ -533,7 +533,7 @@ int ObMajorMergeScheduler::update_merge_status(
 }
 
 int ObMajorMergeScheduler::handle_merge_progress(
-    const compaction::ObBasicMergeProgress &progress,
+    const compaction::ObMergeProgress &progress,
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch)
 {

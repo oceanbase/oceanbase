@@ -175,6 +175,19 @@ int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
           LOG_WARN("failed to schedule tablet major freeze", K(ret), K(param));
         }
       }
+    } else if (stmt.get_table_id() > 0) { // table major freeze
+      if (OB_UNLIKELY(1 != stmt.get_tenant_ids().count())) { // only support one tenant
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support schedule table major freeze for several tenant", K(ret), K(stmt));
+      } else {
+        rootserver::ObTableMajorFreezeArg param;
+        param.tenant_id_ = stmt.get_tenant_ids().at(0);
+        param.table_id_ = stmt.get_table_id();
+        param.is_rebuild_column_group_ = stmt.is_rebuild_column_group();
+        if (OB_FAIL(rootserver::ObMajorFreezeHelper::table_major_freeze(param))) {
+          LOG_WARN("failed to schedule table major freeze", K(ret), K(param));
+        }
+      }
     } else { // tenant major freeze
       rootserver::ObMajorFreezeParam param;
       param.freeze_all_ = stmt.is_freeze_all();

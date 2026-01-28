@@ -1612,6 +1612,7 @@ int ObSSDDLMergeHelper::update_tablet_table_store(ObDDLTabletMergeDagParamV2 &da
       table_store_param.ddl_info_.data_format_version_    = dag_merge_param.ddl_task_param_.tenant_data_version_;
       table_store_param.ddl_info_.ddl_commit_scn_         = dag_merge_param.rec_scn_;
       table_store_param.ddl_info_.ddl_checkpoint_scn_      = dag_merge_param.rec_scn_;
+      table_store_param.ddl_info_.ddl_snapshot_version_    = dag_merge_param.table_key_.get_snapshot_version();
 
       if (!dag_merge_param.for_major_) {
         // data is not complete, now update ddl table store only for reducing count of ddl dump sstable.

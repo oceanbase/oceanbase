@@ -125,7 +125,8 @@ bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &oth
       && root_macro_seq_ == other.root_macro_seq_
       && tx_data_recycle_scn_ == other.tx_data_recycle_scn_
       && co_base_snapshot_version_ == other.co_base_snapshot_version_
-      && rec_scn_ == other.rec_scn_;
+      && rec_scn_ == other.rec_scn_
+      && min_merged_trans_version_ == other.min_merged_trans_version_;
 }
 
 bool ObSSTableBasicMeta::is_valid() const
@@ -158,7 +159,8 @@ bool ObSSTableBasicMeta::is_valid() const
            && root_macro_seq_ >= 0
            && tx_data_recycle_scn_.is_valid()
            && co_base_snapshot_version_ >= 0
-           && rec_scn_.is_valid();
+           && rec_scn_.is_valid()
+           && min_merged_trans_version_ >= 0 && min_merged_trans_version_ <= max_merged_trans_version_;
   return ret;
 }
 
@@ -681,6 +683,7 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.table_mode_ = param.table_mode_;
     basic_meta_.contain_uncommitted_row_ = param.contain_uncommitted_row_;
     basic_meta_.max_merged_trans_version_ = param.max_merged_trans_version_;
+    basic_meta_.min_merged_trans_version_ = param.min_merged_trans_version_;
     basic_meta_.recycle_version_ = param.recycle_version_;
     if (param.upper_trans_version_ > 0) {
       // for inc major sstable only
@@ -732,9 +735,17 @@ int ObSSTableMeta::init_data_index_tree_info(
 
 bool ObSSTableMeta::check_meta() const
 {
-  return basic_meta_.is_valid()
-      && data_root_info_.is_valid()
-      && macro_info_.is_valid();
+  bool bret= false;
+  if (OB_UNLIKELY(!basic_meta_.is_valid())) {
+    LOG_WARN_RET(OB_INVALID_DATA, "invalid basic meta", K_(basic_meta));
+  } else if (OB_UNLIKELY(!data_root_info_.is_valid())) {
+    LOG_WARN_RET(OB_INVALID_DATA, "invalid data root info", K_(data_root_info));
+  } else if (OB_UNLIKELY(!macro_info_.is_valid())) {
+    LOG_WARN_RET(OB_INVALID_DATA, "invalid macro info", K_(macro_info));
+  } else {
+    bret = true;
+  }
+  return bret;
 }
 
 int ObSSTableMeta::fsync_block(const ObTabletCreateSSTableParam &param)

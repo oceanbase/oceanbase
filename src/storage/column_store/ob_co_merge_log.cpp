@@ -18,6 +18,22 @@ namespace oceanbase
 {
 namespace compaction
 {
+const char *ObMergeLog::OpTypeStr[] = {
+  "INVALID",
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "REPLAY",
+  "DELETE_RANGE",
+  "INVALID"
+};
+
+const char *ObMergeLog::get_op_type_str(const int64_t idx)
+{
+  STATIC_ASSERT(static_cast<int64_t>(INVALID) + 1 == ARRAYSIZEOF(OpTypeStr), "merge log op type string is mismatch");
+  return is_valid_op_type((OpType)idx) ? OpTypeStr[idx] : "INVALID";
+}
+
 OB_SERIALIZE_MEMBER(ObMergeLog, op_, major_idx_, row_id_);
 
 /**
@@ -163,7 +179,7 @@ int ObCOMergeLogConsumer<CallbackImpl>::consume_all_merge_log(ObCOMergeLogIterat
     }
     // TODO statistic merge progress
     if (OB_FAIL(ret)) {
-    } else if (curr_log.op_ == ObMergeLog::OpType::REPLAY) {
+    } else if (curr_log.is_range_mergelog()) {
       compact_log = curr_log;
     } else if (OB_FAIL(callback.consume(curr_log, row))) {
       LOG_WARN("failed to consume merge log", K(ret), K(curr_log), KPC(row));

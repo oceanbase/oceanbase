@@ -21,24 +21,92 @@ using namespace common;
 using namespace storage;
 namespace blocksstable
 {
-struct ObMicroBlockHeader
+struct ObMicroBlockHeader final
 {
-  static const int64_t COLUMN_CHECKSUM_PTR_OFFSET;
 public:
-  int16_t magic_;
+  static const int64_t COLUMN_CHECKSUM_PTR_OFFSET;
+  static const int64_t MICRO_BLOCK_HEADER_VERSION_1 = 1;
+  static const int64_t MICRO_BLOCK_HEADER_VERSION_2 = 2;
+  static const int64_t MICRO_BLOCK_HEADER_VERSION_3 = 3;
+  static const int64_t MICRO_BLOCK_HEADER_VERSION_LATEST = MICRO_BLOCK_HEADER_VERSION_3;
+  ObMicroBlockHeader();
+  ~ObMicroBlockHeader() = default;
+  // no need to calc column checksum when column_checksum_ptr = null
+  int init(
+    const uint64_t data_version,
+    const int64_t column_count,
+    const int64_t rowkey_column_count,
+    const ObRowStoreType row_store_type,
+    const bool has_column_checksum);
+  void reset() { new (this) ObMicroBlockHeader(); }
+  void reuse();
+  bool is_valid() const;
+  void set_header_checksum();
+  int check_header_checksum() const;
+  int check_payload_checksum(const char *buf, const int64_t len) const;
+  static int deserialize_and_check_record(
+      const char *ptr, const int64_t size,
+      const int16_t magic, const char *&payload_ptr, int64_t &payload_size);
+  static int deserialize_and_check_record(const char *ptr, const int64_t size, const int16_t magic);
+  int deserialize_and_check_header(const char *ptr, const int64_t size);
+  uint32_t get_serialize_size() const { return get_serialize_size(column_count_, has_column_checksum_); }
+  ObRowStoreType get_row_store_type() const { return ObRowStoreType(row_store_type_); }
+  int64_t get_stored_column_count() const { return column_count_ + (has_row_header_ ? 1 : 0); }
+  static uint32_t get_serialize_size(const int64_t column_count, const bool need_calc_column_chksum) {
+    return static_cast<uint32_t>(COLUMN_CHECKSUM_PTR_OFFSET +
+        (need_calc_column_chksum ? column_count * sizeof(int64_t) : 0));
+  }
+  int check_and_get_record(
+      const char *ptr, const int64_t size, const int16_t magic,
+      const char *&payload_ptr, int64_t &payload_size) const;
+  int check_record(const char *ptr, const int64_t size, const int16_t magic) const;
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
+  int deep_copy(char *buf, const int64_t buf_len, int64_t &pos, ObMicroBlockHeader *&header) const;
+  static void simple_cast(const char *buf, const ObMicroBlockHeader *&micro_header)
+  { // column_checksums_ is nullptr
+    micro_header = reinterpret_cast<const ObMicroBlockHeader *>(buf);
+  }
+  uint32_t get_column_checksum_buf_len() const
+  {
+    return column_count_ * sizeof(int64_t);
+  }
+  int set_min_merged_trans_version(const int64_t input_min_version);
+  int64_t get_min_merged_trans_version() const;
+  bool has_min_merged_trans_version() const
+  {
+    return has_min_merged_trans_version_;
+  }
+  int64_t to_string(char* buf, const int64_t buf_len) const;
+public:
+  bool is_compressed_data() const { return data_length_ != data_zlength_; }
+  bool contain_uncommitted_rows() const { return contain_uncommitted_rows_; }
+  OB_INLINE bool has_string_out_row() const { return has_string_out_row_; }
+  OB_INLINE bool has_lob_out_row() const { return !all_lob_in_row_; }
+  bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
+  bool is_first_row_first_flag() const { return is_first_row_first_flag_; }
+  bool is_contain_hash_index() const;
+  bool is_trans_version_column_idx(const int64_t col_idx) const
+  { return  rowkey_column_count_ > 0 && col_idx == rowkey_column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(); }
+
+public:
+ int16_t magic_;
   int16_t version_;
   uint32_t header_size_;
   int16_t header_checksum_;
   uint16_t column_count_;
   uint16_t rowkey_column_count_;
-  struct {
-    uint16_t has_column_checksum_ : 1;
-    uint16_t has_string_out_row_ : 1; // flag for furture, varchar and char can be overflowed as lob handle
-    uint16_t all_lob_in_row_ : 1; // compatible with 4.0, we assume that all lob is out row in old data
-    uint16_t contains_hash_index_   : 1;
-    uint16_t hash_index_offset_from_end_ : 10;
-    uint16_t has_min_merged_trans_version_   : 1;
-    uint16_t reserved16_          : 1;
+  union {
+    struct {
+      uint16_t has_column_checksum_ : 1;
+      uint16_t has_string_out_row_ : 1; // flag for furture, varchar and char can be overflowed as lob handle
+      uint16_t all_lob_in_row_ : 1; // compatible with 4.0, we assume that all lob is out row in old data
+      uint16_t contains_hash_index_   : 1;
+      uint16_t hash_index_offset_from_end_ : 10;
+      uint16_t has_min_merged_trans_version_   : 1;
+      uint16_t reserved16_          : 1;
+    };
+    uint16_t flag16_;
   };
   uint32_t row_count_;
   uint8_t row_store_type_;
@@ -79,53 +147,10 @@ public:
   int64_t data_checksum_;
   union {
     int64_t *column_checksums_;
+     // is valid when has_min_merged_trans_version_ = true
     int64_t min_merged_trans_version_;
   };
-public:
-  ObMicroBlockHeader();
-  ~ObMicroBlockHeader() = default;
-  void reset() { new (this) ObMicroBlockHeader(); }
-  bool check_data_valid() const;
-  bool is_valid() const;
-  void set_header_checksum();
-  int check_header_checksum() const;
-  int check_payload_checksum(const char *buf, const int64_t len) const;
-  static int deserialize_and_check_record(
-      const char *ptr, const int64_t size,
-      const int16_t magic, const char *&payload_ptr, int64_t &payload_size);
-  static int deserialize_and_check_record(const char *ptr, const int64_t size, const int16_t magic);
-  int deserialize_and_check_header(const char *ptr, const int64_t size);
-  int check_and_get_record(
-      const char *ptr, const int64_t size, const int16_t magic,
-      const char *&payload_ptr, int64_t &payload_size) const;
-  int check_record(const char *ptr, const int64_t size, const int16_t magic) const;
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
-  int deep_copy(char *buf, const int64_t buf_len, int64_t &pos, ObMicroBlockHeader *&new_header) const;
-  uint32_t get_serialize_size() const { return get_serialize_size(column_count_, has_column_checksum_); }
-  int64_t get_stored_column_count() const { return column_count_ + (has_row_header_ ? 1 : 0); }
 
-  OB_INLINE ObRowStoreType get_row_store_type() const { return static_cast<ObRowStoreType>(row_store_type_); }
-
-  static uint32_t get_serialize_size(const int64_t column_count, const bool need_calc_column_chksum) {
-    return static_cast<uint32_t>(ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET +
-        (need_calc_column_chksum ? column_count * sizeof(int64_t) : 0));
-  }
-  TO_STRING_KV(K_(magic), K_(version), K_(header_size), K_(header_checksum),
-      K_(column_count), K_(rowkey_column_count), K_(has_column_checksum), K_(row_count), K_(row_store_type),
-      K_(opt), K_(var_column_count), K_(compressor_type), K_(row_offset), K_(original_length), K_(max_merged_trans_version), K_(min_merged_trans_version),
-      K_(data_length), K_(data_zlength), K_(data_checksum), KP_(column_checksums), K_(single_version_rows),
-      K_(contain_uncommitted_rows),  K_(is_last_row_last_flag), K_(is_first_row_first_flag), K(is_valid()));
-public:
-  bool is_compressed_data() const { return data_length_ != data_zlength_; }
-  bool contain_uncommitted_rows() const { return contain_uncommitted_rows_; }
-  OB_INLINE bool has_string_out_row() const { return has_string_out_row_; }
-  OB_INLINE bool has_lob_out_row() const { return !all_lob_in_row_; }
-  bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
-  bool is_first_row_first_flag() const { return is_first_row_first_flag_; }
-  bool is_contain_hash_index() const;
-  bool is_trans_version_column_idx(const int64_t col_idx) const
-  { return  rowkey_column_count_ > 0 && col_idx == rowkey_column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(); }
 }__attribute__((packed));
 }//end namespace blocksstable
 }//end namespace oceanbase

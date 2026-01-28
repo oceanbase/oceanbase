@@ -141,9 +141,10 @@ TEST_F(TestMicroBlockReader, test_success)
     convert_to_multi_version_row(row, row_generate_.get_schema(), SNAPSHOT_VERSION, multi_version_row);
     ASSERT_EQ(OB_SUCCESS, writer.append_row(multi_version_row));
   }
-  char *buf = NULL;
-  int64_t size = 0;
-  ret = writer.build_block(buf, size);
+  ObMicroBlockDesc micro_block_desc;
+  ret = writer.build_micro_block_desc_in_unittest(micro_block_desc);
+  const char *buf = writer.data_buffer_.data();
+  const int64_t size = writer.data_buffer_.size();
   ASSERT_EQ(OB_SUCCESS, ret);
 
   /*** init column_map ***/
@@ -153,7 +154,8 @@ TEST_F(TestMicroBlockReader, test_success)
           allocator_, 16000, row_generate_.get_schema().get_rowkey_column_num(), lib::is_oracle_mode(), columns, nullptr/*storage_cols_index*/));
   /*** init reader ***/
   ObMicroBlockReader<> reader;
-  ObMicroBlockData block(buf, size);
+  ObMicroBlockData block;
+  ASSERT_EQ(OB_SUCCESS, block.init_with_prepare_micro_header(buf, size));
   ASSERT_EQ(OB_SUCCESS, reader.init(block, read_info_));
 
   /*** init row cache ***/

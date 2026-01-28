@@ -20,6 +20,7 @@
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sql_session_mgr.h"
+#include "share/compaction/ob_sync_mds_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -528,7 +529,7 @@ int ObTruncateInfoService::execute(ObMySQLTransaction &trans,
   } else if (OB_UNLIKELY(is_column_store)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported write truncate info for column store global index", KR(ret), K(is_column_store), K(index_table_schema));
-  } else if (OB_FAIL(ObDDLLock::lock_for_modify_truncate_info_in_trans(get_tenant_id(), index_table_schema.get_table_id(), trans))) {
+  } else if (OB_FAIL(ObDDLLock::lock_for_sync_mds_in_trans(get_tenant_id(), index_table_schema.get_table_id(), trans))) {
     LOG_WARN("failed to lock global index", KR(ret), "index_table_id", index_table_schema.get_table_id());
   } else if (OB_FAIL(index_table_schema.get_tablet_ids(index_tablet_array_))) {
     LOG_WARN("failed to get tablet id from index schema", KR(ret), K(index_table_schema));
@@ -884,67 +885,13 @@ int ObTruncateInfoService::loop_index_tablet_id_to_register_(
     // for same index tablet, different truncate key have different inc_seq
     truncate_arg.ls_id_ = ls_id_array_.at(j);
     truncate_arg.index_tablet_id_ = index_tablet_array_.at(j);
-    if (OB_FAIL(register_mds_(conn, truncate_arg))) {
+    if (OB_FAIL(ObSyncMDSService::register_mds<ObTruncateTabletArg>(
+        conn, loop_allocator_, get_tenant_id(), truncate_arg,
+        transaction::ObTxDataSourceType::SYNC_TRUNCATE_INFO))) {
       LOG_WARN("failed to register mds", KR(ret), K(get_tenant_id()), K(j),
                K_(index_tablet_array), K_(ls_id_array), K(truncate_arg));
     }
   } // for
-  return ret;
-}
-
-int ObTruncateInfoService::register_mds_(
-  ObInnerSQLConnection &conn,
-  const ObTruncateTabletArg &arg)
-{
-  int ret = OB_SUCCESS;
-  const int64_t buf_len = arg.get_serialize_size();
-  int64_t pos = 0;
-  char *buf = nullptr;
-  if (OB_ISNULL(buf = (char *)loop_allocator_.alloc(buf_len))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail alloc memory", KR(ret), K(buf_len));
-  } else if (OB_FAIL(arg.serialize(buf, buf_len, pos))) {
-    LOG_WARN("fail to serialize", KR(ret), K(arg));
-  } else if (OB_FAIL(retry_register_mds_(conn, arg, buf, buf_len))) {
-    LOG_WARN("fail to register mds", KR(ret), K(get_tenant_id()), K(arg));
-  }
-  return ret;
-}
-
-int ObTruncateInfoService::retry_register_mds_(
-    ObInnerSQLConnection &conn,
-    const ObTruncateTabletArg &arg,
-    const char *buf,
-    const int64_t buf_len)
-{
-  int ret = OB_SUCCESS;
-  ObTimeoutCtx ctx;
-  const int64_t default_timeout_ts = GCONF.rpc_timeout;
-  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout_ts))) {
-    LOG_WARN("fail to set timeout ctx", KR(ret), K(default_timeout_ts));
-  } else {
-    const int64_t start_time = ObTimeUtility::current_time();
-    do {
-      if (ctx.is_timeouted()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("already timeout", KR(ret), K(ctx));
-      } else if (OB_FAIL(conn.register_multi_data_source(
-                    get_tenant_id(), arg.ls_id_,
-                    transaction::ObTxDataSourceType::SYNC_TRUNCATE_INFO,
-                    buf, buf_len))) {
-        if (need_retry_errno(ret)) {
-          LOG_INFO("fail to register_tx_data, try again", KR(ret), K(get_tenant_id()), K(arg));
-          ob_usleep(SLEEP_INTERVAL);
-        } else {
-          LOG_WARN("fail to register_tx_data", KR(ret), K(arg), K(buf), K(buf_len));
-        }
-      }
-    } while (need_retry_errno(ret));
-    if (OB_SUCC(ret)) {
-      LOG_INFO("[TRUNCATE_INFO] success to register mds", KR(ret), K(buf_len), K(arg),
-        "cost_ts", ObTimeUtility::current_time() - start_time);
-    }
-  }
   return ret;
 }
 
@@ -1008,11 +955,6 @@ int ObTruncateInfoService::loop_subpart_to_register_mds_(
     }
   }
   return ret;
-}
-
-bool ObTruncateInfoService::need_retry_errno(int ret)
-{
-  return is_location_service_renew_error(ret) || OB_NOT_MASTER == ret;
 }
 
 } // namespace rootserver

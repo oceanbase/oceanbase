@@ -52,7 +52,7 @@ struct ObStorageSnapshotInfo
   };
   ObStorageSnapshotInfo();
   ~ObStorageSnapshotInfo() { reset(); }
-  OB_INLINE void reset() {
+OB_INLINE void reset() {
     snapshot_type_ = SNAPSHOT_MAX;
     snapshot_ = 0;
   }

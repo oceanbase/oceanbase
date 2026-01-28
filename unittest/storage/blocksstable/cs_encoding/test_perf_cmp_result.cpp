@@ -465,7 +465,7 @@ TEST_F(TestPerfCmpResult, test_general_dict_get_rows_t100)
 int main(int argc, char **argv)
 {
   system("rm -f test_perf_cmp_result.log*");
-  OB_LOGGER.set_file_name("test_perf_cmp_result.log", true, false);
+  OB_LOGGER.set_file_name("test_perf_cmp_result.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   std::string filter = testing::GTEST_FLAG(filter);

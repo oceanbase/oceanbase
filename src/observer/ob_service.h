@@ -25,6 +25,7 @@
 #include "observer/report/ob_ls_table_updater.h"
 #include "observer/report/ob_tablet_table_updater.h"
 #include "observer/report/ob_server_meta_table_checker.h" // ObServerMetaTableChecker
+#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -187,6 +188,9 @@ public:
                    obrpc::Int64 &result);
   // ObRpcTabletMajorFreezeP @RS tablet major freeze
   int tablet_major_freeze(const obrpc::ObTabletMajorFreezeArg &arg,
+                   obrpc::Int64 &result);
+  // ObRpcTableMajorFreezeP @RS table major freeze
+  int table_major_freeze(const obrpc::ObTableMajorFreezeRequest &arg,
                    obrpc::Int64 &result);
   // ObRpcCheckSchemaVersionElapsedP @RS global index builder
   int check_schema_version_elapsed(

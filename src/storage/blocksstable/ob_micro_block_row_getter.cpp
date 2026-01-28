@@ -350,8 +350,7 @@ int ObMicroBlockRowGetter::inner_get_row(
   } else if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
     LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
   } else if (OB_UNLIKELY(sstable_->is_minor_sstable() &&
-                         sstable_->get_start_scn().get_val_for_tx() <= context_->trans_version_range_.base_version_)) {
-    // TODO: zhanghuidong.zhd, check min_merged_trans_version instead
+                         sstable_->get_min_merged_trans_version() <= context_->trans_version_range_.base_version_)) {
     if (OB_FAIL(reader_->get_row_and_trans_version(block_addr, block_data, rowkey, *read_info_, row_, trans_version))) {
       if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
         LOG_WARN("Fail to get row", K(ret), K(rowkey), K(block_data), KPC_(read_info), KPC_(param), KPC_(context), K(block_addr));

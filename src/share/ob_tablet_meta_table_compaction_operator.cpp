@@ -824,5 +824,22 @@ int ObTabletMetaTableCompactionOperator::inner_get_max_tablet_id_in_range(
   return ret;
 }
 
+int ObTabletMetaTableCompactionOperator::batch_get_tablet_info(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const common::ObIArray<ObTabletLSPair> &tablet_ls_pairs,
+      ObIArray<ObTabletInfo> &tablet_infos)
+{
+  int ret = OB_SUCCESS;
+  tablet_infos.reuse();
+  if (OB_FAIL(ObTabletTableOperator::inner_batch_get_by_sql_(sql_proxy, tenant_id, tablet_ls_pairs, 0, tablet_ls_pairs.count(), 0, tablet_infos))) {
+    LOG_WARN("failed to batch get tablet info", KR(ret), K(tenant_id), K(tablet_ls_pairs));
+  } else if (OB_UNLIKELY(tablet_infos.count() != tablet_ls_pairs.count())) {
+    ret = OB_EAGAIN;
+    LOG_WARN("tablet infos count not equal to tablet ls pairs count", KR(ret), K(tablet_infos), K(tablet_ls_pairs));
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase

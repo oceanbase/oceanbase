@@ -902,6 +902,9 @@ int ObAccessService::delete_rows(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(tx_desc),
              K(dml_param), K(column_ids), KP(row_iter));
+  } else if (dml_param.table_param_->get_data_table().is_append_only()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete from append only table is");
   } else if (OB_FAIL(check_write_allowed_(ls_id,
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
@@ -1144,6 +1147,9 @@ int ObAccessService::update_rows(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(tx_desc),
              K(dml_param), K(column_ids), K(updated_column_ids));
+  } else if (dml_param.table_param_->get_data_table().is_append_only()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "update append_only table is");
   } else if (OB_FAIL(check_write_allowed_(ls_id,
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,

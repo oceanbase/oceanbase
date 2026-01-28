@@ -962,6 +962,12 @@ DEF_TIME(merger_check_interval, OB_TENANT_PARAMETER, "10m", "[10s, 60m]",
          "the time interval between the schedules of the task "
          "that checks on the progress of MERGE for each zone. Range: [10s, 60m]",
          ObParameterAttr(Section::DAILY_MERGE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_ttl, OB_TENANT_PARAMETER, "False",
+         "specifies whether ttl task is enbled",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_MOMENT(ttl_duty_time, OB_TENANT_PARAMETER, "01:00",
+         "the start time of system daily ttl backgroud procedure. Range: [00:00, 24:00)",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_window_compaction, OB_TENANT_PARAMETER, "False",
          "specifies whether enable window compaction. "
          "True: do window compaction daily;"
@@ -3227,7 +3233,7 @@ ERRSIM_DEF_INT(errsim_backup_override_start_scn, OB_CLUSTER_PARAMETER, "0", "[0,
 
 DEF_INT(_fuse_row_cache_activate_threshold, OB_TENANT_PARAMETER, "6", "[0, 100]",
          "Determine if queries should use fuse_row_cache based on a configurable cache hit rate threshold.",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(_use_distinct_with_expansion, OB_TENANT_PARAMETER, "AUTO",\
         common::ObConfigUseDistinctWithExpansionChecker,

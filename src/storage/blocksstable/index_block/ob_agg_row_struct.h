@@ -119,6 +119,8 @@ public:
   int init(const char *buf, const int64_t buf_size); // init with agg_buf
   int read(const ObSkipIndexColMeta &meta, ObDatum &datum); // use meta get datum
   int read(const ObSkipIndexColMeta &meta, ObDatum &datum, bool &is_prefix);
+  OB_INLINE const ObAggRowHeader *get_header() const { return header_; }
+  OB_INLINE bool is_inited() const { return is_inited_; }
   void reset();
   inline bool has_correct_max_prefix()
   {

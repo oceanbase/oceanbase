@@ -1169,28 +1169,6 @@ int ObFreezer::handle_no_active_memtable_(const ObTabletID &tablet_id,
     } else if (OB_FAIL(get_ls_tablet_svr()->update_tablet_snapshot_version(tablet_id,
                                                                            freeze_snapshot_version.get_val_for_tx()))) {
       LOG_WARN("failed to update tablet snapshot version", K(ret), K(ls_id), K(tablet_id), K(freeze_snapshot_version));
-    } else if (OB_FAIL(tablet->get_protected_memtable_mgr_handle(protected_handle))) {
-      LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet));
-    } else if (protected_handle->get_max_saved_version_from_medium_info_recorder() >=
-               freeze_snapshot_version.get_val_for_tx() && !GCTX.is_shared_storage_mode()) {
-      int tmp_ret = OB_SUCCESS;
-      ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type;
-      if (OB_FAIL(ObTenantTabletScheduler::get_co_merge_type_for_compaction(freeze_snapshot_version.get_val_for_tx(), *tablet, co_major_merge_type))) {
-        LOG_WARN("fail to get co merge type from medium info", K(ret), K(freeze_snapshot_version), KPC(tablet));
-      } else if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_merge_dag(ls_id,
-                                                                                     *tablet,
-                                                                                     MEDIUM_MERGE,
-                                                                                     freeze_snapshot_version.get_val_for_tx(),
-                                                                                     EXEC_MODE_LOCAL,
-                                                                                     nullptr, /*dag_net_id*/
-                                                                                     co_major_merge_type))) {
-        if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
-          ret = tmp_ret;
-          LOG_WARN("failed to schedule medium merge dag", K(ret), K(ls_id), K(tablet_id));
-        }
-      } else {
-        TRANS_LOG(INFO, "[Freezer] memtable_mgr doesn't have memtable", K(ret), K(ls_id), K(tablet_id));
-      }
     }
   } else {
     TRANS_LOG(INFO, "[Freezer] memtable_mgr has memtable", K(ret), K(ls_id), K(tablet_id));

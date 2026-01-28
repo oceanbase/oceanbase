@@ -605,7 +605,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
   ObTabletHandle local_tablet_hdl;
   ObTablesHandleArray major_tables;
   ObStorageSchema storage_schema;
-  ObBuildMajorSSTablesParam major_sstables_param(storage_schema, tablet_info.param_.has_truncate_info_);
+  ObBuildMajorSSTablesParam major_sstables_param(storage_schema, tablet_info.param_.has_merged_with_mds_info_);
   const bool is_only_replace_major = false;
 
   if (!is_inited_) {
@@ -2710,7 +2710,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
               compaction::ObMergeType::MEDIUM_MERGE/*merge_type*/,
               SCN::min_scn()/*clog_checkpoint_scn*/,
               true/*need_report*/,
-              major_sstables_param.has_truncate_info_)))) {
+              major_sstables_param.has_merged_with_mds_info_)))) {
       LOG_WARN("failed to init with compaction info", KR(ret));
     } else if (tablet_storage_schema->get_schema_version() < major_sstables_param.storage_schema_.get_schema_version()) {
       SERVER_EVENT_ADD("storage_ha", "schema_change_need_merge_tablet_meta",
@@ -2726,7 +2726,7 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
                       "new_multi_version_start", update_multi_version_start,
                       "old_snapshot_version", tablet->get_snapshot_version(),
                       "new_snapshot_version", table->get_key().get_snapshot_version(),
-                      "has_truncate_info", major_sstables_param.has_truncate_info_);
+                      "has_merged_with_mds_info", major_sstables_param.has_merged_with_mds_info_);
 #endif
 
 #ifdef OB_BUILD_SHARED_STORAGE

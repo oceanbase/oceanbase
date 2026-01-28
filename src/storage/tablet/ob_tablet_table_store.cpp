@@ -313,39 +313,6 @@ int ObTabletTableStore::init(
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
-int ObTabletTableStore::init_for_shared_storage(
-    common::ObArenaAllocator &allocator,
-    const ObUpdateTableStoreParam &param)
-  {
-    int ret = OB_SUCCESS;
-    const ObSSTable *new_table = param.sstable_;
-
-    if (IS_INIT) {
-      ret = OB_INIT_TWICE;
-      LOG_WARN("double init", K(ret));
-    } else if (OB_UNLIKELY(!param.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("Invalid arguments", K(ret), K(param));
-    } else if (OB_UNLIKELY(!major_tables_.empty() || !minor_tables_.empty())) {
-      ret = OB_ERR_SYS;
-      LOG_ERROR("already exists sstable", K(ret), KPC(this));
-    } else if (OB_ISNULL(new_table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sstable is nullptr", K(ret), K(param));
-    } else if (OB_UNLIKELY(!ObITable::is_major_sstable(new_table->get_key().table_type_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected table type", K(ret), KPC(new_table));
-    } else if (OB_FAIL(major_tables_.init(allocator, new_table))) {
-      LOG_WARN("failed to init major tables", K(ret));
-    } else {
-       // shared tablet meta, is_ready_for_read_ is not necessary.
-       // just to avoid other validation failure
-      is_ready_for_read_ = true;
-      is_inited_ = true;
-    }
-    return ret;
-  }
-
 int ObTabletTableStore::process_minor_sstables_for_ss_(
     ObArenaAllocator &allocator,
     const UpdateUpperTransParam &upper_trans_param,
@@ -2007,17 +1974,9 @@ int ObTabletTableStore::get_recycle_version(
     LOG_WARN("failed to get major tables from old store", K(ret), KPC(this));
   } else if (OB_FAIL(ObTableStoreUtil::sort_major_tables(major_tables))) {
     LOG_WARN("failed to sort major tables", K(ret));
-  } else {
-    for (int64_t i = major_tables.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      if (major_tables.at(i)->get_snapshot_version() <= multi_version_start) {
-        recycle_version = major_tables.at(i)->get_snapshot_version();
-        break;
-      }
-    }
-    if (0 == recycle_version && major_tables.count() > 0) {
-      recycle_version = major_tables.at(0)->get_snapshot_version();
-      LOG_WARN("not found inc base snapshot version, use the oldest major table", K(ret));
-    }
+  } else if (1 == major_tables.count() || major_tables.at(major_tables.count() - 2)->get_snapshot_version() <= multi_version_start) {
+    // only one major table or the second last major table is before multi_version_start, use the last major table
+    recycle_version = major_tables.at(major_tables.count() - 1)->get_snapshot_version();
   }
 #ifdef ERRSIM
   if (OB_FAIL(ret)) {
@@ -2235,7 +2194,7 @@ int ObTabletTableStore::check_and_build_new_major_tables(
             } else if (OB_FAIL(old_sstable->get_meta(old_sst_meta_hdl))) {
               LOG_WARN("failed to get old sstable meta handle", K(ret));
             } else if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(
-                new_sst_meta_hdl.get_sstable_meta(), old_sst_meta_hdl.get_sstable_meta()))) {
+                old_sst_meta_hdl.get_sstable_meta(), new_sst_meta_hdl.get_sstable_meta()))) {
               LOG_WARN("failed to check sstable meta", K(ret), KPC(new_sstable), KPC(old_sstable));
             } else {
               if (new_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_no_backup()
@@ -2655,7 +2614,7 @@ int ObTabletTableStore::build_meta_major_table(
     LOG_WARN("the new meta merge sstable is covered by major", K(ret), KPC(new_sstable), KPC(last_major));
   } else if (!old_meta_tables.empty() && new_sstable->get_snapshot_version() <= old_meta_tables[0]->get_snapshot_version()) {
     ret= OB_MINOR_SSTABLE_RANGE_CROSS;
-    LOG_WARN("new meta major table is covered by old one", K(ret), KPC(new_sstable), K(old_meta_tables));
+    LOG_WARN("new meta major table is covered by old one", K(ret), KPC(new_sstable), KPC(old_meta_tables[0]));
   } else if (OB_FAIL(meta_major_tables_.init(allocator, const_cast<ObSSTable *>(new_sstable)))) {
     LOG_WARN("failed to init meta major tables", K(ret));
   }

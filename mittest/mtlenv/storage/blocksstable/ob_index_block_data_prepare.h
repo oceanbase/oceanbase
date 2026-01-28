@@ -530,13 +530,12 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
     // decompress and decrypt root block
     ObMicroBlockDesMeta meta(ObCompressorType::NONE_COMPRESSOR, root_row_store_type, 0, 0, nullptr);
     ObMacroBlockReader reader;
-    const char *decomp_buf = nullptr;
-    int64_t decomp_size = 0;
+    ObMicroBlockData decomp_data;
     bool is_compressed = false;
     ASSERT_EQ(OB_SUCCESS, reader.decrypt_and_decompress_data(meta, block_buf, root_desc.addr_.size_,
-        decomp_buf, decomp_size, is_compressed, true, &allocator_));
-    root_buf = const_cast<char *>(decomp_buf);
-    root_size = decomp_size;
+        decomp_data, is_compressed, true, &allocator_));
+    root_buf = const_cast<char *>(decomp_data.get_buf());
+    root_size = decomp_data.get_buf_size();
   } else if (root_desc.is_mem_type()) {
     root_buf = root_desc.buf_;
     root_size = root_desc.addr_.size_;
@@ -545,18 +544,10 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
     ASSERT_TRUE(false);
   }
 
-  // deserialize micro block header in root block buf
-  ObMicroBlockHeader root_micro_header;
-  int64_t des_pos = 0;
-  ASSERT_EQ(OB_SUCCESS, root_micro_header.deserialize(root_buf, root_size, des_pos));
   root_block_data_buf_.buf_ = static_cast<char *>(allocator_.alloc(root_size));
   root_block_data_buf_.size_ = root_size;
-  int64_t copy_pos = 0;
-  ObMicroBlockHeader *copied_micro_header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, root_micro_header.deep_copy(
-      (char *)root_block_data_buf_.buf_, root_block_data_buf_.size_, copy_pos, copied_micro_header));
-  ASSERT_TRUE(copied_micro_header->is_valid());
-  MEMCPY((char *)(root_block_data_buf_.buf_ + copy_pos), root_buf + des_pos, root_size - des_pos);
+  MEMCPY((char *)(root_block_data_buf_.buf_), root_buf, root_size);
+  ASSERT_EQ(OB_SUCCESS, root_block_data_buf_.prepare_micro_header());
   row_store_type_ = root_row_store_type;
 
   ObITable::TableKey table_key;
@@ -580,12 +571,13 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
       + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   }
 
-  ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-    param.root_block_addr_, param.root_block_data_);
-  ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-    param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
+    param.root_block_addr_, param.root_block_data_));
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
+    param.data_block_macro_meta_addr_, param.data_block_macro_meta_));
   param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
   param.max_merged_trans_version_ = res.max_merged_trans_version_;
+  param.min_merged_trans_version_ = res.min_merged_trans_version_;
   param.row_count_ = res.row_count_;
   param.root_row_store_type_ = root_row_store_type;
   param.latest_row_store_type_ = table_schema_.get_row_store_type();
@@ -639,6 +631,7 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_co_sstable(const int64
 
   char *root_buf = nullptr;
   int64_t root_size = 0;
+  ObMicroBlockData decomp_data;
   if (root_desc.addr_.is_block()) {
     // read macro block
     ObMacroBlockReadInfo read_info;
@@ -660,11 +653,11 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_co_sstable(const int64
     // decompress and decrypt root block
     ObMicroBlockDesMeta meta(ObCompressorType::NONE_COMPRESSOR, root_row_store_type, 0, 0, nullptr);
     ObMacroBlockReader reader;
-    const char *decomp_buf = nullptr;
-    int64_t decomp_size = 0;
     bool is_compressed = false;
     ASSERT_EQ(OB_SUCCESS, reader.decrypt_and_decompress_data(meta, block_buf, root_desc.addr_.size_,
-        decomp_buf, decomp_size, is_compressed, true, &allocator_));
+        decomp_data, is_compressed, true, &allocator_));
+    const char *decomp_buf = decomp_data.get_buf();
+    int64_t decomp_size = decomp_data.get_buf_size();
     root_buf = const_cast<char *>(decomp_buf);
     root_size = decomp_size;
   } else if (root_desc.is_mem_type()) {
@@ -1284,13 +1277,12 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     // decompress and decrypt root block
     ObMicroBlockDesMeta meta(ObCompressorType::NONE_COMPRESSOR, root_row_store_type, 0, 0, nullptr);
     ObMacroBlockReader reader;
-    const char *decomp_buf = nullptr;
-    int64_t decomp_size = 0;
+    ObMicroBlockData decomp_data;
     bool is_compressed = false;
     ASSERT_EQ(OB_SUCCESS, reader.decrypt_and_decompress_data(meta, block_buf, root_desc.addr_.size_,
-        decomp_buf, decomp_size, is_compressed, true, &allocator_));
-    root_buf = const_cast<char *>(decomp_buf);
-    root_size = decomp_size;
+        decomp_data, is_compressed, true, &allocator_));
+    root_buf = const_cast<char *>(decomp_data.get_buf());
+    root_size = decomp_data.get_buf_size();
   } else if (root_desc.is_mem_type()) {
     root_buf = root_desc.buf_;
     root_size = root_desc.addr_.size_;
@@ -1298,7 +1290,8 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     STORAGE_LOG(INFO, "not supported root block", K(root_desc));
     ASSERT_TRUE(false);
   }
-  ObMicroBlockData root_block(root_buf, root_size);
+  ObMicroBlockData root_block;
+  OK(root_block.init_with_prepare_micro_header(root_buf, root_size));
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
   ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
@@ -1317,17 +1310,10 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
   }
 
   // deserialize micro block header in root block buf
-  ObMicroBlockHeader root_micro_header;
-  int64_t des_pos = 0;
-  ASSERT_EQ(OB_SUCCESS, root_micro_header.deserialize(root_buf, root_size, des_pos));
   merge_root_block_data_buf_.buf_ = static_cast<char *>(allocator_.alloc(root_size));
   merge_root_block_data_buf_.size_ = root_size;
-  int64_t copy_pos = 0;
-  ObMicroBlockHeader *copied_micro_header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, root_micro_header.deep_copy(
-      (char *)merge_root_block_data_buf_.buf_, merge_root_block_data_buf_.size_, copy_pos, copied_micro_header));
-  ASSERT_TRUE(copied_micro_header->is_valid());
-  MEMCPY((char *)(merge_root_block_data_buf_.buf_ + copy_pos), root_buf + des_pos, root_size - des_pos);
+  MEMCPY((char *)(merge_root_block_data_buf_.buf_), root_buf, root_size);
+  ASSERT_EQ(OB_SUCCESS, merge_root_block_data_buf_.prepare_micro_header());
   row_store_type_ = root_row_store_type;
   ObITable::TableKey table_key;
   int64_t table_id = 3001;
@@ -1349,10 +1335,10 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     param.rowkey_column_cnt_ = table_schema_.get_rowkey_column_num()
       + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   }
-  ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
-    param.root_block_addr_, param.root_block_data_);
-  ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
-    param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
+    param.root_block_addr_, param.root_block_data_));
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
+    param.data_block_macro_meta_addr_, param.data_block_macro_meta_));
   param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
   param.max_merged_trans_version_ = res.max_merged_trans_version_;
   param.row_count_ = res.row_count_;

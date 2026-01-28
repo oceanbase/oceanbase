@@ -844,14 +844,13 @@ int ObIndexBlockLoader::open_mem_block()
     STORAGE_LOG(WARN, "Fail to serialize micro block header", K(ret), K(header));
   } else {
     MEMCPY(io_buf_[0] + pos, micro_block_desc->buf_, micro_block_desc->buf_size_);
-    cur_micro_block_.get_buf() = io_buf_[0];
-    cur_micro_block_.get_buf_size() = size;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(open_micro_block(cur_micro_block_))) {
-    STORAGE_LOG(WARN, "Fail to open micro block", K(cur_micro_block_));
-  } else {
-    cur_block_idx_++;
+    if (OB_FAIL(cur_micro_block_.init_with_prepare_micro_header(io_buf_[0], size))) {
+      STORAGE_LOG(WARN, "Fail to prepare micro block header", K(cur_micro_block_));
+    } else if (OB_FAIL(open_micro_block(cur_micro_block_))) {
+      STORAGE_LOG(WARN, "Fail to open micro block", K(cur_micro_block_));
+    } else {
+      cur_block_idx_++;
+    }
   }
   return ret;
 }

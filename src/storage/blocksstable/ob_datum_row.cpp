@@ -342,6 +342,24 @@ int ObDatumRow::shallow_copy(const ObDatumRow &other)
   return ret;
 }
 
+int ObDatumRow::shallow_copy_with_local_storage_datum(const ObDatumRow &other)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(copy_attributes_except_datums(other))) {
+    STORAGE_LOG(WARN, "Failed to copy attributes except datums", K(ret), K(other));
+  } else if (OB_ISNULL(storage_datums_) && get_capacity() < other.count_) {
+    STORAGE_LOG(WARN, "Failed to reserve memory for storage datums", K(ret), K(other));
+  } else {
+    trans_info_ = other.trans_info_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; i++) {
+      storage_datums_[i] = other.storage_datums_[i];
+    }
+  }
+
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObDatumRow)
 {
   int ret = OB_SUCCESS;

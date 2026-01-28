@@ -187,6 +187,7 @@ public:
                                                                    load_param.insert_mode_,
                                                                    load_param.load_mode_,
                                                                    load_param.load_level_,
+                                                                   load_param.dup_action_,
                                                                    column_ids,
                                                                    load_param.enable_inc_major_))) {
       LOG_WARN("fail to check support direct load", KR(ret));

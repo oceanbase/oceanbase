@@ -62,9 +62,10 @@ TEST_F(TestColumnEqualMicroDecoder, small_uint_with_large_exception)
 
   char *buf = NULL;
   int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
+  ASSERT_EQ(OB_SUCCESS, build_block(buf, size));
   ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
 
 

@@ -847,6 +847,10 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
              arg.schema_.get_minor_row_store_type());
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
                    "create table with non-flat delta format under this version is");
+  } else if (compat_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION && arg.schema_.has_ttl_definition() && !arg.schema_.get_ttl_flag().is_valid(compat_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support ttl flag for this version", KR(ret), K_(tenant_id), K(compat_version), K(arg.schema_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support ttl flag");
   } else if (arg.schema_.is_duplicate_table()) { // check compatibility for duplicate table
     bool is_compatible = false;
     if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id_, is_compatible))) {
@@ -859,6 +863,13 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not user tenant, create duplicate table not supported", KR(ret), K_(tenant_id));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, create duplicate table");
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObCompactionTTLUtil::check_create_append_only_engine_valid(arg.schema_, tenant_id_))) {
+      LOG_WARN("fail to check create append_only engine valid", KR(ret), K(tenant_id_), K(arg.schema_));
+    } else if (OB_FAIL(ObCompactionTTLUtil::check_create_ttl_schema_valid(arg.schema_, tenant_id_))) {
+      LOG_WARN("fail to check create ttl schema valid", KR(ret), K(tenant_id_), K(arg.schema_));
     }
   }
 
@@ -1094,7 +1105,7 @@ int ObTableHelper::inner_generate_aux_table_schema_(const ObCreateTableArg &arg)
         } else if (OB_FAIL(index_builder.generate_schema(index_arg,
                                                          *data_table,
                                                          global_index_without_column_info,
-                                                         false, /*generate_id*/
+                                                         false /*generate_id*/,
                                                          index_schema))) {
           LOG_WARN("generate_schema for index failed", KR(ret), K(index_arg), KPC(data_table));
         } else if (index_schema.is_hybrid_vec_index_log_type()) {

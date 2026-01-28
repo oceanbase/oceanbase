@@ -92,6 +92,7 @@ private:
   char other_info_[common::OB_COMPACTION_EVENT_STR_LENGTH];
   char comment_[common::OB_COMPACTION_COMMENT_STR_LENGTH];
   char kept_snapshot_info_[common::OB_COMPACTION_INFO_LENGTH];
+  char co_major_merge_strategy_info_[common::OB_COMPACTION_INFO_LENGTH];
   compaction::ObSSTableMergeHistory merge_history_;
   compaction::ObIDiagnoseInfoMgr::Iterator major_merge_info_iter_;
   compaction::ObIDiagnoseInfoMgr::Iterator minor_merge_info_iter_;

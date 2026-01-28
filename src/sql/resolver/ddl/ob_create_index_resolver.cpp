@@ -15,6 +15,7 @@
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "share/table/ob_ttl_util.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {

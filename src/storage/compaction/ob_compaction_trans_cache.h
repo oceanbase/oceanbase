@@ -102,7 +102,9 @@ public:
     : is_inited_(false),
       max_cnt_(0),
       allocator_(allocator),
-      array_(nullptr)
+      array_(nullptr),
+      hit_cnt_(0),
+      miss_cnt_(0)
   {}
   ~ObCachedTransStateMgr() { destroy(); }
   int init(int64_t max_cnt);
@@ -115,11 +117,14 @@ public:
     const int64_t trans_version,
     const int32_t trans_state,
     const int16_t can_read);
+  TO_STRING_KV(K_(hit_cnt), K_(miss_cnt));
 private:
   bool is_inited_;
   int64_t max_cnt_;
   common::ObIAllocator &allocator_;
   ObMergeCachedTransState *array_;
+  int64_t hit_cnt_;
+  int64_t miss_cnt_;
 };
 
 } // namespace compaction

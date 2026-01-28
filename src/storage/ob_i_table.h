@@ -302,6 +302,7 @@ public:
   virtual int64_t get_snapshot_version() const { return key_.get_snapshot_version(); }
   virtual int64_t get_upper_trans_version() const { return get_snapshot_version(); }
   virtual int64_t get_max_merged_trans_version() const { return get_snapshot_version(); }
+  virtual int64_t get_min_merged_trans_version() const { return 0; }
   virtual int get_frozen_schema_version(int64_t &schema_version) const = 0;
   OB_INLINE uint16_t get_column_group_id() const { return key_.get_column_group_id(); }
   OB_INLINE uint16_t get_slice_idx() const { return key_.get_slice_idx(); }

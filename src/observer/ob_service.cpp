@@ -1146,6 +1146,43 @@ int ObService::tablet_major_freeze(const obrpc::ObTabletMajorFreezeArg &arg,
   return ret;
 }
 
+int ObService::table_major_freeze(const obrpc::ObTableMajorFreezeRequest &arg,
+                           obrpc::Int64 &result)
+{
+  int ret = OB_SUCCESS;
+  result = OB_SUCCESS;
+  int schedule_tablet_cnt = 0;
+  const int64_t start_ts = ObTimeUtility::fast_current_time();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("observer not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table major freeze arg", K(ret), K(arg));
+  } else {
+    MTL_SWITCH(arg.tenant_id_) {
+      int tmp_ret = OB_SUCCESS;
+      for (int64_t i = 0; i < arg.tablet_ids_.count(); ++i) {
+        const ObLSID ls_id(arg.ls_id_);
+        const ObTabletID tablet_id(arg.tablet_ids_.at(i));
+        if (OB_TMP_FAIL(MTL(compaction::ObTenantTabletScheduler *)->user_request_schedule_medium_merge(
+          ls_id, tablet_id, arg.is_rebuild_column_group_))) {
+          LOG_WARN("failed to try schedule tablet major freeze", K(tmp_ret), K(arg), K(i));
+        } else {
+          schedule_tablet_cnt++;
+        }
+      }
+      if (schedule_tablet_cnt != arg.tablet_ids_.count()) {
+        result = OB_PARTIAL_FAILED;
+        LOG_WARN("failed to schedule tablet major freeze", K(ret), K(arg), K(schedule_tablet_cnt), K(arg.tablet_ids_.count()));
+      }
+    }
+  }
+  const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+  LOG_INFO("finish table major freeze request", K(ret), K(arg), K(cost_ts), K(schedule_tablet_cnt));
+  return ret;
+}
+
 int ObService::check_modify_time_elapsed(
     const obrpc::ObCheckModifyTimeElapsedArg &arg,
     obrpc::ObCheckModifyTimeElapsedResult &result)

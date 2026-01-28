@@ -104,29 +104,38 @@ public:
                                   const ObObjMeta &obj_meta,
                                   const ObSkipIndexType index_type,
                                   const ObMicroIndexInfo &index_info,
-                                  sql::ObPhysicalFilterExecutor &filter,
+                                  sql::ObPushdownFilterExecutor &filter,
                                   common::ObIAllocator &allocator,
-                                  const bool use_vectorize);
+                                  const bool use_vectorize,
+                                  const ObITableReadInfo *read_info = nullptr);
   int falsifiable_pushdown_filter(const uint32_t col_idx,
                                   const ObCollationType &cs_type,
                                   const ObSkipIndexType index_type,
                                   const int64_t row_count,
                                   ObMinMaxFilterParam &param,
-                                  sql::ObPhysicalFilterExecutor &filter,
+                                  sql::ObPushdownFilterExecutor &filter,
                                   const bool use_vectorize);
 
 private:
+  OB_INLINE int fix_and_mock_trans_version_datum(const int64_t col_idx,
+                                                 const ObITableReadInfo *read_info,
+                                                 const ObMicroIndexInfo &index_info,
+                                                 ObMinMaxFilterParam &param);
+
   int filter_on_min_max(const uint32_t col_idx,
                         const uint64_t row_count,
                         const ObMinMaxFilterParam &param,
-                        sql::ObWhiteFilterExecutor &filter);
+                        sql::ObWhiteFilterExecutor &filter,
+                        const ObMicroIndexInfo *index_info = nullptr);
 
   int read_aggregate_data(const uint32_t col_idx,
                    common::ObIAllocator &allocator,
                    const share::schema::ObColumnParam *col_param,
                    const ObObjMeta &obj_meta,
                    const bool is_padding_mode,
-                   ObMinMaxFilterParam &param);
+                   ObMinMaxFilterParam &param,
+                   const ObMicroIndexInfo &index_info,
+                   const ObITableReadInfo *read_info = nullptr);
 
   int compare_with_prefix(const sql::ObWhiteFilterExecutor &filter,
                           const common::ObDatum &datum,
@@ -148,6 +157,7 @@ private:
   int compare(const sql::ObWhiteFilterExecutor &filter,
               const common::ObDatum &skip_datum,
               const bool is_prefix,
+              const bool compare_min_value,
               const common::ObDatum &filter_datum,
               ObSkipIndexCmpRes &res);
 

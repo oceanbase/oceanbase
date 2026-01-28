@@ -9,10 +9,13 @@
 // See the Mulan PubL v2 for more details.
 #ifndef OB_ROOTSERVER_TRUNCATE_INFO_TRUNCATE_INFO_SERVICE_H_
 #define OB_ROOTSERVER_TRUNCATE_INFO_TRUNCATE_INFO_SERVICE_H_
-#include "/usr/include/stdint.h"
+
 #include "storage/truncate_info/ob_truncate_info.h"
 #include "share/ob_ls_id.h"
-#include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "lib/allocator/ob_allocator.h"
+#include "common/ob_common_types.h"
+#include "sql/engine/ob_exec_context.h"
+
 namespace oceanbase
 {
 namespace obrpc
@@ -176,16 +179,6 @@ private:
   int loop_index_tablet_id_to_register_(
     observer::ObInnerSQLConnection &conn,
     ObTruncateTabletArg &truncate_arg);
-  int register_mds_(
-    observer::ObInnerSQLConnection &conn,
-    const ObTruncateTabletArg &arg);
-  int retry_register_mds_(
-    observer::ObInnerSQLConnection &conn,
-    const ObTruncateTabletArg &arg,
-    const char *buf,
-    const int64_t buf_len);
-  static bool need_retry_errno(const int ret);
-  static const int64_t SLEEP_INTERVAL = 100 * 1000L; // 100ms
 private:
   ObArenaAllocator allocator_; // for part_key_info_, only init once
   ObArenaAllocator loop_allocator_; // for loop index tablets

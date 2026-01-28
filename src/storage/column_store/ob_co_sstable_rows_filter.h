@@ -101,7 +101,9 @@ private:
       uint32_t &depth);
   int rewrite_cg_iter_idx(
       sql::ObPushdownFilterExecutor *filter,
-      int64_t &cg_iter_idx);
+      int64_t &cg_iter_idx,
+      const bool col_cnt_changed,
+      uint32_t &depth);
   int init_co_sstable(ObITable *table);
   int try_locating_cg_iter(
       const int64_t iter_idx_to_filter_next,
@@ -112,7 +114,7 @@ private:
       const sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor &filter,
       ObCGBitmap *&result);
-  int init_bitmap_buffer(uint32_t bitmap_buffer_count);
+  int extend_bitmap_buffer(const uint32_t bitmap_buffer_count);
   void adjust_batch_size();
   OB_INLINE ObCGBitmap* get_child_bitmap(uint32_t depth);
   static int assign_common_col_groups(
@@ -131,6 +133,10 @@ private:
   static void clear_filter_state(sql::ObPushdownFilterExecutor *filter);
   int filter_tree_can_continuous_filter(sql::ObPushdownFilterExecutor *filter,
                                         bool &can_continuous_filter) const;
+  int init_or_reuse_filter_iter(sql::ObPushdownFilterExecutor *filter,
+                                const int64_t cg_iter_idx,
+                                const bool col_cnt_changed);
+  int do_mds_defensive_check();
 private:
   bool is_inited_;
   bool prepared_;

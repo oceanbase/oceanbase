@@ -14,6 +14,7 @@
 
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "ob_aggregated_store_vec.h"
+#include "storage/ob_trans_version_skip_index_util.h"
 
 namespace oceanbase
 {
@@ -481,12 +482,17 @@ int ObAggregatedStoreVec::check_agg_store_valid()
 int ObAggregatedStoreVec::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg)
 {
   int ret = OB_SUCCESS;
+  ObTransVersionSkipIndexInfo skip_index_info;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggregateStoreVec is not inited", K(ret));
+  } else if (!index_info.is_macro_node() && OB_FAIL(ObTransVersionSkipIndexReader::read_min_max_snapshot(
+                 index_info, iter_param_->get_schema_rowkey_count(), skip_index_info))) {
+    LOG_WARN("Failed to read min max snapshot", K(ret), K(index_info), KPC(iter_param_));
   } else {
     // pre agg info will not be generated for lob out row
     can_agg = filter_is_null() && index_info.can_blockscan() &&
+              (index_info.is_macro_node() || skip_index_info.min_snapshot_ > context_.trans_version_range_.base_version_) &&
               (index_info.row_header_->is_major_node() || (iter_param_->enable_inc_skip_index() && index_info.row_header_->is_single_version_rows())) &&
               !index_info.is_left_border() && !index_info.is_right_border();
     for (int64_t i = 0; OB_SUCC(ret) && can_agg && i < agg_groups_.count(); ++i) {

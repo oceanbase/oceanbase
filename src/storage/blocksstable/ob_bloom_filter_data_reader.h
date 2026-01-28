@@ -37,7 +37,7 @@ public:
       const char *&bf_buf,
       int64_t &bf_size);
 private:
-  int decompress_micro_block(const char *&block_buf, int64_t &block_size);
+  int decompress_micro_block(ObMicroBlockData &block_data);
   int read_micro_block(const char *buf, const int64_t buf_size, const char *&bf_buf, int64_t &bf_size);
   int read_macro_block(const MacroBlockId &macro_id);
 private:

@@ -355,6 +355,7 @@ public:
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
   inline bool is_safe_filter_with_di() const { return is_safe_filter_with_di_; }
   inline int8_t get_access_virtual_col_cnt() const { return access_virtual_col_cnt_; }
+  inline ObMergeEngineType get_merge_engine_type() const { return merge_engine_type_; }
   DECLARE_TO_STRING;
 
   static int convert_column_schema_to_param(const ObColumnSchemaV2 &column_schema,

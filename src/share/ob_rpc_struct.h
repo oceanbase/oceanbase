@@ -7777,6 +7777,53 @@ public:
   bool is_rebuild_column_group_;
 };
 
+struct ObTableMajorFreezeArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableMajorFreezeArg()
+    : tenant_id_(0),
+      table_id_(0),
+      is_rebuild_column_group_(false)
+    {}
+  ~ObTableMajorFreezeArg() = default;
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && table_id_ > 0;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(is_rebuild_column_group));
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  bool is_rebuild_column_group_;
+};
+
+struct ObTableMajorFreezeRequest
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableMajorFreezeRequest()
+    : tenant_id_(0),
+      ls_id_(),
+      tablet_ids_(),
+      is_rebuild_column_group_(false)
+    {}
+  ObTableMajorFreezeRequest(const uint64_t tenant_id, const int64_t ls_id, const common::ObIArray<uint64_t> &tablet_ids, const bool is_rebuild_column_group)
+    : tenant_id_(tenant_id), ls_id_(ls_id), tablet_ids_(), is_rebuild_column_group_(is_rebuild_column_group)
+    {
+      tablet_ids_.assign(tablet_ids);
+    }
+  ~ObTableMajorFreezeRequest() = default;
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && ls_id_ > 0 && !tablet_ids_.empty();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_ids), K_(is_rebuild_column_group));
+  uint64_t tenant_id_;
+  int64_t ls_id_;
+  common::ObSArray<uint64_t> tablet_ids_;
+  bool is_rebuild_column_group_;
+};
+
 struct ObSyncPGPartitionMTFinishArg
 {
   OB_UNIS_VERSION(1);

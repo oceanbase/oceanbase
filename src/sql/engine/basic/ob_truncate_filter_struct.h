@@ -16,7 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "src/storage/blocksstable/ob_storage_datum.h"
-#include "ob_pushdown_filter.h"
+#include "ob_mds_filter_struct.h"
 
 namespace oceanbase
 {
@@ -43,7 +43,7 @@ enum ObTruncateItemType
   MAX_TRUNCATE_PART_EXPR_TYPE
 };
 
-class ObITruncateFilterExecutor
+class ObITruncateFilterExecutor : public ObIMDSFilterExecutor
 {
 public:
   ObITruncateFilterExecutor(common::ObIAllocator &alloc);
@@ -55,8 +55,8 @@ public:
   virtual int prepare_truncate_value(
       const int64_t truncate_commit_viersion,
       const storage::ObTruncatePartition &truncate_partition) = 0;
-  virtual int filter(const blocksstable::ObDatumRow &row, bool &filtered);
-  int filter(const blocksstable::ObStorageDatum *datums, int64_t count, bool &filtered) const
+  virtual int filter(const blocksstable::ObDatumRow &row, bool &filtered) const override;
+  virtual int filter(const blocksstable::ObStorageDatum *datums, int64_t count, bool &filtered) const override final
   {
     return inner_filter(datums, count, filtered);
   }
@@ -72,7 +72,7 @@ public:
   {
     return tmp_datum_buf_;
   }
-  OB_INLINE const common::ObIArray<int32_t> &get_col_idxs()
+  OB_INLINE const common::ObIArray<int32_t> &get_col_idxs() const
   {
     return col_idxs_;
   }
@@ -307,7 +307,7 @@ public:
   virtual int prepare_truncate_value(
       const int64_t truncate_commit_viersion,
       const storage::ObTruncatePartition &truncate_partition) override final;
-  virtual int filter(const blocksstable::ObDatumRow &row, bool &filtered) override final;
+  virtual int filter(const blocksstable::ObDatumRow &row, bool &filtered) const override final;
   OB_INLINE int64_t get_part_child_count() const
   {
     return part_child_count_;
@@ -365,7 +365,7 @@ public:
       const int64_t schema_rowkey_cnt,
       const common::ObIArray<share::schema::ObColDesc> &cols_desc,
       const storage::ObTruncateInfoArray &truncate_info_array);
-  int filter(const blocksstable::ObDatumRow &row, bool &filtered);
+  int filter(const blocksstable::ObDatumRow &row, bool &filtered) const;
   int execute_logic_filter(
       PushdownFilterInfo &filter_info,
       blocksstable::ObIMicroBlockRowScanner *micro_scanner,

@@ -11,11 +11,8 @@
  */
 
 #include "storage/truncate_info/ob_tablet_truncate_info_reader.h"
-#include "lib/ob_errno.h"
-#include "storage/tablet/ob_mds_scan_param_helper.h"
-#include "storage/tablet/ob_mds_schema_helper.h"
+#include "storage/compaction_ttl/ob_tablet_ttl_filter_info_reader.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/tablet/ob_tablet_mds_data.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -25,31 +22,17 @@ namespace oceanbase
 {
 namespace storage
 {
-ObTabletTruncateInfoReader::ObTabletTruncateInfoReader()
-  : is_inited_(false),
-    allocator_("mds_range_iter"),
-    iter_()
-{
-}
 
-ObTabletTruncateInfoReader::~ObTabletTruncateInfoReader()
-{
-}
-
-int ObTabletTruncateInfoReader::init(
-    const ObTablet &tablet,
-    ObTableScanParam &scan_param)
+template <typename Key, typename Value>
+int ObTabletMDSInfoReader<Key, Value>::init(const ObTablet &tablet, ObTableScanParam &scan_param)
 {
   int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = tablet.get_ls_id();
-  const common::ObTabletID &tablet_id = tablet.get_tablet_id();
-  if (OB_UNLIKELY(is_inited_)) {
+
+  if (IS_INIT) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K_(is_inited));
-  } else if (OB_FAIL((tablet.mds_range_query<ObTruncateInfoKey, ObTruncateInfo>(
-      scan_param,
-      iter_)))) {
-    LOG_WARN("fail to do build query range iter", K(ret), K(ls_id), K(tablet_id), K(scan_param));
+    LOG_WARN("Init twice", KR(ret));
+  } else if (OB_FAIL(tablet.mds_range_query(scan_param, iter_))) {
+    LOG_WARN("Fail to init mds range query iterator", KR(ret), K(scan_param), K(tablet));
   } else {
     is_inited_ = true;
   }
@@ -57,33 +40,34 @@ int ObTabletTruncateInfoReader::init(
   return ret;
 }
 
-int ObTabletTruncateInfoReader::get_next_truncate_info(
-    common::ObIAllocator &allocator,
-    ObTruncateInfoKey &key,
-    ObTruncateInfo &truncate_info)
+template <typename Key, typename Value>
+int ObTabletMDSInfoReader<Key, Value>::get_next_mds_kv(ObIAllocator &allocator,
+                                                       Key &key,
+                                                       Value &value)
 {
   int ret = OB_SUCCESS;
+
   key.reset();
-  truncate_info.destroy();
+  value.destroy();
+
   mds::MdsDumpKV *kv = nullptr;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret), K_(is_inited));
+    LOG_WARN("Not init", KR(ret));
   } else if (OB_FAIL(iter_.get_next_mds_kv(allocator_, kv))) {
-    if (OB_ITER_END == ret) {
-      LOG_DEBUG("iter end", K(ret));
-    } else {
-      LOG_WARN("fail to get next mds kv", K(ret));
+    if (OB_ITER_END != ret) {
+      LOG_WARN("Fail to get next mds kv", KR(ret));
     }
   } else {
-    const common::ObString &key_str = kv->k_.key_;
-    const common::ObString &node_str = kv->v_.user_data_;
+    const ObString &key_str = kv->k_.key_;
+    const ObString &value_str = kv->v_.user_data_;
     int64_t key_pos = 0;
-    int64_t node_pos = 0;
+    int64_t value_pos = 0;
     if (OB_FAIL(key.mds_deserialize(key_str.ptr(), key_str.length(), key_pos))) {
-      LOG_WARN("fail to deserialize key", K(ret), K(key_str), KPC(kv));
-    } else if (OB_FAIL(truncate_info.deserialize(allocator, node_str.ptr(), node_str.length(), node_pos))) {
-      LOG_WARN("fail to deserialize truncate info", K(ret), KPC(kv));
+      LOG_WARN("Fail to deserialize key", KR(ret), K(key_str));
+    } else if (OB_FAIL(value.deserialize(allocator, value_str.ptr(), value_str.length(), value_pos))) {
+      LOG_WARN("Fail to deserialize value", KR(ret), K(value_str));
     }
   }
 
@@ -94,21 +78,24 @@ int ObTabletTruncateInfoReader::get_next_truncate_info(
   return ret;
 }
 
-int ObTabletTruncateInfoReader::get_next_mds_kv(
-    common::ObIAllocator &allocator,
-    mds::MdsDumpKV *&kv)
+template <typename Key, typename Value>
+int ObTabletMDSInfoReader<Key, Value>::get_next_mds_kv(ObIAllocator &allocator, mds::MdsDumpKV *&kv)
 {
   int ret = OB_SUCCESS;
+
   kv = nullptr;
+
   if (OB_FAIL(iter_.get_next_mds_kv(allocator, kv))) {
-    if (OB_ITER_END == ret) {
-      LOG_DEBUG("iter end", K(ret));
-    } else {
-      LOG_WARN("fail to get next mds kv", K(ret));
+    if (OB_ITER_END != ret) {
+      LOG_WARN("Fail to get next mds kv", KR(ret));
     }
   }
+
   return ret;
 }
+
+template class ObTabletMDSInfoReader<ObTruncateInfoKey, ObTruncateInfo>;
+template class ObTabletMDSInfoReader<ObTTLFilterInfoKey, ObTTLFilterInfo>;
 
 } // namespace storage
 } // namespace oceanbase

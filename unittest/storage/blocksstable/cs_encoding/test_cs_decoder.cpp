@@ -148,8 +148,8 @@ void TestCSDecoder::test_new_column()
       row_arr[i].trans_id_.reset();
     }
   }
-  OK(build_micro_block_desc(encoder, micro_block_desc, header));
-  LOG_INFO("finish build_micro_block_desc", K(micro_block_desc));
+  OK(build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+  LOG_INFO("finish build_micro_block_desc_in_unittest", K(micro_block_desc));
 
   ObMicroBlockData full_transformed_data;
   ObMicroBlockCSDecoder<HAS_ROW_HEADER> decoder;
@@ -223,8 +223,8 @@ TEST_P(TestCSDecoder, test_integer_decoder)
   }
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
-  LOG_INFO("finish build_micro_block_desc", K(micro_block_desc));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+  LOG_INFO("finish build_micro_block_desc_in_unittest", K(micro_block_desc));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, check_get_row_count(header, micro_block_desc, row_cnt_without_null, col_cnt, false));
@@ -265,7 +265,7 @@ TEST_P(TestCSDecoder, test_integer_decoder)
     }
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, check_get_row_count(header, micro_block_desc, row_cnt_without_null_1, col_cnt, false));
@@ -288,7 +288,7 @@ TEST_P(TestCSDecoder, test_integer_decoder)
     }
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, check_get_row_count(header, micro_block_desc, row_cnt_without_null_2, col_cnt, false));
@@ -354,7 +354,7 @@ TEST_P(TestCSDecoder, test_string_decoder)
   }
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header,
       micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header,
@@ -394,7 +394,7 @@ TEST_P(TestCSDecoder, test_string_decoder)
     }
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
 
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header,
       micro_block_desc, row_arr, row_cnt, true));
@@ -469,7 +469,7 @@ TEST_P(TestCSDecoder, test_dict_decoder)
 
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
 
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header,
       micro_block_desc, row_arr, row_cnt, true));
@@ -508,7 +508,7 @@ TEST_F(TestCSDecoder, test_null_dict_decoder)
   int64_t row_cnt_without_null[col_cnt] = {0, 0, 0, 0};
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
 
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt));
@@ -528,7 +528,7 @@ TEST_F(TestCSDecoder, test_null_dict_decoder)
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
   int64_t row_cnt_without_null_1[col_cnt] = {row_cnt, 0, 0, row_cnt};
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt));
   ASSERT_EQ(OB_SUCCESS, check_get_row_count(header, micro_block_desc, row_cnt_without_null_1, col_cnt, false));
@@ -542,7 +542,7 @@ TEST_F(TestCSDecoder, test_null_dict_decoder)
     row_arr[i].storage_datums_[3].set_null();
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt));
 
@@ -555,7 +555,7 @@ TEST_F(TestCSDecoder, test_null_dict_decoder)
     row_arr[i].storage_datums_[3].set_null();
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[i]));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt));
 }
@@ -644,7 +644,7 @@ TEST_P(TestCSDecoder, test_all_object_type_decoder)
 
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true));
 }
@@ -752,7 +752,7 @@ TEST_P(TestCSDecoder, test_decoder_with_all_stream_encoding_types)
     }
     ObMicroBlockDesc micro_block_desc;
     ObMicroBlockHeader *header = nullptr;
-    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
 
     ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header,
         micro_block_desc, row_arr, row_cnt, true));
@@ -808,7 +808,7 @@ TEST_F(TestCSDecoder, test_dict_const_ref_decoder)
   }
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
 
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header,
       micro_block_desc, row_arr, row_cnt, true));
@@ -911,7 +911,7 @@ TEST_F(TestCSDecoder, test_decimal_int_decoder)
   }
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
 
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header,
       micro_block_desc, row_arr, row_cnt, true));
@@ -965,8 +965,8 @@ TEST_F(TestCSDecoder, decode_row_header)
 
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  OK(build_micro_block_desc(encoder, micro_block_desc, header));
-  LOG_INFO("finish build_micro_block_desc", K(micro_block_desc));
+  OK(build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
+  LOG_INFO("finish build_micro_block_desc_in_unittest", K(micro_block_desc));
 
   ObMicroBlockData full_transformed_data;
   ObMicroBlockCSDecoder<true> decoder;
@@ -1036,7 +1036,7 @@ TEST_F(TestCSDecoder, multi_version_for_multi_version_cols)
 
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  OK(build_micro_block_desc(encoder, micro_block_desc, header));
+  OK(build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
 
   ObSEArray<ObColDesc, 1> cols_desc;
   // request the all the columns

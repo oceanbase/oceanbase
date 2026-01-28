@@ -33,7 +33,7 @@ class ObTabletID;
 namespace compaction
 {
 struct ObMergeParameter;
-struct ObMacroBlockOp;
+struct ObBlockOp;
 
 class ObProgressiveMergeMgr final
 {
@@ -93,7 +93,7 @@ public:
 
   void reset();
   inline bool is_valid() const { return is_inited_; }
-  int check_macro_block_op(const blocksstable::ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op);
+  int check_macro_block_op(const blocksstable::ObMacroBlockDesc &macro_desc, ObBlockOp &block_op);
   int64_t get_compare_progressive_round() const
   {
     return OB_NOT_NULL(mgr_) ? mgr_->get_progressive_merge_round() : -1;

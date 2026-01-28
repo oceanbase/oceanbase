@@ -16,6 +16,7 @@
 #include "rootserver/ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
 #include "share/ob_heap_organized_table_util.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -463,6 +464,8 @@ int ObMLogBuilder::create_or_replace_mlog(share::schema::ObSchemaGetterGuard &sc
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_create_mlog_for_ttl_valid(*base_table_schema))) {
+    LOG_WARN("failed to check create mlog for ttl valid", KR(ret), K(*base_table_schema));
   } else {
     bool is_create_mlog = false;
     if (!create_mlog_arg.replace_if_exists_) {

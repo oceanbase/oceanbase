@@ -127,8 +127,7 @@ int ObDagMicroBlockIterator::get_index_block(ObMicroBlockData &micro_block, cons
         micro_buf,
         micro_buf_size,
         false,
-        micro_block.get_buf(),
-        micro_block.get_buf_size(),
+        micro_block,
         is_compressed))) {
       STORAGE_LOG(WARN, "Fail to decrypt and decompress micro block data", K(ret), K_(simplified_macro_header));
     }

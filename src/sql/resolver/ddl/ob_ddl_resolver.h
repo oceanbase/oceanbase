@@ -27,6 +27,7 @@
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -1061,7 +1062,13 @@ protected:
                                     ObPartitionNameSet &partition_name_set);
   int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
-  int check_ttl_definition(const ParseNode *node);
+  int check_ttl_definition(
+    const ParseNode *node,
+    const uint64_t tenant_data_version);
+  int check_ttl_expr(const ParseNode *ttl_expr_node,
+                     const share::schema::ObTableSchema *tbl_schema,
+                     const uint64_t tenant_data_version,
+                     const share::ObTTLDefinition::ObTTLType &ttl_type);
   int resolve_kv_attributes_option(uint64_t tenant_id, const ParseNode *option_node, bool is_index_option);
   int check_column_is_first_part_key(const ObPartitionKeyInfo &part_key_info, const uint64_t column_id);
 
@@ -1170,6 +1177,7 @@ protected:
   int64_t hash_subpart_num_;
   bool is_external_table_;
   common::ObString ttl_definition_;
+  ObTTLFlag ttl_flag_;
   common::ObString kv_attributes_;
   common::ObString storage_cache_policy_;
   common::ObString index_storage_cache_policy_;

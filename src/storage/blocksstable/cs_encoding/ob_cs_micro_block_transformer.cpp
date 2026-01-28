@@ -1249,18 +1249,17 @@ int ObCSMicroBlockTransformHelper::init(common::ObIAllocator *allocator,
   } else if (OB_ISNULL(allocator) || OB_UNLIKELY(!block_data.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(allocator), K(block_data));
+  } else if (OB_ISNULL(header_ = block_data.get_micro_header())) { // only return valid micro_header ptr
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(allocator), K(block_data));
   } else {
     allocator_ = allocator;
     block_data_ = block_data;
-    header_ = reinterpret_cast<const ObMicroBlockHeader *>(block_data_.get_buf());
     all_col_header_ =
       reinterpret_cast<const ObAllColumnHeader *>(block_data_.get_buf() + header_->header_size_);
     col_headers_ = reinterpret_cast<const ObCSColumnHeader *>(
       block_data_.get_buf() + header_->header_size_ + sizeof(ObAllColumnHeader));
-    if (OB_UNLIKELY(!header_->is_valid())) {
-      ret = OB_INVALID_DATA;
-      LOG_WARN("invalid micro block header", K(ret), KPC(header_));
-    } else if (OB_FAIL(build_tranform_desc_(store_ids, store_ids_cnt))) {
+    if (OB_FAIL(build_tranform_desc_(store_ids, store_ids_cnt))) {
       LOG_WARN("fail to build transform desc", K(ret), KP(store_ids), K(store_ids_cnt));
     } else {
       is_inited_ = true;

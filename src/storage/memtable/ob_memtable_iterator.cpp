@@ -217,7 +217,7 @@ int ObMemtableScanIterator::base_init_(const ObTableIterParam &param,
     STORAGE_LOG(WARN, "table and query_range can not be null", KP(table), KP(query_range), K(ret));
   } else if (OB_FAIL(single_row_reader_.init(static_cast<ObMemtable *>(table), param, context))) {
     STORAGE_LOG(WARN, "init scan iterator fail", K(ret));
-  } else if (param.is_delete_insert_ && OB_FAIL(enable_block_scan_(param, context))) {
+  } else if (param.is_memtable_can_blockscan() && OB_FAIL(enable_block_scan_(param, context))) {
     STORAGE_LOG(WARN, "enable block scan for memtable scan iterator failed", KR(ret), K(param));
   } else {
     // base init finish
@@ -281,7 +281,7 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!param_->is_delete_insert_) {
+  } else if (!param_->is_memtable_can_blockscan()) {
     ret = single_row_reader_.get_next_row(row);
   } else {
     ret = mt_blk_scanner_->get_next_row(row);

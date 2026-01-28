@@ -3225,7 +3225,7 @@ int ObRowScan::construct_access_param(
   } else if (OB_FAIL(build_rowkey_read_info(param))) {
     LOG_WARN("build rowkey read info failed", K(ret), K(param));
   } else if (OB_FAIL(access_param_.init_merge_param(
-        param.table_id_, param.src_tablet_.get_tablet_meta().tablet_id_, *rowkey_read_info_, false/*is_multi_version_minor_merge*/, false/*is_delete_insert*/))) {
+        param.table_id_, param.src_tablet_.get_tablet_meta().tablet_id_, *rowkey_read_info_, false/*is_multi_version_minor_merge*/))) {
     LOG_WARN("init table access param failed", K(ret), KPC(rowkey_read_info_), K(param));
   }
   LOG_INFO("construct table access param finished", K(ret), K(access_param_));
@@ -3521,8 +3521,7 @@ int ObSnapshotRowScan::construct_access_param(
   } else if (OB_FAIL(access_param_.init_merge_param(table_id,
                                                     tablet_id,
                                                     read_info,
-                                                    false/*is_multi_version_minor_merge*/,
-                                                    false/*is_delete_insert*/))) {
+                                                    false/*is_multi_version_minor_merge*/))) {
     LOG_WARN("failed to init access param", K(ret));
   } else {
     access_param_.iter_param_.out_cols_project_ = &out_cols_projector_;

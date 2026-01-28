@@ -178,7 +178,9 @@ enum ObQRIterType
   T_SINGLE_GET,
   T_MULTI_GET,
   T_SINGLE_SCAN,
+  T_LEVEL_ORDER_SCAN,
   T_MULTI_SCAN,
+  T_LEVEL_ORDER_MULTI_SCAN,
   T_MAX_ITER_TYPE,
 };
 
@@ -230,7 +232,8 @@ public:
   VIRTUAL_TO_STRING_KV(K_(type));
 public:
   ObQRIterType get_type() const { return type_; }
-  bool is_scan() const { return type_ == T_SINGLE_SCAN || type_ == T_MULTI_SCAN; }
+  bool is_scan() const { return type_ == T_SINGLE_SCAN || type_ == T_MULTI_SCAN || type_ == T_LEVEL_ORDER_SCAN || type_ == T_LEVEL_ORDER_MULTI_SCAN; }
+  bool is_level_order_scan() const { return type_ == T_LEVEL_ORDER_SCAN || type_ == T_LEVEL_ORDER_MULTI_SCAN; }
 protected:
   ObQRIterType type_;
 

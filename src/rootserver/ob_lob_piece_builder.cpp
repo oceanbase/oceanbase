@@ -162,8 +162,11 @@ int ObLobPieceBuilder::set_basic_infos(
   aux_lob_piece_schema.set_storage_format_version(data_schema.get_storage_format_version());
   aux_lob_piece_schema.set_progressive_merge_round(data_schema.get_progressive_merge_round());
   aux_lob_piece_schema.set_duplicate_attribute(data_schema.get_duplicate_scope(), data_schema.get_duplicate_read_consistency());
+  aux_lob_piece_schema.set_merge_engine_type(data_schema.get_merge_engine_type());
   if (OB_FAIL(aux_lob_piece_schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
     LOG_WARN("set_compress_func_name failed", K(data_schema));
+  } else if (OB_FAIL(aux_lob_piece_schema.set_ttl_definition(data_schema.get_ttl_definition(), data_schema.get_ttl_flag()))) {
+    LOG_WARN("set_ttl_definition failed", K(data_schema));
   }
 
   return ret;

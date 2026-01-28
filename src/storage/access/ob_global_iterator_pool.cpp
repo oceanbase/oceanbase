@@ -258,9 +258,7 @@ void ObGlobalIteratorPool::wash()
         CachedIteratorNode *cache_nodes = cached_node_array_[type];
         for (int64_t i = 0; i < bucket_cnt_; ++i) {
           CachedIteratorNode *node_ptr = &cache_nodes[i];
-          bool is_occupied = ATOMIC_LOAD(&node_ptr->is_occupied_);
-          if (is_occupied) {
-          } else if (is_occupied == ATOMIC_VCAS(&node_ptr->is_occupied_, is_occupied, true)) {
+          if (ATOMIC_VCAS(&node_ptr->is_occupied_, false, true) == false) {
             node_ptr->reclaim(true);
           }
         }

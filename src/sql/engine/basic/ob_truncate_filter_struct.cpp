@@ -47,7 +47,7 @@ ObITruncateFilterExecutor::~ObITruncateFilterExecutor()
   }
 }
 
-int ObITruncateFilterExecutor::filter(const ObDatumRow &row, bool &filtered)
+int ObITruncateFilterExecutor::filter(const ObDatumRow &row, bool &filtered) const
 {
   int ret = OB_SUCCESS;
   const ObIArray<int32_t> &col_idxs = get_col_idxs();
@@ -804,7 +804,7 @@ int ObTruncateOrFilterExecutor::prepare_truncate_value(
   return ret;
 }
 
-int ObTruncateOrFilterExecutor::filter(const ObDatumRow &row, bool &filtered)
+int ObTruncateOrFilterExecutor::filter(const ObDatumRow &row, bool &filtered) const
 {
   int ret = OB_SUCCESS;
   filtered = true;
@@ -1048,7 +1048,7 @@ int ObTruncateAndFilterExecutor::try_use_cached_filter(
   return ret;
 }
 
-int ObTruncateAndFilterExecutor::filter(const ObDatumRow &row, bool &filtered)
+int ObTruncateAndFilterExecutor::filter(const ObDatumRow &row, bool &filtered) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

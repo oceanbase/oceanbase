@@ -911,14 +911,23 @@ bool ObConfigMomentItem::set(const char *str)
   memset(&tm_value, 0, sizeof(struct tm));
   if (0 == STRCASECMP(str, "disable")) {
     value_.disable_ = true;
-  } else if (OB_ISNULL(strptime(str, "%H:%M", &tm_value))) {
-    value_.disable_ = true;
-    ret = false;
-    OB_LOG(ERROR, "Not well-formed moment item value", K(str));
   } else {
-    value_.disable_ = false;
-    value_.hour_ = tm_value.tm_hour;
-    value_.minute_ = tm_value.tm_min;
+    const char *end_ptr = strptime(str, "%H:%M", &tm_value);
+    if (OB_ISNULL(end_ptr)) {
+      value_.disable_ = true;
+      ret = false;
+      OB_LOG(ERROR, "Not well-formed moment item value", K(str));
+    } else if (*end_ptr != '\0') {
+      // Check if there are extra characters after %H:%M format
+      value_.disable_ = true;
+      ret = false;
+      OB_LOG(ERROR, "Moment item value should be exactly in %H:%M format, extra characters found",
+             K(str), "extra_char_pos", end_ptr);
+    } else {
+      value_.disable_ = false;
+      value_.hour_ = tm_value.tm_hour;
+      value_.minute_ = tm_value.tm_min;
+    }
   }
   return ret;
 }

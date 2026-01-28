@@ -66,17 +66,17 @@ struct ObBuildMajorSSTablesParam final
 {
   ObBuildMajorSSTablesParam(
       const ObStorageSchema &storage_schema,
-      const bool has_truncate_info)
+      const bool has_merged_with_mds_info)
     : storage_schema_(storage_schema),
-      has_truncate_info_(has_truncate_info)
+      has_merged_with_mds_info_(has_merged_with_mds_info)
   {}
   bool is_valid() const
   {
     return storage_schema_.is_valid();
   }
-  TO_STRING_KV(K_(storage_schema), K_(has_truncate_info));
+  TO_STRING_KV(K_(storage_schema), K_(has_merged_with_mds_info));
   const ObStorageSchema &storage_schema_;
-  const bool has_truncate_info_;
+  const bool has_merged_with_mds_info_;
 };
 
 class ObTabletCopyDependencyMgr;

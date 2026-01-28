@@ -283,7 +283,7 @@ END_P SET_VAR DELIMITER
 %token <non_reserved_keyword>
 //-----------------------------non_reserved keyword begin-------------------------------------------
         ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE AI ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
-        APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
+        APPEND_ONLY APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRARY ARBITRATION ARG_MAX ARG_MIN ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTH_TYPE AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
         AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ARCHIVELOG_PIECE ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
@@ -294,13 +294,13 @@ END_P SET_VAR DELIMITER
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTERING CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
-        CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMN_NAME_CASE_SENSITIVE COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
+        CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMN_NAME_CASE_SENSITIVE COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPACTION COMPLETION COMPLETE
         COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONCURRENT_LIMITING_RULE CONDENSED CONDITIONAL CONFIGS CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP CREDENTIAL
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT CACHE_REFRESH_INTERVAL_SEC
 
         DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPT DECRYPTION
-        DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DELTA_FORMAT DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS DICT_TABLE
+        DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DELETING DELTA_FORMAT DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS DICT_TABLE
         DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DUPLICATE_READ_CONSISTENCY DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DELETE_INSERT DYNAMIC_PARTITION_POLICY
 
@@ -517,7 +517,7 @@ END_P SET_VAR DELIMITER
 %type <ival> mv_refresh_method mview_enable_disable
 %type <node> name_list opt_name_list
 %type <node> partition_role ls_role zone_desc opt_zone_desc server_or_zone opt_server_or_zone opt_partitions opt_subpartitions add_or_alter_zone_options alter_or_change_or_modify
-%type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
+%type <node> ls opt_tenant_list_or_ls_or_tablet_id_or_table_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
 %type <node> opt_tenant_list_v2
 %type <node> suspend_or_resume tenant_name opt_tenant_name cache_name opt_cache_name file_id opt_file_id cancel_task_type opt_data_source opt_paxos_replica_num
 %type <node> sql_id_or_schema_id_expr opt_sql_id_or_schema_id outline_type sequence_name_expr opt_sequence_name
@@ -594,6 +594,7 @@ END_P SET_VAR DELIMITER
 %type <node> rebuild_tablet_id_list_expr rebuild_tablet_destination rebuild_tablet_source
 %type <node> create_ccl_rule_stmt drop_ccl_rule_stmt ccl_database_table_optition ccl_for_effect_dml ccl_filter_options ccl_keyword_list ccl_with_options ccl_per_sql
 %type <node> ttl_definition ttl_expr ttl_unit
+%type <node> ttl_type
 %type <node> id_dot_id id_dot_id_dot_id
 %type <node> vector_distance_expr vector_distance_metric
 %type <node> any_expr opt_null_pos lambda_expr lambda_expr_params
@@ -8288,6 +8289,12 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   merge_nodes($$, result, T_EXTERNAL_PROPERTIES, $4);
 }
 | pattern_expr { $$ = $1; }
+| TTL opt_equal_mark ttl_expr BY ttl_type
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TTL_DEFINITION_WITH_TYPE, 2, $3, $5);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
 | TTL opt_equal_mark '(' ttl_definition ')'
 {
   (void)($2) ; /* make bison mute */
@@ -8711,6 +8718,13 @@ DELETE_INSERT
   $$->value_ = 1;
   $$->is_hidden_const_ = 1;
 }
+|
+APPEND_ONLY
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+  $$->is_hidden_const_ = 1;
+}
 ;
 
 parallel_option:
@@ -8746,6 +8760,18 @@ column_definition_ref '+' INTERVAL INTNUM ttl_unit
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
 ;
+
+ttl_type:
+COMPACTION
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+}
+| DELETING
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
 
 ttl_unit:
 SECOND
@@ -21258,7 +21284,7 @@ alter_with_opt_hint SYSTEM CANCEL cancel_task_type TASK STRING_VALUE
   malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_TASK, 2, $4, $6);
 }
 |
-alter_with_opt_hint SYSTEM MAJOR FREEZE opt_tenant_list_or_ls_or_tablet_id opt_rebuild_column_store
+alter_with_opt_hint SYSTEM MAJOR FREEZE opt_tenant_list_or_ls_or_tablet_id_or_table_id opt_rebuild_column_store
 {
   (void)($1);
   ParseNode *type = NULL;
@@ -21276,7 +21302,7 @@ alter_with_opt_hint SYSTEM CHECKPOINT
   malloc_non_terminal_node($$, result->malloc_pool_, T_FREEZE, 3, type, NULL, NULL);
 }
 |
-alter_with_opt_hint SYSTEM MINOR FREEZE opt_tenant_list_or_ls_or_tablet_id opt_server_list opt_zone_desc
+alter_with_opt_hint SYSTEM MINOR FREEZE opt_tenant_list_or_ls_or_tablet_id_or_table_id opt_server_list opt_zone_desc
 {
   (void)($1);
   ParseNode *type = NULL;
@@ -23438,7 +23464,7 @@ LS opt_equal_mark INTNUM
 }
 ;
 
-opt_tenant_list_or_ls_or_tablet_id:
+opt_tenant_list_or_ls_or_tablet_id_or_table_id:
 tenant_list_tuple opt_tablet_id
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TENANT_TABLET, 2, $1, $2);
@@ -23447,9 +23473,17 @@ tenant_list_tuple opt_tablet_id
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TENANT_LS_TABLET, 3, $1, $2, $3);
 }
+| tenant_list_tuple TABLE_ID COMP_EQ INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TENANT_TABLE_MAJOR_FREEZE, 2, $1, $4);
+}
 | opt_tablet_id_no_empty
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLET_ID, 1, $1);
+}
+| TABLE_ID COMP_EQ INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_ID, 1, $3);
 }
 | /*EMPTY*/
 {
@@ -27466,6 +27500,7 @@ ACCESS_INFO
 |       ANALYSE
 |       ANY
 |       API_MODE
+|       APPEND_ONLY
 |       APPID
 |       APPROX
 |       APPROXIMATE
@@ -27580,6 +27615,7 @@ ACCESS_INFO
 |       COMMIT
 |       COMMITTED
 |       COMPACT
+|       COMPACTION
 |       COMPLETE
 |       COMPLETION
 |       COMPRESSED
@@ -27636,6 +27672,7 @@ ACCESS_INFO
 |       DELAY
 |       DELAY_KEY_WRITE
 |       DELETE_INSERT
+|       DELETING
 |       DELTA_FORMAT
 |       DENSE_RANK
 |       DEPTH

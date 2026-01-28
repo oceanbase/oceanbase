@@ -1300,6 +1300,108 @@ int ObInnerTableSchema::dba_ob_sensitive_rule_plainaccess_users_ora_schema(ObTab
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_ttl_tasks_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_TTL_TASKS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_TTL_TASKS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       b.table_name as TABLE_NAME,       a.table_id as TABLE_ID,       a.task_id as TASK_ID,       a.task_start_time as START_TIME,       a.task_update_time as MODIFIED_TIME,       (case a.trigger_type         when 0 then 'PERIODIC'         when 1 then 'USER'         else 'INVALID' END) AS TRIGGER_TYPE,       (case a.status         when 2 then 'PENDING'         when 3 then 'CANCELED'         when 4 then 'FINISHED'         when 5 then 'MOVED'         when 6 then 'SKIP'         when 7 then 'FAILED'         when 15 then 'TRIGGERING'         when 16 then 'SUSPENDING'         when 17 then 'CANCELING'         when 18 then 'MOVING'         else 'INVALID' END) AS STATUS,       a.ret_code as RET_CODE,       (case a.task_type         when 2 then 'COMPACTION'         else 'INVALID' END) AS TASK_TYPE       FROM SYS.ALL_VIRTUAL_KV_TTL_TASK a left outer JOIN SYS.ALL_VIRTUAL_CORE_ALL_TABLE b on           a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()           where a.task_type=4 )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_ttl_task_history_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_TTL_TASK_HISTORY_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_TTL_TASK_HISTORY_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       b.table_name as TABLE_NAME,       a.table_id as TABLE_ID,       a.task_id as TASK_ID,       a.task_start_time as START_TIME,       a.task_update_time as MODIFIED_TIME,       (case a.trigger_type         when 0 then 'PERIODIC'         when 1 then 'USER'         else 'INVALID' END) AS TRIGGER_TYPE,       (case a.status         when 3 then 'CANCELED'         when 4 then 'FINISHED'         when 6 then 'SKIP'         else 'INVALID' END) AS STATUS,       a.ret_code as RET_CODE,       (case a.task_type         when 2 then 'COMPACTION'         else 'INVALID' END) AS TASK_TYPE       FROM SYS.ALL_VIRTUAL_KV_TTL_TASK_HISTORY a left outer JOIN SYS.ALL_VIRTUAL_CORE_ALL_TABLE b on           a.table_id = b.table_id and a.tenant_id = b.tenant_id and a.tenant_id = effective_tenant_id()           where a.task_type=4 )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::all_table_idx_data_table_id_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

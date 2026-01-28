@@ -220,6 +220,7 @@ protected:
   bool can_blockscan_;
   bool is_filter_applied_;
   bool use_private_bitmap_;
+  bool contain_uncommitted_row_;
   int64_t current_;         // current cursor
   int64_t start_;           // start of scan, inclusive.
   int64_t last_;            // end of scan, inclusive.
@@ -373,6 +374,12 @@ protected:
       const int64_t sql_sequence,
       const transaction::ObTransID trans_id);
   void reuse_cur_micro_row();
+
+  int read_current_row_with_uncommitted_check(const ObDatumRow *&ret_row,
+                                              bool &version_fit,
+                                              bool &final_result,
+                                              bool &have_uncommitted_row);
+
 private:
   void reuse_prev_micro_row();
   void inner_reset();
@@ -416,6 +423,22 @@ private:
   int64_t sql_sequence_col_idx_;
   int64_t cell_cnt_;
   common::ObVersionRange version_range_;
+};
+
+class ObMultiVersionIOMicroBlockRowScanner final : public ObMultiVersionMicroBlockRowScanner
+{
+public:
+  ObMultiVersionIOMicroBlockRowScanner(common::ObIAllocator &allocator)
+      : ObMultiVersionMicroBlockRowScanner(allocator)
+  {
+  }
+
+  virtual ~ObMultiVersionIOMicroBlockRowScanner() = default;
+
+  INHERIT_TO_STRING_KV("ObMultiVersionIOMicroBlockRowScanner", ObMultiVersionMicroBlockRowScanner, K_(reverse_scan));
+
+protected:
+  virtual int inner_get_next_row(const ObDatumRow *&row) override final;
 };
 
 // multi version sstable micro block scanner for mow tables

@@ -66,45 +66,6 @@ using namespace palf;
 
 namespace storage {
 
-ObSEArray<ObTxData, 8> TX_DATA_ARR;
-
-int ObTxTable::insert(ObTxData *&tx_data)
-{
-  int ret = OB_SUCCESS;
-  ret = TX_DATA_ARR.push_back(*tx_data);
-  return ret;
-}
-
-int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg,
-                                  ObITxDataCheckFunctor &fn)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; i < TX_DATA_ARR.count(); i++) {
-    if (read_tx_data_arg.tx_id_ == TX_DATA_ARR.at(i).tx_id_) {
-      if (TX_DATA_ARR.at(i).state_ == ObTxData::RUNNING) {
-        SCN tmp_scn;
-        tmp_scn.convert_from_ts(30);
-        ObTxCCCtx tmp_ctx(ObTxState::PREPARE, tmp_scn);
-        ret = fn(TX_DATA_ARR[i], &tmp_ctx);
-      } else {
-        ret = fn(TX_DATA_ARR[i]);
-      }
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "check with tx data failed", KR(ret),
-                    K(read_tx_data_arg), K(TX_DATA_ARR.at(i)));
-      }
-      break;
-    }
-  }
-  return ret;
-}
-
-int clear_tx_data()
-{
-  TX_DATA_ARR.reset();
-  return OB_SUCCESS;
-};
-
 class ObMockWhiteFilterExecutor : public ObWhiteFilterExecutor
 {
 public:
@@ -846,7 +807,7 @@ void TestScanBasic::convert_to_co_sstable(ObTableHandleV2 &row_store,
   trans_version_range.base_version_ = 1;
   //prepare merge_ctx
   TestMergeBasic::prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
-  merge_context.static_param_.co_static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, true/*only_use_row_store*/);
   merge_context.static_param_.data_version_ = DATA_VERSION_4_3_0_0;
   merge_context.static_param_.dag_param_.merge_version_ = trans_version_range.snapshot_version_;
   int32_t base_cg_idx = -1;

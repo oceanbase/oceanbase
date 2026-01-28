@@ -38,6 +38,7 @@
 #include "share/semistruct/ob_semistruct_properties.h"
 #include "storage/blocksstable/index_block/ob_index_block_util.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info.h"
+#include "storage/blocksstable/index_block/ob_index_block_util.h"
 namespace oceanbase
 {
 
@@ -733,6 +734,7 @@ public:
   virtual inline ObIndexType get_index_type() const { return INDEX_TYPE_MAX; }
   virtual inline ObIndexStatus get_index_status() const { return INDEX_STATUS_MAX; }
   virtual inline bool is_index_table() const = 0;
+  virtual inline bool has_ttl_definition() const { return false; }
   virtual int get_is_column_store(bool &is_column_store) const { UNUSED(is_column_store); return common::OB_NOT_SUPPORTED; }
 
   virtual int get_store_column_ids(common::ObIArray<ObColDesc> &column_ids, const bool full_col) const
@@ -1041,6 +1043,7 @@ public:
       const common::ObString *&locality_str) const override;
   int get_tablet_ids(
       common::ObIArray<ObTabletID> &tablet_ids) const;
+  // including LEVEL_ONE and LEVEL_TWO
   int get_first_level_hidden_tablet_ids(
       common::ObIArray<ObTabletID> &tablet_ids) const;
   int get_part_idx_by_tablet(
@@ -1213,6 +1216,22 @@ public:
   { return is_mlog_table(table_type) && (table_name.prefix_match(OB_TMP_MLOG_PREFIX_MYSQL) || table_name.prefix_match(OB_TMP_MLOG_PREFIX_ORACLE)); }
   inline static bool is_user_data_table(share::schema::ObTableType table_type)
   { return USER_TABLE == table_type; }
+
+  inline static bool is_trans_version_skip_index_table(share::schema::ObTableType table_type)
+  {
+    // we only build trans version's skip index for below table
+    // user data table,
+    // materailized view
+    // mlog
+    // index, lob meta, lob piece
+    return is_user_data_table(table_type)
+           || is_materialized_view(table_type)
+           || is_mlog_table(table_type)
+           || table_type == ObTableType::USER_INDEX
+           || table_type == ObTableType::AUX_LOB_META
+           || table_type == ObTableType::AUX_LOB_PIECE;
+  }
+
   inline bool is_in_recyclebin() const
   { return common::OB_RECYCLEBIN_SCHEMA_ID == database_id_; }
   virtual inline bool is_external_table() const override { return EXTERNAL_TABLE == table_type_; }
@@ -1625,7 +1644,8 @@ public:
   int is_range_col_part_type(bool &is_range_column_type) const;
   void forbid_auto_partition();
   void clear_constraint();
-  int set_ttl_definition(const common::ObString &ttl_definition) { return deep_copy_str(ttl_definition, ttl_definition_); }
+  int set_ttl_definition(const common::ObString &ttl_definition, const ObTTLFlag &ttl_flag);
+  int set_ttl_definition(const common::ObString &ttl_definition, const ObString &ttl_flag_str);
   int set_kv_attributes(const common::ObString &kv_attributes) { return deep_copy_str(kv_attributes, kv_attributes_); }
   int set_index_params(const common::ObString &index_params) { return deep_copy_str(index_params, index_params_); }
   int set_exec_env(const common::ObString &exec_env) { return deep_copy_str(exec_env, exec_env_); }
@@ -1635,7 +1655,7 @@ public:
 //get methods
   bool is_valid() const;
   int check_valid(const bool for_create) const;
-
+  int check_ttl_definition_valid() const;
   int get_generated_column_by_define(const common::ObString &col_def,
                                      const bool only_hidden_column,
                                      share::schema::ObColumnSchemaV2 *&gen_col);
@@ -1726,7 +1746,7 @@ public:
   inline const ObViewSchema &get_view_schema() const { return view_schema_; }
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
   inline ObTTLFlag get_ttl_flag() const { return ttl_flag_; }
-  inline void set_ttl_flag(const ObTTLFlag ttl_flag) { ttl_flag_ = ttl_flag; }
+  virtual bool has_ttl_definition() const override { return !get_ttl_definition().empty(); }
   inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
   inline const common::ObString &get_index_params() const { return index_params_; }
   inline const common::ObString &get_exec_env() const { return exec_env_; }
@@ -2138,18 +2158,20 @@ public:
   int check_alter_column_in_rowkey(const ObColumnSchemaV2 &src_column,
                                    const ObColumnSchemaV2 &dst_column,
                                    bool &is_in_rowkey) const;
-  int check_alter_column_accuracy(const ObColumnSchemaV2 &src_column,
-                                  ObColumnSchemaV2 &dst_column,
-                                  const int32_t src_col_byte_len,
-                                  const int32_t dst_col_byte_len,
-                                  const bool is_oracle_mode,
-                                  bool &is_offline) const;
-  int check_alter_column_type(const ObColumnSchemaV2 &src_column,
-                              ObColumnSchemaV2 &dst_column,
-                              const int32_t src_col_byte_len,
-                              const int32_t dst_col_byte_len,
-                              const bool is_oracle_mode,
-                              bool &is_offline) const;
+  static int check_alter_column_accuracy(const ObColumnSchemaV2 &src_column,
+                                         const ObColumnSchemaV2 &dst_column,
+                                         const int32_t src_col_byte_len,
+                                         const int32_t dst_col_byte_len,
+                                         const bool is_oracle_mode,
+                                         bool &is_offline,
+                                         bool &is_type_reduction);
+  static int check_alter_column_type(const ObColumnSchemaV2 &src_column,
+                                     const ObColumnSchemaV2 &dst_column,
+                                     const int32_t src_col_byte_len,
+                                     const int32_t dst_col_byte_len,
+                                     const bool is_oracle_mode,
+                                     bool &is_offline,
+                                     bool &is_type_reduction);
 
   int get_column_byte_length(const bool is_oracle_mode, const ObColumnSchemaV2 &col,
                              const bool use_lob_inrow_threshold, int64_t &length) const;
@@ -2160,8 +2182,8 @@ public:
                                           common::ObIArray<ObColumnSchemaV2 *> &column_group) const;
   ObColumnSchemaV2* get_xml_hidden_column_schema(uint64_t column_id, uint64_t udt_set_id) const;
   ObColumnSchemaV2* get_xml_hidden_column_parent_col_schema(uint64_t column_id, uint64_t udt_set_id) const;
-  bool is_same_type_category(const ObColumnSchemaV2 &src_column,
-                             const ObColumnSchemaV2 &dst_column) const;
+  static bool is_same_type_category(const ObColumnSchemaV2 &src_column,
+                                    const ObColumnSchemaV2 &dst_column);
   int check_has_trigger_on_table(ObSchemaGetterGuard &schema_guard,
                                  bool &is_enable,
                                  uint64_t trig_event = ObTriggerEvents::get_all_event()) const;
@@ -2177,6 +2199,7 @@ public:
   int check_has_multivalue_index_aux(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const;
   int check_has_vec_domain_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
   int check_has_spatial_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
+  int check_has_unique_index(ObSchemaGetterGuard &schema_guard, bool &has_unique_index) const;
   int is_real_unique_index_column(ObSchemaGetterGuard &schema_guard,
                                   uint64_t column_id,
                                   bool &is_uni) const;

@@ -34,14 +34,18 @@ protected:
   virtual int calc_scan_range() override;
   int inner_calc_scan_range(const common::ObIArray<blocksstable::ObDatumRange> *&ranges,
                             common::ObIArray<blocksstable::ObDatumRange> &cow_ranges,
-                            const int64_t curr_scan_index_,
+                            const int64_t curr_scan_index,
                             const blocksstable::ObDatumRowkey &curr_rowkey,
                             const bool calc_di_base_range);
   virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
-  virtual int pause(bool& do_pause) override final;
+  virtual int pause(bool& do_pause) override;
   virtual int get_current_range(ObDatumRange& current_range) const override;
   virtual int get_range_count() const override { return ranges_->count(); }
+
+  virtual int build_iter(ObITable *table, const ObTableIterParam *iter_param, ObStoreRowIterator *&iter) override;
+  virtual int init_iter(ObITable *table, const ObTableIterParam *iter_param, ObStoreRowIterator *iter) override;
+
 private:
   const common::ObIArray<blocksstable::ObDatumRange> *ranges_;
   common::ObSEArray<blocksstable::ObDatumRange, 32> cow_ranges_;

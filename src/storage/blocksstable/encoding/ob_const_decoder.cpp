@@ -79,6 +79,9 @@ int ObConstDecoder::decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(nullptr == meta_header_ || !meta_header_->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid meta header", K(ret), KPC_(meta_header));
   } else if (0 == meta_header_->count_) {
     if (OB_FAIL(decode_without_dict(ctx, datum))) {
       LOG_WARN("failed to decode without dict", K(ret));

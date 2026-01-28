@@ -31,7 +31,7 @@ ObMdsMinorFilter::ObMdsMinorFilter()
   : ObICompactionFilter(),
     is_inited_(false),
     medium_filter_snapshot_(0),
-    truncate_filter_snapshot_(0),
+    mds_filter_snapshot_(0),
     ls_id_(ObLSID::INVALID_LS_ID),
     allocator_(ObMemAttr(MTL_ID(), "MdsMinorFilter"))
 {
@@ -55,9 +55,9 @@ int ObMdsMinorFilter::init(
     if (GCTX.is_shared_storage_mode()) {
       medium_filter_snapshot_ = MIN(multi_version_start, last_major_snapshot);
     }
-    truncate_filter_snapshot_ = MIN(multi_version_start, first_major_snapshot);
+    mds_filter_snapshot_ = MIN(multi_version_start, first_major_snapshot);
     ls_id_ = ls_id;
-    LOG_INFO("init MdsMinor filter success", KR(ret), K(first_major_snapshot), K(multi_version_start), K_(medium_filter_snapshot), K_(truncate_filter_snapshot), K_(ls_id));
+    LOG_INFO("init MdsMinor filter success", KR(ret), K(last_major_snapshot), K(first_major_snapshot), K(multi_version_start), K_(medium_filter_snapshot), K_(mds_filter_snapshot), K_(ls_id));
     is_inited_ = true;
   }
   return ret;
@@ -65,13 +65,14 @@ int ObMdsMinorFilter::init(
 
 int ObMdsMinorFilter::filter(
     const blocksstable::ObDatumRow &row,
-    ObFilterRet &filter_ret)
+    ObFilterRet &filter_ret) const
 {
   int ret = OB_SUCCESS;
   filter_ret = FILTER_RET_MAX;
   mds::MdsDumpKVStorageAdapter kv_adapter;
   constexpr uint8_t medium_info_mds_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<ObMediumCompactionInfoKey, ObMediumCompactionInfo>>::value;
   constexpr uint8_t truncateinfo_mds_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<ObTruncateInfoKey, ObTruncateInfo>>::value;
+  constexpr uint8_t ttl_filter_info_mds_unit_id = mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<ObTTLFilterInfoKey, ObTTLFilterInfo>>::value;
   constexpr uint8_t ddl_complete_unit_id =
     mds::TupleTypeIdx<mds::NormalMdsTable, mds::MdsUnit<ObTabletDDLCompleteMdsUserDataKey,
                                                         ObTabletDDLCompleteMdsUserData>>::value;
@@ -85,11 +86,13 @@ int ObMdsMinorFilter::filter(
     ret = filter_medium_info(row, kv_adapter, filter_ret);
   } else if (truncateinfo_mds_unit_id == kv_adapter.get_type()) {
     ret = filter_truncate_info(row, kv_adapter, filter_ret);
+  } else if (ttl_filter_info_mds_unit_id == kv_adapter.get_type()) {
+    ret = filter_ttl_filter_info(row, kv_adapter, filter_ret);
   } else if (ddl_complete_unit_id == kv_adapter.get_type()) {
     ret = filter_ddl_complete_mds_info(row, kv_adapter, filter_ret);
   } else {
-    filter_ret = FILTER_RET_NOT_CHANGE;
-    LOG_DEBUG("not medium info/truncate info", K(ret), K(row), K_(medium_filter_snapshot), K_(truncate_filter_snapshot), K(kv_adapter));
+    filter_ret = FILTER_RET_KEEP;
+    LOG_DEBUG("not medium info/truncate info/ttl filter info", K(ret), K(row), K_(medium_filter_snapshot), K_(mds_filter_snapshot), K(kv_adapter));
   }
 
   return ret;
@@ -97,7 +100,7 @@ int ObMdsMinorFilter::filter(
 int ObMdsMinorFilter::filter_medium_info(
   const blocksstable::ObDatumRow &row,
   const mds::MdsDumpKVStorageAdapter &kv_adapter,
-  ObFilterRet &filter_ret)
+  ObFilterRet &filter_ret) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -113,7 +116,7 @@ int ObMdsMinorFilter::filter_medium_info(
     filter_ret = FILTER_RET_REMOVE;
     LOG_DEBUG("medium info is filtered", K(ret), K(row), K(medium_filter_snapshot_), K(medium_info_key), K(kv_adapter));
   } else {
-    filter_ret = FILTER_RET_NOT_CHANGE;
+    filter_ret = FILTER_RET_KEEP;
     LOG_DEBUG("medium info is not filtered", K(ret), K(row), K(medium_filter_snapshot_), K(medium_info_key), K(kv_adapter));
   }
   return ret;
@@ -122,24 +125,41 @@ int ObMdsMinorFilter::filter_medium_info(
 int ObMdsMinorFilter::filter_truncate_info(
   const blocksstable::ObDatumRow &row,
   const mds::MdsDumpKVStorageAdapter &kv_adapter,
-  ObFilterRet &filter_ret)
+  ObFilterRet &filter_ret) const
+{
+  return filter_mds_info<ObTruncateInfo>(row, kv_adapter, filter_ret);
+}
+
+int ObMdsMinorFilter::filter_ttl_filter_info(
+  const blocksstable::ObDatumRow &row,
+  const mds::MdsDumpKVStorageAdapter &kv_adapter,
+  ObFilterRet &filter_ret) const
+{
+  return filter_mds_info<ObTTLFilterInfo>(row, kv_adapter, filter_ret);
+}
+
+template <typename MDSInfo>
+int ObMdsMinorFilter::filter_mds_info(
+  const blocksstable::ObDatumRow &row,
+  const mds::MdsDumpKVStorageAdapter &kv_adapter,
+  ObFilterRet &filter_ret) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  allocator_.reuse();
-  ObTruncateInfo truncate_info;
+  ObArenaAllocator allocator;
+  MDSInfo mds_info;
   if (OB_UNLIKELY(row.is_uncommitted_row()
       || !row.is_compacted_multi_version_row())) { // not filter uncommitted row
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("uncommitted row or uncompacted row in mds table", K(ret), K(row));
-  } else if (OB_FAIL(truncate_info.deserialize(allocator_, kv_adapter.get_user_data().ptr(), kv_adapter.get_user_data().length(), pos))) {
-    LOG_WARN("fail to deserialize truncate info", K(ret), K(kv_adapter));
-  } else if (truncate_info.commit_version_ < truncate_filter_snapshot_) {
+  } else if (OB_FAIL(mds_info.deserialize(allocator, kv_adapter.get_user_data().ptr(), kv_adapter.get_user_data().length(), pos))) {
+    LOG_WARN("fail to deserialize mds info", K(ret), K(kv_adapter));
+  } else if (mds_info.commit_version_ < mds_filter_snapshot_) {
     filter_ret = FILTER_RET_REMOVE;
     // TODO change into debug log later
-    LOG_INFO("truncate info is filtered", K(ret), K(row), K(truncate_filter_snapshot_), K(truncate_info), K(kv_adapter));
+    LOG_INFO("mds info is filtered", K(ret), K(row), K(mds_filter_snapshot_), K(mds_info), K(kv_adapter));
   } else {
-    filter_ret = FILTER_RET_NOT_CHANGE;
+    filter_ret = FILTER_RET_KEEP;
   }
   return ret;
 }
@@ -147,7 +167,7 @@ int ObMdsMinorFilter::filter_truncate_info(
 int ObMdsMinorFilter::filter_ddl_complete_mds_info(
   const blocksstable::ObDatumRow &row,
   const mds::MdsDumpKVStorageAdapter &kv_adapter,
-  ObFilterRet &filter_ret)
+  ObFilterRet &filter_ret) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -173,7 +193,7 @@ int ObMdsMinorFilter::filter_ddl_complete_mds_info(
       filter_ret = FILTER_RET_REMOVE;
       LOG_TRACE("ddl complete info is filtered", K(ret), K(row), K(ddl_complete_info), K(kv_adapter));
     } else {
-      filter_ret = FILTER_RET_NOT_CHANGE;
+      filter_ret = FILTER_RET_KEEP;
     }
   }
   if (OB_UNLIKELY(INC_MAJOR_MDS_EXPIRED_TIME_SMALL)) {
@@ -184,7 +204,7 @@ int ObMdsMinorFilter::filter_ddl_complete_mds_info(
 
 int ObMdsMinorFilter::should_filter_ddl_inc_major_info(
   const ObTabletDDLCompleteMdsUserData &ddl_complete_info,
-  bool &need_filter)
+  bool &need_filter) const
 {
   int ret = OB_SUCCESS;
   need_filter = false;
@@ -215,7 +235,7 @@ int ObMdsMinorFilter::should_filter_ddl_inc_major_info(
 }
 
 int ObMdsMinorFilter::is_transaction_exist(ObLSHandle &ls_handle, const transaction::ObTransID &tx_id,
-                                           bool &exist)
+                                           bool &exist) const
 {
   int ret = OB_SUCCESS;
   ObTxTableGuard tx_table_guard;
@@ -240,7 +260,7 @@ int ObMdsMinorFilter::is_transaction_exist(ObLSHandle &ls_handle, const transact
 
 int ObMdsMinorFilter::has_ddl_inc_major_sstables(ObLSHandle &ls_handle,
                                                   const transaction::ObTransID &tx_id,
-                                                  ObTabletID &tablet_id, bool &exist)
+                                                  ObTabletID &tablet_id, bool &exist) const
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -296,7 +316,7 @@ int ObMdsMinorFilter::has_ddl_inc_major_sstables(ObLSHandle &ls_handle,
   return ret;
 }
 
-int ObMdsMinorFilter::is_ddl_inc_major_mds_expired(share::SCN start_scn, bool &expired)
+int ObMdsMinorFilter::is_ddl_inc_major_mds_expired(share::SCN start_scn, bool &expired) const
 {
   int ret = OB_SUCCESS;
   expired = false;
@@ -319,7 +339,7 @@ ObCrossLSMdsMinorFilter::ObCrossLSMdsMinorFilter()
 
 int ObCrossLSMdsMinorFilter::filter(
     const blocksstable::ObDatumRow &row,
-    ObFilterRet &filter_ret)
+    ObFilterRet &filter_ret) const
 {
   int ret = OB_SUCCESS;
   filter_ret = FILTER_RET_MAX;
@@ -338,7 +358,7 @@ int ObCrossLSMdsMinorFilter::filter(
       LOG_DEBUG("filter tablet status for cross ls mds minor merge", K(ret));
     }
   } else {
-    filter_ret = FILTER_RET_NOT_CHANGE;
+    filter_ret = FILTER_RET_KEEP;
   }
 
   return ret;

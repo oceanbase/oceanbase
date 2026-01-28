@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_table_access_context.h"
-#include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "storage/access/ob_mds_filter_mgr.h"
 #include "storage/access/ob_index_skip_scanner.h"
 
 namespace oceanbase
@@ -54,7 +54,7 @@ ObTableAccessContext::ObTableAccessContext()
     use_fuse_row_cache_(false),
     need_scn_(false),
     need_release_mview_scan_info_(true),
-    need_release_truncate_part_filter_(true),
+    need_release_mds_filter_(true),
     timeout_(0),
     query_flag_(),
     sql_mode_(0),
@@ -80,8 +80,8 @@ ObTableAccessContext::ObTableAccessContext()
     sample_filter_(nullptr),
     trans_state_mgr_(nullptr),
     mview_scan_info_(nullptr),
+    mds_filter_mgr_(nullptr),
     scan_resume_point_(nullptr),
-    truncate_part_filter_(nullptr),
     mds_collector_(nullptr),
     row_scan_cnt_(nullptr),
     skip_scan_factory_(nullptr),
@@ -108,26 +108,27 @@ ObTableAccessContext::~ObTableAccessContext()
     }
     cg_iter_pool_ = nullptr;
   }
-  if (OB_UNLIKELY(nullptr != sample_filter_)) {
-    ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
-  }
   if (OB_UNLIKELY(need_release_mview_scan_info_ && nullptr != mview_scan_info_)) {
     release_mview_scan_info(stmt_allocator_, mview_scan_info_);
     need_release_mview_scan_info_ = false;
   } else {
     mview_scan_info_ = nullptr;
   }
-  if (OB_UNLIKELY(need_release_truncate_part_filter_ && nullptr != truncate_part_filter_)) {
-    ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(truncate_part_filter_);
-  } else {
-    truncate_part_filter_ = nullptr;
-  }
+
   if (OB_UNLIKELY(nullptr != skip_scan_factory_)) {
     skip_scan_factory_->~ObIndexSkipScanFactory();
     if (OB_NOT_NULL(stmt_allocator_)) {
       stmt_allocator_->free(skip_scan_factory_);
     }
     skip_scan_factory_ = nullptr;
+  }
+  if (OB_UNLIKELY(need_release_mds_filter_ && nullptr != mds_filter_mgr_)) {
+    ObMDSFilterMgrFactory::destroy_mds_filter_mgr(mds_filter_mgr_);
+  } else {
+    mds_filter_mgr_ = nullptr;
+  }
+  if (OB_UNLIKELY(nullptr != sample_filter_)) {
+    ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
   }
 }
 
@@ -310,8 +311,8 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     }
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(mvcc_mds_filter) && mvcc_mds_filter->is_valid()) {
-      need_release_truncate_part_filter_ = false;
-      truncate_part_filter_ = mvcc_mds_filter->truncate_part_filter_;
+      need_release_mds_filter_ = false;
+      mds_filter_mgr_ = mvcc_mds_filter->mds_filter_mgr_;
       if (OB_FAIL(ctx.init_mds_filter(*mvcc_mds_filter))) {
         LOG_WARN("failed to init mds filter on StoreCtx", KR(ret), KPC(mvcc_mds_filter));
       }
@@ -359,8 +360,8 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     }
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(mvcc_mds_filter) && mvcc_mds_filter->is_valid()) {
-      need_release_truncate_part_filter_ = false;
-      truncate_part_filter_ = mvcc_mds_filter->truncate_part_filter_;
+      need_release_mds_filter_ = false;
+      mds_filter_mgr_ = mvcc_mds_filter->mds_filter_mgr_;
       if (OB_FAIL(ctx.init_mds_filter(*mvcc_mds_filter))) {
         LOG_WARN("failed to init mds filter on StoreCtx", KR(ret), KPC(mvcc_mds_filter));
       }
@@ -473,11 +474,6 @@ void ObTableAccessContext::reset()
   } else {
     mview_scan_info_ = nullptr;
   }
-  if (OB_UNLIKELY(need_release_truncate_part_filter_ && nullptr != truncate_part_filter_)) {
-    ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(truncate_part_filter_);
-  } else {
-    truncate_part_filter_ = nullptr;
-  }
   cached_iter_node_ = nullptr;
   if (nullptr != stmt_iter_pool_) {
     stmt_iter_pool_->~ObStoreRowIterPool<ObStoreRowIterator>();
@@ -526,6 +522,11 @@ void ObTableAccessContext::reset()
   range_array_pos_ = nullptr;
   cg_param_pool_ = nullptr;
   block_row_store_ = nullptr;
+  if (OB_UNLIKELY(need_release_mds_filter_ && nullptr != mds_filter_mgr_)) {
+    ObMDSFilterMgrFactory::destroy_mds_filter_mgr(mds_filter_mgr_);
+  } else {
+    mds_filter_mgr_ = nullptr;
+  }
   scan_resume_point_ = nullptr;
   if (OB_UNLIKELY(nullptr != sample_filter_)) {
     ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
@@ -614,15 +615,38 @@ int ObTableAccessContext::alloc_iter_pool(const bool use_column_store)
 int ObTableAccessContext::check_filtered_by_base_version(ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  if (nullptr != truncate_part_filter_) {
-    bool filtered = false;
-    if (OB_FAIL(truncate_part_filter_->filter(row, filtered, false/*check_filter*/, true/*check_version*/))) {
-      LOG_WARN("failed to do truncate part filter", K(ret));
+
+  bool filtered = false;
+
+  if (nullptr != mds_filter_mgr_) {
+    if (row.row_flag_.is_not_exist()) {
+      // skip check, already not exist
+    } else if (OB_FAIL(mds_filter_mgr_->filter(
+            row, filtered, false /*check_filter*/, true /*check_version*/))) {
+      LOG_WARN("failed to filter by base version", K(ret));
     } else if (filtered) {
       row.row_flag_.reset();
       row.row_flag_.set_flag(DF_NOT_EXIST);
     }
   }
+  return ret;
+}
+
+int ObTableAccessContext::combine_to_filter_tree(sql::ObPushdownFilterExecutor *&root_filter, sql::ObPushdownFilterExecutor *sql_pushdown_filter)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (nullptr == mds_filter_mgr_) {
+    root_filter = sql_pushdown_filter;
+  } else if (OB_FAIL(mds_filter_mgr_->combine_to_filter_tree_with_check(root_filter, sql_pushdown_filter))) {
+    // the function will check double combine to filter tree
+    // if double combine isn't the same, it will return error
+    LOG_WARN("failed to combine to filter tree", K(ret));
+  }
+
   return ret;
 }
 

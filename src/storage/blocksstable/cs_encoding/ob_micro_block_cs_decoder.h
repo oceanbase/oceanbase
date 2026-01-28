@@ -223,8 +223,12 @@ public:
   ObMicroBlockCSDecoder();
   virtual ~ObMicroBlockCSDecoder();
 
-  static int get_decoder_cache_size(const char *block, const int64_t block_size, int64_t &size);
-  static int cache_decoders(char *buf, const int64_t size, const char *block, const int64_t block_size);
+  static int get_decoder_cache_size(
+    const ObMicroBlockHeader &micro_header,
+    const char *block, const int64_t block_size, int64_t &size);
+  static int cache_decoders(
+    const ObMicroBlockHeader &micro_header,
+    char *buf, const int64_t size, const char *block, const int64_t block_size);
 
   virtual void reset();
   virtual int init(const ObMicroBlockData &block_data, const ObITableReadInfo &read_info) override;
@@ -255,6 +259,12 @@ public:
   virtual int filter_black_filter_batch(const sql::ObPushdownFilterExecutor *parent,
     sql::ObBlackFilterExecutor &filter, sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap, bool &filter_applied) override;
+  virtual int filter_pushdown_ttl_filter(const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap) override;
+  virtual int filter_pushdown_base_version_filter(const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap) override;
   virtual int filter_pushdown_truncate_filter(const sql::ObPushdownFilterExecutor *parent,
     sql::ObPushdownFilterExecutor &filter, const sql::PushdownFilterInfo &pd_filter_info,
     common::ObBitmap &result_bitmap) override;
@@ -443,6 +453,11 @@ private:
                          ->rowkey_column_count_ -
                      multi_version_cols_cnt;
   }
+
+  int filter_pushdown_single_column_mds_filter(const sql::ObPushdownFilterExecutor *parent,
+                                               sql::ObPushdownFilterExecutor &filter,
+                                               const sql::PushdownFilterInfo &pd_filter_info,
+                                               common::ObBitmap &result_bitmap);
 
 private:
   // When the data is multi version data

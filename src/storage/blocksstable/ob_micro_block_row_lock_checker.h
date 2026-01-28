@@ -61,7 +61,7 @@ protected:
       ObStoreRowLockState& lock_state,
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
-  int check_truncate_part_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered);
+  int check_mds_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered);
   inline void check_base_version(const int64_t trans_version, bool &is_filtered);
 protected:
   bool check_exist_;

@@ -403,7 +403,7 @@ int TestSemiStructEncoding::check_part_transform(
   ObMicroBlockCSDecoder<> decoder;
   const char *block_buf = micro_block_desc.buf_  - header->header_size_;
   const int64_t block_buf_len = micro_block_desc.buf_size_ + header->header_size_;
-  ObMicroBlockData part_transformed_data(block_buf, block_buf_len);
+  ObMicroBlockData part_transformed_data;
   MockObTableReadInfo read_info;
   common::ObArray<int32_t> storage_cols_index;
   common::ObArray<share::schema::ObColDesc> col_descs;
@@ -417,6 +417,8 @@ int TestSemiStructEncoding::check_part_transform(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(read_info.init(allocator, col_cnt, rowkey_cnt, false, col_descs, &storage_cols_index))) {
     LOG_WARN("init read info fail", K(ret));
+  } else if (OB_FAIL(part_transformed_data.init_with_prepare_micro_header(block_buf, block_buf_len))) {
+    LOG_WARN("failed to init micro data", K(ret));
   } else if (OB_FAIL(decoder.init(part_transformed_data, read_info))) {
     LOG_WARN("init decoder fail", K(ret));
   }
@@ -487,7 +489,7 @@ int TestSemiStructEncoding::do_encode(
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(build_micro_block_desc(encoder, micro_block_desc, header))) {
+  } else if (OB_FAIL(build_micro_block_desc_in_unittest(encoder, micro_block_desc, header))) {
     LOG_WARN("build_micro_block_desc fail", K(ret));
   } else if (encoder.encoders_[1]->get_type() != ObCSColumnHeader::Type::SEMISTRUCT) {
     ret = OB_ERR_UNEXPECTED;
@@ -1158,7 +1160,7 @@ TEST_F(TestSemiStructEncoding, test_bug1)
   ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
 
@@ -1204,7 +1206,7 @@ TEST_F(TestSemiStructEncoding, test_bug2)
   ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
 
@@ -1504,7 +1506,7 @@ TEST_F(TestSemiStructEncoding, test_complex_situation)
 
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
   ASSERT_EQ(encoder.encoders_[3]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_EQ(encoder.encoders_[4]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
@@ -1543,7 +1545,7 @@ TEST_F(TestSemiStructEncoding, test_complex_situation)
     ObMicroBlockCSDecoder<> decoder;
     const char *block_buf = micro_block_desc.buf_  - header->header_size_;
     const int64_t block_buf_len = micro_block_desc.buf_size_ + header->header_size_;
-    ObMicroBlockData part_transformed_data(block_buf, block_buf_len);
+    ObMicroBlockData part_transformed_data;
     MockObTableReadInfo read_info;
     common::ObArray<int32_t> storage_cols_index;
     common::ObArray<share::schema::ObColDesc> col_descs;
@@ -1552,6 +1554,7 @@ TEST_F(TestSemiStructEncoding, test_complex_situation)
       ASSERT_EQ(OB_SUCCESS, col_descs.push_back(col_descs_.at(store_id)));
     }
     ASSERT_EQ(OB_SUCCESS, read_info.init(allocator, col_cnt, rowkey_cnt, false, col_descs, &storage_cols_index));
+    ASSERT_EQ(OB_SUCCESS, part_transformed_data.init_with_prepare_micro_header(block_buf, block_buf_len));
     ASSERT_EQ(OB_SUCCESS, decoder.init(part_transformed_data, read_info));
     for (int32_t i = 0; i < row_cnt; ++i) {
       ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, row));
@@ -2921,7 +2924,7 @@ TEST_F(TestSemiStructEncoding, test_nop_bitmap)
     ctx_.semistruct_properties_.freq_threshold_ = semistruct_threshold;
     ObMicroBlockHeader *header = nullptr;
     ObMicroBlockDesc micro_block_desc;
-    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
     LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
     ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
 
@@ -3150,7 +3153,7 @@ TEST_F(TestSemiStructEncoding, test_hete_column_adpter)
   ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ObMicroBlockData full_transformed_data;
   ObMicroBlockCSDecoder decoder;
@@ -3193,7 +3196,7 @@ TEST_F(TestSemiStructEncoding, test_hete_column_adpter)
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
   ASSERT_EQ(row_cnt, datums.count());
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_EQ(OB_SUCCESS, init_cs_decoder(header, micro_block_desc, full_transformed_data, decoder));
   is_freq_column = false;
@@ -3251,7 +3254,7 @@ TEST_F(TestSemiStructEncoding, test_all_empty_obj)
   ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::STR_DICT);
 
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
@@ -3301,7 +3304,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_null_reuse)
   ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
 
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
@@ -3336,7 +3339,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_null_reuse)
       row.storage_datums_[1].set_string(json_datum.get_string());
       ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
     }
-    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
     ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
     ASSERT_NE(nullptr, encoder.encoders_[1]->ctx_->semistruct_ctx_);
     ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
@@ -3375,7 +3378,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   }
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3389,7 +3392,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3402,7 +3405,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   sub_col_count = 6;
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3416,7 +3419,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3429,7 +3432,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   sub_col_count = 10;
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3443,7 +3446,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3460,7 +3463,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
     ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
   }
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   // ASSERT_EQ(nullptr, e->ctx_->semistruct_ctx_);
@@ -3473,7 +3476,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   sub_col_count = 8;
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3487,7 +3490,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse)
   ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3529,7 +3532,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse1)
   }
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3546,7 +3549,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_reuse1)
     ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
     ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
     ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
     e = encoder.encoders_[1];
     ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
     ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3674,7 +3677,7 @@ TEST_F(TestSemiStructEncoding, test_zero_stream)
   {
     ObMicroBlockDesc micro_block_desc;
     ObMicroBlockHeader *header = nullptr;
-    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
     LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
     ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
     ASSERT_EQ(encoder.encoders_[2]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
@@ -3759,7 +3762,7 @@ TEST_F(TestSemiStructEncoding, test_zero_stream)
   {
     ObMicroBlockDesc micro_block_desc;
     ObMicroBlockHeader *header = nullptr;
-    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
     LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
     ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
     ASSERT_EQ(encoder.encoders_[2]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
@@ -3777,7 +3780,7 @@ TEST_F(TestSemiStructEncoding, test_zero_stream)
       ObMicroBlockCSDecoder<> decoder;
       const char *block_buf = micro_block_desc.buf_  - header->header_size_;
       const int64_t block_buf_len = micro_block_desc.buf_size_ + header->header_size_;
-      ObMicroBlockData part_transformed_data(block_buf, block_buf_len);
+      ObMicroBlockData part_transformed_data;
       MockObTableReadInfo read_info;
       common::ObArray<int32_t> storage_cols_index;
       common::ObArray<share::schema::ObColDesc> col_descs;
@@ -3786,6 +3789,7 @@ TEST_F(TestSemiStructEncoding, test_zero_stream)
         ASSERT_EQ(OB_SUCCESS, col_descs.push_back(col_descs_.at(store_id)));
       }
       ASSERT_EQ(OB_SUCCESS, read_info.init(allocator, col_cnt, rowkey_cnt, false, col_descs, &storage_cols_index));
+      ASSERT_EQ(OB_SUCCESS, part_transformed_data.init_with_prepare_micro_header(block_buf, block_buf_len));
       ASSERT_EQ(OB_SUCCESS, decoder.init(part_transformed_data, read_info));
       for (int32_t i = 0; i < row_cnt; ++i) {
         ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, row));
@@ -3832,7 +3836,7 @@ TEST_F(TestSemiStructEncoding, test_heteroid_sub_column)
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types1, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types2, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3847,7 +3851,7 @@ TEST_F(TestSemiStructEncoding, test_heteroid_sub_column)
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types2, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types3, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3973,7 +3977,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
     ObJsonNodeType::J_DOUBLE, ObJsonNodeType::J_INT, ObJsonNodeType::J_BOOLEAN, ObJsonNodeType::J_STRING, ObJsonNodeType::J_DOUBLE };
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -3987,7 +3991,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
   ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4000,7 +4004,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
   sub_col_count = 6;
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4014,7 +4018,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
   ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4027,7 +4031,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
   sub_col_count = 10;
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4041,7 +4045,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
   ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4058,7 +4062,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
     ASSERT_EQ(OB_SUCCESS, datums.push_back(json_datum));
   }
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   // ASSERT_EQ(nullptr, e->ctx_->semistruct_ctx_);
@@ -4071,7 +4075,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
   sub_col_count = 8;
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4085,7 +4089,7 @@ TEST_F(TestSemiStructEncoding, test_array_sub_schema_reuse)
   ASSERT_EQ(true, semistruct_col_ctx->sub_schema_->is_inited());
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4127,7 +4131,7 @@ TEST_F(TestSemiStructEncoding, test_array_heteroid_sub_column)
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types1, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types2, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4142,7 +4146,7 @@ TEST_F(TestSemiStructEncoding, test_array_heteroid_sub_column)
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types2, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, generate_array_datums(allocator, sub_col_types3, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4176,7 +4180,7 @@ TEST_F(TestSemiStructEncoding, test_scalar)
     row.storage_datums_[1].set_string(datums.at(i).get_string());
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_NE(nullptr, encoder.encoders_[1]->ctx_->semistruct_ctx_);
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
@@ -4226,7 +4230,7 @@ TEST_F(TestSemiStructEncoding, test_mix)
     row.storage_datums_[1].set_string(datums.at(i).get_string());
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_NE(nullptr, encoder.encoders_[1]->ctx_->semistruct_ctx_);
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
@@ -4279,7 +4283,7 @@ TEST_F(TestSemiStructEncoding, test_mix2)
     row.storage_datums_[1].set_string(datums.at(i).get_string());
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, encoder.encoders_[1]->ctx_->semistruct_ctx_);
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
@@ -4329,7 +4333,7 @@ TEST_F(TestSemiStructEncoding, test_mix3)
     row.storage_datums_[1].set_string(datums.at(i).get_string());
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, encoder.encoders_[1]->ctx_->semistruct_ctx_);
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
@@ -4384,7 +4388,7 @@ TEST_F(TestSemiStructEncoding, test_mix4)
     row.storage_datums_[1].set_string(datums.at(i).get_string());
     ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
   }
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::STRING);
   ASSERT_NE(nullptr, encoder.encoders_[1]->ctx_->semistruct_ctx_);
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
@@ -4642,7 +4646,7 @@ TEST_F(TestSemiStructEncoding, test_deep_json)
   generator.allocator_ = &allocator;
   ASSERT_EQ(OB_SUCCESS, generator.generates(row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   e = encoder.encoders_[1];
   ASSERT_EQ(e->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_NE(nullptr, e->ctx_->semistruct_ctx_);
@@ -4710,7 +4714,7 @@ TEST_F(TestSemiStructEncoding, test_bug_var_size)
   ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
 
@@ -4757,7 +4761,7 @@ TEST_F(TestSemiStructEncoding, test_empty_array)
   ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
 
@@ -4804,7 +4808,7 @@ TEST_F(TestSemiStructEncoding, test_empty_array_v2)
   ASSERT_EQ(row_cnt, datums.count());
   ObMicroBlockDesc micro_block_desc;
   ObMicroBlockHeader *header = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   LOG_TRACE("micro block", K(micro_block_desc), KPC(header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
 
@@ -4841,7 +4845,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_re_scan_fail)
   }
   ASSERT_EQ(OB_SUCCESS, generate_datums(allocator, sub_col_names, sub_col_types, sub_col_count, row_cnt, datums));
   ASSERT_EQ(OB_SUCCESS, append_row_to_encoder(encoder, row, datums));
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
   ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
   ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));
   ASSERT_EQ(OB_SUCCESS, check_part_transform(allocator, row_cnt, rowkey_cnt, col_cnt, row, header, micro_block_desc, datums));
@@ -4875,7 +4879,7 @@ TEST_F(TestSemiStructEncoding, test_sub_schema_re_scan_fail)
       row.storage_datums_[1].set_string(datums.at(i).get_string());
       ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
     }
-    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header));
+    ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header));
     ASSERT_EQ(encoder.encoders_[1]->get_type(), ObCSColumnHeader::Type::SEMISTRUCT);
     ASSERT_NE(nullptr, encoder.encoders_[1]->ctx_->semistruct_ctx_);
     ASSERT_EQ(OB_SUCCESS, check_full_transform(allocator, row_cnt, row, header, micro_block_desc, datums));

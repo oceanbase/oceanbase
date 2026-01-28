@@ -25,7 +25,7 @@ int ObMvccMdsFilter::init(ObMvccMdsFilter &mds_filter)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(mds_filter));
   } else {
-    truncate_part_filter_ = mds_filter.truncate_part_filter_;
+    mds_filter_mgr_ = mds_filter.mds_filter_mgr_;
     read_info_ = mds_filter.read_info_;
   }
   return ret;

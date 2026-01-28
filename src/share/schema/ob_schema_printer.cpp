@@ -2035,10 +2035,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       && table_schema.get_ttl_definition().length() > 0
       && NULL != table_schema.get_ttl_definition().ptr()) {
     const ObString ttl_definition = table_schema.get_ttl_definition();
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "TTL = (%.*s) ",
-                                ttl_definition.length(), ttl_definition.ptr()))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print ttl definition", K(ret), K(ttl_definition));
-    }
+    ObTTLDefinition tmp_ttl_definition(ttl_definition, table_schema.get_ttl_flag().ttl_type_);
+    (void) tmp_ttl_definition.gene_info(buf, buf_len, pos);
   }
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl
       && table_schema.get_kv_attributes().length() > 0
@@ -2059,7 +2057,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       && !strict_compat_
       && !is_index_tbl
       && !is_no_table_options(sql_mode)
-      && table_schema.is_delete_insert_merge_engine()) {
+      && !ObMergeEngineStoreFormat::is_default_merge_engine(table_schema.get_merge_engine_type())) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "MERGE_ENGINE = %s ",
                                 ObMergeEngineStoreFormat::get_merge_engine_type_name(table_schema.get_merge_engine_type())))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print merge engine", K(ret));
@@ -2666,11 +2664,10 @@ int ObSchemaPrinter::print_table_definition_table_options(
   }
   if (OB_SUCC(ret) && !is_index_tbl && !strict_compat_) {
     const ObString ttl_definition = table_schema.get_ttl_definition();
-    if (ttl_definition.empty()) {
-      // do nothing
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "TTL = (%.*s) ",
-         ttl_definition.length(), ttl_definition.ptr()))) {
-      OB_LOG(WARN, "fail to print ttl definition", K(ret), K(ttl_definition));
+    if (!ttl_definition.empty()) {
+      const ObString ttl_definition = table_schema.get_ttl_definition();
+      ObTTLDefinition tmp_ttl_definition(ttl_definition, table_schema.get_ttl_flag().ttl_type_);
+      (void) tmp_ttl_definition.gene_info(buf, buf_len, pos);
     }
   }
 

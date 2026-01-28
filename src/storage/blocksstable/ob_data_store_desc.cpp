@@ -13,6 +13,7 @@
 #include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "observer/ob_server_struct.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -546,17 +547,17 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   } else if (OB_UNLIKELY(!agg_meta_array_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected non-empty aggregate meta array", K(ret));
-  } else if (schema.is_column_info_simplified()) {
-      // simplified do not generate skip index, do not init agg_meta_array
+  } else if (schema.is_column_info_simplified() && static_desc.major_working_cluster_version_ < share::ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
+    // after(>=) COMPACTION_TTL_CMP_DATA_VERSION, trans version column may have skip index, don't skip this
   } else if (OB_FAIL(init_skip_idx_attrs(is_full_column_sstable, schema, skip_idx_attrs))) {
     STORAGE_LOG(WARN, "failed to prepare allocate skip index col attr", K(ret), K(full_stored_col_cnt_));
   } else if (OB_FAIL(schema.get_skip_index_col_attr(is_major, static_desc.major_working_cluster_version_, skip_idx_attrs))) {
     STORAGE_LOG(WARN, "failed to get skip index col attr", K(ret), K(is_major), K(static_desc.major_working_cluster_version_), K(full_stored_col_cnt_));
   } else if (OB_FAIL(agg_meta_array_.init(ObSkipIndexColMeta::MAX_AGG_COLUMN_PER_ROW * full_stored_col_cnt_))) {
-    STORAGE_LOG(WARN, "failed to init agg meta array", K(ret), K_(full_stored_col_cnt));
+    STORAGE_LOG(WARN, "failed to init agg meta array", K(ret), K_(full_stored_col_cnt), K(skip_idx_attrs));
   } else if (is_full_column_sstable) {
     // generate skip index for row store
-    for (int64_t i = 0; OB_SUCC(ret) && i < full_stored_col_cnt_; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < skip_idx_attrs.count(); ++i) {
       if (!skip_idx_attrs.at(i).has_skip_index()) {
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
                  skip_idx_attrs.at(i), i, agg_meta_array_))) {
@@ -566,8 +567,10 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   } else if (cg_schema->is_single_column_group()) {
     // build min_max and sum aggregate for single column group by default;
     const uint16_t single_cg_column_idx = cg_schema->column_idxs_[0];
-    if (OB_FAIL(generate_single_cg_skip_index_meta(
-                skip_idx_attrs.at(single_cg_column_idx), *cg_schema, static_desc.major_working_cluster_version_))) {
+    if (single_cg_column_idx >= skip_idx_attrs.count()) {
+      // column info simplified, skip index is null
+    } else if (OB_FAIL(generate_single_cg_skip_index_meta(
+                               skip_idx_attrs.at(single_cg_column_idx), *cg_schema, static_desc.major_working_cluster_version_))) {
       STORAGE_LOG(WARN, "failed to generate skip index meta for single column group",
                   K(ret), "skip_idx_attr", skip_idx_attrs.at(single_cg_column_idx),
                   K(static_desc.major_working_cluster_version_), KPC(cg_schema));
@@ -576,7 +579,10 @@ int ObColDataStoreDesc::generate_skip_index_meta(
     // generate skip index for column in column group
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_schema->column_cnt_; ++i) {
       const uint16_t column_idx = cg_schema->get_column_idx(i);
-      if (!skip_idx_attrs.at(column_idx).has_skip_index()) {
+      if (column_idx >= skip_idx_attrs.count()) {
+        // column info simplified, skip index is null
+      } else if (!skip_idx_attrs.at(column_idx).has_skip_index()) {
+        // the column's skip-index is empty
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
                  skip_idx_attrs.at(column_idx), i, agg_meta_array_))) {
         STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), K(is_major), KPC(cg_schema), K(i), K(column_idx));

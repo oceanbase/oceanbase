@@ -662,7 +662,7 @@ int ObCOMergeExeDag::get_next_replay_cg_pair(
   } else if (!ctx.is_using_column_tmp_file()
       && ObBasicMergeScheduler::get_merge_scheduler()->enable_adaptive_merge_schedule()
       && FALSE_IT(try_update_merge_batch_size())) {
-  } else if (ctx.is_build_row_store()) {
+  } else if (ctx.is_build_all_cg_only()) {
     const CGMergeStatus &cg_merge_status = cg_merge_status_[range_idx * cg_count_ + ctx.base_rowkey_cg_idx_];
     inner_set_cg_merge_status(range_idx, 0, ctx.base_rowkey_cg_idx_, CGMergeStatus::CG_SSTABLE_CREATED);
     inner_set_cg_merge_status(range_idx, ctx.base_rowkey_cg_idx_ + 1, cg_count_, CGMergeStatus::CG_SSTABLE_CREATED);
@@ -793,7 +793,7 @@ int ObCOMergeExeDag::generate_next_task(
         break;
       }
     }
-    // only when is_build_row_store() + replay directly in persist task + persist task generate next task
+    // only when is_build_all_cg_only() + replay directly in persist task + persist task generate next task
     // then the finish task will be the persist task's child
     if (OB_SUCC(ret) && !need_persist_task && !need_replay_task) {
       need_finish_task = inner_check_replay_finished();
@@ -1169,7 +1169,7 @@ int ObCOMergeLogReplayTask::process()
     LOG_WARN("failed to alloc memory for persister", K(ret));
   } else if (FALSE_IT(replayer_ = new (buf) ObCOMergeLogReplayer(allocator_,
       ctx->static_param_, start_cg_idx_, end_cg_idx_,
-      ctx->prefer_reuse_macro_block_ ? false : ctx->get_is_rebuild_column_store()))) {
+      ctx->prefer_reuse_macro_block_ ? false :ctx->only_use_row_store()))) {
   } else if (OB_FAIL(replayer_->init(*ctx, range_idx_))) {
     LOG_WARN("failed to init replayer", K(ret));
   } else if (OB_FAIL(replayer_->replay_merge_log())) {
@@ -1250,7 +1250,8 @@ int ObCOMergeFinishTask::process()
     LOG_WARN("failed to create sstable and update tablet", K(ret));
   } else {
     ctx->destroy_merge_info_array(0, ctx->array_count_, true);
-    if (OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_unfinish_tablet(ctx->get_merge_version()))) {
+    if (ctx->get_is_tenant_major_merge()
+        && OB_TMP_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_unfinish_tablet(ctx->get_merge_version()))) {
       LOG_WARN("failed to update unfinish tablet", K(tmp_ret), K(ctx->get_merge_version()));
     }
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!

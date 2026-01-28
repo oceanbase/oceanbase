@@ -14,6 +14,7 @@
 
 #include "ob_storage_schema.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -1972,7 +1973,7 @@ int ObStorageSchema::get_skip_index_col_attr_by_schema(
   }
   attr_idx += ObMultiVersionExtraRowkeyIds::MAX_EXTRA_ROWKEY;
   // set non-rowkey columns
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && !column_info_simplified_ && i < column_cnt_; ++i) {
     skip_idx_attr.reset();
     bool is_rowkey = false;
     for (int64_t j = 0; OB_SUCC(ret) && j < rowkey_array_.count(); ++j) {
@@ -2008,11 +2009,11 @@ int ObStorageSchema::get_skip_index_col_attr_by_schema(
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (attr_idx != skip_idx_attrs.count()) {
+  if (OB_FAIL(ret) || column_info_simplified_) {
+  } else if (OB_UNLIKELY(attr_idx != skip_idx_attrs.count())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected column count", K(ret), K(attr_idx), K(skip_idx_attrs.count()));
-  } else if (OB_NOT_NULL(column_types) && column_types->count() != skip_idx_attrs.count()) {
+    STORAGE_LOG(WARN, "unexpected column count", K(ret), K(attr_idx), K(skip_idx_attrs.count()), K_(column_info_simplified));
+  } else if (OB_UNLIKELY(OB_NOT_NULL(column_types) && column_types->count() != skip_idx_attrs.count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected column type count", K(ret), K(column_types->count()), K(skip_idx_attrs.count()));
   }
@@ -2258,6 +2259,7 @@ int ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema)
     merge_engine_type_ = input_schema.get_merge_engine_type();
     minor_row_store_type_ = input_schema.get_minor_row_store_type();
     skip_index_level_ = input_schema.get_skip_index_level();
+    has_ttl_definition_ = input_schema.has_ttl_definition();
   }
 
   return ret;

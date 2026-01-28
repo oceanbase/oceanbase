@@ -127,7 +127,6 @@ int ObMicroBlockHashIndexBuilder::build_block(ObMicroBufferWriter &buffer)
           ++collision_count;
         }
       }
-
       if ((collision_count * ObMicroBlockHashIndex::MAX_COLLISION_RATIO) <= count_) {
         const uint8_t reserved_byte = ObMicroBlockHashIndex::RESERVED_BYTE;
         if (OB_FAIL(buffer.write(reserved_byte))) {
@@ -179,7 +178,7 @@ int ObMicroBlockHashIndex::init(const ObMicroBlockData &micro_block_data)
   int ret = OB_SUCCESS;
   // ObMicroBlockHashIndex can be inited repeatedly.
   const ObMicroBlockHeader *micro_block_header = micro_block_data.get_micro_header();
-  if (OB_UNLIKELY(nullptr == micro_block_header)) {
+  if (OB_UNLIKELY(nullptr == micro_block_header || micro_block_header->hash_index_offset_from_end_ > micro_block_data.get_buf_size())) {
     ret = OB_INVALID_DATA;
     STORAGE_LOG(WARN, "Invalid micro block header", K(ret), K(micro_block_data));
   } else {

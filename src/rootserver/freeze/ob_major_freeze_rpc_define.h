@@ -214,6 +214,13 @@ public:
         (ObTabletMajorFreezeRequest), ObMajorFreezeResponse);
 };
 
+class ObTableMajorFreezeRpcProxy : public obrpc::ObRpcProxy
+{
+public:
+  DEFINE_TO(ObTableMajorFreezeRpcProxy);
+  RPC_S(PR1 table_major_freeze, OB_TABLE_MAJOR_FREEZE,
+        (ObTableMajorFreezeRequest), ObMajorFreezeResponse);
+};
 
 } // namespace obrpc
 } // namespace oceanbase

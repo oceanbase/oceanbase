@@ -296,7 +296,7 @@ int ObIndexTreePrefetcher::init_index_scanner(ObIndexBlockRowScanner &index_scan
       access_ctx_->query_flag_,
       sstable_->get_macro_offset(),
       sstable_->is_normal_cg_sstable(),
-      sstable_->is_all_cg_base() && nullptr != dynamic_cast<ObCGPrefetcher *>(this),
+      (sstable_->is_all_cg_base() || sstable_->is_co_sstable()) && nullptr != dynamic_cast<ObCGPrefetcher *>(this),
       ObRowkeyVectorHelper::can_use_non_datum_rowkey_vector(sstable_->is_normal_cg_sstable(), iter_param_->tablet_id_)
         ? iter_param_->get_read_info() : nullptr))) {
     LOG_WARN("init index scanner fail", K(ret), KPC(sstable_), KP(sstable_));

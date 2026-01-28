@@ -305,7 +305,7 @@ int ObMacroBlock::write_micro_block(const ObMicroBlockDesc &micro_block_desc,
       data_size_ += micro_block_desc.data_size_;
       data_zsize_ += micro_block_desc.buf_size_;
       // update info from micro_block
-      update_max_merged_trans_version(micro_block_desc.max_merged_trans_version_);
+      update_max_merged_trans_version(header->max_merged_trans_version_);
       if (micro_block_desc.contain_uncommitted_row_) {
         set_contain_uncommitted_row();
       }

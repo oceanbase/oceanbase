@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_multiple_mview_merge.h"
+#include "ob_table_scan_iterator.h"
 
 namespace oceanbase
 {
@@ -339,6 +340,16 @@ int ObMviewMultiScanMerge::open(ObTableScanRange &table_scan_range)
   return ObMultipleMultiScanMerge::open(table_scan_range.get_ranges());
 }
 
+int ObMviewLevelOrderScanMerge::open(ObTableScanRange &table_scan_range)
+{
+  return ObLevelOrderScanMerge::open(table_scan_range.get_ranges().at(0));
+}
+
+int ObMviewLevelOrderMultiScanMerge::open(ObTableScanRange &table_scan_range)
+{
+  return ObLevelOrderMultiScanMerge::open(table_scan_range.get_ranges());
+}
+
 ObMviewMergeWrapper::ObMviewMergeWrapper()
 {
   MEMSET(merges_, 0, sizeof(merges_));
@@ -383,6 +394,7 @@ int ObMviewMergeWrapper::alloc_mview_merge(
     ObTableAccessContext &context,
     ObGetTableParam &get_table_param,
     ObTableScanRange &table_scan_range,
+    ObTableScanParam &scan_param,
     ObMviewMergeWrapper *&merge_wrapper,
     ObMviewMerge *&mview_merge)
 {
@@ -392,7 +404,7 @@ int ObMviewMergeWrapper::alloc_mview_merge(
       OB_ISNULL(merge_wrapper = OB_NEWx(ObMviewMergeWrapper, alloctor))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc mview merge wrapper", K(ret));
-  } else if (OB_FAIL(merge_wrapper->get_mview_merge(param, context, get_table_param, table_scan_range, mview_merge))) {
+  } else if (OB_FAIL(merge_wrapper->get_mview_merge(param, context, get_table_param, table_scan_range, scan_param, mview_merge))) {
     LOG_WARN("Failed to get mview merge", K(ret));
   }
   return ret;
@@ -403,13 +415,18 @@ int ObMviewMergeWrapper::get_mview_merge(
     ObTableAccessContext &context,
     ObGetTableParam &get_table_param,
     ObTableScanRange &table_scan_range,
+    ObTableScanParam &scan_param,
     ObMviewMerge *&version_merge)
 {
   int ret = OB_SUCCESS;
   ObQRIterType merge_type;
   ObMviewMerge *tmp_merge = nullptr;
   version_merge = nullptr;
-  if (OB_FAIL(table_scan_range.get_query_iter_type(merge_type))) {
+  if (OB_FAIL(ObTableScanIterator::calc_query_iter_type(table_scan_range,
+                                                        context.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
+                                                        scan_param,
+                                                        get_table_param,
+                                                        merge_type))) {
     LOG_WARN("Failed to get query iter type", K(ret));
   } else if (nullptr == (tmp_merge = merges_[merge_type])) {
     switch (merge_type) {
@@ -428,6 +445,14 @@ int ObMviewMergeWrapper::get_mview_merge(
       }
       case T_MULTI_SCAN: {
         tmp_merge = OB_NEWx(ObMviewMultiScanMerge, context.stmt_allocator_);
+        break;
+      }
+      case T_LEVEL_ORDER_SCAN: {
+        tmp_merge = OB_NEWx(ObMviewLevelOrderScanMerge, context.stmt_allocator_);
+        break;
+      }
+      case T_LEVEL_ORDER_MULTI_SCAN: {
+        tmp_merge = OB_NEWx(ObMviewLevelOrderMultiScanMerge, context.stmt_allocator_);
         break;
       }
       default: {

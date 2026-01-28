@@ -107,7 +107,7 @@ private:
   int update_merge_status(
     const share::SCN &global_broadcast_scn,
     const int64_t expected_epoch);
-  int handle_merge_progress(const compaction::ObBasicMergeProgress &progress,
+  int handle_merge_progress(const compaction::ObMergeProgress &progress,
                             const share::SCN &global_broadcast_scn,
                             const int64_t expected_epoch);
   int try_update_global_merged_scn(const int64_t expected_epoch);

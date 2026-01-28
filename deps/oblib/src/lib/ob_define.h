@@ -696,6 +696,7 @@ const char *const OB_HIDDEN_LINE_NUMBER_COLUMN_NAME = "__line_number"; // used f
 // hidden rowid name
 const char *const OB_HIDDEN_ROWID_COLUMN_NAME = "__ob_rowid";
 const int32_t OB_HIDDEN_ROWID_COLUMN_LENGTH = 16;
+const char *const OB_ORA_ROWSCN_STR = "ORA_ROWSCN";
 
 const char *const OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME = "ROWID";
 const int32_t OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME_LENGTH = 5;

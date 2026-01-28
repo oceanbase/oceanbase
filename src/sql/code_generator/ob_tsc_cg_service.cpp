@@ -1009,8 +1009,9 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogTableScan &op,
     if (!pd_blockscan) {
       pd_filter = false;
     } else {
+      bool is_before_4_5_1_0 = GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0;
       FOREACH_CNT_X(e, access_exprs, pd_blockscan || pd_filter) {
-        if ((use_column_store && T_ORA_ROWSCN == (*e)->get_expr_type()) || T_PSEUDO_EXTERNAL_FILE_URL == (*e)->get_expr_type()
+        if ((use_column_store && T_ORA_ROWSCN == (*e)->get_expr_type() && is_before_4_5_1_0) || T_PSEUDO_EXTERNAL_FILE_URL == (*e)->get_expr_type()
             || T_PSEUDO_OLD_NEW_COL == (*e)->get_expr_type()) {
           pd_blockscan = false;
           pd_filter = false;

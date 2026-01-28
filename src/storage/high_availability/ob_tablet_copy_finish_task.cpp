@@ -549,7 +549,7 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
     }
     ObBuildMajorSSTablesParam major_sstables_param(
       param_.src_tablet_meta_->storage_schema_,
-      param_.src_tablet_meta_->has_truncate_info_);
+      param_.src_tablet_meta_->has_merged_with_mds_info_);
 
     if (FAILEDx(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(param_.ls_,
                                                                              param_.tablet_id_,

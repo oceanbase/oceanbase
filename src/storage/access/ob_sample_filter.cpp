@@ -678,11 +678,12 @@ ObRowSampleFilter::~ObRowSampleFilter()
 {
   if (OB_NOT_NULL(allocator_)) {
     if (nullptr != filter_) {
+      filter_->set_childs(0, nullptr);
       filter_->~ObPushdownFilterExecutor();
       allocator_->free(filter_);
       filter_ = nullptr;
-      sample_filter_ = nullptr;
-    } else if (nullptr != sample_filter_) {
+    }
+    if (nullptr != sample_filter_) {
       sample_filter_->~ObPushdownFilterExecutor();
       allocator_->free(sample_filter_);
       sample_filter_ = nullptr;

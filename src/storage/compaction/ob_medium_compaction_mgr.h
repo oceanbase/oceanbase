@@ -141,7 +141,7 @@ public:
     const bool is_mv_refresh_or_restore_remote_tablet,
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
     int64_t &schedule_scn,
-    ObCOMajorMergePolicy::ObCOMajorMergeType &co_major_merge_type,
+    ObCOMajorMergeStrategy &co_major_merge_strategy,
     ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason) const;
   OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
   {

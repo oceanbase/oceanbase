@@ -63,6 +63,27 @@ public:
       const sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap) override;
 
+  virtual int filter_pushdown_truncate_filter(const sql::ObPushdownFilterExecutor *parent,
+                                              sql::ObPushdownFilterExecutor &filter,
+                                              const sql::PushdownFilterInfo &pd_filter_info,
+                                              common::ObBitmap &result_bitmap) override;
+
+  virtual int filter_pushdown_ttl_filter(const sql::ObPushdownFilterExecutor *parent,
+                                         sql::ObPushdownFilterExecutor &filter,
+                                         const sql::PushdownFilterInfo &pd_filter_info,
+                                         common::ObBitmap &result_bitmap) override;
+
+  virtual int filter_pushdown_base_version_filter(const sql::ObPushdownFilterExecutor *parent,
+                                                  sql::ObPushdownFilterExecutor &filter,
+                                                  const sql::PushdownFilterInfo &pd_filter_info,
+                                                  common::ObBitmap &result_bitmap) override;
+
+private:
+  int filter_pushdown_single_column_mds_filter(const sql::ObPushdownFilterExecutor *parent,
+                                               sql::ObPushdownFilterExecutor &filter,
+                                               const sql::PushdownFilterInfo &pd_filter_info,
+                                               common::ObBitmap &result_bitmap);
+
 public:
   /********** derived from ObIMicroBlockReader **********/
   virtual int get_row(const int64_t index, ObDatumRow &row) override;

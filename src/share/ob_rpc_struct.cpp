@@ -6586,6 +6586,17 @@ OB_SERIALIZE_MEMBER(ObTabletMajorFreezeArg,
                     tablet_id_,
                     is_rebuild_column_group_);
 
+OB_SERIALIZE_MEMBER(ObTableMajorFreezeArg,
+                    tenant_id_,
+                    table_id_,
+                    is_rebuild_column_group_);
+
+OB_SERIALIZE_MEMBER(ObTableMajorFreezeRequest,
+                    tenant_id_,
+                    ls_id_,
+                    tablet_ids_,
+                    is_rebuild_column_group_);
+
 OB_SERIALIZE_MEMBER(ObSyncPGPartitionMTFinishArg, server_, version_);
 
 OB_SERIALIZE_MEMBER(ObCheckDanglingReplicaFinishArg, server_, version_, dangling_count_);

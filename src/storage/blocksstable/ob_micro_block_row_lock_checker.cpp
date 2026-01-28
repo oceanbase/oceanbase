@@ -15,7 +15,8 @@
 #include "storage/access/ob_rows_info.h"
 #include "storage/access/ob_index_tree_prefetcher.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
-#include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "storage/access/ob_mds_filter_mgr.h"
+
 namespace oceanbase {
 namespace blocksstable {
 using namespace share;
@@ -151,22 +152,20 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
                                                               sstable_->get_end_scn(),
                                                               uncommited_lock_state))) {
           } else if (FALSE_IT(trans_version = uncommited_lock_state.trans_version_.get_val_for_tx())) {
-          } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
-                     transaction::is_effective_trans_version(trans_version) &&
-                     OB_FAIL(check_truncate_part_filter(current,
-                                                        trans_version,
-                                                        multi_version_info.mvcc_row_flag_.is_ghost_row(),
-                                                        is_filtered))) {
-            LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+          } else if (transaction::is_effective_trans_version(trans_version) &&
+                     OB_FAIL(check_mds_filter(current,
+                                              trans_version,
+                                              multi_version_info.mvcc_row_flag_.is_ghost_row(),
+                                              is_filtered))) {
+            LOG_WARN("failed to check mds filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
           } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
           } else if (is_filtered) {
           } else if (FALSE_IT(*lock_state = uncommited_lock_state)) {
           } else if (lock_state->is_lock_decided()) {
             lock_state->lock_dml_flag_ = multi_version_info.dml_row_flag_.get_dml_flag();
           }
-        } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
-                   OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, multi_version_info.mvcc_row_flag_.is_ghost_row(), is_filtered))) {
-          LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+        } else if (OB_FAIL(check_mds_filter(current, 0/*trans_version*/, multi_version_info.mvcc_row_flag_.is_ghost_row(), is_filtered))) {
+          LOG_WARN("failed to check mds filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
         } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
         } else if (is_filtered) {
         } else if (OB_FAIL(lock_state->trans_version_.convert_for_tx(trans_version))) {
@@ -174,9 +173,8 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         } else {
           lock_state->lock_dml_flag_ = multi_version_info.dml_row_flag_.get_dml_flag();
         }
-      } else if (OB_UNLIKELY(nullptr != context_->truncate_part_filter_) &&
-                 OB_FAIL(check_truncate_part_filter(current, 0/*trans_version*/, false, is_filtered))) {
-        LOG_WARN("failed to check truncate part filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
+      } else if (OB_FAIL(check_mds_filter(current, 0/*trans_version*/, false, is_filtered))) {
+        LOG_WARN("failed to check mds filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
       } else if (is_filtered) {
       } else {
         lock_state->trans_version_ = sstable_->is_inc_major_related_sstable()
@@ -204,11 +202,16 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
 }
 
 // TODO if current row is filtered by truncate, it's no need to scan remain data of the same rowkey
-int ObMicroBlockRowLockChecker::check_truncate_part_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered)
+int ObMicroBlockRowLockChecker::check_mds_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered)
 {
   int ret = OB_SUCCESS;
   fitered = false;
-  if (!is_ghost_row && context_->truncate_part_filter_->is_valid_filter()) {
+
+  if (context_->mds_filter_mgr_ == nullptr) {
+    // empty filter, skip
+  } else if (is_ghost_row) {
+    // skip
+  } else {
     const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
     if (OB_FAIL(reader_->get_row(current, row_))) {
       LOG_WARN("failed to get row", K(ret));
@@ -216,14 +219,23 @@ int ObMicroBlockRowLockChecker::check_truncate_part_filter(const int64_t current
       row_.storage_datums_[rowkey_cnt].reuse();
       row_.storage_datums_[rowkey_cnt].set_int(trans_version);
     }
-    if (FAILEDx(context_->truncate_part_filter_->filter(row_, fitered, true/*check_filter*/, !sstable_->is_major_sstable()))) {
-      LOG_WARN("failed to filter truncated part", K(ret));
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(context_->mds_filter_mgr_->filter(row_,
+                                                         fitered,
+                                                         true /* check_filter */,
+                                                         sstable_ == nullptr || !sstable_->is_major_sstable() /* check base version */))) {
+      LOG_WARN("failed to filter mds", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(fitered)) {
-      LOG_DEBUG("[TRUNCATE INFO] filtered by truncated main table partition", K(ret), K(current), K(trans_version), K_(row));
+      LOG_DEBUG("[MDS INFO] filtered by mds", KR(ret), K(current), K_(row), K(trans_version), KPC(context_->mds_filter_mgr_), K(rowkey_cnt));
     } else {
-      LOG_DEBUG("[TRUNCATE INFO] not filtered row", KR(ret), K(row_), KPC(context_->truncate_part_filter_), K(rowkey_cnt));
+      LOG_DEBUG("[MDS INFO] not filtered row", KR(ret), K(current), K(row_), K(trans_version), KPC(context_->mds_filter_mgr_), K(rowkey_cnt));
     }
   }
+
   return ret;
 }
 

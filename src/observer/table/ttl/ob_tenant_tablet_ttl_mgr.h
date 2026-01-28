@@ -172,12 +172,12 @@ public:
 
   virtual int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
   {
-    return ObTTLUtil::check_is_normal_ttl_table(table_schema, is_ttl_table);
+    return ObTTLUtil::check_is_deleting_ttl_table(table_schema, is_ttl_table);
   }
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;
-
+  static ObTTLType get_ttl_type() { return ObTTLType::NORMAL; }
   struct ObTTLTenantInfo
   {
   public:

@@ -1541,6 +1541,7 @@ class SqlKeywords:
          COMMIT
          COMMITTED
          COMPACT
+         COMPACTION
          COMPLETION
          COMPRESSED
          COMPRESSION
@@ -1577,6 +1578,7 @@ class SqlKeywords:
          DELAY
          DELAY_KEY_WRITE
          DELETE_INSERT
+         DELETING
          DES_KEY_FILE
          DESTINATION
          DIAGNOSTICS

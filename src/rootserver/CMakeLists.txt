@@ -273,6 +273,8 @@ ob_set_subtarget(ob_rootserver standby
 
 ob_set_subtarget(ob_rootserver truncate_info
   truncate_info/ob_truncate_info_service.cpp
+  compaction_ttl/ob_compaction_ttl_service.cpp
+  compaction_ttl/ob_tenant_compaction_ttl_scheduler.cpp
 )
 
 ob_set_subtarget(ob_rootserver pl_ddl

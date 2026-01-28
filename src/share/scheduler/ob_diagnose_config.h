@@ -19,7 +19,7 @@
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MEMTABLE_CANT_MINOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "memtable can not minor merge",
     2, {"memtable end_scn", "memtable timestamp"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_CANT_SCHEDULE_MINOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "can't schedule minor merge",
-    3, {"min_snapshot_version", "max_snapshot_version", "mini_sstable_cnt"})
+    4, {"min_snapshot_version", "max_snapshot_version", "mini_sstable_cnt", "minor_compact_trigger"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_CANT_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "need major merge but can't merge now",
     6, {"compaction_scn", "tablet_snapshot_version", "need_force_freeze", "ls_weak_read_ts_ready", "exist_unfinished_inc_major", "max_serialized_medium_scn"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_MEDIUM_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "schedule medium failed",

@@ -403,12 +403,12 @@ private:
     const storage::ObTabletStatAnalyzer &analyzer,
     ObTabletCompactionScoreDecisionInfo &decision_info,
     double &score_value);
-  static int check_need_recycle_truncate_info(
+  static int check_need_recycle_mds_info(
       storage::ObTablet &tablet,
-      bool &need_recycle_truncate_info);
+      bool &need_recycle_mds_info);
   static int get_inc_row_cnt_factor(
       storage::ObTablet &tablet,
-      const bool need_recycle_truncate_info,
+      const bool need_recycle_mds_info,
       int64_t &factor);
   static int estimate_days_by_sstable(
     storage::ObTablet &tablet,

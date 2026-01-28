@@ -947,7 +947,7 @@ int ObWindowCompactionUtils::calculate_tablet_compaction_score(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  bool need_recycle_truncate_info = false;
+  bool need_recycle_mds_info = false;
   need_window_compaction = false;
   decision_info.reset();
   score = 0;
@@ -956,9 +956,9 @@ int ObWindowCompactionUtils::calculate_tablet_compaction_score(
     // tablet does not need to do major compaction
   } else if (tablet.get_inc_row_cnt() >= INC_ROW_CNT_THRESHOLD) {
     need_window_compaction = true;
-  } else if (OB_FAIL(check_need_recycle_truncate_info(tablet, need_recycle_truncate_info))) {
-    LOG_WARN("failed to check need recycle truncate info", K(ret), K(tablet));
-  } else if (tablet.get_inc_row_cnt() > 0 || need_recycle_truncate_info || tablet.need_progressive_merge()) {
+  } else if (OB_FAIL(check_need_recycle_mds_info(tablet, need_recycle_mds_info))) {
+    LOG_WARN("failed to check need recycle mds info", K(ret), K(tablet));
+  } else if (tablet.get_inc_row_cnt() > 0 || need_recycle_mds_info || tablet.need_progressive_merge()) {
     need_window_compaction = true;
   }
 
@@ -966,14 +966,14 @@ int ObWindowCompactionUtils::calculate_tablet_compaction_score(
     // column_group_cnt = tablet.get_last_major_column_count() - 2(multi-version column) + 1(rowkey or all cg) = tablet.get_last_major_column_count() - 1
     const int64_t cg_merge_batch_cnt = tablet.is_row_store() ? 1 : ObCOMajorMergePolicy::get_cg_merge_batch_cnt(tablet.get_last_major_column_count() - 1);
     int64_t inc_row_cnt_factor = 0;
-    if (OB_FAIL(get_inc_row_cnt_factor(tablet, need_recycle_truncate_info, inc_row_cnt_factor))) {
+    if (OB_FAIL(get_inc_row_cnt_factor(tablet, need_recycle_mds_info, inc_row_cnt_factor))) {
       LOG_WARN("failed to get inc row cnt factor", K(ret), K(tablet));
     } else {
       double score_value = cg_merge_batch_cnt * inc_row_cnt_factor;
       if (OB_NOT_NULL(analyzer)) {
         multiply_tablet_compaction_score_with_analyzer(*analyzer, decision_info, score_value);
       }
-      decision_info.dynamic_info_.need_recycle_mds_ = need_recycle_truncate_info;
+      decision_info.dynamic_info_.need_recycle_mds_ = need_recycle_mds_info;
       decision_info.dynamic_info_.need_progressive_merge_ = tablet.need_progressive_merge();
       decision_info.dynamic_info_.cg_merge_batch_cnt_ = cg_merge_batch_cnt;
       decision_info.base_inc_row_cnt_ = tablet.get_inc_row_cnt();
@@ -990,19 +990,19 @@ int ObWindowCompactionUtils::calculate_tablet_compaction_score(
   return ret;
 }
 
-int ObWindowCompactionUtils::check_need_recycle_truncate_info(
+int ObWindowCompactionUtils::check_need_recycle_mds_info(
     storage::ObTablet &tablet,
-    bool &need_recycle_truncate_info)
+    bool &need_recycle_mds_info)
 {
   int ret = OB_SUCCESS;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE;
   int64_t unused_least_medium_snapshot = 0;
-  need_recycle_truncate_info = false;
-  if (OB_FAIL(ObAdaptiveMergePolicy::check_truncate_info_reason(tablet, reason, unused_least_medium_snapshot))) {
-    LOG_WARN("failed to check truncate info reason", K(ret), K(tablet_id));
-  } else if (ObAdaptiveMergePolicy::AdaptiveMergeReason::RECYCLE_TRUNCATE_INFO == reason) {
-    need_recycle_truncate_info = true;
+  need_recycle_mds_info = false;
+  if (OB_FAIL(ObAdaptiveMergePolicy::check_mds_info_reason(tablet, reason, unused_least_medium_snapshot))) {
+    LOG_WARN("failed to check mds info reason", K(ret), K(tablet_id));
+  } else if (ObAdaptiveMergePolicy::AdaptiveMergeReason::RECYCLE_MDS_INFO == reason) {
+    need_recycle_mds_info = true;
   }
   return ret;
 }
@@ -1031,12 +1031,12 @@ void ObWindowCompactionUtils::multiply_tablet_compaction_score_with_analyzer(
 
 int ObWindowCompactionUtils::get_inc_row_cnt_factor(
     storage::ObTablet &tablet,
-    const bool need_recycle_truncate_info,
+    const bool need_recycle_mds_info,
     int64_t &factor)
 {
   int ret = OB_SUCCESS;
   int64_t score_row_cnt = tablet.get_inc_row_cnt();
-  if (need_recycle_truncate_info || tablet.need_progressive_merge()) {
+  if (need_recycle_mds_info || tablet.need_progressive_merge()) {
     score_row_cnt += tablet.get_last_major_row_count();
   }
   int64_t days_since_last_compaction = 0;

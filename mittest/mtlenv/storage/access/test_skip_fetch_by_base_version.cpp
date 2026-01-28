@@ -68,43 +68,6 @@ using namespace palf;
 namespace storage
 {
 
-ObSEArray<ObTxData, 8> TX_DATA_ARR;
-
-int ObTxTable::insert(ObTxData *&tx_data)
-{
-  int ret = OB_SUCCESS;
-  ret = TX_DATA_ARR.push_back(*tx_data);
-  return ret;
-}
-
-int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; i < TX_DATA_ARR.count(); i++)
-  {
-    if (read_tx_data_arg.tx_id_ == TX_DATA_ARR.at(i).tx_id_) {
-      if (TX_DATA_ARR.at(i).state_ == ObTxData::RUNNING) {
-        SCN tmp_scn;
-        tmp_scn.convert_from_ts(30);
-        ObTxCCCtx tmp_ctx(ObTxState::PREPARE, tmp_scn);
-        ret = fn(TX_DATA_ARR[i], &tmp_ctx);
-      } else {
-        ret = fn(TX_DATA_ARR[i]);
-      }
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "check with tx data failed", KR(ret), K(read_tx_data_arg), K(TX_DATA_ARR.at(i)));
-      }
-      break;
-    }
-  }
-  return ret;
-}
-
-void clear_tx_data()
-{
-  TX_DATA_ARR.reset();
-};
-
 class ObMockWhiteFilterExecutor : public ObWhiteFilterExecutor
 {
 public:

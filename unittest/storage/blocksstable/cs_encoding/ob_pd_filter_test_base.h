@@ -571,7 +571,7 @@ int ObPdFilterTestBase::check_column_store_white_filter(
   #define HANDLE_TRANSFORM() \
   ObMicroBlockDesc micro_block_desc; \
   ObMicroBlockHeader *header = nullptr; \
-  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc(encoder, micro_block_desc, header)); \
+  ASSERT_EQ(OB_SUCCESS, build_micro_block_desc_in_unittest(encoder, micro_block_desc, header)); \
   ASSERT_EQ(OB_SUCCESS, full_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true)); \
   ASSERT_EQ(OB_SUCCESS, part_transform_check_row(header, micro_block_desc, row_arr, row_cnt, true)); \
   LOG_INFO(">>>>>>>>>>FINISH DECODER<<<<<<<<<<<"); \

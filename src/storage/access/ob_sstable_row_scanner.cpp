@@ -28,6 +28,7 @@ ObSSTableRowScanner<PrefetchType>::~ObSSTableRowScanner()
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, micro_data_scanner_, ObMicroBlockRowScanner);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_micro_data_scanner_, ObMultiVersionMicroBlockRowScanner);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_di_micro_data_scanner_, ObMultiVersionDIMicroBlockRowScanner);
+  FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_io_micro_data_scanner_, ObMultiVersionIOMicroBlockRowScanner);
 }
 
 template<typename PrefetchType>
@@ -37,6 +38,7 @@ void ObSSTableRowScanner<PrefetchType>::reset()
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, micro_data_scanner_, ObMicroBlockRowScanner);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_micro_data_scanner_, ObMultiVersionMicroBlockRowScanner);
   FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_di_micro_data_scanner_, ObMultiVersionDIMicroBlockRowScanner);
+  FREE_ITER_FROM_ALLOCATOR(long_life_allocator_, mv_io_micro_data_scanner_, ObMultiVersionIOMicroBlockRowScanner);
   is_opened_ = false;
   range_idx_ = 0;
   is_di_base_iter_ = false;
@@ -68,6 +70,9 @@ void ObSSTableRowScanner<PrefetchType>::reuse()
   if (nullptr != mv_di_micro_data_scanner_) {
     mv_di_micro_data_scanner_->reuse();
   }
+  if (nullptr != mv_io_micro_data_scanner_) {
+    mv_io_micro_data_scanner_->reuse();
+  }
   if (nullptr != block_row_store_) {
     block_row_store_->reuse();
   }
@@ -94,6 +99,9 @@ void ObSSTableRowScanner<PrefetchType>::reclaim()
   }
   if (nullptr != mv_di_micro_data_scanner_) {
     mv_di_micro_data_scanner_->reuse();
+  }
+  if (nullptr != mv_io_micro_data_scanner_) {
+    mv_io_micro_data_scanner_->reuse();
   }
   micro_scanner_ = nullptr;
   sstable_ = nullptr;
@@ -231,6 +239,8 @@ int ObSSTableRowScanner<PrefetchType>::init_micro_scanner()
   if (sstable_->is_multi_version_minor_sstable()) {
     if (iter_param_->is_delete_insert_) {
       INIT_MICRO_DATA_SCANNER(mv_di_micro_data_scanner_, ObMultiVersionDIMicroBlockRowScanner);
+    } else if (iter_param_->is_append_only_can_blockscan()) {
+      INIT_MICRO_DATA_SCANNER(mv_io_micro_data_scanner_, ObMultiVersionIOMicroBlockRowScanner);
     } else {
       INIT_MICRO_DATA_SCANNER(mv_micro_data_scanner_, ObMultiVersionMicroBlockRowScanner);
     }

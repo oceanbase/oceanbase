@@ -142,12 +142,7 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
 
       if (OB_NOT_NULL(compaction_filter)) {
         // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
-        SCN recycled_scn;
-        if (compaction_filter->get_max_filtered_end_scn() > SCN::min_scn()) {
-          recycled_scn = compaction_filter->get_max_filtered_end_scn();
-        } else {
-          recycled_scn = compaction_filter->get_recycle_scn();
-        }
+        SCN recycled_scn = compaction_filter->get_recycle_scn();
         if (recycled_scn > param.filled_tx_scn()) {
           param.set_filled_tx_scn(recycled_scn);
         }

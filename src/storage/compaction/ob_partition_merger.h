@@ -46,32 +46,7 @@ struct ObMergeParameter;
 class ObPartitionMergeHelper;
 class ObPartitionMinorMergeHelper;
 class ObTabletMergeInfo;
-
-struct ObMacroBlockOp {
-  enum BlockOp: uint8_t {
-    OP_NONE = 0,
-    OP_REORG = 1,
-    OP_REWRITE = 2
-  };
-
-  ObMacroBlockOp() = default;
-  ~ObMacroBlockOp() = default;
-  OB_INLINE void reset() { block_op_ = OP_NONE; }
-  OB_INLINE bool is_none() const { return block_op_ == OP_NONE; }
-  OB_INLINE bool is_rewrite() const { return block_op_ == OP_REWRITE; }
-  OB_INLINE bool is_reorg() const { return block_op_ == OP_REORG; }
-  OB_INLINE bool is_open() const { return is_reorg() || is_rewrite(); }
-  OB_INLINE void set_rewrite() { block_op_ = OP_REWRITE; }
-  OB_INLINE void set_reorg() { block_op_ = OP_REORG; }
-  OB_INLINE bool is_valid() const { return block_op_ <= OP_REWRITE && block_op_ >= OP_NONE; }
-  const char* get_block_op_str() const;
-
-  TO_STRING_KV("op_type", get_block_op_str());
-
-  BlockOp block_op_;
-private:
-  const static char * block_op_str_[];
-};
+struct ObBlockOp;
 
 class ObDataDescHelper final {
 public:
@@ -117,7 +92,7 @@ public:
     : ObMergerBasic(allocator, static_param),
       partition_fuser_(nullptr),
       merge_helper_(nullptr),
-      filter_statistics_()
+      filter_handle_()
   {}
   virtual ~ObMerger() { reset(); }
   virtual void reset();
@@ -127,7 +102,7 @@ protected:
 public:
   ObIPartitionMergeFuser *partition_fuser_;
   ObPartitionMergeHelper *merge_helper_;
-  ObICompactionFilter::ObFilterStatistics filter_statistics_;
+  ObCompactionFilterHandle filter_handle_;
 };
 
 class ObRowStoreMerger : public ObMerger
@@ -182,26 +157,35 @@ public:
 protected:
   virtual int inner_process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true) = 0;
   virtual int inner_close() override;
-  virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) = 0;
+  virtual int try_process(
+    const blocksstable::ObMicroBlock &micro_block,
+    ObPartitionMergeIter &iter);
+  virtual int try_process(
+      const blocksstable::ObMacroBlockDesc &macro_desc,
+      const ObMicroBlockData *micro_block_data,
+      ObPartitionMergeIter &iter);
+  virtual int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters);
+  int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObBlockOp &block_op);
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) = 0;
 
+  int process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true);
+  int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
+  int check_row_columns(const blocksstable::ObDatumRow &row);
+
+private:
+   // Attention! use try_process to reuse micro/macro
   int process(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx);
   int process(
       const blocksstable::ObMacroBlockDesc &macro_meta,
       const ObMicroBlockData *micro_block_data,
       const int64_t sstable_idx);
-  int process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true);
-  int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
-  int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op);
-  int check_row_columns(const blocksstable::ObDatumRow &row);
-
-private:
   int inner_open_macro_writer(ObBasicTabletMergeCtx &ctx, ObMergeParameter &merge_param);
   virtual int inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx) override final;
   virtual int inner_init() = 0;
 protected:
   static const int64_t DEFAULT_ITER_ARRAY_SIZE = DEFAULT_ITER_COUNT * sizeof(ObPartitionMergeIter *);
 protected:
+  int64_t reuse_row_cnt_;
   ObPartitionMergeProgress *merge_progress_;
   blocksstable::ObDataStoreDesc data_store_desc_;
   blocksstable::ObMacroBlockWriter *macro_writer_;
@@ -228,9 +212,8 @@ protected:
 private:
   virtual int inner_init() override;
   int init_progressive_merge_helper();
-  virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) override;
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) override;
-  int merge_micro_block_iter(ObPartitionMergeIter &iter, int64_t &reuse_row_cnt);
+  int merge_micro_block_iter(ObPartitionMergeIter &iter);
   int reuse_base_sstable(ObPartitionMergeHelper &merge_helper);
   int reuse_base_small_sstable(ObPartitionMergeIter *base_iter, const MERGE_ITER_ARRAY &merge_iters);
   int inner_reuse_micro_or_row(ObPartitionMergeIter &base_iter, const MERGE_ITER_ARRAY &merge_iters);
@@ -263,7 +246,6 @@ protected:
                                            common::ObIArray<int64_t> &iter_idxs);
   int skip_shadow_row(MERGE_ITER_ARRAY &merge_iters);
   int check_need_prebuild_bloomfilter();
-  virtual int rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters) override;
 private:
   virtual int inner_init() override;
   int init_progressive_merge_helper();
@@ -328,8 +310,8 @@ int ObMergerBasic::alloc_row_writer(
     writer = nullptr;
     ObCOTabletMergeCtx *ctx = static_cast<ObCOTabletMergeCtx *>(merge_ctx_);
     ObTabletMergeInfo **merge_infos = ctx->cg_merge_info_array_;
-    const bool need_co_scan = ctx->is_build_row_store_from_rowkey_cg()
-        || (ctx->is_build_redundant_row_store_from_rowkey_cg() && 0 == cg_idx);
+    const bool need_co_scan = ctx->is_build_all_cg_from_each_cg()
+        || (ctx->only_use_row_store() && 0 == cg_idx);
     if (OB_UNLIKELY(nullptr == merge_infos || nullptr == merge_infos[cg_idx])) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "unexpected nullptr merge info", K(ret), K(merge_infos), K(cg_idx));

@@ -379,7 +379,7 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
       if (OB_FAIL(set_row_data_pos(fix_data_size))) {
         LOG_WARN("set row data position failed", K(ret));
       } else {
-        get_header(data_buffer_)->var_column_count_ = static_cast<uint16_t>(var_data_encoders_.count());
+        micro_header_.var_column_count_ = static_cast<uint16_t>(var_data_encoders_.count());
       }
     }
 
@@ -393,19 +393,19 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
     // <4> fill row index
     if (OB_SUCC(ret)) {
       if (var_data_encoders_.empty()) {
-        get_header(data_buffer_)->row_index_byte_ = 0;
+        micro_header_.row_index_byte_ = 0;
       } else {
-        get_header(data_buffer_)->row_index_byte_ = 2;
+        micro_header_.row_index_byte_ = 2;
         if (row_indexs_.at(row_indexs_.count() - 1) > UINT16_MAX) {
-          get_header(data_buffer_)->row_index_byte_ = 4;
+          micro_header_.row_index_byte_ = 4;
         }
         ObIntegerArrayGenerator gen;
-        const int64_t row_index_size = row_indexs_.count() * get_header(data_buffer_)->row_index_byte_;
+        const int64_t row_index_size = row_indexs_.count() * micro_header_.row_index_byte_;
         if (OB_FAIL(data_buffer_.ensure_space(row_index_size))) {
           STORAGE_LOG(WARN, "fail to ensure space", K(ret), K(row_index_size), K(data_buffer_));
-        } else if (OB_FAIL(gen.init(data_buffer_.data() + data_buffer_.length(), get_header(data_buffer_)->row_index_byte_))) {
+        } else if (OB_FAIL(gen.init(data_buffer_.data() + data_buffer_.length(), micro_header_.row_index_byte_))) {
           LOG_WARN("init integer array generator failed",
-              K(ret), "byte", get_header(data_buffer_)->row_index_byte_);
+              K(ret), "byte", micro_header_.row_index_byte_);
         } else if (OB_FAIL(data_buffer_.write_nop(row_index_size))) {
           LOG_WARN("advance data buffer failed", K(ret), K(row_index_size));
         } else {
@@ -418,11 +418,11 @@ int ObMicroBlockRawEncoder::build_block(char *&buf, int64_t &size)
 
     // <5> fill header, encoding_meta and fix cols data
     if (OB_SUCC(ret)) {
-      get_header(data_buffer_)->row_count_ = static_cast<uint32_t>(datum_rows_.count());
-      get_header(data_buffer_)->has_string_out_row_ = has_string_out_row_;
-      get_header(data_buffer_)->all_lob_in_row_ = !has_lob_out_row_;
-      get_header(data_buffer_)->max_merged_trans_version_ = max_merged_trans_version_;
-      const int64_t header_size = get_header(data_buffer_)->header_size_;
+      micro_header_.row_count_ = static_cast<uint32_t>(datum_rows_.count());
+      micro_header_.has_string_out_row_ = has_string_out_row_;
+      micro_header_.all_lob_in_row_ = !has_lob_out_row_;
+      micro_header_.max_merged_trans_version_ = max_merged_trans_version_;
+      const int64_t header_size = micro_header_.header_size_;
       char *data = data_buffer_.data() + header_size;
       FOREACH(e, encoders_) {
         MEMCPY(data, &(*e)->get_column_header(), sizeof(ObColumnHeader));
@@ -997,7 +997,7 @@ void TestDecoderFilterPerf::init_encoding_ctx(
   char* buf = NULL; \
   int64_t size = 0; \
   if (is_column_store) { \
-    ASSERT_EQ(OB_SUCCESS, cs_encoder_.build_micro_block_desc(micro_block_desc)); \
+    ASSERT_EQ(OB_SUCCESS, cs_encoder_.build_micro_block_desc_in_unittest(micro_block_desc)); \
     if (need_cs_full_transform_) { \
       int64_t pos = 0; \
       ObMicroBlockHeader *header = const_cast<ObMicroBlockHeader *>(micro_block_desc.header_); \
@@ -1029,13 +1029,17 @@ void TestDecoderFilterPerf::init_encoding_ctx(
       data.buf_ = micro_block_desc.buf_ - micro_block_desc.header_->header_size_; \
       data.size_ = micro_block_desc.buf_size_ + micro_block_desc.header_->header_size_; \
     } \
+    ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(data.buf_, data.size_)); \
     ASSERT_EQ(OB_SUCCESS, cs_decoder.init(data, cs_read_info_)) << "buffer size: " << data.get_buf_size() << std::endl; \
     cur_decoder = &cs_decoder; \
   } else { \
+    int64_t pos = 0; \
     if (is_raw_encoder_) { \
       ASSERT_EQ(OB_SUCCESS, raw_encoder_.build_block(buf, size)); \
+      ASSERT_EQ(OB_SUCCESS, raw_encoder_.micro_header_.serialize(buf, size, pos)); \
     } else { \
       ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size)); \
+      ASSERT_EQ(OB_SUCCESS, encoder_.micro_header_.serialize(buf, size, pos)); \
     } \
     if (need_compress_) { \
       ObMicroBlockCompressor compressor; \

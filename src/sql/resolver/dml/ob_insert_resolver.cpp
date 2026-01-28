@@ -113,6 +113,24 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     } else { /*do nothing*/ }
   }
 
+  // Check if replace into is used on append_only table
+  if (OB_SUCC(ret) && insert_stmt->is_replace()) {
+    TableItem *table_item = insert_stmt->get_table_item_by_id(
+        insert_stmt->get_insert_table_info().table_id_);
+    if (OB_NOT_NULL(table_item)) {
+      const ObTableSchema *table_schema = NULL;
+      if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                     table_item->get_base_table_item().ref_id_,
+                                                     table_schema,
+                                                     table_item->is_link_table()))) {
+        LOG_WARN("fail to get table schema", K(ret));
+      } else if (OB_NOT_NULL(table_schema) && table_schema->is_append_only_merge_engine()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace into append_only table is");
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && insert_stmt->is_overwrite()) {
     TableItem *tmp_table_item = insert_stmt->get_table_item_by_id(insert_stmt->get_insert_table_info().table_id_);
     if (OB_ISNULL(tmp_table_item)) {

@@ -20,6 +20,8 @@
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
 #include "share/schema/ob_list_row_values.h"
 #include "unittest/storage/ob_truncate_info_helper.h"
+#include "storage/access/ob_mds_filter_mgr.h"
+#include "storage/blocksstable/ob_datum_row.h"
 
 namespace oceanbase
 {
@@ -200,7 +202,7 @@ void ObTruncatePartitionFitlerTest::rescan_filter(
   ObTruncateInfoArray truncate_info_array;
   truncate_info_array.init_for_first_creation(allocator_);
   ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(truncate_info));
-  ASSERT_EQ(OB_SUCCESS, filter.truncate_filter_executor_->switch_info(filter.filter_factory_, schema_rowkey_cnt_, cols_desc_, truncate_info_array));
+  ASSERT_EQ(OB_SUCCESS, filter.truncate_filter_executor_->switch_info(filter.mds_filter_mgr_.get_filter_factory(), schema_rowkey_cnt_, cols_desc_, truncate_info_array));
 }
 
 void ObTruncatePartitionFitlerTest::build_filter(
@@ -231,6 +233,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   // ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   // ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_range1_idx on t_range1(c2) global", affected_rows));
 
+  ObMDSFilterMgr mds_filter_mgr(nullptr);
   ObDatumRow index_part_row;
   ASSERT_EQ(OB_SUCCESS, index_part_row.init(allocator_, 4));
   ObStorageDatum &scn_datum = index_part_row.storage_datums_[2];
@@ -248,7 +251,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   col_idxs_[0] = 0;
   build_truncate_info(ObTruncatePartition::RANGE_PART, row_scn, range_begin_rowkey, range_end_rowkey, 1, range_truncate_info1);
 
-  ObTruncatePartitionFilter truncate_range_part_filter1;
+  ObTruncatePartitionFilter truncate_range_part_filter1(mds_filter_mgr);
   get_index_table_cols_param(false);
   build_filter(range_truncate_info1, truncate_range_part_filter1);
 
@@ -272,7 +275,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo range_truncate_info2;
   build_truncate_info(ObTruncatePartition::RANGE_PART, row_scn, range_begin_rowkey, range_end_rowkey, 1, range_truncate_info2);
 
-  ObTruncatePartitionFilter truncate_range_part_filter2;
+  ObTruncatePartitionFilter truncate_range_part_filter2(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(range_truncate_info2, truncate_range_part_filter2);
 
@@ -287,7 +290,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo range_truncate_info3;
   build_truncate_info(ObTruncatePartition::RANGE_PART, row_scn, range_begin_rowkey, range_end_rowkey, 1, range_truncate_info3);
-  ObTruncatePartitionFilter truncate_range_part_filter3;
+  ObTruncatePartitionFilter truncate_range_part_filter3(mds_filter_mgr);
   get_index_table_cols_param(false);
   build_filter(range_truncate_info3, truncate_range_part_filter3);
 
@@ -303,7 +306,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
 
   ObTruncateInfo range_truncate_info4;
   build_truncate_info(ObTruncatePartition::RANGE_PART, row_scn, range_begin_rowkey, range_end_rowkey, 1, range_truncate_info4);
-  ObTruncatePartitionFilter truncate_range_part_filter4;
+  ObTruncatePartitionFilter truncate_range_part_filter4(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(range_truncate_info4, truncate_range_part_filter4);
 
@@ -361,7 +364,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   col_idxs_[1] = 0;
   build_truncate_info(ObTruncatePartition::RANGE_COLUMNS_PART, row_scn, range_columns_min_begin_rowkey, range_columns_end_rowkey, 2, range_columns_truncate_info1);
 
-  ObTruncatePartitionFilter truncate_range_columns_part_filter1;
+  ObTruncatePartitionFilter truncate_range_columns_part_filter1(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(range_columns_truncate_info1, truncate_range_columns_part_filter1);
 
@@ -395,7 +398,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo range_columns_truncate_info2;
   build_truncate_info(ObTruncatePartition::RANGE_COLUMNS_PART, row_scn, range_columns_begin_rowkey, range_columns_end_rowkey, 2, range_columns_truncate_info2);
 
-  ObTruncatePartitionFilter truncate_range_columns_part_filter2;
+  ObTruncatePartitionFilter truncate_range_columns_part_filter2(mds_filter_mgr);
   get_index_table_cols_param(false);
   build_filter(range_columns_truncate_info2, truncate_range_columns_part_filter2);
 
@@ -417,7 +420,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo range_columns_truncate_info3;
   build_truncate_info(ObTruncatePartition::RANGE_COLUMNS_PART, row_scn, range_columns_begin_rowkey, range_columns_max_end_rowkey, 2, range_columns_truncate_info3);
 
-  ObTruncatePartitionFilter truncate_range_columns_part_filter3;
+  ObTruncatePartitionFilter truncate_range_columns_part_filter3(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(range_columns_truncate_info3, truncate_range_columns_part_filter3);
 
@@ -437,7 +440,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo range_columns_truncate_info4;
   build_truncate_info(ObTruncatePartition::RANGE_COLUMNS_PART, row_scn, range_columns_begin_rowkey, range_columns_max_end_rowkey, 2, range_columns_truncate_info4);
 
-  ObTruncatePartitionFilter truncate_range_columns_part_filter4;
+  ObTruncatePartitionFilter truncate_range_columns_part_filter4(mds_filter_mgr);
   build_filter(range_columns_truncate_info4, truncate_range_columns_part_filter4);
 
   CHECK_RANGE_COLUMNS_ROW(800, 0, 0, truncate_range_columns_part_filter4, TRUE);
@@ -495,7 +498,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   col_idxs_[0] = 0;
   build_truncate_info(ObTruncatePartition::LIST_PART, row_scn, list_row_values, 1, list_truncate_info1);
 
-  ObTruncatePartitionFilter truncate_list_part_filter1;
+  ObTruncatePartitionFilter truncate_list_part_filter1(mds_filter_mgr);
   get_index_table_cols_param(false);
   build_filter(list_truncate_info1, truncate_list_part_filter1);
   ObStorageDatum &list_part_datum = index_part_row.storage_datums_[0];
@@ -529,7 +532,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo list_truncate_info2;
   build_truncate_info(ObTruncatePartition::LIST_PART, row_scn, list_row_values2, 1, list_truncate_info2);
 
-  ObTruncatePartitionFilter truncate_list_part_filter2;
+  ObTruncatePartitionFilter truncate_list_part_filter2(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(list_truncate_info2, truncate_list_part_filter2);
 
@@ -555,7 +558,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo list_truncate_info3;
   build_truncate_info(ObTruncatePartition::LIST_PART, row_scn, list_row_values3, 1, list_truncate_info3, ObTruncatePartition::EXCEPT);
 
-  ObTruncatePartitionFilter truncate_list_part_filter3;
+  ObTruncatePartitionFilter truncate_list_part_filter3(mds_filter_mgr);
   get_index_table_cols_param(false);
   build_filter(list_truncate_info3, truncate_list_part_filter3);
 
@@ -596,7 +599,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo list_truncate_info4;
   build_truncate_info(ObTruncatePartition::LIST_PART, row_scn, list_row_values4, 1, list_truncate_info4, ObTruncatePartition::ALL);
 
-  ObTruncatePartitionFilter truncate_list_part_filter4;
+  ObTruncatePartitionFilter truncate_list_part_filter4(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(list_truncate_info4, truncate_list_part_filter4);
 
@@ -641,7 +644,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   col_idxs_[1] = 0;
   build_truncate_info(ObTruncatePartition::LIST_COLUMNS_PART, row_scn, list_columns_row_values1, 2, list_columns_truncate_info1);
 
-  ObTruncatePartitionFilter truncate_list_columns_part_filter1;
+  ObTruncatePartitionFilter truncate_list_columns_part_filter1(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(list_columns_truncate_info1, truncate_list_columns_part_filter1);
 
@@ -674,7 +677,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo list_columns_truncate_info2;
   build_truncate_info(ObTruncatePartition::LIST_COLUMNS_PART, row_scn, list_columns_row_values2, 2, list_columns_truncate_info2);
 
-  ObTruncatePartitionFilter truncate_list_columns_part_filter2;
+  ObTruncatePartitionFilter truncate_list_columns_part_filter2(mds_filter_mgr);
   get_index_table_cols_param(false);
   build_filter(list_columns_truncate_info2, truncate_list_columns_part_filter2);
 
@@ -702,7 +705,7 @@ TEST_F(ObTruncatePartitionFitlerTest, part_filter)
   ObTruncateInfo list_columns_truncate_info3;
   build_truncate_info(ObTruncatePartition::LIST_COLUMNS_PART, row_scn, list_columns_row_values3, 2, list_columns_truncate_info3);
 
-  ObTruncatePartitionFilter truncate_list_columns_part_filter3;
+  ObTruncatePartitionFilter truncate_list_columns_part_filter3(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(list_columns_truncate_info3, truncate_list_columns_part_filter3);
 
@@ -744,6 +747,7 @@ TEST_F(ObTruncatePartitionFitlerTest, subpart_filter)
 {
   get_index_table_cols_desc();
   get_index_table_cols_param(true);
+  ObMDSFilterMgr mds_filter_mgr(nullptr);
   ObDatumRow index_part_row;
   ASSERT_EQ(OB_SUCCESS, index_part_row.init(allocator_, 4));
   ObStorageDatum &scn_datum = index_part_row.storage_datums_[2];
@@ -786,7 +790,7 @@ TEST_F(ObTruncatePartitionFitlerTest, subpart_filter)
       1,
       range_list_truncate_info1);
 
-  ObTruncatePartitionFilter truncate_range_list_part_filter1;
+  ObTruncatePartitionFilter truncate_range_list_part_filter1(mds_filter_mgr);
   get_index_table_cols_param(false);
   build_filter(range_list_truncate_info1, truncate_range_list_part_filter1);
 
@@ -809,7 +813,7 @@ TEST_F(ObTruncatePartitionFitlerTest, subpart_filter)
       ObTruncatePartition::INCLUDE,
       ObTruncatePartition::EXCEPT);
 
-  ObTruncatePartitionFilter truncate_range_list_part_filter2;
+  ObTruncatePartitionFilter truncate_range_list_part_filter2(mds_filter_mgr);
   get_index_table_cols_param(true);
   build_filter(range_list_truncate_info2, truncate_range_list_part_filter2);
 
@@ -835,7 +839,7 @@ TEST_F(ObTruncatePartitionFitlerTest, subpart_filter)
       range_list_truncate_info3,
       ObTruncatePartition::INCLUDE,
       ObTruncatePartition::ALL);
-  ObTruncatePartitionFilter truncate_range_list_part_filter3;
+  ObTruncatePartitionFilter truncate_range_list_part_filter3(mds_filter_mgr);
   get_index_table_cols_param(false);
   build_filter(range_list_truncate_info3, truncate_range_list_part_filter3);
   CHECK_SUB_PART_ROW(800, 5,0, truncate_range_list_part_filter3, TRUE);
@@ -892,6 +896,7 @@ TEST_F(ObTruncatePartitionFitlerTest, multi_truncate_info)
   // ASSERT_EQ(OB_SUCCESS, sql_proxy.write("create index t_range1_idx on t_range1(c2) global", affected_rows));
   // get_index_table_cols_desc(conn, "t_range1");
 
+  ObMDSFilterMgr mds_filter_mgr(nullptr);
   ObDatumRow index_part_row;
   ASSERT_EQ(OB_SUCCESS, index_part_row.init(allocator_, 4));
   ObStorageDatum &scn_datum = index_part_row.storage_datums_[2];
@@ -928,7 +933,7 @@ TEST_F(ObTruncatePartitionFitlerTest, multi_truncate_info)
             truncate_range_part_filter.filter(index_part_row, filtered));      \
   ASSERT_##flag(filtered);
   {
-    ObTruncatePartitionFilter truncate_range_part_filter;
+    ObTruncatePartitionFilter truncate_range_part_filter(mds_filter_mgr);
     get_index_table_cols_param(false);
     build_filter(truncate_info_array, truncate_range_part_filter);
 
@@ -960,7 +965,7 @@ TEST_F(ObTruncatePartitionFitlerTest, multi_truncate_info)
     ObTruncateInfo range_truncate_info3;
     build_truncate_info(ObTruncatePartition::RANGE_PART, 900/*row_scn*/, range_begin_rowkey, range_end_rowkey, 1, range_truncate_info3);
     ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(range_truncate_info3));
-    ObTruncatePartitionFilter truncate_range_part_filter;
+    ObTruncatePartitionFilter truncate_range_part_filter(mds_filter_mgr);
     get_index_table_cols_param(true);
     build_filter(truncate_info_array, truncate_range_part_filter);
 
@@ -1039,7 +1044,7 @@ TEST_F(ObTruncatePartitionFitlerTest, multi_truncate_info)
   build_truncate_info(ObTruncatePartition::LIST_PART, 1200/*row_scn*/, list_row_values, 1, list_truncate_info2, ObTruncatePartition::EXCEPT);
   ASSERT_EQ(OB_SUCCESS, truncate_info_array2.append_with_deep_copy(list_truncate_info2));
   {
-    ObTruncatePartitionFilter truncate_list_part_filter;
+    ObTruncatePartitionFilter truncate_list_part_filter(mds_filter_mgr);
     get_index_table_cols_param(true);
     build_filter(truncate_info_array2, truncate_list_part_filter);
     row_scn = 800;

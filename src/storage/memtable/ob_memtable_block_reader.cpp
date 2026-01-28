@@ -16,6 +16,9 @@
 #include "ob_memtable_single_row_reader.h"
 #include "ob_memtable.h"
 #include "storage/access/ob_table_access_context.h"
+#include "storage/truncate_info/ob_truncate_partition_filter.h"
+#include "storage/compaction_ttl/ob_ttl_filter.h"
+#include "storage/compaction_ttl/ob_base_version_filter.h"
 
 namespace oceanbase {
 using namespace storage;
@@ -235,6 +238,182 @@ int ObMemtableBlockReader::filter_pushdown_filter(
     LOG_TRACE("[PUSHDOWN] memtable block pushdown filter row", K(ret), K(has_lob_out_row),
               K(pd_filter_info), K(col_offsets), K(result_bitmap.popcnt()), K(result_bitmap));
   }
+  return ret;
+}
+
+int ObMemtableBlockReader::filter_pushdown_truncate_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(pd_filter_info.start_ < 0
+                  || pd_filter_info.start_ + pd_filter_info.count_ > row_count_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument",
+             K(ret),
+             K(row_count_),
+             K(pd_filter_info.start_),
+             K(pd_filter_info.count_));
+  } else if (OB_UNLIKELY(!filter.is_truncate_filter_node())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected truncate filter type", K(ret), K(filter));
+  } else {
+    sql::ObITruncateFilterExecutor *truncate_executor = nullptr;
+    if (filter.is_filter_black_node()) {
+      truncate_executor = static_cast<sql::ObTruncateBlackFilterExecutor*>(&filter);
+    } else {
+      truncate_executor = static_cast<sql::ObTruncateWhiteFilterExecutor*>(&filter);
+    }
+
+    ObStorageDatum *datum_buf = truncate_executor->get_tmp_datum_buffer();
+    const common::ObIArray<int32_t> &col_idxs = truncate_executor->get_col_idxs();
+    const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
+    const int64_t col_count = col_idxs.count();
+    int64_t row_idx = 0;
+    if (OB_UNLIKELY(col_count <= 0 || nullptr == datum_buf)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected col count", K(ret), K(col_count), KP(datum_buf));
+    }
+    for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
+      row_idx = offset + pd_filter_info.start_;
+      if (nullptr != parent && parent->can_skip_filter(offset)) {
+        continue;
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
+          ObStorageDatum &datum = datum_buf[i];
+          const int64_t col_idx = col_idxs.at(i);
+          const ObObjType obj_type = cols_desc.at(col_idx).col_type_.get_type();
+          const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(obj_type);
+          ObStorageDatum &src_datum = rows_[row_idx].storage_datums_[col_idx];
+
+          datum.reuse();
+          if (OB_FAIL(datum.from_storage_datum(src_datum, map_type))) {
+            LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(src_datum), K(obj_type), K(map_type));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        bool filtered = false;
+        if (OB_FAIL(truncate_executor->filter(datum_buf, col_count, filtered))) {
+          LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
+        } else if (!filtered) {
+          if (OB_FAIL(result_bitmap.set(offset))) {
+            LOG_WARN("Failed to set result bitmap", K(ret), K(offset));
+          }
+        }
+      }
+    }
+    LOG_TRACE("[TRUNCATE INFO] memtable pushdown truncate filter row", K(ret), K(pd_filter_info),
+              K(result_bitmap.popcnt()), K(result_bitmap), K_(micro_header),
+              KPC(truncate_executor), K(filter));
+  }
+
+  return ret;
+}
+
+int ObMemtableBlockReader::filter_pushdown_single_column_mds_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(pd_filter_info.start_ < 0
+                  || pd_filter_info.start_ + pd_filter_info.count_ > row_count_
+                  || pd_filter_info.is_pd_to_cg_
+                  || !filter.is_mds_node())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument",
+             K(ret),
+             K(row_count_),
+             K(pd_filter_info.start_),
+             K(pd_filter_info.count_),
+             K(filter),
+             K(pd_filter_info.is_pd_to_cg_));
+  } else {
+    sql::ObIMDSFilterExecutor *mds_executor = nullptr;
+    if (filter.is_ttl_filter_node()) {
+      mds_executor = static_cast<sql::ObTTLWhiteFilterExecutor *>(&filter);
+    } else if (filter.is_base_version_node()) {
+      mds_executor = static_cast<sql::ObBaseVersionFilterExecutor *>(&filter);
+    }
+
+    if (OB_ISNULL(mds_executor) || OB_UNLIKELY(mds_executor->get_col_idx() < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected mds executor", K(ret), K(filter));
+    } else {
+      const int64_t col_idx = mds_executor->get_col_idx();
+
+      for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
+        // Step 1. read datum from (cached) row
+        const int64_t row_idx = offset + pd_filter_info.start_;
+        const ObStorageDatum &src_datum = rows_[row_idx].storage_datums_[col_idx];
+        bool filtered = false;
+
+        // Step 2. check whether datum is valid and filter datum
+        if (OB_UNLIKELY(src_datum.is_nop_value())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected nop value", KR(ret), K(col_idx), K(row_idx), K(rows_[row_idx]));
+        } else if (OB_FAIL(mds_executor->filter(&src_datum, 1, filtered))) {
+          LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
+        } else if (!filtered) {
+          if (OB_FAIL(result_bitmap.set(offset))) {
+            LOG_WARN("Failed to set result bitmap", K(ret), K(offset));
+          }
+        }
+      }
+    }
+
+    LOG_TRACE("[MDS INFO] memtable pushdown single column mds filter row",
+              K(ret),
+              K(pd_filter_info),
+              K(result_bitmap.popcnt()),
+              K(result_bitmap),
+              KPC(mds_executor),
+              K(filter));
+  }
+
+  return ret;
+}
+
+int ObMemtableBlockReader::filter_pushdown_ttl_filter(const sql::ObPushdownFilterExecutor *parent,
+                                                      sql::ObPushdownFilterExecutor &filter,
+                                                      const sql::PushdownFilterInfo &pd_filter_info,
+                                                      common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!filter.is_ttl_filter_node())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ttl filter type", K(ret), K(filter));
+  } else if (OB_FAIL(filter_pushdown_single_column_mds_filter(
+                 parent, filter, pd_filter_info, result_bitmap))) {
+    LOG_WARN("Failed to do single column mds pushdown filter", K(ret), K(filter));
+  }
+
+  return ret;
+}
+
+int ObMemtableBlockReader::filter_pushdown_base_version_filter(
+    const sql::ObPushdownFilterExecutor *parent,
+    sql::ObPushdownFilterExecutor &filter,
+    const sql::PushdownFilterInfo &pd_filter_info,
+    common::ObBitmap &result_bitmap)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!filter.is_base_version_node())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected base version filter type", K(ret), K(filter));
+  } else if (OB_FAIL(filter_pushdown_single_column_mds_filter(
+                 parent, filter, pd_filter_info, result_bitmap))) {
+    LOG_WARN("Failed to do single column mds pushdown filter", K(ret), K(filter));
+  }
+
   return ret;
 }
 

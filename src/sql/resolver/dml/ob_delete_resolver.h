@@ -49,6 +49,7 @@ private:
                                         TableItem *&table_item);
   int check_view_deletable();
   int check_safe_update_mode(ObDeleteStmt *delete_stmt, bool is_multi_table_delete);
+  int resolve_check_merge_engine(const TableItem* table_item);
   common::ObSEArray<TableItem*, 2> delete_tables_;
 };
 }  // namespace sql

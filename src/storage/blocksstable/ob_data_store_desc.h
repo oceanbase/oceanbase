@@ -351,7 +351,7 @@ public:
   OB_INLINE const share::ObSemistructProperties& get_semistruct_properties() const { return static_desc_->semistruct_properties_; }
   OB_INLINE bool is_delete_insert_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT; }
   OB_INLINE bool is_partial_update_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE; }
-  OB_INLINE bool is_insert_only_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
+  OB_INLINE bool is_append_only_merge_engine() const { return get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
   static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   // emergency magic table id is 10000
   static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;

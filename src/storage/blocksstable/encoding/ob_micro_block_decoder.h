@@ -98,26 +98,32 @@ public:
   void reset();
   void reuse();
   static int get_micro_metas(
+      const char *block,
+      const int64_t block_size,
       const ObMicroBlockHeader *&header,
       const ObColumnHeader *&col_header,
-      const char *&meta_data,
-      const char *block,
-      const int64_t block_size);
+      const char *&meta_data);
 protected:
   int prepare(const int64_t column_cnt);
-  int do_init(const ObMicroBlockData &block_data, const int64_t request_cnt);
-  int init_decoders();
-  int add_decoder(const int64_t store_idx, const common::ObObjMeta &obj_meta,
-                  int64_t &decoders_buf_pos, ObColumnDecoder &dest);
-  int acquire(const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnDecoder *&decoder);
-  int setup_row(const uint64_t row_id, int64_t &row_len, const char *&row_data);
-  int alloc_decoders_buf(int64_t &decoders_buf_pos);
+  int do_init(
+    const ObMicroBlockData &block_data,
+    const ObMicroBlockHeader &micro_header,
+    const int64_t request_cnt);
+  int init_decoders(const ObMicroBlockHeader &micro_header);
+  int add_decoder(
+    const ObMicroBlockHeader &micro_header,
+    const int64_t store_idx, const common::ObObjMeta &obj_meta,
+    int64_t &decoders_buf_pos, ObColumnDecoder &dest);
+  int acquire(
+    const ObMicroBlockHeader &micro_header,
+    const int64_t store_idx, int64_t &decoders_buf_pos, const ObIColumnDecoder *&decoder);
+  int setup_row(const ObMicroBlockHeader &micro_header, const uint64_t row_id, int64_t &row_len, const char *&row_data);
+  int alloc_decoders_buf(const ObMicroBlockHeader &micro_header, int64_t &decoders_buf_pos);
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
 
   ObMicroBlockAddr block_addr_;
   int64_t request_cnt_; // request column count
-  const ObMicroBlockHeader *header_;
   const ObColumnHeader *col_header_;
   const ObBlockCachedDecoderHeader *cached_decoder_;
   const char *meta_data_;
@@ -274,6 +280,16 @@ public:
       sql::ObPushdownFilterExecutor &filter,
       const sql::PushdownFilterInfo &pd_filter_info,
       common::ObBitmap &result_bitmap) override;
+  virtual int filter_pushdown_ttl_filter(
+      const sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap) override;
+  virtual int filter_pushdown_base_version_filter(
+      const sql::ObPushdownFilterExecutor *parent,
+      sql::ObPushdownFilterExecutor &filter,
+      const sql::PushdownFilterInfo &pd_filter_info,
+      common::ObBitmap &result_bitmap) override;
 
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
@@ -302,8 +318,7 @@ public:
       storage::ObAggCell &agg_cell) override;
   virtual int64_t get_column_count() const override
   {
-    OB_ASSERT(nullptr != header_);
-    return header_->column_count_;
+    return micro_header_->column_count_;
   }
   virtual int get_raw_column_datum(
       const int32_t col_offset,
@@ -318,7 +333,7 @@ public:
   {
     return 1 == col_offsets.count() &&
         (decoders_[col_offsets.at(0)].decoder_->is_new_column() || ObColumnHeader::DICT == decoders_[col_offsets.at(0)].ctx_->col_header_->type_) &&
-        header_->all_lob_in_row_;
+        micro_header_->all_lob_in_row_;
   }
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const override;
   virtual int read_distinct(
@@ -364,7 +379,7 @@ public:
       sql::ObExprPtrIArray &exprs,
       const bool need_init_vector) override;
   virtual bool has_lob_out_row() const override final
-  { return nullptr != header_ && header_->has_lob_out_row(); }
+  { return micro_header_->has_lob_out_row(); }
 
 private:
   // use inner_reset to reuse the decoder buffer
@@ -396,10 +411,6 @@ private:
     return rh;
   }
   static const ObRowHeader init_major_store_row_header();
-  static int get_micro_metas(
-      const ObMicroBlockHeader *&header, const ObColumnHeader *&col_header,
-      const char *&meta_data, const char *block, const int64_t block_size);
-
   template <typename Allocator>
   static int acquire(
       Allocator &allocator,
@@ -420,11 +431,14 @@ private:
   int get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx);
   virtual const ObMicroBlockHeader* get_micro_header() const override final
   {
-    return header_;
+    return micro_header_;
   }
+  int filter_pushdown_single_column_mds_filter(const sql::ObPushdownFilterExecutor *parent,
+                                               sql::ObPushdownFilterExecutor &filter,
+                                               const sql::PushdownFilterInfo &pd_filter_info,
+                                               common::ObBitmap &result_bitmap);
 
 private:
-  const ObMicroBlockHeader *header_;
   int64_t request_cnt_; // request column count
   const ObColumnHeader *col_header_;
   const char *meta_data_;

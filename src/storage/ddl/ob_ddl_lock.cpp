@@ -469,15 +469,35 @@ int ObDDLLock::lock_for_modify_auto_part_size_in_trans(
   return ret;
 }
 
-int ObDDLLock::lock_for_modify_truncate_info_in_trans(
+int ObDDLLock::lock_for_sync_mds_in_trans(
     const uint64_t tenant_id,
-    const uint64_t global_index_table_id,
+    const uint64_t table_id,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   const int64_t timeout_us = DEFAULT_TIMEOUT;
-  if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id, global_index_table_id, EXCLUSIVE, timeout_us, trans))) {
+  if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id, table_id, EXCLUSIVE, timeout_us, trans))) {
     LOG_WARN("failed to lock online ddl table", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLLock::lock_for_ttl_in_trans(
+    const ObTableSchema &table_schema,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout_us = DEFAULT_TIMEOUT;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t table_id = table_schema.get_table_id();
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id, table_id, EXCLUSIVE, timeout_us, trans))) {
+    LOG_WARN("failed to lock online ddl table", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
+    LOG_WARN("failed to get data tablet ids", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(lock_table_lock_in_trans(tenant_id, table_id, tablet_ids, ROW_EXCLUSIVE, timeout_us, trans))) {
+    // disable load data, normal DML is not affected
+    LOG_WARN("failed to lock table", K(ret), K(tenant_id), K(table_id));
   }
   return ret;
 }
@@ -1151,9 +1171,9 @@ int ObOnlineDDLLock::lock_table_in_trans(
   arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
   arg.lock_mode_ = lock_mode;
   arg.owner_id_.set_default();
-  if (OB_ISNULL(iconn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
+  if (OB_ISNULL(iconn = static_cast<ObInnerSQLConnection *>(trans.get_connection())) || !iconn->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid conn", K(ret));
+    LOG_WARN("invalid conn", K(ret), KP(iconn));
   } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, arg, iconn))) {
     LOG_WARN("failed to lock online ddl table in trans", K(ret), K(arg));
   }

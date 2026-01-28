@@ -25,6 +25,7 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
 #include "rootserver/ob_partition_exchange.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -417,6 +418,23 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to check htable ddl supported", K(ret));
       }
     }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(table_schema_)) {
+      if (OB_ISNULL(schema_checker_) || OB_ISNULL(schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema checker or schema guard is null", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_ttl_schema_valid(
+              *table_schema_,
+              alter_table_stmt->get_alter_table_arg().alter_table_schema_,
+              session_info_->get_effective_tenant_id(),
+              *schema_checker_->get_schema_guard()))) {
+        LOG_WARN("failed to check ttl schema valid", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_merge_engine_valid(
+                     *table_schema_,
+                     alter_table_stmt->get_alter_table_arg().alter_table_schema_))) {
+        LOG_WARN("failed to check append_only engine valid", K(ret));
+      }
+    }
   }
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
   return ret;
@@ -473,7 +491,7 @@ int ObAlterTableResolver::set_table_options()
       SQL_RESV_LOG(WARN, "Write database_name to alter_table_schema failed!", K(database_name_), K(ret));
     } else if (OB_FAIL(alter_table_schema.set_encryption_str(encryption_))) {
       SQL_RESV_LOG(WARN, "Write encryption to alter_table_schema failed!", K(encryption_), K(ret));
-    } else if (OB_FAIL(alter_table_schema.set_ttl_definition(ttl_definition_))) {
+    } else if (OB_FAIL(alter_table_schema.set_ttl_definition(ttl_definition_, ttl_flag_))) {
       SQL_RESV_LOG(WARN, "Write ttl_definition to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_kv_attributes(kv_attributes_))) {
       SQL_RESV_LOG(WARN, "Write kv_attributes to alter_table_schema failed!", K(ret));
@@ -506,10 +524,6 @@ int ObAlterTableResolver::set_table_options()
                  K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.3, zlib_lite");
       }
-    }
-
-    if (OB_FAIL(ret)) {
-      //do nothing
     }
 
     if (OB_FAIL(ret)) {
@@ -1010,6 +1024,13 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
                 K(ret));
             } else if (OB_FAIL(resolve_partition_options(*action_node))) {
               SQL_RESV_LOG(WARN, "Resolve partition option failed!", K(ret));
+            } else if (OB_ISNULL(table_schema_)) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "table schema is null", K(ret));
+            } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_partition_for_append_only_valid(
+                           *table_schema_,
+                           alter_table_stmt->get_alter_table_arg().alter_part_type_))) {
+              SQL_RESV_LOG(WARN, "check alter partition for append only valid failed", KR(ret));
             }
             break;
           }
@@ -1190,6 +1211,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "REMOVE TTL in data version less than 4.2.1");
           } else {
             ttl_definition_.reset();
+            ttl_flag_ = table_schema_->get_ttl_flag();
+            ttl_flag_.ttl_type_ = ObTTLDefinition::NONE;
             if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
               SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
             }
@@ -1263,6 +1286,19 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         }
       }
     }
+    // after resolve drop column, check append_only table requirements
+    if (OB_SUCC(ret)) {
+       if (OB_ISNULL(table_schema_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "table schema is null", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_column_for_append_only_valid(
+                     alter_table_stmt->get_alter_table_arg(),
+                     *table_schema_,
+                     lib::is_oracle_mode()))) {
+        SQL_RESV_LOG(WARN, "check alter column for append only valid failed", KR(ret));
+      }
+    }
+
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < add_index_action_idxs.count(); ++i) {
         ParseNode *action_node = NULL;
@@ -1710,6 +1746,11 @@ int ObAlterTableResolver::resolve_drop_unused_columns(const ParseNode& node)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported to alter table force under this tenant_data_version", KR(ret), K(tenant_data_version), K(lib::is_oracle_mode()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is illegal, alter table force");
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", KR(ret), KP(table_schema_));
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_alter_table_force_valid(*table_schema_))) {
+    LOG_WARN("failed to check alter table flush valid", KR(ret), K(table_schema_));
   }
 
   if (OB_SUCC(ret)) {
@@ -3427,6 +3468,8 @@ int ObAlterTableResolver::resolve_exchange_partition_stmt(
     } else if (OB_ISNULL(exchange_table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table not found", K(ret), KPC(exchange_table_schema), K(exchange_db_name), K(exchange_table_name));
+    } else if (OB_FAIL(ObCompactionTTLUtil::check_exchange_partition_for_append_only_valid(orig_table_schema, *exchange_table_schema))) {
+      LOG_WARN("check alter partition for append only valid failed", KR(ret));
     } else {
       orig_part_name.assign_ptr(node.children_[0]->str_value_, static_cast<int32_t>(node.children_[0]->str_len_));
     }

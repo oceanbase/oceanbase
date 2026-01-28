@@ -343,8 +343,18 @@ public:
   // Generate aggregated row for serialization
   int get_aggregated_row(const ObSkipIndexAggResult *&aggregated_row);
   int64_t get_max_agg_size() { return max_agg_size_; }
+  int get_agg_datum(const ObSkipIndexColMeta &col_meta, const ObStorageDatum *&datum) const;
   TO_STRING_KV(K_(col_aggs), K(agg_result_), K_(max_agg_size), K_(need_aggregate), K_(is_inited));
 private:
+  OB_INLINE int init_agg_row_reader(const char *buf,
+                                    const int64_t buf_size,
+                                    bool &need_fill_trans_version);
+  OB_INLINE int read_column_agg_value(const ObSkipIndexColMeta &idx_col_meta,
+                                      ObStorageDatum &datum,
+                                      bool &is_min_max_prefix);
+  OB_INLINE int fill_trans_version_agg_value(const ObSkipIndexColMeta &idx_col_meta,
+                                             ObStorageDatum &datum);
+
   int calc_max_agg_size(
       const ObIArray<ObSkipIndexColMeta> &full_agg_metas,
       const ObIArray<ObColDesc> &full_col_descs);
@@ -473,6 +483,7 @@ public:
   int eval(const ObIndexBlockRowDesc &row_desc);
   int get_index_agg_result(ObIndexBlockRowDesc &row_desc);
   int get_index_row_agg_info(ObIndexRowAggInfo &index_row_agg_info, ObIAllocator &allocator);
+  bool is_agg_meta_match_col_desc(const ObIArray<ObSkipIndexColMeta> &agg_meta_array, const ObIArray<ObColDesc> &col_descs);
   inline bool need_data_aggregate() const { return need_data_aggregate_ && !has_reused_null_agg_in_this_micro_block_; };
   inline int64_t get_max_agg_size() { return skip_index_aggregator_.get_max_agg_size(); }
   inline int64_t get_row_count() const { return aggregate_info_.row_count_; }
@@ -481,6 +492,8 @@ public:
   inline bool is_first_row_first_flag() const { return aggregate_info_.is_first_row_first_flag_; }
   inline bool is_single_version_rows() const { return aggregate_info_.single_version_rows_; }
   inline int64_t get_max_merged_trans_version() const { return aggregate_info_.max_merged_trans_version_; }
+  int get_agg_datum(const ObSkipIndexColMeta &col_meta, const ObStorageDatum *&datum) const
+  { datum = nullptr; return need_data_aggregate() ? skip_index_aggregator_.get_agg_datum(col_meta, datum) : OB_SUCCESS; }
   TO_STRING_KV(K_(skip_index_aggregator), K_(aggregate_info),
       K_(need_data_aggregate), K_(has_reused_null_agg_in_this_micro_block), K_(is_inited));
 private:

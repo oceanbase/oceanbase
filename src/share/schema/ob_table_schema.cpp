@@ -16,7 +16,7 @@
 
 #include "share/catalog/ob_external_catalog.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
-
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 namespace oceanbase
 {
@@ -202,16 +202,16 @@ int ObMergeSchema::get_skip_index_col_attr(
     }
   }
 
-  // special handling
-  if (OB_SUCC(ret) && !is_major) {
-    for (int64_t i = 0; i < skip_idx_attrs.count(); ++i) {
-      skip_idx_attrs.at(i).unset_sum(); // delta sstable do not support sum
+  if (OB_SUCC(ret)) {
+    if (!is_major) {
+      for (int64_t i = 0; i < skip_idx_attrs.count(); ++i) {
+        skip_idx_attrs.at(i).unset_sum(); // delta sstable do not support sum
+      }
     }
-    if (data_version >= DATA_VERSION_4_5_1_0) {
+    if (data_version >= DATA_VERSION_4_5_1_0 && ObTableSchema::is_trans_version_skip_index_table(get_table_type())) {
       skip_idx_attrs.at(trans_version_col_idx).set_min_max();
     }
   }
-
   return ret;
 }
 
@@ -229,7 +229,7 @@ int ObMergeSchema::get_delta_skip_index_adaptively(common::ObIArray<ObSkipIndexC
     LOG_WARN("failed to set skip index col attr by schema", K(ret), K(skip_idx_attrs), K(column_types));
   }
   // 2. calculate schema aggregate row size, generate skip index for trans_version, find candidate columns
-  for (int64_t i = 0; OB_SUCC(ret) && i < skip_idx_attrs.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < MIN(column_types.count(), skip_idx_attrs.count()); ++i) {
     const ObObjMeta &meta_type = column_types.at(i);
     if (skip_idx_attrs.at(i).has_skip_index()) {
       if (OB_FAIL(blocksstable::ObSkipIndexColMeta::calc_skip_index_maximum_size(
@@ -2036,6 +2036,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       external_location_id_ = src_schema.external_location_id_;
       tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
       skip_index_level_ = src_schema.skip_index_level_;
+      ttl_flag_ = src_schema.ttl_flag_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -4116,6 +4117,7 @@ void ObTableSchema::reset()
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
   skip_index_level_ = ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY;
+  ttl_flag_.reset();
   reset_string(tablegroup_name_);
   reset_string(comment_);
   reset_string(pk_comment_);
@@ -4187,6 +4189,7 @@ void ObTableSchema::reset()
   cg_name_hash_arr_ = NULL;
   mlog_tid_ = OB_INVALID_ID;
   tmp_mlog_tid_ = OB_INVALID_ID;
+  skip_index_level_ = ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY;
   local_session_vars_.reset();
   mv_mode_.reset();
   storage_cache_policy_.reset();
@@ -5034,9 +5037,8 @@ int ObTableSchema::delete_column_internal(ObColumnSchemaV2 *column_schema, const
   return ret;
 }
 
-bool ObTableSchema::is_same_type_category(
-                   const ObColumnSchemaV2 &src_column,
-                   const ObColumnSchemaV2 &dst_column) const
+bool ObTableSchema::is_same_type_category(const ObColumnSchemaV2 &src_column,
+                                          const ObColumnSchemaV2 &dst_column)
 {
   bool ret_bool = false;
   const ObObjMeta src_meta = src_column.get_meta_type();
@@ -5147,11 +5149,12 @@ int ObTableSchema::convert_char_to_byte_semantics(const ObColumnSchemaV2 *col_sc
 }
 
 int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_column,
-                                              ObColumnSchemaV2 &dst_column,
-                                              const int32_t src_col_byte_len,
-                                              const int32_t dst_col_byte_len,
-                                              const bool is_oracle_mode,
-                                              bool &is_offline) const
+                                               const ObColumnSchemaV2 &dst_column,
+                                               const int32_t src_col_byte_len,
+                                               const int32_t dst_col_byte_len,
+                                               const bool is_oracle_mode,
+                                               bool &is_offline,
+                                               bool &is_type_reduction)
 {
   int ret = OB_SUCCESS;
   const ColumnType src_col_type = src_column.get_data_type();
@@ -5161,7 +5164,7 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
   const ObObjMeta &src_meta = src_column.get_meta_type();
   const ObObjMeta &dst_meta = dst_column.get_meta_type();
   if (src_column.get_data_type() == dst_column.get_data_type()) {
-    bool is_type_reduction = false;
+    is_type_reduction = false;
     // In ObAccuracy, precision and length_semantics are union data structure, so when you change
     // varchar2(m byte) to varchar2(m char), the precision you get from ObAccuracy is an invalid value
     // because the length_semantics of byte is 2, the length_semantics of char is 1. this will lead to misjudgment
@@ -5265,11 +5268,12 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
 }
 
 int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
-                                           ObColumnSchemaV2 &dst_column,
+                                           const ObColumnSchemaV2 &dst_column,
                                            const int32_t src_col_byte_len,
                                            const int32_t dst_col_byte_len,
                                            const bool is_oracle_mode,
-                                           bool &is_offline) const
+                                           bool &is_offline,
+                                           bool &is_type_reduction)
 {
   int ret = OB_SUCCESS;
   const ColumnType src_col_type = src_column.get_data_type();
@@ -5281,7 +5285,7 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
   if (src_column.get_data_type() != dst_column.get_data_type()) {
     char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE] = {0};
     bool is_same_category = is_same_type_category(src_column, dst_column);
-    bool is_type_reduction = false;
+    is_type_reduction = false;
     // In ObAccuracy, precision and length_semantics are union data structure, so when you change
     // varchar2(m byte) to varchar2(m char), the precision you get from ObAccuracy is an invalid value
     // because the length_semantics of byte is 2, the length_semantics of char is 1. this will lead to misjudgment
@@ -5765,6 +5769,7 @@ int ObTableSchema::check_alter_column_is_offline(const ObColumnSchemaV2 *src_col
   int ret = OB_SUCCESS;
   bool is_same = false;
   bool is_oracle_mode = false;
+  bool unused_type_reduction = false;
   if (OB_ISNULL(src_column) || NULL == dst_column) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column schema is NULL", K(ret));
@@ -5803,10 +5808,10 @@ int ObTableSchema::check_alter_column_is_offline(const ObColumnSchemaV2 *src_col
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(check_alter_column_accuracy(*src_column, *dst_column, src_col_byte_len,
-                  dst_col_byte_len, is_oracle_mode, is_offline))) {
+                  dst_col_byte_len, is_oracle_mode, is_offline, unused_type_reduction))) {
         LOG_WARN("failed to check alter column accuracy", K(ret));
       } else if (OB_FAIL(check_alter_column_type(*src_column, *dst_column, src_col_byte_len,
-                         dst_col_byte_len, is_oracle_mode, is_offline))) {
+                         dst_col_byte_len, is_oracle_mode, is_offline, unused_type_reduction))) {
         LOG_WARN("failed to check alter column type", K(ret));
       }
     }
@@ -5877,6 +5882,7 @@ int ObTableSchema::check_column_can_be_altered_offline(
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
   bool is_offline = false;
+  bool unused_type_reduction = false;
   if (OB_ISNULL(src_column) || NULL == dst_column) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column schema is NULL", K(ret));
@@ -5914,10 +5920,10 @@ int ObTableSchema::check_column_can_be_altered_offline(
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(check_alter_column_accuracy(*src_column, *dst_column, src_col_byte_len,
-                  dst_col_byte_len, is_oracle_mode, is_offline))) {
+                  dst_col_byte_len, is_oracle_mode, is_offline, unused_type_reduction))) {
         LOG_WARN("failed to check alter column accuracy", K(ret));
       } else if (OB_FAIL(check_alter_column_type(*src_column, *dst_column, src_col_byte_len,
-                         dst_col_byte_len, is_oracle_mode, is_offline))) {
+                         dst_col_byte_len, is_oracle_mode, is_offline, unused_type_reduction))) {
         LOG_WARN("failed to check alter column type", K(ret));
       }
     }
@@ -10197,6 +10203,7 @@ DEFINE_CHECK_HAS_INDEX_FUNC(fts_index_aux);
 DEFINE_CHECK_HAS_INDEX_FUNC(vec_domain_index);
 DEFINE_CHECK_HAS_INDEX_FUNC(spatial_index);
 DEFINE_CHECK_HAS_INDEX_FUNC(multivalue_index_aux);
+DEFINE_CHECK_HAS_INDEX_FUNC(unique_index);
 
 #undef DEFINE_CHECK_HAS_INDEX_FUNC
 
@@ -11129,6 +11136,29 @@ int ObTableSchema::check_identity_column_for_interval_part() const
   return ret;
 }
 
+int ObTableSchema::check_ttl_definition_valid() const
+{
+  int ret = OB_SUCCESS;
+  bool is_ttl_schema = false;
+  bool is_compaction_ttl = false;
+  uint64_t tenant_data_version = 0;
+  if (!has_ttl_definition()) {
+    // do nothing if table has no ttl definition
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (OB_FAIL(ObCompactionTTLUtil::is_ttl_schema(*this, is_ttl_schema))) {
+    LOG_WARN("failed to check if schema is ttl schema", K(ret), K(get_table_id()));
+  } else if (!is_ttl_schema) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("schema is not ttl schema", K(ret), K(get_table_id()));
+  } else if (OB_FAIL(ObCompactionTTLUtil::is_compaction_ttl_schema(tenant_data_version, *this, is_compaction_ttl))) {
+    if (OB_NOT_SUPPORTED != ret) {
+      LOG_WARN("failed to check if schema is compaction ttl schema", K(ret), K(get_table_id()));
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::get_hidden_column_count(int64_t &hidden_column_count) const
 {
   int ret = OB_SUCCESS;
@@ -11145,6 +11175,36 @@ int ObTableSchema::get_hidden_column_count(int64_t &hidden_column_count) const
     } else if (column_schema->is_hidden()) {
       hidden_column_count++;
     }
+  }
+  return ret;
+}
+
+int ObTableSchema::set_ttl_definition(const common::ObString &input_ttl_definition, const ObTTLFlag &ttl_flag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ttl_flag.is_valid() || (input_ttl_definition.empty() && ttl_flag.ttl_type_ != ObTTLDefinition::NONE))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ttl flag", KR(ret), K(ttl_flag), K(input_ttl_definition));
+  } else if (OB_UNLIKELY(!input_ttl_definition.empty() && is_fts_index())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ttl definition is not supported for fts index", KR(ret), K(input_ttl_definition), K_(index_type));
+  } else if (OB_FAIL(deep_copy_str(input_ttl_definition, ttl_definition_))) {
+    LOG_WARN("failed to copy ttl definition", K(ret));
+  } else {
+    ttl_flag_ = ttl_flag;
+  }
+  return ret;
+}
+
+int ObTableSchema::set_ttl_definition(const common::ObString &input_ttl_definition, const ObString &ttl_flag_str)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (!ttl_flag_str.empty() && OB_FAIL(ttl_flag_.deserialize(ttl_flag_str.ptr(), ttl_flag_str.length(), pos))) {
+    LOG_WARN("failed to deserialize ttl flag", K(ret));
+  }
+  if (FAILEDx(deep_copy_str(input_ttl_definition, ttl_definition_))) {
+    LOG_WARN("failed to copy ttl definition", K(ret));
   }
   return ret;
 }

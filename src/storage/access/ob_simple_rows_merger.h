@@ -172,7 +172,9 @@ int ObSimpleRowsMerger<T, Comparator>::push(const T &item)
       int64_t i = item_cnt_ - 1;
       for ( ; OB_SUCC(ret) && i >= 0; --i) {
         if (OB_FAIL(cmp_.cmp(item, items_[i], cmp_ret))) {
-          STORAGE_LOG(WARN, "Fail to compare item", K(ret), K(i), K(items_[i]), K(item));
+          if (OB_BLOCK_SWITCHED != ret) {
+            STORAGE_LOG(WARN, "Fail to compare item", K(ret), K(i), K(items_[i]), K(item));
+          }
           break;
         } else if (cmp_ret < 0) {
           items_[i+1] = items_[i];

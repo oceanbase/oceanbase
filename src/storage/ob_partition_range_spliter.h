@@ -23,7 +23,7 @@
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/tablet/ob_table_store_util.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
-#include "access/ob_index_sstable_estimator.h"
+#include "storage/access/ob_index_block_tree_traverser.h"
 
 namespace oceanbase
 {
@@ -43,17 +43,22 @@ class ObSSTableSecMetaIterator;
 namespace storage
 {
 
+class ObPartitionEst;
+
 struct ObRangePrecision
 {
   static constexpr int64_t DEFAULT_DYNAMIC_RANGE_PRECISION_HINT = 0;
+  static constexpr int64_t DEFAULT_ROW_COUNT_PRECISION_HINT = 120; // which means the max task's row count is in [100, avg row count * 120]
 
-  ObRangePrecision() : range_precision_(DEFAULT_DYNAMIC_RANGE_PRECISION_HINT) {}
-  ObRangePrecision(const int64_t range_precision) : range_precision_(range_precision) {}
+  ObRangePrecision(const int64_t range_precision = DEFAULT_DYNAMIC_RANGE_PRECISION_HINT, const int64_t row_count_precision = DEFAULT_ROW_COUNT_PRECISION_HINT)
+      : range_precision_(range_precision), row_count_precision_(row_count_precision)
+  {
+  }
 
   OB_INLINE bool is_valid() const
   {
-    return (range_precision_ > 0 && range_precision_ <= 10000)
-           || range_precision_ == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT;
+    return ((range_precision_ > 0 && range_precision_ <= 10000) || range_precision_ == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT)
+           && (row_count_precision_ >= 100 && row_count_precision_ <= 10000);
   }
 
   OB_INLINE int recalc_range_precision(const int64_t range_count)
@@ -83,208 +88,18 @@ struct ObRangePrecision
     return ret;
   }
 
-  OB_INLINE int64_t get_sample_step() const { return max(1, 10000 / max(1, range_precision_)); }
+  OB_INLINE int64_t calc_row_count_upper_limit(const int64_t split_row_count) const
+  {
+    return split_row_count * (1.0f * row_count_precision_ / 100);
+  }
 
-  TO_STRING_KV(K_(range_precision));
+  OB_INLINE int64_t get_sample_step() const { return max(1, 10000 / max(1, range_precision_)); }
+  OB_INLINE int64_t get_row_count_precision() const { return row_count_precision_; }
+
+  TO_STRING_KV(K_(range_precision), K_(row_count_precision));
 
   int64_t range_precision_;
-};
-
-class ObIMultiRangeEstimateContext
-{
-public:
-  /**
-   * @brief Operation types that can be performed during the traversal of an index block tree.
-   */
-  enum ObTraverserOperationType : uint8_t
-  {
-    NOTHING,          ///< No operation is needed
-    GOTO_NEXT_LEVEL,  ///< Continue traversal by going to next level
-  };
-
-  virtual ~ObIMultiRangeEstimateContext() = default;
-
-  virtual bool is_valid() const = 0;
-
-  virtual bool is_ended() const = 0;
-
-  virtual const ObDatumRange &get_curr_range() const = 0;
-
-  virtual int64_t get_curr_range_idx() const = 0;
-
-  virtual int64_t get_ranges_count() const = 0;
-
-  /**
-   * @brief Switch to next range. This method is called by tree traverser.
-   */
-  virtual int next_range() = 0;
-
-  /**
-   * @brief Callback function when a leaf node is during traversal
-   */
-  virtual int on_leaf_node(const ObMicroIndexInfo &index_row, const ObPartitionEst &est) = 0;
-
-  /**
-   * @brief Callback function when a inner node is during traversal
-   */
-  virtual int on_inner_node(const ObMicroIndexInfo &index_row,
-                            const bool is_coverd_by_range,
-                            ObTraverserOperationType &opertion) = 0;
-
-  /**
-   * @brief Callback function when we cann't goto next level because of performance
-   */
-  virtual int on_node_estimate(const ObMicroIndexInfo &index_row, const bool is_coverd_by_range) = 0;
-
-  DECLARE_PURE_VIRTUAL_TO_STRING;
-};
-
-class ObIndexBlockTreeTraverser
-{
-public:
-  // If the row count of data micro block is larger than below limit,
-  // we should open this micro block to get more precise estimate result
-  static constexpr int64_t OPEN_DATA_MICRO_BLOCK_ROW_LIMIT = 65536;
-
-  static constexpr int64_t OPEN_INDEX_MICRO_BLOCK_LIMIT = 100;
-
-  ObIndexBlockTreeTraverser() : is_inited_(false) {}
-
-  int init(ObSSTable &sstable, const ObITableReadInfo &index_read_info);
-
-  void reuse();
-
-  int traverse(ObIMultiRangeEstimateContext &context,
-               const int64_t open_index_micro_block_limit = OPEN_INDEX_MICRO_BLOCK_LIMIT);
-
-  OB_INLINE bool is_inited() const { return is_inited_; }
-
-  OB_INLINE const ObSSTable *get_sstable() const { return sstable_; }
-
-  OB_INLINE const ObITableReadInfo *get_read_info() const { return read_info_; }
-
-  OB_INLINE ObIAllocator &get_allocator() { return allocator_; }
-
-  TO_STRING_KV(KPC_(read_info), KPC_(context), KPC_(sstable));
-
-private:
-  class TreeNodeContext
-  {
-  public:
-    int init(const ObMicroBlockData &block_data,
-             const ObMicroIndexInfo *micro_index_info,
-             ObIndexBlockTreeTraverser &traverser);
-
-    int open(const ObMicroBlockData &block_data, const ObMicroIndexInfo *micro_index_info);
-
-    void reuse();
-
-    int locate_range(const ObDatumRange &range, int64_t &index_row_count);
-
-    int get_next_index_row(ObMicroIndexInfo &idx_block_row);
-  private:
-    ObArenaAllocator allocator_;
-    ObIndexBlockRowScanner scanner_;
-  };
-
-  struct PathInfo
-  {
-    PathInfo() : path_count_(0), left_most_(false), right_most_(false), in_middle_(false) {}
-    PathInfo(const int64_t path_count, const int64_t path_idx, const PathInfo &father_path_info)
-        : path_count_(path_count), left_most_(path_idx == 0 && (!father_path_info.valid() || father_path_info.left_most_)),
-          right_most_(path_idx == path_count - 1 && (!father_path_info.valid() || father_path_info.right_most_)),
-          in_middle_(!left_most_ && !right_most_)
-    {
-    }
-
-    OB_INLINE bool valid() const { return path_count_ != 0; }
-    OB_INLINE void reset() { *this = PathInfo(); }
-
-    TO_STRING_KV(K_(path_count), K_(left_most), K_(right_most), K_(in_middle));
-
-    int64_t path_count_;
-    bool left_most_;
-    bool right_most_;
-    bool in_middle_;
-  };
-
-  class PathNodeCaches
-  {
-  public:
-    constexpr static int64_t MAX_CACHE_LEVEL = 8;
-
-    struct CacheNode
-    {
-      CacheNode() : is_inited_(false) {}
-
-      void reuse()
-      {
-        context_.reuse();
-      }
-
-      TO_STRING_KV(K_(key), K_(micro_handle), K_(micro_data), K_(is_inited));
-
-      ObMicroBlockCacheKey key_;
-      ObMicroBlockDataHandle micro_handle_;
-      ObMicroBlockData micro_data_;
-      ObMacroBlockReader macro_block_reader_;
-      TreeNodeContext context_;
-      bool is_inited_;
-    };
-
-    int load_root(const ObMicroBlockData &block_data, ObIndexBlockTreeTraverser &traverser);
-
-    int find(const int64_t level,
-            const ObMicroIndexInfo *micro_index_info,
-            bool &is_in_cache);
-
-    int get(const int64_t level,
-            const ObMicroIndexInfo *micro_index_info,
-            ObIndexBlockTreeTraverser &traverser,
-            CacheNode *&cache_node,
-            bool &is_in_cache);
-
-    int prefetch(const ObMicroIndexInfo &micro_index_info, ObMicroBlockDataHandle &micro_handle);
-
-  private:
-    ObArenaAllocator allocator_;
-    CacheNode caches_[MAX_CACHE_LEVEL];
-  };
-
-  int inner_node_traverse(const ObMicroIndexInfo *micro_index_info,
-                          const PathInfo &path_info,
-                          const int64_t level,
-                          const double open_index_micro_block_limit);
-
-  int leaf_node_traverse(const ObMicroIndexInfo &micro_index_info,
-                         const PathInfo &path_info,
-                         const int64_t level);
-
-  int goto_next_level_node(const ObMicroIndexInfo &micro_index_info,
-                           const PathInfo &path_info,
-                           const int64_t level,
-                           double open_index_micro_block_limit);
-
-  int handle_overflow_ranges();
-
-  int is_range_cover_node_end_key(const ObDatumRange &range,
-                                  const ObMicroIndexInfo &micro_index_info,
-                                  bool &is_over);
-
-  ObArenaAllocator allocator_;
-  ObSSTable *sstable_;
-  const ObITableReadInfo *read_info_;
-  ObIMultiRangeEstimateContext *context_;
-
-  PathNodeCaches path_caches_;
-
-  // statistics
-  int64_t visited_node_count_;
-  int64_t visited_macro_node_count_;
-  double avg_range_visited_node_cnt_;
-  double remain_can_visited_node_cnt_;
-
-  bool is_inited_;
+  int64_t row_count_precision_;
 };
 
 /**
@@ -359,7 +174,7 @@ struct ObRangeCompartor
 /**
  * @brief The context for multi range row estimate
  */
-class ObMultiRangeRowEstimateContext : public ObIMultiRangeEstimateContext
+class ObMultiRangeRowEstimateContext : public ObIIndexTreeTraverserContext
 {
 public:
   // if a node row count is less than 1/8 of the current range row count
@@ -385,10 +200,6 @@ public:
   {
     return *ranges_.at(curr_range_idx_).range_;
   }
-
-  int64_t get_curr_range_idx() const override { return curr_range_idx_; }
-
-  int64_t get_ranges_count() const override { return ranges_.count(); };
 
   int next_range() override;
 
@@ -661,8 +472,6 @@ public:
   static constexpr int64_t MIN_SPLIT_TABLE_ROW_COUNT = 65535; // 64K rows
   static constexpr int64_t TOO_MARY_RANGES_THRESHOLD = 20;
   static constexpr int64_t SPLIT_RANGE_FACTOR = 2;
-  static constexpr int64_t DEFAULT_MAX_SPLIT_TIME_COST = 10; // ms
-  static constexpr int64_t INDEX_BLOCK_PER_TIME = 3; // access 3 index block / ms
 
   /**
    * @brief Get the multi ranges row count
@@ -673,7 +482,7 @@ public:
    * @param row_count the row count of the multi ranges
    * @param macro_block_count the different macro block count of the multi ranges, if all ranges is
    *                          in the same macro block, the macro block count will be set to 1
-   * @param max_time
+   * @param row_count_precision (0, 100] which means the max task's row count is in [0, avg row count * 100 / row_count_precision]
    * @param range_precision
    * @return int
    */
@@ -682,21 +491,21 @@ public:
                                  ObTableStoreIterator &table_iter,
                                  int64_t &row_count,
                                  int64_t &macro_block_count,
-                                 const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                                 const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                                  const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   int get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
                            const ObITableReadInfo &index_read_info,
                            ObTableStoreIterator &table_iter,
                            int64_t &total_size,
-                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                           const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                            const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   int get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
                            const ObITableReadInfo &index_read_info,
                            const ObIArray<ObITable *> &tables,
                            int64_t &total_size,
-                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                           const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                            const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   template <typename ObRange>
@@ -707,7 +516,7 @@ public:
                              ObIAllocator &allocator,
                              ObArrayArray<ObRange> &multi_range_split_array,
                              const bool for_compaction = false,
-                             const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                             const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                              const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   template <typename ObRange>
@@ -718,7 +527,7 @@ public:
                              ObIAllocator &allocator,
                              ObArrayArray<ObRange> &multi_range_split_array,
                              const bool for_compaction = false,
-                             const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                             const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                              const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
 private:
@@ -728,8 +537,7 @@ private:
                            int64_t &total_size,
                            int64_t &total_row_count,
                            int64_t &total_macro_block_count,
-                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                           const ObRangePrecision &range_precision = ObRangePrecision());
+                           const ObRangePrecision &range_precision);
 
   bool all_range_is_single_rowkey(const ObIArray<ObStoreRange> &ranges);
 
@@ -747,7 +555,6 @@ private:
                         ObIAllocator &allocator,
                         ObArrayArray<ObRange> &multi_range_split_array,
                         const bool for_compaction = false,
-                        const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
                         const ObRangePrecision &range_precision = ObRangePrecision());
 
   int get_tables(ObTableStoreIterator &table_iter, ObIArray<ObITable *> &tables);
@@ -770,7 +577,6 @@ private:
                                     ObIAllocator &allocator,
                                     ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
                                     int64_t &estimate_rows_sum,
-                                    const int64_t max_time,
                                     const ObRangePrecision &range_precision);
 
   int split_ranges_for_memtable(const ObIArray<ObPairStoreAndDatumRange> &ranges,
@@ -784,7 +590,6 @@ private:
   int split_ranges_for_sstable(const ObIArray<ObPairStoreAndDatumRange> &sorted_ranges,
                                const ObITableReadInfo &read_info,
                                const int64_t expected_task_count,
-                               const int64_t open_index_block_limit,
                                ObSSTable &sstable,
                                ObIAllocator &allocator,
                                ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,

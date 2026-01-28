@@ -420,6 +420,7 @@ private:
 
 struct ObIndexBlockRowMinorMetaInfo
 {
+  ObIndexBlockRowMinorMetaInfo() { reset(); }
   void reset() { MEMSET(this, 0, sizeof(*this)); }
   int64_t snapshot_version_;               // Snapshow version for minor sstable
   int64_t max_merged_trans_version_;       // Max transaction version in blocks

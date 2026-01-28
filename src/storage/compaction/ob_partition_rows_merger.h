@@ -95,7 +95,6 @@ private:
   int64_t rowkey_size_;
 };
 
-typedef common::ObRowsMerger<ObPartitionMergeLoserTreeItem, ObPartitionMergeLoserTreeCmp> RowsMerger;
 typedef common::ObSEArray<int64_t, DEFAULT_ITER_COUNT> CONSUME_ITER_IDX_ARRAY;
 typedef ObMergeLoserTree<ObPartitionMergeLoserTreeItem, ObPartitionMergeLoserTreeCmp> ObPartitionMergeLoserTree;
 typedef ObSimpleRowsMerger<ObPartitionMergeLoserTreeItem, ObPartitionMergeLoserTreeCmp> ObSimpleRowsPartitionMerger;
@@ -178,7 +177,9 @@ public:
       is_inited_(false)
   {}
   virtual ~ObPartitionMergeHelper() { reset(); }
-  int init(const ObMergeParameter &merge_param);
+  int init(
+    const ObMergeParameter &merge_param,
+    ObCompactionFilterHandle &filter_handle);
   virtual void reset();
   virtual OB_INLINE bool is_co_major_helper() const { return false; }
   virtual OB_INLINE bool is_multi_major_helper() const { return false; }
@@ -194,9 +195,15 @@ public:
   OB_INLINE bool is_iter_end() const { return merge_iters_.empty() || (nullptr != rows_merger_ && rows_merger_->empty() && consume_iter_idxs_.empty()); }
   TO_STRING_KV(K_(is_inited), K_(merge_iters), K_(consume_iter_idxs), KPC(rows_merger_))
 protected:
-  virtual ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const int64_t sstable_idx, const ObITable *table) = 0;
+  virtual ObPartitionMergeIter *alloc_merge_iter(
+    const ObMergeParameter &merge_param,
+    const int64_t sstable_idx,
+    const ObITable *table,
+    ObCompactionFilterHandle &filter_handle) = 0;
 private:
-  int init_merge_iters(const ObMergeParameter &merge_param);
+  int init_merge_iters(
+    const ObMergeParameter &merge_param,
+    ObCompactionFilterHandle &filter_handle);
   int init_mv_merge_iters(const ObMergeParameter &merge_param);
   int prepare_rows_merger(const ObMergeParameter &merge_param);
   int build_rows_merger();
@@ -222,7 +229,11 @@ public:
   {}
   virtual OB_INLINE bool need_check_major_sstable() const { return false; }
 protected:
-  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const int64_t sstable_idx, const ObITable *table) override;
+  ObPartitionMergeIter *alloc_merge_iter(
+    const ObMergeParameter &merge_param,
+    const int64_t sstable_idx,
+    const ObITable *table,
+    ObCompactionFilterHandle &filter_handle) override;
 private:
   virtual bool need_all_column_from_rowkey_co_sstable(const ObITable &table, const ObMergeParameter &merge_param) const { return false; }
   virtual bool table_need_full_merge(const int64_t sstable_idx, const ObITable &table, const ObMergeParameter &merge_param) const
@@ -272,7 +283,11 @@ public:
       const ObMergeType &merge_type,
       storage::ObTransNodeDMLStat &tnode_stat) const;
 protected:
-  ObPartitionMergeIter *alloc_merge_iter(const ObMergeParameter &merge_param, const int64_t sstable_idx, const ObITable *table) override;
+  ObPartitionMergeIter *alloc_merge_iter(
+    const ObMergeParameter &merge_param,
+    const int64_t sstable_idx,
+    const ObITable *table,
+    ObCompactionFilterHandle &filter_handle) override;
 };
 
 } //namespace compaction

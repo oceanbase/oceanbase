@@ -135,6 +135,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     table_type_ = schema->get_table_type();
     lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
     is_delete_insert_ = schema->is_delete_insert_merge_engine();
+    merge_engine_type_ = schema->get_merge_engine_type();
     if (OB_FAIL(schema->get_is_row_store(use_cs))) {
       LOG_WARN("fail to get is row store", K(ret));
     } else {
@@ -281,8 +282,9 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
   }
 
   bool need_truncate_filter = !use_cs && nullptr != schema && schema->is_global_index_table();
+  bool has_ttl_definition = nullptr != schema && schema->get_ttl_flag().had_rowscn_as_ttl_;
   if (OB_FAIL(ret)) {
-  } else if (need_truncate_filter) {
+  } else if (need_truncate_filter || has_ttl_definition) {
     if (OB_FAIL(schema->get_mulit_version_rowkey_column_ids(all_column_ids))) {
       LOG_WARN("fail to get multi version rokwey column", K(ret));
     } else if (OB_FAIL(schema->get_column_ids_without_rowkey(all_column_ids, false))) {
@@ -316,8 +318,10 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
       col_index = -1;
       virtual_cols_cnt++;
     } else {
-      col_index = need_truncate_filter ? i - virtual_cols_cnt - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() :
-                                         i - virtual_cols_cnt;
+      col_index = (need_truncate_filter || has_ttl_definition)
+                      ? i - virtual_cols_cnt
+                            - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()
+                      : i - virtual_cols_cnt;
     }
 
     if (FAILEDx(tmp_cols.push_back(column))) {
@@ -352,7 +356,9 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
                 true/*has_all_column_group*/,
                 false/*is_cg_sstable*/,
                 need_truncate_filter,
-                is_delete_insert_))) {
+                is_delete_insert(),
+                schema->get_micro_block_format_version(),
+                has_ttl_definition))) {
       LOG_WARN("Fail to init read info", K(ret));
     } else if (!col_map_.is_inited()) {
       if (OB_FAIL(col_map_.init(tmp_cols))) {
@@ -840,6 +846,11 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_DECODE(is_delete_insert_);
   OB_UNIS_DECODE(merge_engine_type_);
+  if (OB_SUCC(ret) && merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_MAX) {
+    merge_engine_type_ = is_delete_insert_ ? ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT
+                                           : ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  }
+
   OB_UNIS_DECODE(inc_pk_doc_id_col_id_);
   OB_UNIS_DECODE(vec_chunk_col_id_);
   OB_UNIS_DECODE(vec_embedded_col_id_);

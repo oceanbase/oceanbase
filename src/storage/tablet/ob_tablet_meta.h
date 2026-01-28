@@ -77,7 +77,7 @@ public:
       const bool micro_index_clustered,
       const bool has_cs_replica,
       const bool need_generate_cs_replica_cg_array,
-      const bool has_truncate_info,
+      const bool has_merged_with_mds_info,
       const uint64_t ddl_data_format_version);
   int init(
       const ObTabletMeta &old_tablet_meta,
@@ -87,7 +87,7 @@ public:
       const share::ObSplitTabletInfo &split_info,
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
       const ObDDLTableStoreParam &ddl_info = ObDDLTableStoreParam(),
-      const bool has_truncate_info = false);
+      const bool has_merged_with_mds_info = false);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const share::SCN &flush_scn);
@@ -178,7 +178,7 @@ public:
                K_(micro_index_clustered),
                K_(ddl_replay_status),
                K_(split_info),
-               K_(has_truncate_info),
+               K_(has_merged_with_mds_info),
                K_(inc_major_snapshot));
 
 public:
@@ -245,7 +245,7 @@ public:
   bool is_empty_shell_; // alignment: 1B, size: 2B
   bool micro_index_clustered_; // alignment: 1B, size: 2B
   share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 16B
-  bool has_truncate_info_; // be True after first major with truncate info
+  bool has_merged_with_mds_info_; // be True after first major with mds info
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
 private:
   void update_extra_medium_info(
@@ -340,7 +340,7 @@ public:
                K_(ddl_replay_status),
                K_(is_storage_schema_cs_replica),
                K_(split_info),
-               K_(has_truncate_info),
+               K_(has_merged_with_mds_info),
                K_(min_ss_tablet_version),
                K_(inc_major_snapshot));
 private:
@@ -399,7 +399,7 @@ public:
   share::ObSplitTabletInfo split_info_;
   // [since 4.3.5 bp2] be True after first major with truncate info
   // will never be false even after truncate info recycled
-  bool has_truncate_info_;
+  bool has_merged_with_mds_info_;
 
   share::SCN min_ss_tablet_version_;
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot

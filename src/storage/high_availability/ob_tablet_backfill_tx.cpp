@@ -1724,7 +1724,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_for_ss_()
     const int64_t rebuild_seq = tablet_merge_ctx_.get_ls_rebuild_seq();
     const int64_t transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_;
     const share::SCN end_scn = sstable->get_end_scn();
-    const bool has_truncate_info = tablet->has_truncate_info();
+    const bool has_merged_with_mds_info = tablet->has_merged_with_mds_info();
     const bool need_check_sstable = compaction::is_minor_merge(tablet_merge_ctx_.get_merge_type()) || compaction::is_history_minor_merge(tablet_merge_ctx_.get_merge_type());
 
     ObUpdateTableStoreParam param(snapshot_version,
@@ -1737,7 +1737,7 @@ int ObTabletTableFinishBackfillTXTask::update_merge_sstable_for_ss_()
     ObCompactionTableStoreParam compaction_param(compaction::ObMergeType::MINI_MERGE,
                                                  end_scn,
                                                  false/*need_report*/,
-                                                 has_truncate_info);
+                                                 has_merged_with_mds_info);
 
     if (OB_FAIL(param.init_with_ha_info(ha_param))) {
       LOG_WARN("failed to init param with ha info", K(ret), K(param));
@@ -2198,7 +2198,9 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_table_merge_ctx_(
     static_param.private_transfer_epoch_ = private_transfer_epoch;
     tablet_merge_ctx.static_desc_.private_transfer_epoch_ = private_transfer_epoch;
 
-    if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info())) {
+    if (OB_FAIL(static_param.init_merge_version_range(static_param.version_range_))) {
+      LOG_WARN("failed to init merge version_range", K(ret), K(static_param));
+    } else if (OB_FAIL(tablet_merge_ctx.init_tablet_merge_info())) {
       LOG_WARN("failed to init tablet merge info", K(ret), K(ls_id_), K(tablet_info_), K(tablet_merge_ctx));
     } else if (OB_FAIL(tablet->get_mds_table_rec_scn(static_param.rec_scn_))) {
       LOG_WARN("fail to get mds table rec scn", K(ret), KPC(tablet));
@@ -2351,6 +2353,8 @@ int ObTabletMdsTableBackfillTXTask::prepare_mds_sstable_merge_ctx_(
 
     if (OB_FAIL(tablet_merge_ctx.prepare_merge_tables(mds_sstable_array))) {
       LOG_WARN("failed to prepare merge tables", K(ret), K(mds_sstable_array));
+    } else if (OB_FAIL(static_param.init_merge_version_range(static_param.version_range_))) {
+      LOG_WARN("failed to init merge version_range", K(ret), K(static_param));
     } else if (OB_FAIL(tablet_merge_ctx.prepare_schema())) {
       LOG_WARN("failed to prepare schema", K(ret), K(tablet_merge_ctx));
     } else if (OB_FAIL(tablet_merge_ctx.build_ctx_after_init(unused_finish_flag))) {

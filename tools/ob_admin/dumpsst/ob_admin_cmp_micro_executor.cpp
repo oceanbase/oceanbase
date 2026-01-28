@@ -202,9 +202,15 @@ int ObAdminCmpMicroExecutor::parse_cmd(int argc, char *argv[])
 
 void ObAdminCmpMicroExecutor::print_micro_meta(const int64_t idx)
 {
-  ObMicroBlockHeader *micro_header = reinterpret_cast<ObMicroBlockHeader*>(uncomp_micro_[idx]);
-  const int64_t encoding_meta_offset = sizeof(ObMicroBlockHeader) + sizeof(ObColumnHeader) * header_[idx]->column_count_;
-  STORAGE_LOG(INFO, "micro meta", K(idx), K(*micro_header), K(encoding_meta_offset));
+  int ret = OB_SUCCESS;
+  ObMicroBlockHeader micro_header;
+  int64_t pos = 0;
+  int64_t size = sizeof(ObMicroBlockHeader) + sizeof(int64_t) * header_[idx]->column_count_;
+  if (OB_SUCC(micro_header.deserialize(uncomp_micro_[idx], size, pos))) {
+    const int64_t encoding_meta_offset = sizeof(ObMicroBlockHeader) + sizeof(ObColumnHeader) * header_[idx]->column_count_;
+    STORAGE_LOG(INFO, "micro meta", K(idx), K(micro_header), K(encoding_meta_offset));
+  }
+
 }
 
 }

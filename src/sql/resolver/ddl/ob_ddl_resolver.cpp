@@ -26,6 +26,7 @@
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/resolver/ddl/ob_fts_parser_resolver.h"
 #include "share/ob_dynamic_partition_manager.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_license_utils.h"
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "plugin/external_table/ob_external_struct.h"
@@ -51,6 +52,7 @@ namespace sql
     } \
   } while(0) \
 
+ERRSIM_POINT_DEF(EN_CREATE_TABLE_WITH_TTL);
 
 ObDDLResolver::ObDDLResolver(ObResolverParams &params)
   : ObStmtResolver(params),
@@ -105,6 +107,7 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     hash_subpart_num_(-1),
     is_external_table_(false),
     ttl_definition_(),
+    ttl_flag_(),
     kv_attributes_(),
     storage_cache_policy_(),
     index_storage_cache_policy_(),
@@ -1117,6 +1120,32 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
       }
     }
   }
+
+  {
+    if (EN_CREATE_TABLE_WITH_TTL) {
+      if (OB_NOT_NULL(stmt_) && stmt::T_CREATE_TABLE == stmt_->get_stmt_type() && ttl_definition_.empty()) {
+        ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+        bool merge_engine_valid = arg.schema_.get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY
+                                  || arg.schema_.get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
+
+        int64_t time_s = EN_CREATE_TABLE_WITH_TTL.item_.cond_;
+        if (time_s >= 0 && merge_engine_valid) {
+          char ttl_buffer[64];
+          if (snprintf(ttl_buffer, sizeof(ttl_buffer), "ora_rowscn + interval %ld second", time_s) < 0) {
+            ret = OB_SIZE_OVERFLOW;
+            SQL_RESV_LOG(WARN, "failed to generate ttl definition buffer when use tracepoint", K(time_s), K(ret));
+          } else if (OB_FAIL(ob_write_string(*allocator_, ObString::make_string(ttl_buffer), ttl_definition_))) {
+            SQL_RESV_LOG(WARN, "failed to write ttl definition string when use tracepoint", K(ret));
+          } else {
+            ttl_flag_.had_rowscn_as_ttl_ = 1;
+            ttl_flag_.ttl_type_ = ObTTLDefinition::COMPACTION;
+            FLOG_INFO("EN_CREATE_TABLE_WITH_TTL Tracepoint! create table with ttl", K(time_s), K(ttl_definition_), K(ttl_flag_));
+          }
+        }
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && exist_duplicate_read_consistency) {
     if (!ObDuplicateScopeChecker::is_valid_duplicate_scope(duplicate_scope_)) {
       ret = OB_NOT_SUPPORTED;
@@ -2803,14 +2832,19 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
-      case T_TTL_DEFINITION: {
+      case T_TTL_DEFINITION:
+      case T_TTL_DEFINITION_WITH_TYPE: {
         uint64_t tenant_data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
           LOG_WARN("get tenant data version failed", K(ret));
-        } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+        } else if (OB_UNLIKELY(option_node->type_ == T_TTL_DEFINITION && tenant_data_version < DATA_VERSION_4_2_1_0)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("ttl definition is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl definition is not supported in data version less than 4.2.1");
+        } else if (OB_UNLIKELY(option_node->type_ == T_TTL_DEFINITION_WITH_TYPE && tenant_data_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("ttl definition is not supported in data version less than 4.5.1", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl definition is not supported in data version less than 4.5.1");
         } else if (!is_index_option) {
           if (OB_ISNULL(option_node->children_)) {
             ret = OB_ERR_UNEXPECTED;
@@ -2819,13 +2853,13 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             ObRawExpr *expr = NULL;
             ObString tmp_str;
             tmp_str.assign_ptr(const_cast<char *>(option_node->str_value_),
-                                  static_cast<int32_t>(option_node->str_len_));
+                               static_cast<int32_t>(option_node->str_len_));
             if (OB_ISNULL(option_node->children_[0])) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(ERROR,"children can't be null", K(ret));
             } else if (OB_FAIL(ob_write_string(*allocator_, tmp_str, ttl_definition_))) {
               SQL_RESV_LOG(WARN, "write string failed", K(ret));
-            } else if (OB_FAIL(check_ttl_definition(option_node))) {
+            } else if (OB_FAIL(check_ttl_definition(option_node, tenant_data_version))) {
               LOG_WARN("fail to check ttl definition", K(ret));
             } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
               if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
@@ -3040,6 +3074,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             if (OB_UNLIKELY(!ObMergeEngineStoreFormat::is_merge_engine_valid(merge_engine_type))) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(WARN, "unexpected invalid merge engine value", K(ret), K(merge_engine_type));
+            } else if (ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type
+                && ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION > tenant_data_version) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("append_only merge engine type is not supported on current data version", K(ret), K(tenant_id), K(tenant_data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "append_only merge engine type is not supported on current data version");
             } else {
               arg.schema_.set_merge_engine_type(merge_engine_type);
             }
@@ -5723,6 +5762,7 @@ void ObDDLResolver::reset() {
   table_dop_ = DEFAULT_TABLE_DOP;
   hash_subpart_num_ = -1;
   ttl_definition_.reset();
+  ttl_flag_.reset();
   kv_attributes_.reset();
   storage_cache_policy_.reset();
   index_storage_cache_policy_.reset();
@@ -10443,6 +10483,12 @@ int ObDDLResolver::check_foreign_key_reference(
         ret = OB_ERR_CANNOT_ADD_FOREIGN;
         LOG_WARN("foreign key cannot be based on non-user table",
                  K(ret), K(parent_table_schema->is_user_table()));
+      } else if (OB_ISNULL(schema_checker_) || OB_ISNULL(schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema checker or schema guard is null", K(ret));
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_create_foreign_key_for_ttl_valid(
+                     *parent_table_schema))) {
+        LOG_WARN("failed to check foreign key for ttl valid", K(ret), KPC(parent_table_schema));
       } else {
         ObSEArray<ObString, 8> &child_columns = arg.child_columns_;
         ObSEArray<ObString, 8> &parent_columns = arg.parent_columns_;
@@ -13755,19 +13801,19 @@ int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, obrpc::ObCreateIndexA
   return ret;
 }
 
-int ObDDLResolver::check_ttl_definition(const ParseNode *node)
+int ObDDLResolver::check_ttl_definition(
+  const ParseNode *node,
+  const uint64_t tenant_data_version)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *column_schema = NULL;
   const ObTableSchema *tbl_schema = NULL;
+  bool is_ttl_schema = false;
+  ObTTLDefinition::ObTTLType ttl_type = ObTTLDefinition::NONE;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(stmt_) ||
-      OB_ISNULL(session_info_) || OB_ISNULL(node) || node->type_ != T_TTL_DEFINITION) {
+      OB_ISNULL(session_info_) || OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(ERROR,"unexpected null value", K(ret), K_(schema_checker),
                  K_(stmt), K_(session_info), K(node));
-  } else if (node->type_ != T_TTL_DEFINITION) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(ERROR,"unexpected node type", K(ret), K(node->type_));
   } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
     ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
     tbl_schema = &create_table_stmt->get_create_table_arg().schema_;
@@ -13777,36 +13823,94 @@ int ObDDLResolver::check_ttl_definition(const ParseNode *node)
       database_name_, table_name_, false, tbl_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(session_info_->get_effective_tenant_id()),
         K(alter_table_stmt->get_alter_table_arg()));
+    } else {
+      ttl_flag_.fuse(tbl_schema->get_ttl_flag());
     }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported statement for TTL expression", K(ret), K(stmt_->get_stmt_type()));
   }
 
-  for (int i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
-    if (OB_ISNULL(node->children_[i])) {
+  if (node->type_ == T_TTL_DEFINITION_WITH_TYPE) {
+    if (OB_UNLIKELY(node->num_child_ < 1)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ttl expr is null", K(ret), K(i));
-    } else if (OB_ISNULL(node->children_[i]) || T_TTL_EXPR != node->children_[i]->type_ ||
-                node->children_[i]->num_child_ != 3) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("child node of ttl definition is wrong", KR(ret), K(node->children_[i]));
-    } else if (OB_ISNULL(node->children_[i]->children_[0]) || T_COLUMN_REF != node->children_[i]->children_[0]->type_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("child node of ttl expr is wrong", KR(ret), K(node->children_[i]->children_[0]));
+      LOG_WARN("unexpected ttl type", K(ret), K(node));
     } else {
-      ObString column_name(node->children_[i]->children_[0]->str_len_, node->children_[i]->children_[0]->str_value_);
-      if (OB_ISNULL(column_schema = tbl_schema->get_column_schema(column_name))) {
-        ret = OB_TTL_COLUMN_NOT_EXIST;
-        LOG_USER_ERROR(OB_TTL_COLUMN_NOT_EXIST, column_name.length(), column_name.ptr());
-        LOG_WARN("ttl column is not exists", K(ret), K(column_name));
-      } else if ((!ob_is_datetime_tc(column_schema->get_data_type()) &&
-                  !ob_is_mysql_datetime_tc(column_schema->get_data_type()))) {
-        ret = OB_TTL_COLUMN_TYPE_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, column_name.length(), column_name.ptr());
-        LOG_WARN("invalid ttl expression, ttl column type should be datetime or timestamp",
-                  K(ret), K(column_name), K(column_schema->get_data_type()));
+      ttl_type = static_cast<ObTTLDefinition::ObTTLType>(node->children_[1]->value_);
+      if (OB_FAIL(check_ttl_expr(node->children_[0], tbl_schema, tenant_data_version, ttl_type))) {
+        LOG_WARN("failed to check ttl expr", KR(ret), K(node));
       }
+    }
+  } else if (node->type_ == T_TTL_DEFINITION) {
+    ttl_type = ObTTLDefinition::DELETING;
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      if (OB_FAIL(check_ttl_expr(node->children_[i], tbl_schema, tenant_data_version, ttl_type))) {
+        LOG_WARN("failed to check ttl expr", KR(ret), K(i));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ttl type", K(ret), K(ttl_type));
+  }
+
+  return ret;
+}
+
+int ObDDLResolver::check_ttl_expr(const ParseNode *ttl_expr_node,
+                                  const ObTableSchema *tbl_schema,
+                                  const uint64_t tenant_data_version,
+                                  const ObTTLDefinition::ObTTLType &ttl_type)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+
+  if (OB_ISNULL(ttl_expr_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ttl expr is null", K(ret));
+  } else if (OB_UNLIKELY(nullptr == ttl_expr_node || T_TTL_EXPR != ttl_expr_node->type_ || ttl_expr_node->num_child_ != 3)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child node of ttl definition is wrong", KR(ret), K(ttl_expr_node), K(ttl_expr_node->type_), K(ttl_expr_node->num_child_));
+  } else if (OB_UNLIKELY(nullptr == ttl_expr_node->children_[0] || T_COLUMN_REF != ttl_expr_node->children_[0]->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child node of ttl expr is wrong", KR(ret), K(ttl_expr_node->children_[0]), K(ttl_expr_node->children_[0]->type_));
+  } else {
+    ObTTLFlag tmp_ttl_flag;
+    ObString column_name(ttl_expr_node->children_[0]->str_len_, ttl_expr_node->children_[0]->str_value_);
+    if (ObCompactionTTLUtil::is_rowscn_column(column_name)) {
+      if (tenant_data_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("rowscn column as ttl column is not supported in data version less than 4.5.1", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn column as ttl column in this version is");
+      } else {
+        tmp_ttl_flag.had_rowscn_as_ttl_ = true;
+        FLOG_INFO("[COMPACTION TTL] use rowscn column as TTL column", KR(ret), K(column_name));
+      }
+    } else if (OB_ISNULL(tbl_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (OB_ISNULL(column_schema = tbl_schema->get_column_schema(column_name))) {
+      ret = OB_TTL_COLUMN_NOT_EXIST;
+      LOG_USER_ERROR(OB_TTL_COLUMN_NOT_EXIST, column_name.length(), column_name.ptr());
+      LOG_WARN("ttl column is not exists", K(ret), K(column_name));
+    } else if ((!ob_is_datetime_tc(column_schema->get_data_type()) &&
+                !ob_is_mysql_datetime_tc(column_schema->get_data_type()))) {
+      ret = OB_TTL_COLUMN_TYPE_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, column_name.length(), column_name.ptr());
+      LOG_WARN("invalid ttl expression, ttl column type should be datetime or timestamp",
+                K(ret), K(column_name), K(column_schema->get_data_type()));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION == ttl_type && !tmp_ttl_flag.had_rowscn_as_ttl_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("compaction ttl only support rowscn column", K(ret), K(tbl_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "compaction ttl only support rowscn column");
+    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION != ttl_type && tmp_ttl_flag.had_rowscn_as_ttl_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rowscn column as ttl column is not supported in row ttl type", K(ret), K(tbl_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn column as ttl column is not supported in row ttl type");
+    } else {
+      tmp_ttl_flag.ttl_type_ = ttl_type;
+      ttl_flag_.fuse(tmp_ttl_flag);
     }
   }
 

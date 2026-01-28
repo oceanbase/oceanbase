@@ -25,6 +25,7 @@
 #include "share/table/ob_ttl_util.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -2048,8 +2049,22 @@ int ObIndexBuilder::generate_schema(
         }
       }
     }
-
     if (OB_SUCC(ret)) {
+      if (data_schema.is_append_only_merge_engine()) {
+        // index should inherit the append_only merge engine type of the data table
+        schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (data_schema.has_ttl_definition()
+      && OB_FAIL(ObCompactionTTLUtil::check_create_index_for_ttl_valid(data_schema, arg.index_type_, schema))) {
+      LOG_WARN("fail to check create index for ttl valid", KR(ret), K(data_schema), K(arg.index_type_));
+    } else if (data_schema.has_ttl_definition()
+      && OB_FAIL(schema.set_ttl_definition(
+          data_schema.get_ttl_definition(),
+          data_schema.get_ttl_flag()))) {
+      LOG_WARN("set ttl definition failed", K(ret), K(data_schema));
+    } else {
       // column information of the global index is filled during the resolve stage
       const bool is_index_local_storage = share::schema::is_index_local_storage(arg.index_type_);
       const bool need_generate_index_schema_column = (is_index_local_storage || global_index_without_column_info);
@@ -2122,6 +2137,7 @@ int ObIndexBuilder::generate_schema(
   }
   return ret;
 }
+
 
 int ObIndexBuilder::create_index_column_group(const obrpc::ObCreateIndexArg &arg, ObTableSchema &index_table_schema)
 {

@@ -15,15 +15,19 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "share/schema/ob_table_param.h"
+#include "storage/compaction/ob_block_op.h"
+
 namespace oceanbase
 {
 namespace blocksstable
 {
 struct ObDatumRow;
+struct ObMacroBlockDesc;
+struct ObMicroBlock;
 }
 namespace compaction
 {
-
+struct ObMinorRowkeyOutputState;
 class ObICompactionFilter
 {
 public:
@@ -33,9 +37,9 @@ public:
 
   virtual ~ObICompactionFilter() {}
   // for statistics
-  enum ObFilterRet
+  enum ObFilterRet : uint8_t
   {
-    FILTER_RET_NOT_CHANGE = 0,
+    FILTER_RET_KEEP = 0,
     FILTER_RET_REMOVE = 1,
     FILTER_RET_MAX = 2,
   };
@@ -47,15 +51,22 @@ public:
   {
     ObFilterStatistics()
     {
-      MEMSET(row_cnt_, 0, sizeof(row_cnt_));
+      reset();
     }
     ~ObFilterStatistics() {}
     void add(const ObFilterStatistics &other);
-    void inc(ObFilterRet filter_ret);
+    void row_inc(ObFilterRet filter_ret);
+    void micro_inc(ObBlockOp::BlockOp block_op, const int64_t filter_row_cnt);
+    void macro_inc(ObBlockOp::BlockOp block_op, const int64_t filter_row_cnt);
     void reset();
     int64_t to_string(char *buf, const int64_t buf_len) const;
     void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
+    int64_t get_filter_row_cnt() const { return row_cnt_[FILTER_RET_REMOVE] + filter_block_row_cnt_; }
+    int64_t filter_sstable_cnt_;
+    int64_t filter_block_row_cnt_;
     int64_t row_cnt_[FILTER_RET_MAX];
+    int64_t micro_cnt_[ObBlockOp::OP_MAX];
+    int64_t macro_cnt_[ObBlockOp::OP_MAX];
   };
 
   enum CompactionFilterType : uint8_t
@@ -71,14 +82,64 @@ public:
   };
   const static char *ObFilterTypeStr[];
   const static char *get_filter_type_str(const int64_t idx);
+  static bool need_gene_filter_statistics(const CompactionFilterType filter_type)
+  {
+    return filter_type == MDS_IN_MEDIUM_INFO || filter_type == ROWSCN_FILTER || filter_type == MLOG_PURGE_FILTER;
+  }
 
   // need be thread safe
   virtual int filter(
       const blocksstable::ObDatumRow &row,
-      ObFilterRet &filter_ret) = 0;
+      ObFilterRet &filter_ret) const = 0;
   virtual CompactionFilterType get_filter_type() const = 0;
-
+  virtual int get_filter_op(
+    const int64_t min_merged_snapshot,
+    const int64_t max_merged_snapshot,
+    ObBlockOp &op) const
+  {
+    op.set_open(); // open all blocks by default
+    return OB_SUCCESS;
+  }
+  // use trans_version column & min-max skip index to speed up filter
+  // return -1 if not supported
+  virtual int64_t get_trans_version_col_idx() const
+  {
+    return -1;
+  }
   VIRTUAL_TO_STRING_KV("filter_type", get_filter_type_str(get_filter_type()));
+};
+
+// compaction_filter is shared by multiple compaction tasks,
+// so we need to collect filter statistics for each compaction task
+struct ObCompactionFilterHandle final
+{
+public:
+  ObCompactionFilterHandle()
+  : compaction_filter_(nullptr),
+    filter_statistics_()
+  {}
+  ~ObCompactionFilterHandle() {}
+  bool is_valid() const { return nullptr != compaction_filter_; }
+  int init(ObICompactionFilter *compaction_filter);
+  int filter(
+      const blocksstable::ObDatumRow &row,
+      ObICompactionFilter::ObFilterRet &filter_ret);
+  int get_block_op_from_filter(const blocksstable::ObMacroBlockDesc &macro_desc, ObBlockOp &block_op);
+  int get_block_op_from_filter_for_minor(
+    const blocksstable::ObMacroBlockDesc &macro_desc,
+    const ObMinorRowkeyOutputState &rowkey_state,
+    ObBlockOp &block_op);
+  int get_block_op_from_filter(const blocksstable::ObMicroBlock &micro_block, ObBlockOp &block_op);
+  void inc_filter_row_cnt() { filter_statistics_.row_inc(ObICompactionFilter::FILTER_RET_REMOVE); }
+  void inc_macro_open_cnt() { filter_statistics_.macro_inc(ObBlockOp::OP_OPEN, 0/*useless*/); }
+  TO_STRING_KV(KPC_(compaction_filter), K_(filter_statistics));
+private:
+  int inner_get_block_op_from_filter(
+    const blocksstable::ObMacroBlockDesc &macro_desc,
+    ObBlockOp &block_op);
+public:
+  ObICompactionFilter *compaction_filter_;
+  ObICompactionFilter::ObFilterStatistics filter_statistics_;
 };
 
 struct ObCompactionFilterFactory final

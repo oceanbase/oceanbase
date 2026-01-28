@@ -78,7 +78,7 @@ int get_datum_from_black_filter(ObEvalCtx &ctx,
   return ret;
 }
 
-int get_datum_to_apply_bloom_filter(ObEvalCtx &ctx, sql::ObPhysicalFilterExecutor& physical_filter, const ObDatum ** /* out */ datum)
+int get_datum_to_apply_bloom_filter(ObEvalCtx &ctx, sql::ObPushdownFilterExecutor& physical_filter, const ObDatum ** /* out */ datum)
 {
   int ret = OB_SUCCESS;
   if (physical_filter.is_filter_white_node()) {
@@ -297,7 +297,7 @@ int ObExternalTablePushdownFilter::apply_bloom_filter(
   if (bloom_filter_enabled_ && !skipped && bloom_filter_builder != nullptr) {
     // all the items & filters
     common::ObSEArray<BloomFilterItem, 1> items;
-    common::ObSEArray<sql::ObPhysicalFilterExecutor *, 1> filters;
+    common::ObSEArray<sql::ObPushdownFilterExecutor *, 1> filters;
     ObSEArray<ObSqlDatumInfo, 1> datuminfos;
     // ext_tbl_col_id -> [array of index in items/filters]
     common::hash::ObHashMap<int64_t, common::ObSEArray<int64_t, 1>>

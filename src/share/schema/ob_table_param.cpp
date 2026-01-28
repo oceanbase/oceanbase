@@ -1040,7 +1040,7 @@ int ObTableParam::construct_columns_and_projector(
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_output_projector;
   ObSEArray<bool, COMMON_COLUMN_NUM> tmp_output_sel_mask;
   ObSEArray<int32_t, COMMON_COLUMN_NUM> tmp_cg_idxs;
-  ObSEArray<uint64_t, COMMON_COLUMN_NUM> truncate_col_ids;
+  ObSEArray<uint64_t, COMMON_COLUMN_NUM> mds_filter_col_ids;
   const ObIArray<uint64_t> *access_col_ids = &output_column_ids;
   share::schema::ObColDesc tmp_col_desc;
   share::schema::ObColExtend tmp_col_extend;
@@ -1048,6 +1048,7 @@ int ObTableParam::construct_columns_and_projector(
   bool is_cs = false;
   bool has_all_column_group = false;
   bool need_truncate_filter = false;
+  bool has_ttl_definition = false;
   int64_t rowkey_count = 0;
   is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
 
@@ -1123,9 +1124,9 @@ int ObTableParam::construct_columns_and_projector(
       ObSEArray<ObColDesc, COMMON_COLUMN_NUM> non_rowkey_column_ids;
       if (OB_FAIL(table_schema.get_column_ids_without_rowkey(non_rowkey_column_ids, true))) {
         LOG_WARN("get column ids failed", K(ret));
-      } else if (OB_FAIL(truncate_col_ids.push_back(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
+      } else if (OB_FAIL(mds_filter_col_ids.push_back(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
         LOG_WARN("fail to push back trans version col to truncate col ids", K(ret));
-      } else if (OB_FAIL(truncate_col_ids.push_back(common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID))) {
+      } else if (OB_FAIL(mds_filter_col_ids.push_back(common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID))) {
         LOG_WARN("fail to push back sql sequence col to truncate col ids", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < non_rowkey_column_ids.count(); ++i) {
@@ -1135,22 +1136,39 @@ int ObTableParam::construct_columns_and_projector(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("The column is NULL", K(ret), K(table_schema.get_table_id()), K(column_id), K(i));
         } else if (column_schema->is_user_specified_storing_column()) {
-        } else if (OB_FAIL(truncate_col_ids.push_back(column_id))) {
+        } else if (OB_FAIL(mds_filter_col_ids.push_back(column_id))) {
           LOG_WARN("fail to push back non rowkey col id to truncate col ids");
         }
       }
+
+      if (OB_SUCC(ret)) {
+        need_truncate_filter = true;
+      }
+    }
+
+    has_ttl_definition = table_schema.get_ttl_flag().had_rowscn_as_ttl_;
+    if (OB_SUCC(ret) && has_ttl_definition) {
+      // TODO(menglan): we need other column desc in ttl when ttl support non-rowscn column
+      if (!is_contain(mds_filter_col_ids, common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID)
+          && OB_FAIL(mds_filter_col_ids.push_back(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
+        LOG_WARN("fail to push back rowscn col id to truncate col ids", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && (has_ttl_definition || need_truncate_filter)) {
+      // add output column ids
       for (int64_t i = 0; OB_SUCC(ret) && i < output_column_ids.count(); ++i) {
         const uint64_t column_id = output_column_ids.at(i);
-        if (is_contain(truncate_col_ids, column_id)) {
-        } else if (OB_FAIL(truncate_col_ids.push_back(column_id))) {
+        if (is_contain(mds_filter_col_ids, column_id)) {
+        } else if (OB_FAIL(mds_filter_col_ids.push_back(column_id))) {
           LOG_WARN("fail to push back output col id to truncate col ids");
         }
       }
       if (OB_SUCC(ret)) {
-        access_col_ids = &truncate_col_ids;
-        need_truncate_filter = true;
+        access_col_ids = &mds_filter_col_ids;
       }
     }
+
     //add other columns
     for (int32_t i = 0; OB_SUCC(ret) && i < access_col_ids->count(); ++i) {
       tmp_col_extend.reset();
@@ -1175,6 +1193,11 @@ int ObTableParam::construct_columns_and_projector(
         } else {
           meta_type.set_int();
         }
+
+        if (common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id) {
+          tmp_col_extend.skip_index_attr_.set_min_max();
+        }
+
         column->set_column_id(column_id);
         column->set_meta_type(meta_type);
         col_index = -1;
@@ -1310,9 +1333,11 @@ int ObTableParam::construct_columns_and_projector(
                                      is_cs ? &tmp_cg_idxs : nullptr,
                                      &tmp_access_cols_extend,
                                      has_all_column_group,
-                                     false/*is_cg_sstable*/,
+                                     false /*is_cg_sstable*/,
                                      need_truncate_filter,
-                                     table_schema.is_delete_insert_merge_engine()))) {
+                                     table_schema.is_delete_insert_merge_engine(),
+                                     table_schema.get_micro_block_format_version(),
+                                     has_ttl_definition))) {
       LOG_WARN("fail to init main read info", K(ret));
     } else if (OB_FAIL(output_projector_.assign(tmp_output_projector))) {
       LOG_WARN("assign failed", K(ret));
@@ -1358,6 +1383,8 @@ int ObTableParam::construct_columns_and_projector(
 
   if (FAILEDx(table_schema.check_is_normal_cgs_at_the_end(is_normal_cgs_at_the_end_))) {
     LOG_WARN("Fail to check whether normal cgs are at the end of schema array", K(ret), K(table_schema));
+  } else {
+    merge_engine_type_ = table_schema.get_merge_engine_type();
   }
   return ret;
 }
@@ -1535,6 +1562,8 @@ int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
   if (OB_SUCC(ret)) {
     if (table_schema.is_fts_index() && OB_FAIL(convert_fulltext_index_info(table_schema))) {
       LOG_WARN("fail to convert fulltext index info", K(ret));
+    } else {
+      merge_engine_type_ = table_schema.get_merge_engine_type();
     }
   }
   LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(output_column_ids), K(aggregate_column_ids), K(group_by_column_ids),

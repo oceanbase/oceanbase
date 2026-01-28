@@ -15,6 +15,7 @@
 #include "ob_multiple_scan_merge.h"
 #include "ob_multiple_get_merge.h"
 #include "ob_multiple_multi_scan_merge.h"
+#include "ob_level_order_scan_merge.h"
 
 namespace oceanbase
 {
@@ -168,6 +169,8 @@ DEFINE_MERGE_WRAPPER(ObMviewSingleMerge, ObSingleMerge);
 DEFINE_MERGE_WRAPPER(ObMviewScanMerge, ObMultipleScanMerge);
 DEFINE_MERGE_WRAPPER(ObMviewGetMerge, ObMultipleGetMerge);
 DEFINE_MERGE_WRAPPER(ObMviewMultiScanMerge, ObMultipleMultiScanMerge);
+DEFINE_MERGE_WRAPPER(ObMviewLevelOrderScanMerge, ObLevelOrderScanMerge);
+DEFINE_MERGE_WRAPPER(ObMviewLevelOrderMultiScanMerge, ObLevelOrderMultiScanMerge);
 #undef DEFINE_MERGE_WRAPPER
 
 typedef ObMultipleMerge ObMviewMerge;
@@ -186,6 +189,7 @@ public:
       ObTableAccessContext &context,
       ObGetTableParam &get_table_param,
       ObTableScanRange &table_scan_range,
+      ObTableScanParam &scan_param,
       ObMviewMergeWrapper *&merge_wrapper,
       ObMviewMerge *&mview_merge);
 private:
@@ -194,6 +198,7 @@ private:
       ObTableAccessContext &context,
       ObGetTableParam &get_table_param,
       ObTableScanRange &table_scan_range,
+      ObTableScanParam &scan_param,
       ObMviewMerge *&version_merge);
   ObMviewMerge *merges_[T_MAX_ITER_TYPE];
 };

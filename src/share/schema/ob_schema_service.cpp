@@ -408,6 +408,7 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       micro_block_format_version_ = src_schema.micro_block_format_version_;
       minor_row_store_type_ = src_schema.minor_row_store_type_;
       skip_index_level_ = src_schema.skip_index_level_;
+      ttl_flag_ = src_schema.ttl_flag_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {

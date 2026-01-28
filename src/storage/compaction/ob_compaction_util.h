@@ -157,7 +157,6 @@ const char *merge_level_to_str(const ObMergeLevel &merge_level);
 
 enum ObExecMode : uint8_t {
   EXEC_MODE_LOCAL = 0,
-  EXEC_MODE_CALC_CKM, // calc checksum, not output macro
   EXEC_MODE_OUTPUT,   // normal compaction, output macro to share_storage
   EXEC_MODE_VALIDATE,   // verify checksum and dump macro block
   EXEC_MODE_MAX
@@ -174,10 +173,6 @@ inline bool is_local_exec_mode(const ObExecMode &exec_mode)
 inline bool is_output_exec_mode(const ObExecMode &exec_mode)
 {
   return EXEC_MODE_OUTPUT == exec_mode;
-}
-inline bool is_calc_ckm_exec_mode(const ObExecMode &exec_mode)
-{
-  return EXEC_MODE_CALC_CKM == exec_mode;
 }
 inline bool is_validate_exec_mode(const ObExecMode &exec_mode)
 {
@@ -196,7 +191,6 @@ enum ObGetMacroSeqStage : uint8_t
   GET_NEW_ROOT_MACRO_SEQ = 1, // for next major
   MACRO_SEQ_TYPE_MAX
 };
-bool is_valid_get_macro_seq_stage(const ObGetMacroSeqStage stage);
 
 const int64_t MAX_MERGE_THREAD = 64;
 const int64_t DEFAULT_CG_MERGE_BATCH_SIZE = 10;

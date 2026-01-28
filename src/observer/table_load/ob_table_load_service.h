@@ -44,6 +44,7 @@ public:
                                        const storage::ObDirectLoadInsertMode::Type insert_mode,
                                        const storage::ObDirectLoadMode::Type load_mode,
                                        const storage::ObDirectLoadLevel::Type load_level,
+                                       const sql::ObLoadDupActionType dup_action,
                                        const common::ObIArray<uint64_t> &column_ids,
                                        bool enable_inc_major);
   // 业务层指定schema_guard进行检查
@@ -53,6 +54,7 @@ public:
                                        const storage::ObDirectLoadInsertMode::Type insert_mode,
                                        const storage::ObDirectLoadMode::Type load_mode,
                                        const storage::ObDirectLoadLevel::Type load_level,
+                                       const sql::ObLoadDupActionType dup_action,
                                        const common::ObIArray<uint64_t> &column_ids,
                                        bool enable_inc_major);
   static int check_support_direct_load(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -61,6 +63,7 @@ public:
                                        const storage::ObDirectLoadInsertMode::Type insert_mode,
                                        const storage::ObDirectLoadMode::Type load_mode,
                                        const storage::ObDirectLoadLevel::Type load_level,
+                                       const sql::ObLoadDupActionType dup_action,
                                        const common::ObIArray<uint64_t> &column_ids,
                                        bool enable_inc_major);
   static int check_support_direct_load_for_columns(const share::schema::ObTableSchema *table_schema,
@@ -76,6 +79,9 @@ public:
                                                      const ObTableSchema *table_schema,
                                                      const ObDirectLoadMethod::Type method,
                                                      const storage::ObDirectLoadMode::Type load_mode);
+  static int check_support_direct_load_for_append_only(ObSchemaGetterGuard &schema_guard,
+                                                       const ObTableSchema &table_schema,
+                                                       const sql::ObLoadDupActionType dup_action);
 
   static int alloc_ctx(ObTableLoadTableCtx *&table_ctx);
   static void free_ctx(ObTableLoadTableCtx *table_ctx);

@@ -266,6 +266,9 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_hp_infrastructure_manager.ipp
   engine/basic/ob_hp_infras_vec_mgr.cpp
   engine/basic/ob_truncate_filter_struct.cpp
+  engine/basic/ob_ttl_filter_struct.cpp
+  engine/basic/ob_mds_filter_struct.cpp
+  engine/basic/ob_base_version_filter_struct.cpp
   engine/basic/ob_consistent_hashing_load_balancer.cpp
   engine/basic/ob_lake_table_reader_profile.cpp
 )

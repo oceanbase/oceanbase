@@ -592,7 +592,7 @@ int reverse_trans_version_val(common::ObDatum *datums, const int64_t count)
   return ret;
 }
 
-int reverse_trans_version_val(ObIVector *vector, const int64_t count)
+int reverse_trans_version_val(ObIVector *vector, const int64_t count, const int64_t vec_offset)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == vector || count < 0)) {
@@ -608,7 +608,7 @@ int reverse_trans_version_val(ObIVector *vector, const int64_t count)
       STORAGE_LOG(WARN, "Unexpected vector", K(ret), K(fixed_length_base->has_null()), K(fixed_length_base->get_length()));
     } else {
       int64_t *ver_ptr = reinterpret_cast<int64_t *>(fixed_length_base->get_data());
-      for (int64_t i = 0; i < count; ++i) {
+      for (int64_t i = vec_offset; i < vec_offset + count; ++i) {
         ver_ptr[i] = -ver_ptr[i];
       }
     }

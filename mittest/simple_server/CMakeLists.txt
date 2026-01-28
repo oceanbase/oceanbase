@@ -186,4 +186,9 @@ ob_unittest_observer(test_max_id_cache rootservice/test_max_id_cache.cpp)
 ####### truncate case #########
 ob_truncate_case(test_truncate_partition_filter test_truncate_partition_filter.cpp)
 ob_truncate_case(test_truncate_info_service test_truncate_info_service.cpp)
+ob_truncate_case(test_ttl_schema_service test_ttl_schema_service.cpp)
+ob_truncate_case(test_ttl_filter test_ttl_filter.cpp)
+ob_truncate_case(test_mds_filter_mgr test_mds_filter_mgr.cpp)
+ob_truncate_case(test_mds_cache_valid test_mds_cache_valid.cpp)
+ob_truncate_case(test_min_merged_trans_version test_min_merged_trans_version.cpp)
 ####### truncate case #########

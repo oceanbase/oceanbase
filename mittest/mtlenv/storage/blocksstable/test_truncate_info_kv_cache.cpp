@@ -76,7 +76,7 @@ void TestTruncateInfoKVCache::TearDown()
 TEST_F(TestTruncateInfoKVCache, truncate_info_cache_deep_copy)
 {
   ObTruncateInfo truncate_info;
-  ObTruncateInfoValueHandle cache_handle;
+  ObTruncateInfoCacheValueHandle cache_handle;
   const int64_t list_val_cnt = 3;
   int64_t list_vals[] = {200, 300, 100};
   ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_truncate_partition(allocator_, list_vals, list_val_cnt, truncate_info.truncate_part_));
@@ -114,16 +114,16 @@ TEST_F(TestTruncateInfoKVCache, truncate_info_cache_deep_copy)
   ObTruncateInfoCacheValue cache_value;
   ObTruncateInfoCacheValue cache_value2;
   {
-    ObTruncateInfoCacheKey cache_key(MTL_ID(), tablet_id, truncate_info.schema_version_, last_major_snapshot);
+    ObTruncateInfoCacheKey cache_key(MTL_ID(), tablet_id, truncate_info.commit_version_, last_major_snapshot);
     ASSERT_EQ(OB_SUCCESS, cache_value.init(1/*count*/, &truncate_info));
     ASSERT_EQ(cache_value.size(), sizeof(ObTruncateInfoCacheValue) + sizeof(ObTruncateInfo) + truncate_info.get_deep_copy_size());
-    ASSERT_EQ(OB_SUCCESS, truncate_info_cache.put_truncate_info_array(cache_key, cache_value));
+    ASSERT_EQ(OB_SUCCESS, truncate_info_cache.put_mds_info_array(cache_key, cache_value));
 
     equal = false;
-    ASSERT_EQ(OB_SUCCESS, truncate_info_cache.get_truncate_info_array(cache_key, cache_handle));
+    ASSERT_EQ(OB_SUCCESS, truncate_info_cache.get_mds_info_array(cache_key, cache_handle));
     if (cache_handle.is_valid() && cache_handle.value_->is_valid()) {
       ASSERT_EQ(1, cache_handle.value_->count_);
-      ASSERT_EQ(OB_SUCCESS, cache_handle.value_->truncate_info_array_[0].compare(truncate_info, equal));
+      ASSERT_EQ(OB_SUCCESS, cache_handle.value_->mds_info_array_[0].compare(truncate_info, equal));
     }
     ASSERT_TRUE(equal);
   }
@@ -138,16 +138,16 @@ TEST_F(TestTruncateInfoKVCache, truncate_info_cache_deep_copy)
   ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(truncate_info));
   ASSERT_EQ(2, truncate_info_array.count());
   {
-    ObTruncateInfoCacheKey cache_key(MTL_ID(), tablet_id, truncate_info.schema_version_, last_major_snapshot);
-    ASSERT_EQ(OB_SUCCESS, ObTruncateInfoKVCacheUtil::put_truncate_info_array(cache_key, truncate_info_array.truncate_info_array_));
+    ObTruncateInfoCacheKey cache_key(MTL_ID(), tablet_id, truncate_info.commit_version_, last_major_snapshot);
+    ASSERT_EQ(OB_SUCCESS, ObTruncateInfoKVCacheUtil::put_mds_info_array(cache_key, truncate_info_array.mds_info_array_));
 
     cache_handle.reset();
     equal = false;
-    ASSERT_EQ(OB_SUCCESS, truncate_info_cache.get_truncate_info_array(cache_key, cache_handle));
+    ASSERT_EQ(OB_SUCCESS, truncate_info_cache.get_mds_info_array(cache_key, cache_handle));
     if (cache_handle.is_valid() && cache_handle.value_->is_valid()) {
       ASSERT_EQ(2, cache_handle.value_->count_);
-      ASSERT_EQ(OB_SUCCESS, cache_handle.value_->truncate_info_array_[0].compare(*truncate_info_array.at(0), equal));
-      ASSERT_EQ(OB_SUCCESS, cache_handle.value_->truncate_info_array_[1].compare(*truncate_info_array.at(1), equal));
+      ASSERT_EQ(OB_SUCCESS, cache_handle.value_->mds_info_array_[0].compare(*truncate_info_array.at(0), equal));
+      ASSERT_EQ(OB_SUCCESS, cache_handle.value_->mds_info_array_[1].compare(*truncate_info_array.at(1), equal));
     }
     ASSERT_TRUE(equal);
   }
