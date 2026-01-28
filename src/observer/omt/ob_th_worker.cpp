@@ -104,7 +104,7 @@ ObThWorker::ObThWorker()
       is_inited_(false), tenant_(nullptr),
       run_cond_(),
       pause_flag_(false), large_query_(false),
-      priority_limit_(RQ_LOW), is_lq_yield_(false),
+      priority_limit_(RQ_LOW),
       query_start_time_(0), last_check_time_(0),
       can_retry_(true), need_retry_(false),
       last_wakeup_ts_(0), blocking_ts_(nullptr),
@@ -312,8 +312,10 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
 void ObThWorker::set_th_worker_thread_name()
 {
   char buf[32];
-  if (serving_tenant_id_ != tenant_->id()) {
+  static thread_local uint64_t last_group_id = UINT64_MAX;
+  if (serving_tenant_id_ != tenant_->id() || last_group_id != get_group_id()) {
     serving_tenant_id_ = tenant_->id();
+    last_group_id = get_group_id();
     snprintf(buf, sizeof(buf), "L%d_G%ld", get_worker_level(), get_group_id());
     lib::set_thread_name(buf);
   }
@@ -438,7 +440,6 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
             if (this->get_worker_level() != 0) {
               // nesting workers not allowed to calling check_worker_count
             } else if (!is_group_worker()) {
-              tenant_->lq_end(*this);
               tenant_->check_worker_count(*this);
             } else {
               ObResourceGroup *group = static_cast<ObResourceGroup *>(group_);

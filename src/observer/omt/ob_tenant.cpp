@@ -433,6 +433,11 @@ inline bool is_dbms_job_group(int64_t group_id)
   return oceanbase::share::OBCG_DBMS_SCHED_JOB == group_id || oceanbase::share::OBCG_OLAP_ASYNC_JOB == group_id;
 }
 
+inline bool is_lq_group(int64_t group_id)
+{
+  return oceanbase::share::OBCG_LQ == group_id;
+}
+
 void ObResourceGroup::check_worker_count()
 {
   int ret = OB_SUCCESS;
@@ -494,6 +499,7 @@ void ObResourceGroup::check_worker_count()
 
     int64_t succ_num = 0L;
     int64_t shrink_ts = (token == 0 && workers_.get_size() == 1) ? SLEEP_INTERVAL : SHRINK_INTERVAL;
+    shrink_ts = is_lq_group(group_id_) ? 0 : shrink_ts;
     int64_t diff = token < min_worker_cnt() ? token - workers_.get_size() : min_worker_cnt() - workers_.get_size();
     if (OB_UNLIKELY(diff > 0)) {
       token_change_ts_ = now;
@@ -768,6 +774,8 @@ ObTenant::ObTenant(const int64_t id,
       st_metrics_(),
       sql_limiter_(),
       worker_us_(0),
+      last_check_ts_(0),
+      last_lq_cpu_(0.0),
       cpu_time_us_(0)
 {
   token_usage_check_ts_ = ObTimeUtility::current_time();
@@ -1646,10 +1654,61 @@ int ObTenant::timeup()
       update_token_usage();
       handle_retry_req();
       update_queue_size();
+      update_lq_cpu_limit();
     }
     IGNORE_RETURN unlock(handle);
   }
   return OB_SUCCESS;
+}
+
+void ObTenant::update_lq_cpu_limit()
+{
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::current_time();
+  if (cgroup_ctrl_.is_valid() && now - last_check_ts_ > 1 * 1000 * 1000) {
+    last_check_ts_ = now;
+    int64_t large_query_cpu_quota_adjustment_step = 0;
+    {
+      ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
+      large_query_cpu_quota_adjustment_step = tenant_config.is_valid() ? tenant_config->_large_query_cpu_quota_adjustment_step : 0;
+    }
+    // 计算目标 CPU 配额
+    double tenant_cpu = std::max(1.0, unit_min_cpu());
+    double lq_cpu = std::max(1.0, 1.0 * GCONF.large_query_worker_percentage) / 100.0 * tenant_cpu;
+    double new_lq_cpu;
+    if (last_lq_cpu_ == 0) {
+      last_lq_cpu_ = tenant_cpu;
+    }
+    if (large_query_cpu_quota_adjustment_step == 0) {
+      // 为0时不限制大查询CPU，立即恢复至 tenant_cpu
+      new_lq_cpu = tenant_cpu;
+    } else {
+      double delta;
+      if (req_queue_.size() > 0) {
+        delta = -std::abs(lq_cpu - tenant_cpu) * large_query_cpu_quota_adjustment_step / 100.0;
+      } else {
+        delta = std::abs(lq_cpu - tenant_cpu) * large_query_cpu_quota_adjustment_step / 100.0;
+      }
+      new_lq_cpu = last_lq_cpu_ + delta;
+      new_lq_cpu = std::min(new_lq_cpu, tenant_cpu);
+      new_lq_cpu = std::max(new_lq_cpu, lq_cpu);
+    }
+
+    if (std::abs(new_lq_cpu - last_lq_cpu_) > 0.001) {
+      double effect_lq_cpu = .0;
+      if (OB_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(id_, new_lq_cpu, share::OBCG_LQ))) {
+        LOG_WARN("set LQ group cpu failed", K(ret), K(id_), K(new_lq_cpu));
+      } else if (OB_FAIL(cgroup_ctrl_.get_cpu_cfs_quota(id_, effect_lq_cpu, share::OBCG_LQ))) {
+        LOG_WARN("get LQ group cpu failed", K(ret), K(id_), K(new_lq_cpu));
+      } else if (std::abs(new_lq_cpu - effect_lq_cpu) > 0.001) {
+        LOG_WARN("LQ group cpu not effect", K(ret), K(id_), K(effect_lq_cpu), K(new_lq_cpu));
+      } else {
+        LOG_INFO("update lq cpu limit", K(id_), K(req_queue_.size()), K(tenant_cpu), K(lq_cpu),
+        K(new_lq_cpu), K(last_lq_cpu_), K(large_query_cpu_quota_adjustment_step));
+        last_lq_cpu_ = new_lq_cpu;
+      }
+    }
+  }
 }
 
 int ObTenant::get_default_group_throttled_time(int64_t &default_group_throttled_time)
@@ -2024,25 +2083,13 @@ int ObTenant::acquire_more_worker(int64_t num, int64_t &succ_num, bool force)
   return ret;
 }
 
-void ObTenant::lq_end(ObThWorker &w)
-{
-  int ret = OB_SUCCESS;
-  if (w.is_lq_yield()) {
-    if (OB_FAIL(SET_GROUP_ID(share::OBCG_DEFAULT))) {
-      LOG_WARN("move thread from lq group failed", K(ret), K(id_));
-    } else {
-      w.set_lq_yield(false);
-    }
-  }
-}
-
 void ObTenant::lq_wait(ObThWorker &w)
 {
   int64_t last_query_us = ObTimeUtility::current_time() - w.get_last_wakeup_ts();
   ObResourceGroup *group = static_cast<ObResourceGroup *>(w.get_group());
   int64_t lq_group_worker_cnt = group->workers_.get_size();
-  int64_t default_group_worker_cnt = workers_.get_size();
-  double large_query_percentage = GCONF.large_query_worker_percentage / 100.0;
+  int64_t default_group_worker_cnt = std::max(1, workers_.get_size());
+  double large_query_percentage = std::max(1.0, 1.0 * GCONF.large_query_worker_percentage) / 100.0;
   int64_t wait_us = static_cast<int64_t>(last_query_us * lq_group_worker_cnt /
                                         (default_group_worker_cnt * large_query_percentage) -
                                          last_query_us);
@@ -2058,17 +2105,17 @@ int ObTenant::lq_yield(ObThWorker &w)
 {
   int ret = OB_SUCCESS;
   ATOMIC_INC(&tt_large_quries_);
-  if (!cgroup_ctrl_.is_valid() && w.is_group_worker()) {
-    if (w.get_group_id() == share::OBCG_LQ) {
-      lq_wait(w);
-    }
-  } else if (w.is_lq_yield()) {
-    // avoid duplicate change group
-  } else if (OB_FAIL(SET_GROUP_ID(share::OBCG_LQ))) {
-    LOG_WARN("move thread to lq group failed", K(ret), K(id_));
-  } else {
-    w.set_lq_yield();
+  // 有新请求排队时才切换到LQ组
+  if (req_queue_.size() > 0 && w.get_group_id() == 0
+      && OB_FAIL(switch_worker_to_large_query_group(&w))) {
+    LOG_WARN("failed to switch worker to LQ group", K(ret), K(id_));
   }
+
+  // 已在LQ组且未开cgroup时执行sleep限速
+  if (w.get_group_id() == share::OBCG_LQ && !cgroup_ctrl_.is_valid()) {
+    lq_wait(w);
+  }
+
   return ret;
 }
 
@@ -2275,4 +2322,72 @@ void ObTenant::check_px_thread_recycle()
       LOG_WARN("failed to switch to tenant", K(id_), K(ret));
     }
   }
+}
+
+// 切换worker到大查询组(OBCG_LQ)
+int ObTenant::switch_worker_to_large_query_group(ObThWorker* worker)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(worker) || worker->get_tenant() != this || worker->get_group_id() != 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    // 带超时的trylock
+    int64_t start_ts = ObTimeUtility::current_time();
+    while (OB_FAIL(workers_lock_.trylock())) {
+      if (has_stopped() || ObTimeUtility::current_time() - start_ts > 10000) {
+        ret = has_stopped() ? OB_TENANT_NOT_IN_SERVER : OB_EAGAIN;
+        break;
+      }
+      ob_usleep(100);
+    }
+
+    if (OB_SUCC(ret)) {
+      // 获取或创建LQ组
+      ObResourceGroup* lq_group = nullptr;
+      ObResourceGroupNode *node = nullptr, key(share::OBCG_LQ);
+      if (OB_SUCC(GroupMap::err_code_map(group_map_.get(&key, node)))) {
+        lq_group = static_cast<ObResourceGroup*>(node);
+      } else if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = group_map_.create_and_insert_group(share::OBCG_LQ, this, &cgroup_ctrl_, lq_group);
+        if (OB_ENTRY_EXIST == ret && OB_SUCC(GroupMap::err_code_map(group_map_.get(&key, node)))) {
+          lq_group = static_cast<ObResourceGroup*>(node);
+        }
+      }
+
+      if (OB_SUCC(ret) && OB_NOT_NULL(lq_group)) {
+        // 检查LQ组的worker数量是否超过限制
+        if (lq_group->workers_.get_size() >= lq_group->max_worker_cnt()) {
+          LOG_WARN("LQ group worker count exceeds limit, skip switch",
+                   K(id_), K(lq_group->workers_.get_size()), K(lq_group->max_worker_cnt()));
+        } else {
+          // 先补充一个worker到默认组
+          int64_t succ_num = 0;
+          if (OB_FAIL(acquire_more_worker(1, succ_num))) {
+            LOG_WARN("failed to acquire worker before switch", K(ret), K(id_));
+          } else {
+            // 切换链表
+            workers_.remove(&worker->worker_node_);
+            if (!lq_group->workers_.add_last(&worker->worker_node_)) {
+              workers_.add_last(&worker->worker_node_);
+              ret = OB_ERR_UNEXPECTED;
+              // 切换失败但不销毁新补充的worker（小概率事件）
+            } else {
+              worker->set_group(lq_group);
+              worker->set_group_id_(share::OBCG_LQ);
+              worker->set_thread_group_id(OB_THREAD_GROUP_LARGE_QUERY);
+              worker->set_th_worker_thread_name();
+              if (cgroup_ctrl_.is_valid()) {
+                IGNORE_RETURN SET_GROUP_ID(share::OBCG_LQ);
+              }
+            }
+          }
+        }
+      }
+
+      workers_lock_.unlock();
+    }
+  }
+
+  return ret;
 }
