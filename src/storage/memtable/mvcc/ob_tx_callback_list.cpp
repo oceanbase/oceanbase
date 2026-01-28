@@ -33,6 +33,7 @@ ObTxCallbackList::ObTxCallbackList(ObTransCallbackMgr &callback_mgr, const int16
     branch_removed_(0),
     data_size_(0),
     logged_data_size_(0),
+    unlogged_and_rollbacked_data_size_(0),
     sync_scn_(SCN::min_scn()),
     batch_checksum_(),
     checksum_scn_(SCN::min_scn()),
@@ -78,6 +79,7 @@ void ObTxCallbackList::reset()
   branch_removed_ = 0;
   data_size_ = 0;
   logged_data_size_ = 0;
+  unlogged_and_rollbacked_data_size_ = 0;
   sync_scn_ = SCN::min_scn();
 }
 
@@ -123,14 +125,14 @@ int ObTxCallbackList::append_callback(ObITransCallback *callback,
       }
       ++appended_;
       ATOMIC_INC(&length_);
-      int64_t data_size = callback->get_data_size();
-      data_size_ += data_size;
+      int64_t data_size = callback->get_data_size() + callback->get_old_row_data_size();
+      ATOMIC_AAF(&data_size_, data_size);
       if (repos_lc) {
         set_log_cursor_(get_tail());
       }
       if (for_replay) {
         ++logged_;
-        logged_data_size_ += data_size;
+        ATOMIC_AAF(&logged_data_size_, data_size);
         ++synced_;
       }
 
@@ -174,7 +176,7 @@ int ObTxCallbackList::append_callback(ObITransCallback *head,
       if (OB_FAIL(cb->before_append_cb(for_replay))) {
         TRANS_LOG(WARN, "before_append_cb failed", K(ret), KPC(cb));
       } else {
-        data_size += cb->get_data_size();
+        data_size += cb->get_data_size() + cb->get_old_row_data_size();
         last_succeed_cb = cb;
       }
     }
@@ -228,12 +230,12 @@ int ObTxCallbackList::append_callback(ObITransCallback *head,
 
         // Step6: maintain the callbacklist statistics
         appended_ += length;
-        ATOMIC_FAA(&length_, length);
-        data_size_ += data_size;
+        ATOMIC_AAF(&length_, length);
+        ATOMIC_AAF(&data_size_, data_size);
         if (for_replay) {
           logged_ += length;
           synced_ += length;
-          logged_data_size_ += data_size;
+          ATOMIC_AAF(&logged_data_size_, data_size);
         }
 
         // NB: It is important to note that once the callback is successfully
@@ -368,6 +370,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
             uint64_t checksum_now = batch_checksum_.calc();
             TRANS_LOG(INFO, "[CallbackList] remove-callback", K(checksum_now), KPC(this));
           }
+          int64_t data_size = iter->get_data_size() + iter->get_old_row_data_size();
           // the del operation must serialize with append operation
           // if it is operating on the list tail
           if (iter_end && !lock_state.APPEND_LOCKED_) {
@@ -388,6 +391,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
             ++removed_;
             if (iter->need_submit_log()) {
               ++unlog_removed_;
+              ATOMIC_AAF(&unlogged_and_rollbacked_data_size_, data_size);
             }
             ++remove_count;
             if (iter->is_need_free()) {

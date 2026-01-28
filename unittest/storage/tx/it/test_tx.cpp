@@ -90,6 +90,7 @@ public:
       testing::UnitTest::GetInstance()->current_test_info();
     MTL_MEM_ALLOC_MGR.init();
     auto test_name = test_info->name();
+    ASSERT_EQ(OB_SUCCESS, omt::ObTenantConfigMgr::get_instance().add_tenant_config(1001));
     _TRANS_LOG(INFO, ">>>> starting test : %s", test_name);
   }
   virtual void TearDown() override

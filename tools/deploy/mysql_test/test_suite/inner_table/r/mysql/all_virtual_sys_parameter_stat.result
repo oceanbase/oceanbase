@@ -644,6 +644,8 @@ _use_hash_rollup
 _use_odps_jni_connector
 _wait_interval_after_parallel_ddl
 _with_subquery
+_write_throttle_by_pending_log_size_limit
+_write_throttle_by_pending_log_sleep_interval
 _xa_gc_interval
 _xa_gc_timeout
 _xsolapi_generate_with_clause

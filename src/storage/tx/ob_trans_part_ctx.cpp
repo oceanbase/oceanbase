@@ -798,7 +798,7 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
                 0 == exec_info_.intermediate_participants_.count() &&
                 !exec_info_.is_dup_tx_) {
         exec_info_.trans_type_ = TransType::SP_TRANS;
-        can_elr_ = (trans_service_->get_tx_elr_util().is_can_tenant_elr() ? true : false);
+        can_elr_ = trans_service_->get_tenant_config_cache().can_tenant_elr_;
         if (OB_FAIL(one_phase_commit_())) {
           TRANS_LOG(WARN, "start sp coimit fail", K(ret), KPC(this));
         }
@@ -1851,7 +1851,7 @@ int ObPartTransCtx::submit_redo_after_write(const bool force, const ObTxSEQ &wri
   TRANS_LOG(TRACE, "submit_redo_after_write", K(force), K(write_seq_no), K_(trans_id), K_(ls_id),
             K(mt_ctx_.get_pending_log_size()));
   ObTimeGuard tg("submit_redo_for_after_write", 100000);
-  if (force || mt_ctx_.pending_log_size_too_large(write_seq_no)) {
+  if (force || mt_ctx_.pending_log_size_too_large(write_seq_no.get_branch())) {
     bool parallel_logging = false;
 #define LOAD_PARALLEL_LOGGING parallel_logging = exec_info_.serial_final_scn_.atomic_load().is_valid()
     LOAD_PARALLEL_LOGGING;
@@ -1966,6 +1966,7 @@ int ObPartTransCtx::prepare_for_submit_redo(ObTxLogCb *&log_cb,
   }
   return ret;
 }
+
 
 int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted, const uint32_t freeze_clock)
 {
@@ -2160,7 +2161,7 @@ int ObPartTransCtx::on_dist_end_(const bool commit)
 #ifdef ERRSIM
 ERRSIM_POINT_DEF(EN_TX_ON_SUCCESS_DELAY)
 #endif
-
+ERRSIM_POINT_DEF(EN_TX_ON_SUCCESS_SKIP_SUBMIT_REDO_LOG)
 int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
 {
   int ret = OB_SUCCESS;
@@ -2182,7 +2183,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
   int64_t ctx_lock_wait_time = 0;
 
   bool handle_fast_commit = false;
-  bool try_submit_next_log = false;
+  bool try_submit_log_for_commit = false;
   bool need_return_log_cb = false;
   bool retry_submit_mds = false;
   {
@@ -2296,7 +2297,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
         submit_record_log_time = ObTimeUtility::fast_current_time() -  before_submit_record_ts;
       }
       handle_fast_commit = !(sub_state_.is_state_log_submitted() || log_cb->get_callbacks().count() == 0);
-      try_submit_next_log = !ObTxLogTypeChecker::is_state_log(log_cb->get_last_log_type()) && is_committing_();
+      try_submit_log_for_commit = !ObTxLogTypeChecker::is_state_log(log_cb->get_last_log_type()) && is_committing_();
       retry_submit_mds = ObTxLogTypeChecker::is_mds_log(log_cb->get_last_log_type());
       busy_cbs_.remove(log_cb);
       need_return_log_cb = true;
@@ -2323,12 +2324,24 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     return_log_cb_(log_cb);
   }
   // try submit log if txn is in commit phase
-  if (try_submit_next_log) {
+  if (try_submit_log_for_commit) {
+    const int64_t before_try_submit_next_log_ts = ObTimeUtility::fast_current_time();
     // in commiting, acquire CTX lock is enough, because redo flushing must finished
     CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
     try_submit_next_log_(false);
+    try_submit_next_log_cost_time = ObTimeUtility::fast_current_time() - before_try_submit_next_log_ts;
   }
-  
+
+  if (!try_submit_log_for_commit && EN_TX_ON_SUCCESS_SKIP_SUBMIT_REDO_LOG == OB_SUCCESS) {
+    int16_t list_idx = mt_ctx_.get_pending_log_size_too_large_list();
+    if (list_idx >= 0) {
+      const int64_t before_try_submit_next_log_ts = ObTimeUtility::fast_current_time();
+      ObTxSEQ write_seq_no(1/*seq*/, list_idx/*branch_id*/);
+      submit_redo_after_write(true, write_seq_no);
+      try_submit_next_log_cost_time = ObTimeUtility::fast_current_time() - before_try_submit_next_log_ts;
+    }
+  }
+
   if (retry_submit_mds) {
     CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
     if (OB_TMP_FAIL(submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
@@ -8735,62 +8748,78 @@ int ObPartTransCtx::end_access()
   return ret;
 }
 
-int ObPartTransCtx::check_pending_log_overflow(const int64_t stmt_timeout)
+ERRSIM_POINT_DEF(CHECK_PENDING_LOG_FOR_TX)
+int ObPartTransCtx::check_pending_log_overflow(const int64_t stmt_timeout, const ObTxSEQ &write_seq_no)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_LOCAL_RETRY_US = 1 * 1000 * 1000; // 1s
-  const int64_t LOCAL_RETRY_INTERVAL_US = 50 * 1000;  // 50ms
-                                                      
-  if (OB_SUCC(ret) && ATOMIC_LOAD(&has_extra_log_cb_group_)) {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-    const int64_t trx_max_log_cb_limit =
-        tenant_config.is_valid() ? tenant_config->_trx_max_log_cb_limit : 16;
+  if (CHECK_PENDING_LOG_FOR_TX == 0 || CHECK_PENDING_LOG_FOR_TX == -(trans_id_.get_id())) {
+    const ObTransService::TenantConfigCache &tenant_config_cache = trans_service_->get_tenant_config_cache();
+    int64_t trx_max_log_cb_limit = tenant_config_cache.trx_max_log_cb_limit_;
     // smaller than 16  || no limit with tx_log_cb =>  disable the check of pending logs
     if (trx_max_log_cb_limit >= 16) {
       const int64_t start_wait_us = ObTimeUtility::current_time();
       int64_t cur_us = start_wait_us;
-      int64_t busy_cb_cnt = 0;
-      int64_t extra_cb_group_cnt = 0;
-      while (get_pending_log_size()
-             > 4 * ObTxLogCbGroup::MAX_LOG_CB_COUNT_IN_GROUP * 2 * 1024 * 1024) {
-        {
-          ObSpinLockGuard guard(log_cb_lock_);
-          busy_cb_cnt = busy_cbs_.get_size();
-          extra_cb_group_cnt = extra_cb_group_list_.get_size();
-          if (free_cbs_.is_empty() && ls_tx_ctx_mgr_->get_log_cb_pool_mgr().is_all_busy()) {
-            ret = OB_TX_PENDING_LOG_OVERFLOW;
-            if (REACH_COUNT_PER_SEC(3) && REACH_TIME_INTERVAL(100 * 1000)) {
-              TRANS_LOG(WARN, "too may pending log", K(ret), K(free_cbs_.get_size()),
-                        K(extra_cb_group_cnt), K(busy_cb_cnt), KPC(this));
-            }
-          } else {
-            ret = OB_SUCCESS;
+      int64_t max_pending_log_size = tenant_config_cache.write_throttle_by_pending_log_size_limit_;
+      int retry_times = 0;
+      while (max_pending_log_size > 0 && mt_ctx_.pending_log_size_too_large(write_seq_no.get_branch(), max_pending_log_size)) {
+        int64_t sleep_interval = tenant_config_cache.write_throttle_by_pending_log_sleep_interval_;
+        int64_t busy_cb_cnt = busy_cbs_.get_size();
+        int64_t extra_cb_group_cnt = extra_cb_group_list_.get_size();
+        int tmp_ret = OB_SUCCESS;
+        retry_times++;
+        if (busy_cb_cnt < trx_max_log_cb_limit) {
+          usleep(sleep_interval / 2);
+          tmp_ret = submit_redo_after_write(true, write_seq_no);
+          if (OB_NOT_MASTER == tmp_ret) {
+            ret = OB_NOT_MASTER;
+            break;
           }
         }
-  
+
         cur_us = ObTimeUtility::current_time();
   
         if (cur_us >= stmt_timeout) {
           TRANS_LOG(INFO, "retry to wait log cb until stmt timeout", K(ret), K(stmt_timeout),
                     K(busy_cb_cnt), K(extra_cb_group_cnt), K(start_wait_us), KPC(this));
           ret = OB_TIMEOUT;
+          break;
         }
 
-        if (OB_TX_PENDING_LOG_OVERFLOW!= ret) {
-          break;
-        } else {
-          if (cur_us - start_wait_us > MAX_LOCAL_RETRY_US) {
-            TRANS_LOG(INFO, "retry to wait log cb with a long time", K(ret), K(stmt_timeout),
-                      K(busy_cb_cnt), K(extra_cb_group_cnt), K(start_wait_us), K(MAX_LOCAL_RETRY_US),
-                      KPC(this));
+        usleep(sleep_interval / 2);
+
+        if ((cur_us - start_wait_us) > 1_s && TC_REACH_TIME_INTERVAL(2_s)) {
+          int64_t branch_pending_log_size = mt_ctx_.get_branch_pending_log_size(write_seq_no.get_branch());
+          TRANS_LOG(INFO, "retry to submit redo before write with a long time",
+                    K(tmp_ret),
+                    K(write_seq_no),
+                    K(busy_cb_cnt),
+                    K(extra_cb_group_cnt),
+                    K(start_wait_us),
+                    K(sleep_interval),
+                    K(branch_pending_log_size),
+                    K(max_pending_log_size),
+                    K(retry_times),
+                    KPC(this));
+          // check is leader
+          bool is_leader = false;
+          int64_t epoch = 0;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->get_role(is_leader, epoch))) {
+            LOG_WARN("get ls role failed", K(tmp_ret), K(ls_id_));
+            break;
+          } else if (!is_leader) {
+            LOG_WARN("ls is not leader", K(ls_id_));
+            ret = OB_NOT_MASTER;
             break;
           }
-          ob_usleep(LOCAL_RETRY_INTERVAL_US);
+          // check status
+          if (OB_FAIL(check_status())) {
+            break;
+          }
         }
       }
     }
   }
-  
   return ret;
 }
 
@@ -11253,7 +11282,7 @@ int ObPartTransCtx::submit_redo_log_out(ObTxLogBlock &log_block,
   } else if (FALSE_IT(with_ref = true)) {
   } else if (FALSE_IT(time_guard.click("before_submit_log_block"))) {
   } else if (OB_FAIL(submit_log_block_out_(log_block, share::SCN::min_scn(), log_cb, replay_hint))) {
-    TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
+    TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(trans_id_), K(ls_id_), KP(this));
   } else {
     time_guard.click("submit_out_to_palf");
     submitted_scn = log_cb->get_log_ts();

@@ -962,19 +962,26 @@ int ObMemtableCtx::update_checksum(const ObIArray<uint64_t> &checksum,
 }
 
 ERRSIM_POINT_DEF(TX_FORCE_WRITE_CLOG)
-bool ObMemtableCtx::pending_log_size_too_large(const ObTxSEQ &write_seq_no)
+bool ObMemtableCtx::pending_log_size_too_large(const int16_t branch_id, int64_t limit)
 {
   bool ret = true;
-
-  if (0 == GCONF._private_buffer_size) {
-    ret = false;
-  } else if (TX_FORCE_WRITE_CLOG) {
-    ret = true;
-  } else {
-    ret = trans_mgr_.pending_log_size_too_large(write_seq_no, GCONF._private_buffer_size);
+  if (limit == 0) {
+    limit = GCONF._private_buffer_size;
   }
-
+  if (0 == limit) {
+    ret = false;
+  } else {
+    ret = trans_mgr_.pending_log_size_too_large(branch_id, limit);
+  }
   return ret;
+}
+
+int16_t ObMemtableCtx::get_pending_log_size_too_large_list(int64_t limit) const
+{
+  if (limit == 0) {
+    limit = GCONF._private_buffer_size;
+  }
+  return trans_mgr_.get_pending_log_size_too_large_list(limit);
 }
 
 int ObMemtableCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)

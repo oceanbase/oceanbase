@@ -2274,6 +2274,23 @@ inline ObTxCallbackList *ObTransCallbackMgr::get_callback_list_(const int16_t in
   return NULL;
 }
 
+inline const ObTxCallbackList *ObTransCallbackMgr::get_callback_list_(const int16_t index, const bool nullable) const
+{
+  if (index == 0) {
+    return &callback_list_;
+  }
+  if (callback_lists_) {
+    OB_ASSERT(index < MAX_CALLBACK_LIST_COUNT);
+    return &callback_lists_[index - 1];
+  } else if (!nullable) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback list is null", K(index));
+#ifdef ENABLE_DEBUG_LOG
+    ob_abort();
+#endif
+  }
+  return NULL;
+}
+
 void ObTransCallbackMgr::check_all_redo_flushed()
 {
   bool ok = true;
@@ -2294,15 +2311,33 @@ int ObTransCallbackMgr::get_logging_list_count() const
   return callback_lists_ ? MAX_CALLBACK_LIST_COUNT : 1;
 }
 
-bool ObTransCallbackMgr::pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no,
+bool ObTransCallbackMgr::pending_log_size_too_large(const int16_t branch_id,
                                                     const int64_t limit)
 {
   if (is_parallel_logging_()) {
-    ObTxCallbackList *list = get_callback_list_(write_seq_no.get_branch() % MAX_CALLBACK_LIST_COUNT, true);
+    ObTxCallbackList *list = get_callback_list_(branch_id % MAX_CALLBACK_LIST_COUNT, true);
     return list ? list->pending_log_too_large(limit) : 0;
   } else {
     return ATOMIC_LOAD(&pending_log_size_) > limit;
   }
+}
+
+int16_t ObTransCallbackMgr::get_pending_log_size_too_large_list(const int64_t limit) const
+{
+  int16_t ret = -1;
+  if (is_parallel_logging_() && callback_lists_) {
+    int16_t start_idx = get_itid() % MAX_CALLBACK_LIST_COUNT;
+    for (int i = start_idx; i < MAX_CALLBACK_LIST_COUNT; i++) {
+      const ObTxCallbackList *list = get_callback_list_(i, true);
+      if (list && !list->is_logging_locked() && list->pending_log_too_large(limit)) {
+        ret = i;
+        break;
+      }
+    }
+  } else if (ATOMIC_LOAD(&pending_log_size_) > limit) {
+    ret = 0;
+  }
+  return ret;
 }
 
 void ObTransCallbackMgr::set_parallel_logging(const share::SCN serial_final_scn,
@@ -2363,6 +2398,16 @@ int64_t ObTransCallbackMgr::get_pending_log_size() const
       size += list->get_pending_log_size();
     }
     return size;
+  }
+}
+
+int64_t ObTransCallbackMgr::get_branch_pending_log_size(const int16_t branch) const
+{
+  if (is_parallel_logging_()) {
+    const ObTxCallbackList *list = get_callback_list_(branch % MAX_CALLBACK_LIST_COUNT, true);
+    return list ? list->get_pending_log_size() : 0;
+  } else {
+    return ATOMIC_LOAD(&pending_log_size_);
   }
 }
 

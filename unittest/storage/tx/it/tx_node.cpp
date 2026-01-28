@@ -826,5 +826,6 @@ int ObTxNode::replay(const void *buffer,
   }
   return ret;
 }
+
 } // transaction
 } // oceanbase
