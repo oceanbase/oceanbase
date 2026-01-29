@@ -35,7 +35,8 @@
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_i_sslog_proxy.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_proxy.h"
 #include "storage/shared_storage/mem_macro_cache/ob_ss_mem_macro_cache.h"
-
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
+#include "logservice/palf/election/utils/election_common_define.h"
 
 namespace oceanbase
 {
@@ -128,12 +129,21 @@ public:
    virtual void SetUp() override
   {
     if (!scp_tenant_created) {
+      // Increase MAX_TST after start() to override the default 100ms setting
+      // This extends lease interval from 400ms to 2s, reducing lease expiration issues
+      oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
       ObSimpleClusterTestBase::SetUp();
       OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8));
       OK(get_tenant_id(run_ctx.tenant_id_));
       ASSERT_NE(0, run_ctx.tenant_id_);
       OK(get_curr_simple_server().init_sql_proxy2());
       scp_tenant_created = true;
+      // Wait for tenant services to be ready, this helps avoid LS leader election issues
+      {
+        share::ObTenantSwitchGuard tguard;
+        OK(tguard.switch_to(run_ctx.tenant_id_));
+        OK(TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+      }
     }
   }
   void set_ls_and_tablet_id_for_run_ctx(const char *table_name);
@@ -159,7 +169,7 @@ public:
     }
 public:
   static const int64_t READ_IO_SIZE = DIO_READ_ALIGN_SIZE * 256 * 2; // 2MB
-private:
+protected:
   char read_buf_[READ_IO_SIZE];
   ObStorageObjectReadInfo read_info_;
 };
