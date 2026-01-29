@@ -656,20 +656,31 @@ int ObExternalTablePushdownFilter::build_filter_expr_rels_recursive(
       }
     }
   } else if (filter->is_filter_node()) {
-    if (OB_UNLIKELY(!filter->is_filter_black_node())) {
+    bool is_white_filter_supported = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
+    if (OB_UNLIKELY((!filter->is_filter_black_node() && !filter->is_filter_white_node())
+                    || (filter->is_filter_white_node() && !is_white_filter_supported))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("not supported non-black filter in external table", K(ret), K(filter));
+      LOG_WARN("not supported filter in external table", K(ret), K(filter));
     } else {
-      sql::ObBlackFilterExecutor *black_filter =
-        static_cast<sql::ObBlackFilterExecutor *>(filter);
-      const common::ObIArray<uint64_t> &col_ids = black_filter->get_col_ids();
-      const common::ObIArray<ObExpr*> *col_exprs = black_filter->get_cg_col_exprs();
-      if (OB_ISNULL(col_exprs) || col_ids.count() != col_exprs->count()) {
+      common::ObIArray<uint64_t> *col_ids = nullptr;
+      const common::ObIArray<ObExpr*> *col_exprs = nullptr;
+      if (filter->is_filter_black_node()) {
+        sql::ObBlackFilterExecutor *black_filter =
+          static_cast<sql::ObBlackFilterExecutor *>(filter);
+        col_ids = &black_filter->get_col_ids();
+        col_exprs = black_filter->get_cg_col_exprs();
+      } else {
+        sql::ObWhiteFilterExecutor *white_filter =
+          static_cast<sql::ObWhiteFilterExecutor *>(filter);
+        col_ids = &white_filter->get_col_ids();
+        col_exprs = white_filter->get_cg_col_exprs();
+      }
+      if (OB_ISNULL(col_exprs) || OB_ISNULL(col_ids) || col_ids->count() != col_exprs->count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null col exprs or col ids", K(ret));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < col_ids.count(); ++i) {
-          const uint64_t col_id = col_ids.at(i);
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_ids->count(); ++i) {
+          const uint64_t col_id = col_ids->at(i);
           const ObExpr *col_expr = col_exprs->at(i);
           if (OB_FAIL(build_filter_expr_rel(col_id, col_expr, row_iter))) {
             LOG_WARN("fail to build filter expr rel", K(ret), K(i), K(col_id), KP(col_expr));

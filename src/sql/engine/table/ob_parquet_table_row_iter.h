@@ -30,6 +30,7 @@
 #include "sql/engine/basic/ob_arrow_basic.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/engine/table/ob_external_table_pushdown_filter.h"
+#include "sql/engine/table/ob_parquet_dict_filter.h"
 #include "storage/access/ob_sstable_index_filter.h"
 #include <parquet/page_index.h>
 #include <parquet/stream_reader.h>
@@ -172,7 +173,8 @@ public:
     mode_(FilterCalcMode::DYNAMIC_EAGER_CALC),
     reader_metrics_(),
     column_index_type_(sql::ColumnIndexType::NAME),
-    is_col_name_case_sensitive_(false) {}
+    is_col_name_case_sensitive_(false),
+    dict_filter_pushdown_(nullptr) {}
   virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
@@ -200,6 +202,10 @@ public:
   int64_t get_lazy_file_count() const { return is_eager_calc() ? lazy_columns_.count() : file_column_exprs_.count(); }
   int64_t get_lazy_access_count() const { return is_eager_calc() ? lazy_columns_.count() : column_exprs_.count();  }
   int64_t get_lazy_column_id(const int64_t i) const { return is_eager_calc() ? lazy_columns_.at(i) : i; }
+  bool is_dict_load_func(int32_t file_col_idx) const
+  {
+    return load_funcs_.at(file_col_idx) == &DataLoader::load_string_col_dict;
+  }
 
   class ParquetBloomFilterParamBuilder : public ObExternalTablePushdownFilter::BloomFilterParamBuilder
   {
@@ -289,6 +295,7 @@ private:
     int64_t last_column_id_;
   };
   // load vec data from parquet file to expr mem
+
   struct DataLoader {
     DataLoader(ObEvalCtx &eval_ctx,
                ObExpr *file_col_expr,
@@ -306,7 +313,11 @@ private:
                ObColumnDefaultValue &col_def,
                int64_t &read_progress,
                const bool cross_page,
-               ParquetStatInfo &stat):
+               ParquetStatInfo &stat,
+               int32_t col_idx,
+               bool first_batch,
+               ObParquetDictFilterPushdown * dict_filter_pushdown,
+               bool need_decode):
       eval_ctx_(eval_ctx),
       file_col_expr_(file_col_expr),
       arr_type_(arr_type),
@@ -323,7 +334,11 @@ private:
       col_def_(col_def),
       read_progress_(read_progress),
       cross_page_(cross_page),
-      stat_(stat)
+      stat_(stat),
+      col_idx_(col_idx),
+      first_batch_(first_batch),
+      dict_filter_pushdown_(dict_filter_pushdown),
+      need_decode_(need_decode)
     {}
     typedef int (DataLoader::*LOAD_FUNC)();
     static LOAD_FUNC
@@ -356,6 +371,7 @@ private:
     int load_bool_to_int64_vec();
     int load_date_to_mysql_date();
     int load_string_col();
+    int load_string_col_dict();
     int load_default();
     int load_fixed_string_col();
     int load_decimal_any_col();
@@ -432,6 +448,10 @@ private:
     // only uesd for collection type:
     common::ObArrayWrap<int16_t> coll_def_levels_buf_;
     common::ObArrayWrap<int16_t> coll_rep_levels_buf_;
+    int32_t col_idx_;
+    bool first_batch_;
+    ObParquetDictFilterPushdown *dict_filter_pushdown_;
+    bool need_decode_;
   };
   class ParquetSectorIterator {
     public:
@@ -505,6 +525,9 @@ private:
                         std::unique_ptr<parquet::ParquetFileReader>& eager_file_reader);
   void reset_column_readers();
   int project_eager_columns(int64_t &count, int64_t capacity);
+  int calc_eager_column_convert(const int64_t read_count);
+  int apply_dict_code_filters(const int64_t count,
+                              ObPushdownFilterExecutor *curr_filter);
   int calc_filters(const int64_t count,
                    ObPushdownFilterExecutor *curr_filter,
                    ObPushdownFilterExecutor *parent_filter);
@@ -532,6 +555,9 @@ private:
   int calc_column_convert(const int64_t read_count, const bool is_eager, ObEvalCtx &eval_ctx);
   int calc_file_meta_column(const int64_t read_count, ObEvalCtx &eval_ctx);
   static bool is_contain_field_id(std::shared_ptr<parquet::FileMetaData> file_meta);
+  // 根据字典编码检查结果，动态更新 load_funcs_
+  int update_load_funcs_for_dict_optimization();
+  int collect_dict_filter_executors(ObPushdownFilterExecutor *filter);
 private:
   ObParquetIteratorState state_;
   lib::ObMemAttr mem_attr_;
@@ -580,6 +606,7 @@ private:
   ObLakeTableParquetReaderMetrics reader_metrics_;
   sql::ColumnIndexType column_index_type_;
   bool is_col_name_case_sensitive_;
+  ObParquetDictFilterPushdown *dict_filter_pushdown_;  // 字典优化模块
 };
 
 }

@@ -839,8 +839,9 @@ int ObPushdownFilterConstructor::generate(ObRawExpr *raw_expr, ObPushdownFilterN
   bool is_semistruct_white = false;
   ObItemType op_type = T_INVALID;
   ObPushdownFilterNode *filter_node = nullptr;
-  // treat all filters of external table as black filter
   bool is_external_table = table_type_ == share::schema::EXTERNAL_TABLE;
+  bool is_white_mode_enabled
+      = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0) || !is_external_table;
   if (OB_ISNULL(raw_expr) || OB_ISNULL(alloc_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid null parameter", K(ret), KP(raw_expr), KP(alloc_));
@@ -861,7 +862,8 @@ int ObPushdownFilterConstructor::generate(ObRawExpr *raw_expr, ObPushdownFilterN
     } else {
       static_cast<ObPushdownDynamicFilterNode *>(filter_node)->set_last_child(true);
     }
-  } else if (!is_external_table && OB_FAIL(is_white_mode(raw_expr, is_white, is_semistruct_white))) {
+  } else if (is_white_mode_enabled
+             && OB_FAIL(is_white_mode(raw_expr, is_white, is_semistruct_white))) {
     LOG_WARN("Failed to get filter type", K(ret));
   } else if (is_white) {
     if (is_semistruct_white) {
@@ -1640,7 +1642,6 @@ int ObPushdownFilterExecutor::execute(
   } else if (nullptr != parent && OB_FAIL(parent->prepare_skip_filter(false))) {
     LOG_WARN("Failed to check parent blockscan", K(ret));
   } else if (is_filter_black_node()) {
-    // external table only support black filter
     ObBlackFilterExecutor *black_filter = static_cast<ObBlackFilterExecutor *>(this);
     if (OB_ISNULL(filter_column_loader)) {
       ret = OB_INVALID_ARGUMENT;
@@ -1648,6 +1649,16 @@ int ObPushdownFilterExecutor::execute(
     } else if (OB_FAIL(filter_column_loader->load(black_filter->get_col_ids()))) {
       LOG_WARN("fail to load filter column", K(ret));
     } else if (OB_FAIL(black_filter->filter_batch(parent, start, count, *result))) {
+      LOG_WARN("fail to filter batch", K(ret));
+    }
+  } else if (is_filter_white_node()) {
+    ObWhiteFilterExecutor *white_filter = static_cast<ObWhiteFilterExecutor *>(this);
+    if (OB_ISNULL(filter_column_loader)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid argument", K(ret), KP(filter_column_loader));
+    } else if (OB_FAIL(filter_column_loader->load(white_filter->get_col_ids()))) {
+      LOG_WARN("fail to load filter column", K(ret));
+    } else if (OB_FAIL(white_filter->filter_batch(parent, start, count, *result))) {
       LOG_WARN("fail to filter batch", K(ret));
     }
   } else if (is_logic_op_node()) {

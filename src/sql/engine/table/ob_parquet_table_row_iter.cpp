@@ -12,13 +12,19 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_parquet_table_row_iter.h"
-#include "sql/engine/basic/ob_arrow_basic.h"
+
+#include "lib/udt/ob_array_type.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/engine/basic/ob_arrow_basic.h"
+#include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include <parquet/api/reader.h>
 #include "sql/engine/table/ob_external_table_pushdown_filter.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
+#include "storage/blocksstable/encoding/ob_encoding_util.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
+
+#include <parquet/api/reader.h>
 
 namespace oceanbase
 {
@@ -50,6 +56,10 @@ ObParquetTableRowIterator::~ObParquetTableRowIterator()
     malloc_allocator_.free(rg_bitmap_);
     rg_bitmap_ = nullptr;
   }
+  if (nullptr != dict_filter_pushdown_) {
+    dict_filter_pushdown_->~ObParquetDictFilterPushdown();
+    dict_filter_pushdown_ = nullptr;
+  }
   malloc_allocator_.reset();
   reader_profile_.dump_metrics();
   reader_profile_.update_profile();
@@ -75,6 +85,28 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
                                           scan_param->ext_tbl_filter_pd_level_,
                                           scan_param->column_ids_,
                                           eval_ctx));
+
+  // 初始化字典优化模块
+  if (OB_SUCC(ret) && nullptr == dict_filter_pushdown_ && file_column_exprs_.count() > 0) {
+    dict_filter_pushdown_ = OB_NEWx(ObParquetDictFilterPushdown, &allocator_);
+    if (OB_ISNULL(dict_filter_pushdown_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for dict filter pushdown", K(ret));
+    } else if (OB_FAIL(dict_filter_pushdown_->init(file_column_exprs_.count()))) {
+      LOG_WARN("fail to init dict filter pushdown", K(ret));
+    } else {
+      common::ObSEArray<ObExpr *, 16> decode_exprs;
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
+        if (OB_FAIL(decode_exprs.push_back(get_column_expr_by_id(i)))) {
+          LOG_WARN("fail to push back expr", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(dict_filter_pushdown_->init_decode_exprs(decode_exprs))) {
+        LOG_WARN("fail to init decode exprs for dict filter pushdown", K(ret));
+      }
+    }
+  }
+
   OZ(reader_profile_.register_metrics(&reader_metrics_, READER_METRICS_LABEL));
   OZ(data_access_driver_.register_io_metrics(reader_profile_, IO_METRICS_LABEL));
   OZ(file_prebuffer_.register_metrics(reader_profile_, PREBUFFER_METRICS_LABEL));
@@ -105,6 +137,15 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     } else if (FALSE_IT(lib::ob_sort(lazy_columns_.begin(), lazy_columns_.end()))) {
     }
+
+    if (OB_SUCC(ret)) {
+      if (scan_param_->ext_enable_late_materialization_
+          && scan_param->pd_storage_filters_ != nullptr) {
+        // build filter expr rels for late materialization
+        OZ(build_filter_expr_rels(scan_param->pd_storage_filters_, this));
+      }
+    }
+
     OZ (state_.init(file_column_exprs_.count(), get_eager_count(), allocator_));
     if (file_column_exprs_.count() > 0) {
       OZ (column_indexs_.allocate_array(allocator_, file_column_exprs_.count()));
@@ -306,32 +347,6 @@ static void print_type_mismatch_error(const int ret, ObDatumMeta &meta,
 
 int ObParquetTableRowIterator::next_file()
 {
-#define BEGIN_CATCH_EXCEPTIONS try {
-#define END_CATCH_EXCEPTIONS                                                                       \
-  } catch (const ObErrorCodeException &ob_error) {                                                 \
-    if (OB_SUCC(ret)) {                                                                            \
-      ret = ob_error.get_error_code();                                                             \
-      LOG_WARN("fail to read file", K(ret));                                                       \
-    }                                                                                              \
-  } catch (const ::parquet::ParquetStatusException &e) {                                           \
-    if (OB_SUCC(ret)) {                                                                            \
-      status = e.status();                                                                         \
-      ret = OB_INVALID_EXTERNAL_FILE;                                                              \
-      LOG_WARN("unexpected error", K(ret), "Info", e.what());                                      \
-    }                                                                                              \
-  } catch (const ::parquet::ParquetException &e) {                                                 \
-    if (OB_SUCC(ret)) {                                                                            \
-      ret = OB_INVALID_EXTERNAL_FILE;                                                              \
-      LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, e.what());                                          \
-      LOG_WARN("unexpected error", K(ret), "Info", e.what());                                      \
-    }                                                                                              \
-  } catch (...) {                                                                                  \
-    if (OB_SUCC(ret)) {                                                                            \
-      ret = OB_ERR_UNEXPECTED;                                                                     \
-      LOG_WARN("unexpected error", K(ret));                                                        \
-    }                                                                                              \
-  }                                                                                                \
-
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   ObString location = scan_param_->external_file_location_;
@@ -634,12 +649,28 @@ int ObParquetTableRowIterator::next_row_group()
           ++reader_metrics_.selected_row_group_count_;
           sector_iter_.reset();
           find_row_group = true;
-          if (is_iceberg_lake_table() && !state_.is_delete_file_loaded_) {
-            if (OB_FAIL(build_delete_bitmap(state_.cur_file_url_, state_.file_idx_ - 1))) {
-              LOG_WARN("failed to read position delete", K(ret));
-            } else {
-              state_.is_delete_file_loaded_ = true;
-            }
+
+          if (OB_NOT_NULL(dict_filter_pushdown_)) {
+              dict_filter_pushdown_->reset();
+              if (OB_FAIL(
+                      dict_filter_pushdown_->init_row_group_dict_encoding_check(rg_reader,
+                                                                                column_indexs_,
+                                                                                eager_columns_))) {
+                LOG_WARN("fail to init row group dict encoding check", K(ret));
+              } else if (OB_FAIL(update_load_funcs_for_dict_optimization())) {
+                LOG_WARN("fail to update load funcs for dict optimization", K(ret));
+              } else if (OB_FAIL(collect_dict_filter_executors(scan_param_->pd_storage_filters_))) {
+                LOG_WARN("fail to collect dict filter executors", K(ret));
+              }
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (is_iceberg_lake_table() && !state_.is_delete_file_loaded_) {
+              if (OB_FAIL(build_delete_bitmap(state_.cur_file_url_, state_.file_idx_ - 1))) {
+                LOG_WARN("failed to read position delete", K(ret));
+              } else {
+                state_.is_delete_file_loaded_ = true;
+              }
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(prepare_rg_bitmap(rg_reader))) {
@@ -653,6 +684,63 @@ int ObParquetTableRowIterator::next_row_group()
       }
     }
   }
+  return ret;
+}
+
+int ObParquetTableRowIterator::collect_dict_filter_executors(ObPushdownFilterExecutor *filter)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(filter)) {
+    // do nothing
+  } else if (filter->is_filter_node()) {
+    // 检查当前filter是否可以使用字典优化
+    int32_t file_col_idx = -1;
+    ObParquetDictColumnData *dict_data = nullptr;
+    ObIArray<uint64_t> *col_ids = nullptr;
+    bool has_dict_data = false;
+
+    if (filter->is_filter_black_node()) {
+      ObBlackFilterExecutor *black_filter = static_cast<ObBlackFilterExecutor *>(filter);
+      col_ids = &black_filter->get_col_ids();
+    } else if (filter->is_filter_white_node()) {
+      ObWhiteFilterExecutor *white_filter = static_cast<ObWhiteFilterExecutor *>(filter);
+      col_ids = &white_filter->get_col_ids();
+    }
+
+    // 只处理单列filter
+    if (OB_NOT_NULL(col_ids) && col_ids->count() == 1) {
+      uint64_t ob_col_id = col_ids->at(0);
+
+      // 从 OB 列 ID 映射到 file_column_exprs_ 索引
+      for (int64_t i = 0; i < mapping_column_ids_.count(); ++i) {
+        if (mapping_column_ids_.at(i).first == ob_col_id) {
+          file_col_idx = i;
+          break;
+        }
+      }
+
+      if (file_col_idx < 0) {
+        // do nothing
+        // file column expr和ob_col_id不是一一映射，不采用字典优化
+      } else if (ObParquetDictFilterPushdown::is_operator_supported_for_dict_filter(filter)
+                 && is_dict_load_func(file_col_idx)) {
+        if (OB_FAIL(dict_filter_pushdown_->collect_dict_filter_executor(filter))) {
+          LOG_WARN("fail to push back dict filter executor", K(ret));
+        } else {
+          LOG_DEBUG("dict filter executor collected", KP(filter), K(file_col_idx));
+        }
+      }
+    }
+  } else if (filter->is_logic_op_node()) {
+    sql::ObPushdownFilterExecutor **children = filter->get_childs();
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter->get_child_count(); ++i) {
+      if (OB_FAIL(collect_dict_filter_executors(children[i]))) {
+        LOG_WARN("fail to collect dict filter executors from child", K(ret), K(i));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1180,65 +1268,65 @@ int ObParquetTableRowIterator::DataLoader::to_numeric(
 }
 
 int ObParquetTableRowIterator::DataLoader::to_numeric_hive(
-    const int64_t idx,
-    const char *str,
-    const int32_t length,
-    char *buf,
-    const int64_t data_len)
+  const int64_t idx,
+  const char *str,
+  const int32_t length,
+  char *buf,
+  const int64_t data_len)
 {
-  int ret = OB_SUCCESS;
-  ObDecimalInt *decint = NULL;
-  int32_t val_len = 0;
-  if (OB_UNLIKELY(length > data_len)) {
-    ret = OB_DECIMAL_PRECISION_OVERFLOW;
-    LOG_WARN("overflow", K(length), K(data_len));
+int ret = OB_SUCCESS;
+ObDecimalInt *decint = NULL;
+int32_t val_len = 0;
+if (OB_UNLIKELY(length > data_len)) {
+  ret = OB_DECIMAL_PRECISION_OVERFLOW;
+  LOG_WARN("overflow", K(length), K(data_len));
+} else {
+  //to little endian
+  // fill 1 when the input value is negetive, otherwise fill 0
+  MEMSET(buf, (static_cast<unsigned char>(*str) & 0x80) ? 0xFF : 0x00, data_len);
+  if (data_len <= 4) {
+    //for precision <= 9
+    MEMCPY(buf + 4 - length, str, length);
+    uint32_t *res = pointer_cast<uint32_t*>(buf);
+    uint32_t temp_v = *res;
+    *res = ntohl(temp_v);
   } else {
-    //to little endian
-    // fill 1 when the input value is negetive, otherwise fill 0
-    MEMSET(buf, (static_cast<unsigned char>(*str) & 0x80) ? 0xFF : 0x00, data_len);
-    if (data_len <= 4) {
-      //for precision <= 9
-      MEMCPY(buf + 4 - length, str, length);
-      uint32_t *res = pointer_cast<uint32_t*>(buf);
-      uint32_t temp_v = *res;
-      *res = ntohl(temp_v);
-    } else {
-      int64_t pos = 0;
-      int64_t temp_len = length;
-      while (temp_len >= 8) {
-        uint64_t temp_v = *(pointer_cast<const uint64_t*>(str + temp_len - 8));
-        *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
-        pos+=8;
-        temp_len-=8;
-      }
-      if (temp_len > 0) {
-        MEMCPY(buf + pos + 8 - temp_len, str, temp_len);
-        uint64_t temp_v = *(pointer_cast<uint64_t*>(buf + pos));
-        *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
-      }
+    int64_t pos = 0;
+    int64_t temp_len = length;
+    while (temp_len >= 8) {
+      uint64_t temp_v = *(pointer_cast<const uint64_t*>(str + temp_len - 8));
+      *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
+      pos+=8;
+      temp_len-=8;
     }
-    decint = pointer_cast<ObDecimalInt *>(buf);
-    val_len = static_cast<int32_t>(data_len);
-    if (ObDecimalIntType == file_col_expr_->datum_meta_.type_) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
-      vec->set_decimal_int(idx, decint, val_len);
-    } else if (ObNumberType == file_col_expr_->datum_meta_.type_
-               || ObUNumberType == file_col_expr_->datum_meta_.type_) {
-      ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
-      ObDiscreteBase *vec = static_cast<ObDiscreteBase *>(file_col_expr_->get_vector(eval_ctx_));
-      number::ObNumber res_nmb;
-      if (OB_FAIL(wide::to_number(decint, val_len, file_col_expr_->datum_meta_.scale_,
-                                  tmp_alloc_g.get_allocator(), res_nmb))) {
-        LOG_WARN("fail to from", K(ret));
-      } else {
-        vec->set_number(idx, res_nmb);
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("not supported type", K(file_col_expr_->datum_meta_));
+    if (temp_len > 0) {
+      MEMCPY(buf + pos + 8 - temp_len, str, temp_len);
+      uint64_t temp_v = *(pointer_cast<uint64_t*>(buf + pos));
+      *(pointer_cast<uint64_t*>(buf + pos)) = ntohll(temp_v);
     }
   }
-  return ret;
+  decint = pointer_cast<ObDecimalInt *>(buf);
+  val_len = static_cast<int32_t>(data_len);
+  if (ObDecimalIntType == file_col_expr_->datum_meta_.type_) {
+    ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_col_expr_->get_vector(eval_ctx_));
+    vec->set_decimal_int(idx, decint, val_len);
+  } else if (ObNumberType == file_col_expr_->datum_meta_.type_
+             || ObUNumberType == file_col_expr_->datum_meta_.type_) {
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+    ObDiscreteBase *vec = static_cast<ObDiscreteBase *>(file_col_expr_->get_vector(eval_ctx_));
+    number::ObNumber res_nmb;
+    if (OB_FAIL(wide::to_number(decint, val_len, file_col_expr_->datum_meta_.scale_,
+                                tmp_alloc_g.get_allocator(), res_nmb))) {
+      LOG_WARN("fail to from", K(ret));
+    } else {
+      vec->set_number(idx, res_nmb);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not supported type", K(file_col_expr_->datum_meta_));
+  }
+}
+return ret;
 }
 
 int ObParquetTableRowIterator::to_numeric_hive(
@@ -1528,15 +1616,14 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
       if (OB_LIKELY(is_fast_path)) {
         for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
           parquet::ByteArray &cur_v = values_data[i];
-          if (OB_UNLIKELY(cur_v.len > max_length)) {
-            if (OB_UNLIKELY(!is_byte_length
-                            && ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
-                                                      pointer_cast<const char *>(cur_v.ptr),
-                                                      cur_v.len)
-                                   > max_length)) {
-              ret = OB_ERR_DATA_TOO_LONG;
-              LOG_WARN("data too long", K(max_length), K(cur_v.len), K(ret));
-            }
+          if (OB_UNLIKELY(cur_v.len > max_length
+                          && (is_byte_length
+                              || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
+                                                        pointer_cast<const char *>(cur_v.ptr),
+                                                        cur_v.len)
+                                     > max_length))) {
+            ret = OB_ERR_DATA_TOO_LONG;
+            LOG_WARN("data too long", K(max_length), K(cur_v.len), K(ret));
           } else {
             text_vec->set_string(i + row_offset, pointer_cast<const char *>(cur_v.ptr), cur_v.len);
           }
@@ -1583,6 +1670,118 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
                 text_vec->set_string(i + row_offset,
                                      pointer_cast<const char *>(res_ptr),
                                      cur_v.len);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_string_col_dict()
+{
+  int ret = OB_SUCCESS;
+
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx_);
+  int16_t max_def_level = reader_->descr()->max_definition_level();
+  StrDiscVec *text_vec = static_cast<StrDiscVec *>(file_col_expr_->get_vector(eval_ctx_));
+
+  CK(VEC_DISCRETE == text_vec->get_format());
+  CK(OB_NOT_NULL(dict_filter_pushdown_));
+
+  ObArrayWrap<int32_t> indices;
+  const parquet::ByteArray *dict_values = nullptr;
+  int32_t dict_len = 0;
+  int64_t indices_cnt = 0;
+  OZ(indices.allocate_array(tmp_alloc_g.get_allocator(), batch_size_));
+
+  const bool is_oracle_mode = lib::is_oracle_mode();
+  const bool is_byte_length
+      = is_oracle_byte_length(is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
+  const int64_t max_length = file_col_expr_->max_length_;
+  const bool is_large_text = ob_is_large_text(file_col_expr_->datum_meta_.type_);
+
+  if (OB_SUCC(ret)) {
+    parquet::ByteArrayReader *byte_array_reader = static_cast<parquet::ByteArrayReader *>(reader_);
+    row_count_ = byte_array_reader->ReadBatchWithDictionary(batch_size_,
+                                                            def_levels_buf_.get_data(),
+                                                            rep_levels_buf_.get_data(),
+                                                            indices.get_data(),
+                                                            &indices_cnt,
+                                                            &dict_values,
+                                                            &dict_len);
+
+    read_progress_ += row_count_;
+    if (OB_FAIL(dict_filter_pushdown_->save_dict_column_data(col_idx_,
+                                                              indices.get_data(),
+                                                              indices_cnt,
+                                                              dict_values,
+                                                              dict_len,
+                                                              parquet::Type::BYTE_ARRAY,
+                                                              first_batch_,
+                                                              row_count_,
+                                                              batch_size_,
+                                                              !(IS_PARQUET_COL_NOT_NULL),
+                                                              def_levels_buf_.get_data(),
+                                                              max_def_level,
+                                                              file_col_expr_))) {
+      LOG_WARN("fail to save dict column data", K(ret), K(col_idx_));
+    } else {
+      LOG_DEBUG("dict column data saved", K(col_idx_), K(dict_len), K(row_count_));
+    }
+
+    // decode when project_lazy_columns
+    if (OB_FAIL(ret)) {
+    } else if (need_decode_) {
+      ObParquetDictColumnData *saved_dict_data = nullptr;
+      bool has_saved_dict = false;
+      if (OB_FAIL(
+              dict_filter_pushdown_->get_dict_data(col_idx_, saved_dict_data, has_saved_dict))) {
+        LOG_WARN("fail to get saved dict data", K(ret), K(col_idx_));
+      } else if (!has_saved_dict || OB_ISNULL(saved_dict_data)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("saved dict data not found or invalid", K(ret), K(col_idx_), K(has_saved_dict));
+      } else {
+        common::StrDiscVec *dict_vec = saved_dict_data->dict_values_;
+
+        // 特殊情况：字典为空（全为 null）
+        if (OB_ISNULL(dict_vec) || saved_dict_data->dict_len_ <= 0) {
+          // 全为 null 的字典列，直接将所有行设置为 null
+          for (int i = 0; i < row_count_; i++) {
+            text_vec->set_null(i + row_offset_);
+          }
+        } else {
+          char **dict_ptrs = dict_vec->get_ptrs();
+          int32_t *dict_lens = dict_vec->get_lens();
+
+          int16_t *def_levels = def_levels_buf_.get_data();
+          int32_t *indices_data = indices.get_data();
+          const bool has_null = !(IS_PARQUET_COL_NOT_NULL && indices_cnt == row_count_);
+
+          const bool is_fast_path = !is_oracle_mode && !has_null;
+
+          if (OB_LIKELY(is_fast_path)) {
+            for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+              text_vec->set_string(i + row_offset_,
+                                   dict_ptrs[indices_data[i]],
+                                   dict_lens[indices_data[i]]);
+            }
+          } else {
+            int j = 0;
+            for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
+              if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels[i])) {
+                text_vec->set_null(i + row_offset_);
+              } else if (OB_UNLIKELY(dict_vec->is_null(indices_data[j]))) {
+                text_vec->set_null(i + row_offset_);
+                j++;
+              } else {
+                text_vec->set_string(i + row_offset_,
+                                     dict_ptrs[indices_data[j]],
+                                     dict_lens[indices_data[j]]);
+                j++;
               }
             }
           }
@@ -2655,25 +2854,34 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   int64_t read_count = 0;
   ObMallocHookAttrGuard guard(mem_attr_);
 
+  if (OB_NOT_NULL(dict_filter_pushdown_)) {
+    dict_filter_pushdown_->clear_filter_arrays();
+  }
+
   if (OB_FAIL(next_sector(capacity, eval_ctx, read_count))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next sector", K(ret));
     }
   } else if (OB_FAIL(calc_file_meta_column(read_count, eval_ctx))) {
     LOG_WARN("failed to calc file meta column", K(ret));
-  } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
-    LOG_WARN("failed to calc column convert", K(ret));
   } else if (OB_FAIL(calc_exprs_for_rowid(read_count, state_))) {
     LOG_WARN("failed to calc rowid", K(ret));
-  } else if (is_lazy_calc()
-             && scan_param_->ext_enable_late_materialization_
+  } else if (is_lazy_calc() && scan_param_->ext_enable_late_materialization_
              && nullptr != scan_param_->pd_storage_filters_) {
-    if (OB_FAIL(calc_filters(read_count, scan_param_->pd_storage_filters_, nullptr))) {
+    if (OB_FAIL(apply_dict_code_filters(read_count, scan_param_->pd_storage_filters_))) {
+      LOG_WARN("failed to apply dict code filters", K(ret));
+    } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
+      // 在字典解码后调用，确保 column_exprs_ 拿到正确数据
+      LOG_WARN("failed to calc column convert", K(ret));
+    } else if (OB_FAIL(calc_filters(read_count, scan_param_->pd_storage_filters_, nullptr))) {
       LOG_WARN("failed to calc lazy filters", K(ret));
     } else if (OB_FAIL(reorder_output(*scan_param_->pd_storage_filters_->get_result(),
-                                      eval_ctx, read_count))) {
+                                      eval_ctx,
+                                      read_count))) {
       LOG_WARN("failed to reorder", K(ret));
     }
+  } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
+    LOG_WARN("failed to calc column convert", K(ret));
   }
   if (OB_SUCC(ret)) {
     count = read_count;
@@ -3361,6 +3569,7 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
           OZ (ObArrayExprUtils::get_array_type_by_subschema_id(eval_ctx,
                                             column_expr->datum_meta_.get_subschema_id(), arr_type));
         }
+        bool first_batch = true;
         while (OB_SUCC(ret) && load_row_count < capacity &&
               ((eager_col_reader == nullptr && load_row_count < state_.cur_row_group_row_count_) ||
               (eager_col_reader != nullptr && eager_col_reader->HasNext()))) {
@@ -3382,11 +3591,13 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
                             requested_batch_size, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.eager_read_row_counts_[i],
-                            cross_page, stat_);
+                            cross_page, stat_, cur_col_id_, first_batch,
+                            dict_filter_pushdown_, false);
           MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
           load_row_count += temp_row_count;
+          first_batch = false;
         }
         if (OB_SUCC(ret)) {
           if (0 == read_count) {
@@ -3421,15 +3632,60 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
     }
   }
 
-  if (OB_SUCC(ret) && read_count > 0) {
+  if (OB_SUCC(ret)) {
+    state_.logical_eager_read_row_count_ += read_count;
+    count = read_count;
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::calc_eager_column_convert(const int64_t read_count)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+  if (read_count > 0) {
     scan_param_->op_->clear_evaluated_flag();
     if (OB_FAIL(calc_column_convert(read_count, true, eval_ctx))) {
       LOG_WARN("failed to calc column convert", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    state_.logical_eager_read_row_count_ += read_count;
-    count = read_count;
+  return ret;
+}
+
+int ObParquetTableRowIterator::apply_dict_code_filters(const int64_t count,
+                                                       ObPushdownFilterExecutor *curr_filter)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(curr_filter) && OB_NOT_NULL(dict_filter_pushdown_)
+      && dict_filter_pushdown_->has_dict_columns()) {
+    ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+    bool applied_dict_filter = false;
+
+    // ====== 【阶段1】根节点：应用字典优化 ======
+    if (OB_FAIL(dict_filter_pushdown_->apply_single_column_dict_filters(curr_filter,
+                                                                        nullptr,
+                                                                        eval_ctx,
+                                                                        count,
+                                                                        mapping_column_ids_,
+                                                                        column_indexs_,
+                                                                        applied_dict_filter))) {
+      LOG_WARN("fail to apply single column dict filters", K(ret));
+      // ====== 【阶段2】解码字典列 ======
+    } else {
+      scan_param_->op_->clear_evaluated_flag();
+      if (applied_dict_filter && OB_FAIL(curr_filter->prepare_skip_filter(false))) {
+        LOG_WARN("Failed to check parent skip filter", K(ret));
+      } else if (OB_FAIL(dict_filter_pushdown_->decode_filtered_rows_to_exprs(curr_filter,
+                                                                              eval_ctx,
+                                                                              mapping_column_ids_,
+                                                                              is_dup_project_,
+                                                                              is_eager_calc()))) {
+        LOG_WARN("fail to decode dict columns", K(ret));
+      } else {
+        LOG_DEBUG("dict columns decoded for all rows (has non-dict filters)");
+      }
+    }
   }
   return ret;
 }
@@ -3439,58 +3695,99 @@ int ObParquetTableRowIterator::calc_filters(const int64_t count,
                                             ObPushdownFilterExecutor *parent_filter)
 {
   int ret = OB_SUCCESS;
-  if (nullptr != curr_filter) {
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(curr_filter)) {
     common::ObBitmap *result = nullptr;
     bool filter_valid = true;
-    if (OB_FAIL(curr_filter->init_evaluated_datums(filter_valid))) {
-      LOG_WARN("failed to init eval datum", K(ret));
-    } else if (!filter_valid) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
-    } else if (OB_FAIL(curr_filter->init_bitmap(count, result))) {
-      LOG_WARN("Failed to get filter bitmap", K(ret));
-    } else if (nullptr != parent_filter && OB_FAIL(parent_filter->prepare_skip_filter(false))) {
-      LOG_WARN("Failed to check parent skip filter", K(ret));
-    } else if (curr_filter->is_filter_node()) {
-      if ((OB_FAIL((static_cast<ObBlackFilterExecutor*>(curr_filter))->filter_batch(parent_filter,
-          0, count, *result)))) {
-        LOG_WARN("failed to filter batch", K(ret));
+
+    if (curr_filter->is_filter_node()) {
+      // 检查filter是否已被字典优化处理
+      if (OB_NOT_NULL(dict_filter_pushdown_)
+          && dict_filter_pushdown_->is_filter_processed_by_dict(curr_filter)
+          && !dict_filter_pushdown_->is_failed_dict_filter(curr_filter)) {
+        // do nothing
+      } else {
+        if (OB_FAIL(curr_filter->init_bitmap(count, result))) {
+          LOG_WARN("Failed to init filter bitmap", K(ret));
+        } else if (nullptr != parent_filter && OB_FAIL(parent_filter->prepare_skip_filter(false))) {
+          LOG_WARN("Failed to check parent skip filter", K(ret));
+        } else if (curr_filter->is_filter_black_node()) {
+          ObBlackFilterExecutor *black_filter = static_cast<ObBlackFilterExecutor *>(curr_filter);
+          if (OB_FAIL(curr_filter->init_evaluated_datums(filter_valid))) {
+            LOG_WARN("failed to init eval datum", K(ret));
+          } else if (!filter_valid) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
+          } else if (OB_FAIL(black_filter->filter_batch(parent_filter, 0, count, *result))) {
+            LOG_WARN("failed to filter batch", K(ret));
+          }
+        } else if (curr_filter->is_filter_white_node()) {
+          ObWhiteFilterExecutor *white_filter = static_cast<ObWhiteFilterExecutor *>(curr_filter);
+          ObWhiteFilterOperatorType op_type = white_filter->get_op_type();
+          if (WHITE_OP_IN == op_type) {
+            if (OB_FAIL(white_filter->init_in_eval_datums(filter_valid))) {
+              LOG_WARN("failed to init eval datum", K(ret));
+            }
+          } else if (OB_FAIL(white_filter->init_compare_eval_datums(filter_valid))) {
+            LOG_WARN("failed to init eval datum", K(ret));
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (!filter_valid) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
+          } else if (OB_FAIL(white_filter->filter_batch(parent_filter, 0, count, *result))) {
+            LOG_WARN("failed to filter batch", K(ret));
+          }
+        }
       }
     } else if (curr_filter->is_logic_op_node()) {
-      sql::ObPushdownFilterExecutor **children = curr_filter->get_childs();
-      if (parent_filter != nullptr
-          && parent_filter->is_logic_and_node()
-          && curr_filter->is_logic_and_node()) {
-        MEMCPY(result->get_data(), parent_filter->get_result()->get_data(), count);
-      }
-      for (uint32_t i = 0; OB_SUCC(ret) && i < curr_filter->get_child_count(); i++) {
-        const common::ObBitmap *child_result = nullptr;
-        if (OB_ISNULL(children[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected null child filter", K(ret));
-        } else if (OB_FAIL(calc_filters(count, children[i], curr_filter))) {
-          LOG_WARN("Failed to filter micro block", K(ret), K(i), KP(children[i]));
-        } else if (OB_ISNULL(child_result = children[i]->get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected get null filter bitmap", K(ret));
-        } else {
-          if (curr_filter->is_logic_and_node()) {
-            if (OB_FAIL(result->bit_and(*child_result))) {
-              LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
-            } else if (result->is_all_false()) {
-              break;
-            }
-          } else  {
-            if (OB_FAIL(result->bit_or(*child_result))) {
-              LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
-            } else if (result->is_all_true()) {
-              break;
+      // 处理逻辑节点（AND/OR）
+      // 逻辑节点需要初始化bitmap来合并子filter的结果
+      if (OB_NOT_NULL(dict_filter_pushdown_)
+          && dict_filter_pushdown_->is_processed_dict_op_filter(curr_filter)) {
+        // do nothing
+      } else if (OB_FAIL(curr_filter->init_bitmap(count, result))) {
+        LOG_WARN("Failed to init filter bitmap", K(ret));
+      } else {
+        sql::ObPushdownFilterExecutor **children = curr_filter->get_childs();
+
+        // AND节点优化：继承父节点的result作为初始值
+        if (OB_NOT_NULL(parent_filter) && parent_filter->is_logic_and_node()
+            && curr_filter->is_logic_and_node()) {
+          MEMCPY(result->get_data(), parent_filter->get_result()->get_data(), count);
+        }
+
+        for (uint32_t i = 0; OB_SUCC(ret) && i < curr_filter->get_child_count(); i++) {
+          const common::ObBitmap *child_result = nullptr;
+          if (OB_ISNULL(children[i])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected null child filter", K(ret));
+          } else if (OB_FAIL(calc_filters(count, children[i], curr_filter))) {
+            LOG_WARN("Failed to filter micro block", K(ret), K(i), KP(children[i]));
+          } else if (OB_ISNULL(child_result = children[i]->get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Unexpected get null filter bitmap", K(ret));
+          } else {
+            if (curr_filter->is_logic_and_node()) {
+              if (OB_FAIL(result->bit_and(*child_result))) {
+                LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
+              } else if (result->is_all_false()) {
+                break;
+              }
+            } else {
+              if (OB_FAIL(result->bit_or(*child_result))) {
+                LOG_WARN("Failed to merge result bitmap", K(ret), KP(child_result));
+              } else if (result->is_all_true()) {
+                break;
+              }
             }
           }
         }
       }
     }
   }
+
   return ret;
 }
 
@@ -3546,6 +3843,7 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
         tmp_logical_read += skip_range.at(j);
         int64_t temp_row_count = 0;
         int64_t orig_load_row_count = load_row_count;
+        bool first_batch = true;
         while (OB_SUCC(ret) && orig_load_row_count + read_range.at(j) > load_row_count) {
           int64_t requested_batch_size = orig_load_row_count + read_range.at(j) - load_row_count;
 
@@ -3557,12 +3855,14 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
                             requested_batch_size, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.read_row_counts_[cur_col_id_],
-                            cross_page, stat_);
+                            cross_page, stat_, cur_col_id_, first_batch, dict_filter_pushdown_,
+                            is_eager_calc());
           MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
           load_row_count += temp_row_count;
           tmp_logical_read += temp_row_count;
+          first_batch = false;
         }
       }
       if (OB_SUCC(ret)) {
@@ -3675,6 +3975,9 @@ int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t
 {
   int ret = OB_SUCCESS;
   int64_t capacity = std::min(capacity_, group_remain_count);
+  if (OB_NOT_NULL(iter_->dict_filter_pushdown_)) {
+    iter_->dict_filter_pushdown_->clear_filter_arrays();
+  }
   if (is_end()) {
     if (!bitmap_.is_inited()) {
       OZ (bitmap_.init(capacity_));
@@ -3704,10 +4007,15 @@ int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t
           if (0 == real_batch_size) {
           } else if (OB_FAIL(iter_->project_eager_columns(read_count, real_batch_size))) {
             LOG_WARN("failed to project eager column", K(ret));
+          } else if (OB_FAIL(iter_->apply_dict_code_filters(read_count, real_filter))) {
+            LOG_WARN("failed to apply dict code filters", K(ret));
+          } else if (OB_FAIL(iter_->calc_eager_column_convert(read_count))) {
+            // 在字典解码后调用，确保 column_exprs_ 拿到正确数据
+            LOG_WARN("failed to calc eager column convert", K(ret));
           } else if (OB_FAIL(iter_->calc_filters(read_count, real_filter, nullptr))) {
             LOG_WARN("failed to calc eager filters", K(ret));
           } else if (nullptr != real_filter
-                      && OB_FAIL(bitmap_.append(size_, *real_filter->get_result(), 0, read_count))) {
+                     && OB_FAIL(bitmap_.append(size_, *real_filter->get_result(), 0, read_count))) {
             LOG_WARN("failed to copy bitmap", K(ret));
           } else {
             size_ += read_count;
@@ -4432,6 +4740,32 @@ int ObParquetTableRowIterator::calc_file_meta_column(const int64_t read_count,
   return ret;
 }
 
+int ObParquetTableRowIterator::update_load_funcs_for_dict_optimization()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(dict_filter_pushdown_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dict filter pushdown is null", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < eager_columns_.count(); ++i) {
+    uint64_t col_idx = eager_columns_.at(i);
+    if (load_funcs_.at(col_idx) == &DataLoader::load_string_col
+        || load_funcs_.at(col_idx) == &DataLoader::load_string_col_dict) {
+      bool encoded = false;
+      if (OB_FAIL(dict_filter_pushdown_->is_column_all_pages_dict_encoded(col_idx, encoded))) {
+        LOG_WARN("fail to check is column all pages dict encoded", K(ret), K(col_idx));
+      } else {
+        load_funcs_.at(col_idx)
+            = encoded ? &DataLoader::load_string_col_dict : &DataLoader::load_string_col;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObParquetTableRowIterator::calc_column_convert(const int64_t read_count,
                                                    const bool is_eager,
                                                    ObEvalCtx &eval_ctx)
@@ -4543,15 +4877,9 @@ DEF_TO_STRING(ObParquetIteratorState)
   J_COLON();
   pos += ObExternalIteratorState::to_string(buf + pos, buf_len - pos);
   J_COMMA();
-  J_KV(K_(row_group_idx),
-       K_(cur_row_group_idx),
-       K_(end_row_group_idx),
-       K_(cur_row_group_row_count));
+  J_KV(K_(row_group_idx), K_(cur_row_group_idx), K_(end_row_group_idx), K_(cur_row_group_row_count));
   J_OBJ_END();
   return pos;
 }
-
-#undef BEGIN_CATCH_EXCEPTIONS
-#undef END_CATCH_EXCEPTIONS
 }
 }

@@ -1234,13 +1234,13 @@ public:
     return ret;
   }
 
+  int init_compare_eval_datums(bool &need_convert);
+  int init_in_eval_datums(bool &need_convert);
 protected:
   OB_INLINE bool is_null_param(const ObDatum &datum, const ObObjMeta obj_meta)
   {
     return datum.is_null() || (lib::is_oracle_mode() && obj_meta.is_character_type() && (0 == datum.len_));
   }
-  int init_compare_eval_datums(bool &need_convert);
-  int init_in_eval_datums(bool &need_convert);
   int init_param_set(const int64_t count, const ObExpr *cur_arg);
   int add_to_param_set_and_array(const ObDatum &datum, const ObExpr *cur_arg);
 public:
