@@ -871,9 +871,13 @@ int ObExternalTableUtils::fetch_odps_partition_info_for_task_assign(
     int64_t ref_table_id = scan_op->tsc_ctdef_.scan_ctdef_.ref_table_id_;
     ObString properties = scan_op->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_;
     common::hash::ObHashMap<ObOdpsPartitionKey, int64_t> partition_str_to_file_size;
-
+    ObSQLSessionInfo *session = NULL;
+    if (OB_ISNULL(session = exec_ctx.get_my_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null", K(ret));
+    }
     // get row count for odps partition
-    OZ(ObExternalTableUtils::fetch_odps_partition_info(properties, external_table_files, 0,
+    OZ(ObExternalTableUtils::fetch_odps_partition_info(*session, properties, external_table_files, 0,
                                  tenant_id, ref_table_id, parallel,
                                  partition_str_to_file_size, allocator));
 
@@ -1914,6 +1918,7 @@ int ObLocalFileListArrayOpWithFilter::func(const dirent *entry)
 }
 
 int ObExternalTableUtils::collect_external_file_list_with_cache(
+    ObSQLSessionInfo &session,
     const uint64_t tenant_id,
     const ObIArray<ObString> &part_path,
     const ObIArray<int64_t> &part_id,
@@ -1930,6 +1935,7 @@ int ObExternalTableUtils::collect_external_file_list_with_cache(
   ObSEArray<int64_t, 4> reorder_part_id;
   if (OB_FAIL(
           ObExternalTableFileManager::get_instance().get_external_file_list_on_device_with_cache(
+              session,
               part_path,
               tenant_id,
               part_id,

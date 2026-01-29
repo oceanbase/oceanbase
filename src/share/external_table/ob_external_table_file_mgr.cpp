@@ -397,8 +397,8 @@ int ObExternalTableFileManager::init()
 {
   int ret = OB_SUCCESS;
   OZ (kv_cache_.init("external_table_file_cache"));
-  OZ (external_file_list_cache_.init("external_table_file_list_cache"));
-  OZ (external_partitions_cache_.init("external_table_partitions_cache"));
+  OZ (external_file_list_cache_.init("external_table_file_list_cache", 2));
+  OZ (external_partitions_cache_.init("external_table_partitions_cache", 2));
   return ret;
 }
 
@@ -529,7 +529,8 @@ int ObExternalTableFileManager::get_external_files_from_cache(
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_external_file_list_on_device_with_cache(part_paths,
+    if (OB_FAIL(get_external_file_list_on_device_with_cache(*(ctx.get_my_session()),
+                                                            part_paths,
                                                             table_schema->get_tenant_id(),
                                                             partition_ids,
                                                             pattern,
@@ -1818,7 +1819,6 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
       }
     }
   } else {
-    table_files_from_cache = new ObExternalTableFiles;
     if (OB_FAIL(get_external_file_list_on_device(location,
                                                  -1,  // useless
                                                  pattern,
@@ -1910,6 +1910,7 @@ int ObExternalTableFileManager::insert_one_location_to_cache(int64_t tenant_id,
 }
 
 int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
+    ObSQLSessionInfo &session,
     const ObIArray<common::ObString> &location,
     const uint64_t tenant_id,
     const ObIArray<int64_t> &part_id,
@@ -1971,7 +1972,8 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
       ObFixedArray<ObString, ObIAllocator> tmp_location(tmp_allocator,
                                                         tmp_need_get_location.count());
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(collect_file_list_by_expr_parallel(tenant_id,
+      } else if (OB_FAIL(collect_file_list_by_expr_parallel(session,
+                                                            tenant_id,
                                                             tmp_need_get_location,
                                                             pattern,
                                                             access_info,
@@ -2021,7 +2023,8 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
       }
     }
   } else {
-    OZ(collect_file_list_by_expr_parallel(tenant_id,
+    OZ(collect_file_list_by_expr_parallel(session,
+                                          tenant_id,
                                           location,
                                           pattern,
                                           access_info,
@@ -2036,6 +2039,7 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
 }
 
 int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
+    ObSQLSessionInfo &session,
     uint64_t tenant_id,
     const ObIArray<ObString> &location,
     const ObString &pattern,
@@ -2073,18 +2077,19 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
   OZ(query_sql.append("(select count(*) from internal.oceanbase.__all_dummy);"));
   if (OB_FAIL(ret)) {
   } else if (path_to_collect > 0) {
-    ObMySQLTransaction trans;
-
-    CK(OB_NOT_NULL(GCTX.sql_proxy_));
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to assign query sql", KR(ret));
+    ObInnerSQLConnectionPool *pool = NULL;
+    sqlclient::ObISQLConnection *conn = NULL;
+    if (OB_ISNULL(GCTX.sql_proxy_)
+      || OB_ISNULL(pool = static_cast<ObInnerSQLConnectionPool*>(GCTX.sql_proxy_->get_pool()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null pool", K(ret));
+    } else if (OB_FAIL(pool->acquire(&session, conn))) {
+      LOG_WARN("failed to acquire connection", K(ret));
     } else {
       LOG_TRACE("collect_file_list query_sql", K(query_sql));
-
-      OZ(trans.start(GCTX.sql_proxy_, tenant_id));
       SMART_VAR(ObISQLClient::ReadResult, result)
       {
-        if (OB_FAIL(trans.read(result, tenant_id, query_sql.ptr()))) {
+        if (OB_FAIL(conn->execute_read(tenant_id, query_sql.ptr(), result))) {
           LOG_WARN("failed to read result", KR(ret));
         } else {
           ObMySQLResult *res = NULL;
@@ -2127,10 +2132,6 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
         }
       }
     }
-    OZ(trans.end(true));
-    if (trans.is_started()) {
-      trans.end(false);
-    }
   }
   return ret;
 }
@@ -2138,27 +2139,32 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
 int ObExternalTableFileManager::calculate_dop(int64_t task_count, uint64_t tenant_id, int64_t &dop)
 {
   int ret = OB_SUCCESS;
-  int conf_max_dop = INT_MAX;
-
+  int64_t expected_dop = MAX(task_count / 2, static_cast<int64_t>(1));
+  int64_t dop_limit = INT64_MAX;
+  int64_t conf_max_dop = INT64_MAX;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+
   if (OB_LIKELY(tenant_config.is_valid())
-      && static_cast<int64_t>(tenant_config->_max_dop_for_external_table_file_listing) > 0) {
-    conf_max_dop = tenant_config->_max_dop_for_external_table_file_listing;
-  }
-  ObSEArray<ObAddr, 4> servers;
-  int64_t calculated_dop
-      = std::min(task_count / 2 > 0 ? task_count / 2 : 1, static_cast<int64_t>(conf_max_dop));
-  double min_cpu;
-  double max_cpu;
-  if (OB_ISNULL(GCTX.omt_)) {
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu, max_cpu))) {
-    LOG_WARN("fail to get tenant cpu", K(ret));
-  } else if (OB_FAIL(oceanbase::rootserver::ObTenantServerAdminUtil::get_tenant_servers(tenant_id,
-                                                                                        servers))) {
-    LOG_WARN("failed to get tenant servers", K(ret), K(tenant_id));
+      && (conf_max_dop = static_cast<int64_t>(tenant_config->_max_dop_for_external_table_file_listing)) > 0) {
+    dop_limit = conf_max_dop;
   } else {
-    dop = std::min(calculated_dop, static_cast<int64_t>(max_cpu * servers.count() / 2));
+    ObSEArray<ObAddr, 4> servers;
+    double min_cpu;
+    double max_cpu;
+    if (OB_ISNULL(GCTX.omt_)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu, max_cpu))) {
+      LOG_WARN("fail to get tenant cpu", K(ret));
+    } else if (OB_FAIL(oceanbase::rootserver::ObTenantServerAdminUtil::get_tenant_servers(tenant_id,
+                                                                                          servers))) {
+      LOG_WARN("failed to get tenant servers", K(ret), K(tenant_id));
+    } else {
+      dop_limit = MAX(static_cast<int64_t>(1), static_cast<int64_t>(max_cpu * servers.count() / 2));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    dop = std::min(expected_dop, dop_limit);
   }
 
   return ret;

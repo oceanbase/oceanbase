@@ -360,7 +360,8 @@ class ObExternalTableUtils {
                                      common::ObIAllocator &allocator, int64_t &file_size,
                                      int64_t &modify_time, ObString &content_digest);
 
-  static int collect_external_file_list_with_cache(const uint64_t tenant_id,
+  static int collect_external_file_list_with_cache(ObSQLSessionInfo &session,
+                                                   const uint64_t tenant_id,
                                                    const ObIArray<ObString> &part_path,
                                                    const ObIArray<int64_t> &part_id,
                                                    const ObString &access_info,
@@ -416,7 +417,8 @@ class ObExternalTableUtils {
   }
 
   template<typename PartRecordType>
-  static int fetch_odps_partition_info(const ObString& porperty_str,
+  static int fetch_odps_partition_info(ObSQLSessionInfo &session,
+    const ObString& porperty_str,
     const ObIArray<PartRecordType>& partition_strs, const bool get_row_count_or_size,
     const uint64_t tenant_id, const uint64_t table_ref_id, const int64_t parallel,
     ObHashMap<ObOdpsPartitionKey, int64_t>& partition_str_to_file_size,
@@ -482,18 +484,19 @@ class ObExternalTableUtils {
       OZ(query_sql.append("(select count(*) from internal.oceanbase.__all_dummy);"));
 
       if (file_to_collect > 0) {
-        ObMySQLTransaction trans;
-
-        CK(OB_NOT_NULL(GCTX.sql_proxy_));
-        if (OB_FAIL(ret)) {
-          LOG_WARN("failed to assign query sql", KR(ret));
+        observer::ObInnerSQLConnectionPool *pool = NULL;
+        sqlclient::ObISQLConnection *conn = NULL;
+        if (OB_ISNULL(GCTX.sql_proxy_)
+          || OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool*>(GCTX.sql_proxy_->get_pool()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null pool", K(ret));
+        } else if (OB_FAIL(pool->acquire(&session, conn))) {
+          LOG_WARN("failed to acquire connection", K(ret));
         } else {
-          OZ(trans.start(GCTX.sql_proxy_, tenant_id));
-
           LOG_INFO("odps query_sql", K(query_sql));
           SMART_VAR(ObISQLClient::ReadResult, result)
           {
-            if (OB_FAIL(trans.read(result, tenant_id, query_sql.ptr()))) {
+            if (OB_FAIL(conn->execute_read(tenant_id, query_sql.ptr(), result))) {
               LOG_WARN("failed to read result", KR(ret));
             } else {
               ObMySQLResult *res = NULL;
@@ -523,10 +526,6 @@ class ObExternalTableUtils {
               }
             }
           }
-        }
-        OZ(trans.end(true));
-        if (trans.is_started()) {
-          trans.end(false);
         }
       }
     }

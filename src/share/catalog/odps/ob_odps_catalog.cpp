@@ -467,7 +467,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
       if (OB_SUCC(ret)) {
         common::hash::ObHashMap<ObOdpsPartitionKey, int64_t> partition_str_to_file_size;
         // get size for odps partition
-        OZ(ObExternalTableUtils::fetch_odps_partition_info(format_str, partition_values_to_collect_statistic, 1,
+        OZ(ObExternalTableUtils::fetch_odps_partition_info(*session, format_str, partition_values_to_collect_statistic, 1,
                             tenant_id, ref_table_id, 1, partition_str_to_file_size, allocator));
         for (int64_t i = 0; OB_SUCC(ret) && i < partition_values_to_collect_statistic.count(); ++i) {
           int64_t file_size = 0;

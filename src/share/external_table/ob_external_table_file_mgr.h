@@ -403,6 +403,7 @@ public:
       int64_t refresh_interval_ms);
 
   int get_external_file_list_on_device_with_cache(
+      ObSQLSessionInfo &session,
       const ObIArray<common::ObString> &location,
       const uint64_t tenant_id,
       const ObIArray<int64_t> &part_id,
@@ -612,7 +613,8 @@ private:
                                        const ObDatabaseSchema *database_schema,
                                        ObIArray<ObPartition *> &partitions_to_del);
 
-  int collect_file_list_by_expr_parallel(uint64_t tenant_id,
+  int collect_file_list_by_expr_parallel(ObSQLSessionInfo &session,
+                                         uint64_t tenant_id,
                                          const ObIArray<ObString> &location,
                                          const ObString &pattern,
                                          const ObString &access_info,

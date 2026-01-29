@@ -377,6 +377,7 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
     // 批量获取分区下的文件列表
     if (tmp_part_path.count() > 0) {
       OZ(ObExternalTableUtils::collect_external_file_list_with_cache(
+          *(exec_ctx.get_my_session()),
           table_schema->get_tenant_id(),
           tmp_part_path,
           tmp_part_id,
