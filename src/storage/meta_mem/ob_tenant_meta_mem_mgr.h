@@ -621,7 +621,8 @@ private:
   ObFlyingTabletPointerMap flying_tablet_map_;
   ObExternalTabletCntMap external_tablet_cnt_map_;
   ObSSTabletLocalCacheMap ss_tablet_local_cache_map_;
-  int tg_id_;
+  int tg_id_; // t3m thread id
+  int oracle_temp_table_gc_tg_id_; // oracle temp table gc thread id
   int persist_tg_id_; // since persist task may cost too much time, we use another thread to exec.
   TableGCTask table_gc_task_;
   RefreshConfigTask refresh_config_task_;
