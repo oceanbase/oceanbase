@@ -2465,6 +2465,21 @@ int ObPluginVectorIndexUtils::fill_ivf_mem_context_detail_info(ObPluginVectorInd
   return ret;
 }
 
+int ObPluginVectorIndexUtils::release_row_scan_iter(common::ObNewRowIterator *&iter)
+{
+  int ret = OB_SUCCESS;
+  ObAccessService *tsc_service = MTL(ObAccessService *);
+  if (OB_ISNULL(tsc_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(tsc_service));
+  } else if (OB_FAIL(tsc_service->revert_scan_iter(iter))) {
+    LOG_WARN("failed to revert row scan iter", K(ret));
+  } else {
+    iter = nullptr;
+  }
+  return ret;
+}
+
 // use for select
 int ObPluginVectorIndexUtils::check_snapshot_iter_need_rescan(common::ObNewRowIterator *snapshot_idx_iter, bool &need_rescan, blocksstable::ObDatumRow *&row)
 {

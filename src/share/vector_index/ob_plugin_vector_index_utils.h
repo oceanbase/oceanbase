@@ -90,6 +90,7 @@ public:
   static int get_read_scn(bool is_leader, ObLSID &ls_id, SCN &target_scn);
   static int query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id, bool is_leader);
   static int check_snapshot_iter_need_rescan(common::ObNewRowIterator *snapshot_idx_iter, bool &need_rescan, blocksstable::ObDatumRow *&row);
+  static int release_row_scan_iter(common::ObNewRowIterator *&iter);
 
   static int add_key_ranges(uint64_t table_id, ObRowkey& rowkey, storage::ObTableScanParam &scan_param);
   static int add_key_ranges(uint64_t table_id, ObRowkey& start_key, ObRowkey& end_key, storage::ObTableScanParam &scan_param);

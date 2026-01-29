@@ -3832,9 +3832,9 @@ int ObDASHNSWScanIter::do_snapshot_table_scan_need_reuse(bool &first_scan,
   } else if (OB_FAIL(ObPluginVectorIndexUtils::check_snapshot_iter_need_rescan(iter->get_output_result_iter(), need_reverse, unused_row))) {
     LOG_WARN("fail to check snapshot iter need rescan", K(ret));
   } else if (need_reverse) {
-    LOG_DEBUG("do snapshot table scan need rescan", K(scan_param.scan_flag_.scan_order_));
-    if (OB_FAIL(iter->release())) {
-      LOG_WARN("fail to release snapshot iter", K(ret));
+    LOG_WARN("do snapshot table scan need rescan", K(scan_param.scan_flag_.scan_order_));
+    if (OB_FAIL(ObPluginVectorIndexUtils::release_row_scan_iter(iter->get_output_result_iter()))) {
+      LOG_WARN("fail to release row scan iter", K(ret));
     } else if (FALSE_IT(first_scan = true)) {
     } else if (OB_FAIL(do_aux_table_scan_need_reuse(first_scan, scan_param, ctdef, rtdef, iter, tablet_id, is_get, need_reverse))) {
       LOG_WARN("fail to do aux table scan", K(ret));
