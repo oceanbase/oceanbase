@@ -83,10 +83,9 @@ namespace sql
     PX_RESCAN,
     PX_ESTIMATE_SIZE,
     RUNTIME_FILTER,
-
+    RUNTIME_FILTER_PRUNING,
     ALLOC_STARTUP_EXPR,
     ADJUST_SHARED_EXPR,
-
     COLLECT_BATCH_EXEC_PARAM,
     ALLOC_OP,
     ADJUST_SCAN_DIRECTION,
@@ -240,6 +239,7 @@ namespace sql
     int init_px_node_opt_info(int64_t tenant_id);
     int check_enable_topn_runtime_filter();
     int check_enable_runtime_filter_adaptive_apply();
+    int check_enable_runtime_filter();
     int check_extend_sql_plan_monitor_metrics();
     int check_enable_delete_insert_scan();
 

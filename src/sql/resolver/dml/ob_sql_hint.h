@@ -340,7 +340,8 @@ struct LogTableHint
                            const ObJoinFilterHint *&hint) const;
   int get_join_filter_hints(const ObRelIds &left_tables,
                             bool part_join_filter,
-                            ObIArray<const ObJoinFilterHint*> &hints) const;
+                            ObIArray<const ObJoinFilterHint*> &hints,
+                            bool match_empty_tables = false) const;
   int add_join_filter_hint(const ObDMLStmt &stmt,
                            const ObQueryHint &query_hint,
                            const ObJoinFilterHint &hint);
@@ -400,6 +401,15 @@ struct JoinFilterPushdownHintInfo
                             bool part_join_filter,
                             bool &can_use,
                             const ObJoinFilterHint *&force_hint) const;
+  bool match_table(const ObQueryHint &query_hint,
+                   ObTableInHint table,
+                   const TableItem *table_item) const;
+  int check_use_join_filter_v2(const TableItem *table,
+                               const TableItem *view_tableitem,
+                               const ObQueryHint &query_hint,
+                               bool part_join_filter,
+                               bool &can_use,
+                               const ObJoinFilterHint *&force_hint) const;
   TO_STRING_KV(K_(filter_table_id),
                  K_(join_filter_hints),
                  K_(part_join_filter_hints));
@@ -518,10 +528,22 @@ struct ObLogPlanHint
                             bool config_disable,
                             bool &can_use,
                             const ObJoinFilterHint *&force_hint) const;
+  int check_join_filter_pushdown_hints(ObIAllocator &allocator,
+                                       const ObQueryHint &query_hint,
+                                       uint64_t filter_table_id,
+                                       const ObRelIds &left_tables,
+                                       TableItem* view_tableitem,
+                                       TableItem* tableitem,
+                                       bool part_join_filter,
+                                       bool config_disable,
+                                       bool &can_use,
+                                       const ObJoinFilterHint *&force_hint) const;
+
   int get_pushdown_join_filter_hints(uint64_t filter_table_id,
                                      const ObRelIds &left_tables,
                                      bool config_disable,
-                                     JoinFilterPushdownHintInfo& info) const;
+                                     JoinFilterPushdownHintInfo& info,
+                                     bool left_table_empty_included = false) const;
   int check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const;
   int check_use_column_store(uint64_t table_id, bool &force_column_store, bool &force_no_column_store) const;
   int check_use_skip_scan(uint64_t table_id,  uint64_t index_id,

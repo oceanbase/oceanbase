@@ -14,6 +14,7 @@
 #define SRC_SQL_OPTIMIZER_OB_LOG_SELECT_INTO_H_
 
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "objit/common/ob_item_type.h"
 
@@ -21,6 +22,9 @@ namespace oceanbase
 {
 namespace sql
 {
+
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogSelectInto : public ObLogicalOperator
 {

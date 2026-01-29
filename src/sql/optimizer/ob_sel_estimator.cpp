@@ -16,6 +16,7 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
+
 namespace oceanbase
 {
 namespace sql

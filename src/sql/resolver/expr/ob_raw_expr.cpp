@@ -2390,7 +2390,7 @@ int ObColumnRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int6
   return ret;
 }
 
-const ObRawExpr *ObAliasRefRawExpr::get_ref_expr() const
+const ObRawExpr *ObAliasRefRawExpr::get_ref_select_expr() const
 {
   const ObRawExpr *ret = NULL;
   if (project_index_ == OB_INVALID_INDEX) {
@@ -2409,7 +2409,7 @@ const ObRawExpr *ObAliasRefRawExpr::get_ref_expr() const
   return ret;
 }
 
-ObRawExpr *ObAliasRefRawExpr::get_ref_expr()
+ObRawExpr *ObAliasRefRawExpr::get_ref_select_expr()
 {
   ObRawExpr *ret = NULL;
   if (project_index_ == OB_INVALID_INDEX) {
@@ -2516,8 +2516,21 @@ int ObAliasRefRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64
   if (OB_ISNULL(ref_expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Ref expr is NULL", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF("project_ref("))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
   } else if (OB_FAIL(ref_expr_->get_name(buf, buf_len, pos, type))) {
-  } else { }//do nothing
+    LOG_WARN("fail to get_name", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(",%ld)", project_index_ + 1))) {
+    LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (EXPLAIN_EXTENDED == type) {
+    if (OB_FAIL(BUF_PRINTF("("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%p", this))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -2530,7 +2543,7 @@ bool ObAliasRefRawExpr::inner_same_as(const ObRawExpr &expr,
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "ref_expr_ is null");
   } else if (expr.get_expr_type() == get_expr_type()) {
     const ObAliasRefRawExpr &alias_ref = static_cast<const ObAliasRefRawExpr&>(expr);
-    bret = (alias_ref.get_ref_expr() == get_ref_expr());
+    bret = (alias_ref.get_ref_select_expr() == get_ref_select_expr());
   }
   return bret;
 }
@@ -2538,7 +2551,7 @@ bool ObAliasRefRawExpr::inner_same_as(const ObRawExpr &expr,
 void ObAliasRefRawExpr::inner_calc_hash()
 {
   expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
-  expr_hash_ = common::do_hash(get_ref_expr(), expr_hash_);
+  expr_hash_ = common::do_hash(get_ref_select_expr(), expr_hash_);
 }
 
 ////////////////////////////////////////////////////////////////

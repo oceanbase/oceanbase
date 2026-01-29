@@ -32,7 +32,6 @@
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/monitor/ob_plan_info_manager.h"
 #include "sql/optimizer/ob_px_resource_analyzer.h"
-#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
@@ -784,6 +783,8 @@ struct ObErrLogDefine
 
 class Path;
 class ObLogPlan;
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogicalOperator
 {
 public:
@@ -873,6 +874,7 @@ public:
    * 如果不维护parent这个结构，就可以避免这种计划拷贝。
    */
   void set_parent(ObLogicalOperator *parent);
+
   /**
    *  Get the cardinality
    */
@@ -1252,6 +1254,11 @@ public:
 
   bool can_update_producer_id_for_shared_expr(const ObRawExpr *expr);
 
+  virtual int update_optimizer_info(const JoinFilterInfo &join_filter_info) const {
+    UNUSED(join_filter_info);
+    return OB_SUCCESS;
+  }
+
   int extract_non_const_exprs(const ObIArray<ObRawExpr*> &input_exprs,
                               ObIArray<ObRawExpr*> &non_const_exprs);
   int check_need_pushdown_expr(const uint64_t producer_id,
@@ -1346,6 +1353,7 @@ public:
   virtual int compute_property();
 
   int check_property_valid() const;
+
   int compute_normal_multi_child_parallel_and_server_info();
   int set_parallel_and_server_info_for_match_all();
   int get_limit_offset_value(ObRawExpr *percent_expr,
@@ -1415,6 +1423,9 @@ public:
   int get_table_scan(ObLogicalOperator *&tsc, uint64_t table_id);
 
   int find_all_tsc(common::ObIArray<ObLogicalOperator*> &tsc_ops, ObLogicalOperator *root);
+
+  int find_all_tsc_like_ops(common::ObIArray<ObLogicalOperator*> &tsc_ops, const ObLogicalOperator *root);
+
   /**
    * Check if a exchange need rescan is below me.
    */
@@ -1749,6 +1760,10 @@ public:
 
   inline void set_is_order_by_plan_top(const bool is_top) { is_order_by_plan_top_ = is_top; }
   inline bool is_order_by_plan_top() const { return is_order_by_plan_top_; }
+
+  int find_pkey_exchange_out(ObLogicalOperator* root_op,
+    ObLogExchange*& exchange_output_op,
+    bool &found);
 public:
   ObSqlArray<ObLogicalOperator *> child_;
   ObSqlArray<ObPCParamEqualInfo> equal_param_constraints_;
@@ -1810,6 +1825,10 @@ protected:
                     bool& table_scan_has_exchange,
                     bool &has_px_coord);
 
+  int fill_in_part_join_filter_info(const ObLogicalOperator *cur, ObLogGranuleIterator *&gi_op);
+
+  int collect_and_prune_left_child(ObLogicalOperator*& root, ObIArray<uint64_t> &to_prune);
+  int prune_unpaired_join_filter_create();
   int check_sort_key_can_pushdown_to_tsc(
       ObLogicalOperator *op,
       common::ObIArray<ObRawExpr *> &effective_sk_exprs,
@@ -1866,9 +1885,9 @@ private:
     bool &need_remove,
     bool global_order);
   //private function, just used for allocating join filter node.
-  int allocate_partition_join_filter(const ObIArray<JoinFilterInfo*> &infos,
+  int allocate_partition_join_filter(ObIArray<JoinFilterInfo*> &infos,
                                      int64_t &filter_id);
-  int allocate_normal_join_filter(const ObIArray<JoinFilterInfo*> &infos,
+  int allocate_normal_join_filter(ObIArray<JoinFilterInfo*> &infos,
                                   int64_t &filter_id);
   int create_runtime_filter_info(
       ObLogicalOperator *op,

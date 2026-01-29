@@ -81,6 +81,9 @@ public:
 
   int sort_range_exprs(const ObIArray<ObRawExpr*> &range_exprs,
                        ObIArray<ObRawExpr*> &out_range_exprs);
+  static int is_precise_json_contains(ObExecContext &exec_ctx,
+                                      const ObObj &json_value,
+                                      bool &is_precise);
 private:
   ObExprRangeConverter();
   int alloc_range_node(ObRangeNode *&range_node);
@@ -143,6 +146,7 @@ private:
   int check_calculable_expr_valid(const ObRawExpr *expr, bool &is_valid, const bool ignore_error = true);
   int add_precise_constraint(const ObRawExpr *expr, bool is_precise, char escape);
   int add_prefix_pattern_constraint(const ObRawExpr *expr);
+  int add_json_contains_constraint(const ObRawExpr *expr, bool is_precise);
   int get_final_expr_idx(const ObRawExpr *expr,
                          const ObRangeColumnMeta *column_meta,
                          int64_t &idx);

@@ -13,11 +13,14 @@
 #ifndef OCEANBASE_SQL_OB_LOG_TOPK_H
 #define OCEANBASE_SQL_OB_LOG_TOPK_H
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_set.h"
 namespace oceanbase
 {
 namespace sql
 {
+  template<typename R, typename C>
+  class PlanVisitor;
   class ObLogTopk : public ObLogicalOperator
   {
   public:

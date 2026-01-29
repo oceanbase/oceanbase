@@ -7272,10 +7272,10 @@ bool ObRawExprUtils::is_same_column_ref(const ObRawExpr *column_ref1, const ObRa
   const ObRawExpr *left_real_ref = column_ref1;
   const ObRawExpr *right_real_ref = column_ref2;
   while (left_real_ref != NULL && T_REF_ALIAS_COLUMN == left_real_ref->get_expr_type()) {
-    left_real_ref = static_cast<const ObAliasRefRawExpr*>(left_real_ref)->get_ref_expr();
+    left_real_ref = static_cast<const ObAliasRefRawExpr*>(left_real_ref)->get_ref_select_expr();
   }
   while (right_real_ref != NULL && T_REF_ALIAS_COLUMN == right_real_ref->get_expr_type()) {
-    right_real_ref = static_cast<const ObAliasRefRawExpr*>(right_real_ref)->get_ref_expr();
+    right_real_ref = static_cast<const ObAliasRefRawExpr*>(right_real_ref)->get_ref_select_expr();
   }
   bool bret = (left_real_ref == right_real_ref);
   return bret;
@@ -10822,6 +10822,36 @@ int ObRawExprUtils::build_unpivot_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::build_greatest_or_least_expr(ObRawExprFactory &expr_factory,
+                                                 const ObSQLSessionInfo *session_info,
+                                                 bool is_greatest,
+                                                 ObIArray<ObRawExpr *> &param_exprs,
+                                                 ObRawExpr *&func_expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *dst_expr;
+  func_expr = NULL;
+  if (OB_ISNULL(session_info) || OB_UNLIKELY(param_exprs.count() < 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid args", KP(session_info), K(param_exprs.count()));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(is_greatest ? T_FUN_SYS_GREATEST : T_FUN_SYS_LEAST, dst_expr))) {
+    LOG_WARN("create cast expr failed", K(ret));
+  } else if (OB_ISNULL(dst_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("create null expr", K(ret));
+  } else if (OB_FAIL(dst_expr->set_param_exprs(param_exprs))) {
+    LOG_WARN("set real param expr failed", K(ret));
+  } else if (OB_FAIL(dst_expr->formalize(session_info))) {
+    LOG_WARN("formalize current expr failed", K(ret));
+  } else {
+    ObString func_name = ObString::make_string(is_greatest ? N_GREATEST : N_LEAST);
+    dst_expr->set_func_name(func_name);
+    dst_expr->set_result_type(param_exprs.at(0)->get_result_type());
+    func_expr = dst_expr;
+  }
+  return ret;
+}
+
 int ObRawExprUtils::find_expr(ObRawExpr *root, const ObRawExpr *expected, bool &found)
 {
   int ret = OB_SUCCESS;
@@ -10951,6 +10981,72 @@ bool ObRawExprUtils::is_invalid_type_for_compare(const ObRawExprResType &type)
           ObRoaringBitmapType == type.get_type() ||
           ObCollectionSQLType == type.get_type() ||
           ObExtendType == type.get_type();
+}
+
+int ObRawExprUtils::build_json_member_of_expr(ObRawExprFactory &expr_factory,
+                                               const ObSQLSessionInfo &session,
+                                               ObRawExpr *json_val,
+                                               ObRawExpr *json_array,
+                                               ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+  expr = NULL;
+  if (OB_ISNULL(json_val) || OB_ISNULL(json_array)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", K(ret), KP(json_val), KP(json_array));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_JSON_MEMBER_OF, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_ISNULL(func_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("func expr is null", K(ret));
+  } else if (OB_FALSE_IT(func_expr->set_func_name(ObString::make_string("json_member_of")))) {
+  } else if (OB_FAIL(func_expr->set_param_exprs(json_val, json_array))) {
+    LOG_WARN("fail to set param exprs", K(ret));
+  } else if (OB_FAIL(func_expr->formalize(&session))) {
+    LOG_WARN("fail to formalize expr", K(ret));
+  } else {
+    expr = func_expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_json_extract_expr(ObRawExprFactory &expr_factory,
+                                             const ObSQLSessionInfo &session,
+                                             ObRawExpr *json_val,
+                                             const ObString &json_path,
+                                             ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *func_expr = NULL;
+  ObConstRawExpr *path_expr = NULL;
+  expr = NULL;
+  if (OB_ISNULL(json_val)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", K(ret), KP(json_val));
+  } else if (OB_FAIL(build_const_string_expr(expr_factory,
+                                             ObVarcharType,
+                                             json_path,
+                                             CS_TYPE_UTF8MB4_BIN,
+                                             path_expr))) {
+    LOG_WARN("fail to create const string expr", K(ret));
+  } else if (OB_ISNULL(path_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("path expr is null", K(ret));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_JSON_EXTRACT, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_ISNULL(func_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("func expr is null", K(ret));
+  } else if (OB_FALSE_IT(func_expr->set_func_name(ObString::make_string("json_extract")))) {
+  } else if (OB_FAIL(func_expr->set_param_exprs(json_val, path_expr))) {
+    LOG_WARN("fail to set param exprs", K(ret));
+  } else if (OB_FAIL(func_expr->formalize(&session))) {
+    LOG_WARN("fail to formalize expr", K(ret));
+  } else {
+    expr = func_expr;
+  }
+  return ret;
 }
 
 }

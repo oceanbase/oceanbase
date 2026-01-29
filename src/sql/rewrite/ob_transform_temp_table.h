@@ -157,8 +157,19 @@ public:
                         bool &trans_happened);
 
   int compute_common_map_info(ObIArray<ObStmtMapInfo>& map_infos,
+                              ObIArray<ObSelectStmt*>& stmts,
                               ObStmtMapInfo &common_map_info);
 
+  int extract_pullup_group_expr(ObRawExpr &pred_expr,
+                                ObRawExpr* &pullup_group_expr,
+                                bool &can_pullup);
+  int pullup_where_to_having_conds(const ObIArray<ObRawExpr*> &pushdown_aggr,
+                                   const ObIArray<ObRawExpr*> &origin_where_exprs,
+                                   const ObIArray<ObStmtMapInfo::CondProperty> &cond_property_map,
+                                   ObIArray<ObRawExpr*> &pullup_having);
+  bool is_similar_condition(const ObIArray<int64_t> &common_cond_map,
+                          const ObIArray<int64_t> &cond_map,
+                          int64_t idx);
   int compute_common_map(ObIArray<int64_t> &source_map, ObIArray<int64_t> &common_map);
 
   int inner_create_temp_table(ObSelectStmt *stmt,
@@ -166,14 +177,18 @@ public:
                               ObStmtMapInfo& common_map_info);
 
   int pushdown_conditions(ObSelectStmt *parent_stmt,
-                        const ObIArray<int64_t> &cond_map,
-                        const ObIArray<int64_t> &common_cond_map,
-                        ObIArray<ObRawExpr*> &pushdown_exprs);
+                          const ObIArray<int64_t> &cond_map,
+                          const ObIArray<int64_t> &common_cond_map,
+                          const ObIArray<ObStmtMapInfo::CondProperty> &cond_property_map,
+                          ObIArray<ObRawExpr*> &pushdown_exprs);
 
   int pushdown_having_conditions(ObSelectStmt *parent_stmt,
                               const ObIArray<int64_t> &having_map,
                               const ObIArray<int64_t> &common_having_map,
                               ObIArray<ObRawExpr*> &pushdown_exprs);
+  int pullup_group_exprs_from_conditions(ObIArray<ObRawExpr*> &where_exprs,
+                                         const ObIArray<ObStmtMapInfo::CondProperty> &cond_property_map,
+                                         ObIArray<ObRawExpr*> &groupby_exprs);
 
   int apply_temp_table(ObSelectStmt *parent_stmt,
                       TableItem *view_table,
@@ -321,6 +336,12 @@ public:
   int update_table_id_for_pseudo_columns(ObSelectStmt *view,
                                          ObSelectStmt *temp_table_query,
                                          const ObStmtMapInfo& map_info);
+  int check_expr_array_equal(ObSelectStmt *first_stmt,
+                             ObSelectStmt *second_stmt,
+                             ObStmtMapInfo &map_info,
+                             const ObIArray<ObRawExpr*> &first_exprs,
+                             const ObIArray<ObRawExpr*> &second_exprs,
+                             bool &is_equal);
 private:
   ObArenaAllocator allocator_;
   TempTableTransParam *trans_param_;

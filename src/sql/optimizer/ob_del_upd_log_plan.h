@@ -265,7 +265,8 @@ protected:
   int candi_allocate_subplan_filter_for_assignments(ObIArray<ObRawExpr*> &assign_exprs);
   int extract_assignment_subqueries(ObRawExpr *expr,
                                     ObIArray<ObRawExpr*> &normal_query_refs,
-                                    ObIArray<ObRawExpr*> &alias_query_refs);
+                                    ObIArray<ObRawExpr*> &alias_query_refs,
+                                    ObIArray<ObAliasRefRawExpr*> &project_ref_exprs);
   int check_use_direct_load();
   int check_basic_sharding_for_dml_stmt(ObShardingInfo &target_sharding,
                                         ObLogicalOperator &child,

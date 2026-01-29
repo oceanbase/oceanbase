@@ -241,6 +241,7 @@ struct ObOptParamHint
     DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
     DEF(ENABLE_DELETE_INSERT_SCAN,)                 \
+    DEF(INDEX_MERGE_THRESHOLD_FOR_MULTIVALUE,)      \
     DEF(PARTITION_ORDERED,)                         \
     DEF(USE_DISTINCT_WITH_EXPANSION,)               \
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
@@ -1343,6 +1344,9 @@ private:
   int64_t parallel_;
 };
 
+// PX_JOIN_FILTER ( [ @qb_name ] filter_table)
+// PX_JOIN_FILTER ( [ @qb_name ] filter_table left_tables)
+// PX_JOIN_FILTER ( [ @qb_name ] filter_table left_tables pushdown_filter_table_)
 class ObJoinFilterHint : public ObOptHint
 {
 public:
@@ -1367,7 +1371,7 @@ public:
   bool has_left_tables() const { return !left_tables_.empty(); }
   bool has_pushdown_filter_table() const { return !pushdown_filter_table_.table_name_.empty(); }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(filter_table), K_(left_tables));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(pushdown_filter_table), K_(filter_table), K_(left_tables));
 
 private:
   ObTableInHint filter_table_;

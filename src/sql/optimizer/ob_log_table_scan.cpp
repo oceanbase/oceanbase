@@ -2219,8 +2219,18 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
     } else if (OB_NOT_NULL(est_cost_info_) &&
                OB_FAIL(print_est_method(est_cost_info_->est_method_, buf, buf_len, pos))) {
       LOG_WARN("failed to print est method", K(ret));
+    } else if (OB_NOT_NULL(est_cost_info_) && (est_cost_info_->join_filter_sel_ < 1.0)) {
+      if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("join filter selectivity: %.2e", est_cost_info_->join_filter_sel_))) {
+        LOG_WARN("failed to print join filter info");
+      }
     }
-    END_BUF_PRINT(plan_item.optimizer_, plan_item.optimizer_len_);
+    if (OB_SUCC(ret)) {
+      END_BUF_PRINT(plan_item.optimizer_, plan_item.optimizer_len_);
+    }
   }
   // print partitions
   if (OB_SUCC(ret)) {
@@ -2570,6 +2580,17 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
                     plan_item.object_type_len_);
       plan_item.object_id_ = ref_table_id_;
     }
+  }
+  return ret;
+}
+
+int ObLogTableScan::update_optimizer_info(const JoinFilterInfo &join_filter_info) const
+{
+  int ret = OB_SUCCESS;
+  // multi selectivity with est_cost_info.join_filter_sel_
+  if (!join_filter_info.can_use_join_filter_) {
+  } else if (OB_NOT_NULL(est_cost_info_)) {
+    est_cost_info_->join_filter_sel_ *= join_filter_info.join_filter_selectivity_;
   }
   return ret;
 }

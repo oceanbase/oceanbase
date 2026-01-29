@@ -1440,6 +1440,11 @@ public:
                                 ObIArray<ObRawExpr *> &param_exprs,
                                 ObRawExpr *&unpivot_expr,
                                 bool is_label_expr);
+  static int build_greatest_or_least_expr(ObRawExprFactory &expr_factory,
+                                          const ObSQLSessionInfo *session_info,
+                                          bool is_greatest,
+                                          ObIArray<ObRawExpr *> &param_exprs,
+                                          ObRawExpr *&func_expr);
   static bool is_auxiliary_generated_column(const ObColumnRefRawExpr &col_ref);
   static int resolve_identifier(ObIAllocator &allocator,
       sql::ObSQLSessionInfo &session,
@@ -1455,6 +1460,16 @@ public:
       common::ObIArray<sql::ObQualifiedName> &q_name,
       bool nullable);
   static bool is_invalid_type_for_compare(const ObRawExprResType &type);
+  static int build_json_member_of_expr(ObRawExprFactory &expr_factory,
+                                       const ObSQLSessionInfo &session,
+                                       ObRawExpr *json_val,
+                                       ObRawExpr *json_array,
+                                       ObRawExpr *&expr);
+  static int build_json_extract_expr(ObRawExprFactory &expr_factory,
+                                     const ObSQLSessionInfo &session,
+                                     ObRawExpr *json_val,
+                                     const ObString &json_path,
+                                     ObRawExpr *&expr);
 private:
   static int need_extra_cast_for_enumset(const ObRawExprResType &src_type,
                                          const ObRawExprResType &dst_type,

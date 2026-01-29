@@ -2601,7 +2601,7 @@ int ObDelUpdLogPlan::replace_alias_ref_expr(ObRawExpr *&expr, bool &replace_happ
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid alias expr", K(ret), K(*alias));
     } else {
-      expr = alias->get_ref_expr();
+      expr = alias->get_ref_select_expr();
       replace_happened = true;
     }
   } else {
@@ -2619,10 +2619,12 @@ int ObDelUpdLogPlan::candi_allocate_subplan_filter_for_assignments(ObIArray<ObRa
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> normal_query_refs;
   ObSEArray<ObRawExpr*, 4> alias_query_refs;
+  ObSEArray<ObAliasRefRawExpr*, 4> project_ref_exprs;
   for (int64_t i = 0; OB_SUCC(ret) && i < assign_exprs.count(); ++i) {
     if (OB_FAIL(extract_assignment_subqueries(assign_exprs.at(i),
                                               normal_query_refs,
-                                              alias_query_refs))) {
+                                              alias_query_refs,
+                                              project_ref_exprs))) {
       LOG_WARN("failed to replace alias ref expr", K(ret));
     }
   }
@@ -2632,19 +2634,20 @@ int ObDelUpdLogPlan::candi_allocate_subplan_filter_for_assignments(ObIArray<ObRa
     // step. allocate subplan filter for "dml .. set c1 = (select)"
     LOG_WARN("failed to allocate subplan", K(ret));
   } else if (!alias_query_refs.empty() &&
-              OB_FAIL(candi_allocate_subplan_filter(alias_query_refs, NULL, true))) {
+              OB_FAIL(candi_allocate_subplan_filter(alias_query_refs, NULL, true, false, &project_ref_exprs))) {
     // step. allocate subplan filter for "dml .. set (a,b)=(select..), (c,d)=(select..)"
     LOG_WARN("failed to allocate subplan filter", K(ret));
   } else {
     LOG_TRACE("succeed to allocate subplan filter for assignment", K(ret),
-                          K(normal_query_refs.count()), K(alias_query_refs.count()));
+                          K(normal_query_refs.count()), K(alias_query_refs.count()), K(project_ref_exprs.count()));
   }
   return ret;
 }
 
 int ObDelUpdLogPlan::extract_assignment_subqueries(ObRawExpr *expr,
                                                    ObIArray<ObRawExpr*> &normal_query_refs,
-                                                   ObIArray<ObRawExpr*> &alias_query_refs)
+                                                   ObIArray<ObRawExpr*> &alias_query_refs,
+                                                   ObIArray<ObAliasRefRawExpr*> &project_ref_exprs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -2666,12 +2669,15 @@ int ObDelUpdLogPlan::extract_assignment_subqueries(ObRawExpr *expr,
       LOG_WARN("invalid alias expr", K(ret), K(*alias));
     } else if (OB_FAIL(add_var_to_array_no_dup(alias_query_refs, alias->get_param_expr(0)))) {
       LOG_WARN("failed to add var to array with out duplicate", K(ret));
+    } else if (OB_FAIL(add_var_to_array_no_dup(project_ref_exprs, alias))) {
+      LOG_WARN("failed to add var to array with out duplicate", K(ret));
     }
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(SMART_CALL(extract_assignment_subqueries(expr->get_param_expr(i),
                                                            normal_query_refs,
-                                                           alias_query_refs)))) {
+                                                           alias_query_refs,
+                                                           project_ref_exprs)))) {
         LOG_WARN("failed to extract query ref expr", K(ret));
       }
     }

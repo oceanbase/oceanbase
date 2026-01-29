@@ -182,6 +182,11 @@
           "comment": "for classic OLAP workloads, disable nested loop join"
         },
         {
+          "name": "_rtf_creator_max_row_count",
+          "value": 2000000000,
+          "comment": "for classic OLAP workloads, larger creater row count is allowed"
+        },
+        {
           "name": "default_table_organization",
           "value": "HEAP",
           "comment": "the order in which the data rows of the table are stored. For AP, the data rows of table are stored in no particular order"

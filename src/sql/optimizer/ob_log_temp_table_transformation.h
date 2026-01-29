@@ -20,6 +20,8 @@ namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogTempTableTransformation : public ObLogicalOperator
 {
 public:

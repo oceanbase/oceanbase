@@ -14,12 +14,15 @@
 #define OCEANBASE_SQL_OB_LOG_SUBPLAN_FILTER_H_
 
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 struct ObBasicCostInfo;
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogSubPlanFilter : public ObLogicalOperator
 {
 public:
@@ -33,6 +36,7 @@ public:
         one_time_idxs_(),
         update_set_(false),
         enable_px_batch_rescans_(plan.get_allocator()),
+        project_ref_exprs_(plan.get_allocator()),
         above_pushdown_left_params_(plan.get_allocator()),
         above_pushdown_right_params_(plan.get_allocator()),
         enable_das_group_rescan_(false)
@@ -47,6 +51,11 @@ public:
   inline int add_subquery_exprs(const ObIArray<ObQueryRefRawExpr *> &query_exprs)
   {
     return append(subquery_exprs_, query_exprs);
+  }
+
+  inline int add_project_ref_exprs(const ObIArray<ObAliasRefRawExpr *> &project_ref_exprs)
+  {
+    return append(project_ref_exprs_, project_ref_exprs);
   }
 
   inline int add_exec_params(const ObIArray<ObExecParamRawExpr *> &exec_params)
@@ -172,6 +181,7 @@ protected:
   bool update_set_;
   ObSqlArray<bool > enable_px_batch_rescans_;
 
+  ObSqlArray<ObAliasRefRawExpr *> project_ref_exprs_;
   ObSqlArray<ObExecParamRawExpr *> above_pushdown_left_params_;
   ObSqlArray<ObExecParamRawExpr *> above_pushdown_right_params_;
   bool enable_das_group_rescan_;

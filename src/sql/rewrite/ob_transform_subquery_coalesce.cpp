@@ -1780,11 +1780,11 @@ int ObTransformSubqueryCoalesce::get_subquery_assign_exprs(ObIArray<ObRawExpr*> 
     }
     for (int64_t j = 0; OB_SUCC(ret) && is_valid && j < alias_exprs.count(); ++j) {
       ObAliasRefRawExpr *alias_expr = alias_exprs.at(j);
-      if (OB_ISNULL(alias_expr) || OB_ISNULL(alias_expr->get_ref_expr())) {
+      if (OB_ISNULL(alias_expr) || OB_ISNULL(alias_expr->get_ref_select_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
-      } else if (alias_expr->get_ref_expr()->is_query_ref_expr()) {
-        ObQueryRefRawExpr *query_ref_expr = static_cast<ObQueryRefRawExpr*>(alias_expr->get_ref_expr());
+      } else if (alias_expr->get_ref_select_expr()->is_query_ref_expr()) {
+        ObQueryRefRawExpr *query_ref_expr = static_cast<ObQueryRefRawExpr*>(alias_expr->get_ref_select_expr());
         stmt = query_ref_expr->get_ref_stmt();
         if (OB_ISNULL(stmt)) {
           ret = OB_ERR_UNEXPECTED;

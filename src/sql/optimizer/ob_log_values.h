@@ -20,6 +20,8 @@ namespace oceanbase
 {
 namespace sql
 {
+  template<typename R, typename C>
+  class PlanVisitor;
   /**
    * ObLogValues is currently being used as 'explain' and 'help' operator.
    */

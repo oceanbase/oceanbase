@@ -2841,7 +2841,7 @@ int ObRawExprDeduceType::visit(ObSetOpRawExpr &expr)
 int ObRawExprDeduceType::visit(ObAliasRefRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  ObRawExpr *ref_expr = expr.get_ref_expr();
+  ObRawExpr *ref_expr = expr.get_ref_select_expr();
   if (OB_ISNULL(ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null");

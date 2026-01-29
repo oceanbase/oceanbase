@@ -17,6 +17,7 @@
 #define protected public
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "observer/mysql/obmp_base.h"
+#include "observer/ob_server.h"
 #undef protected
 #undef private
 #include "sql/ob_sql_init.h"
@@ -151,6 +152,7 @@ void TestSQLCompile::test_sql_compile(const char *file_name_prefix)
                               case_id);
 
     ContextParam param;
+    observer::ObServer::get_instance().gctx_.server_id_ = 1;
     param.set_mem_attr(1001, "compile", ObCtxIds::WORK_AREA).set_page_size(OB_MALLOC_REQ_NORMAL_BLOCK_SIZE);
     CREATE_WITH_TEMP_CONTEXT(param) {
       init_sql_ctx();

@@ -18,6 +18,8 @@
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/optimizer/ob_log_subplan_scan.h"
+#include "sql/optimizer/ob_optimizer_util.h"
+#include "ob_transform_predicate_move_around.h"
 
 using namespace oceanbase::common;
 
@@ -546,8 +548,14 @@ int ObTransformTempTable::inner_extract_common_table_expression(ObDMLStmt &root_
       } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(helper->stmt_,
                                                                 stmt,
                                                                 map_info,
-                                                                relation))) {
+                                                                relation,
+                                                                false,
+                                                                true,
+                                                                true,
+                                                                true))) {
         LOG_WARN("failed to check stmt containment", K(ret));
+      } else if (OB_FAIL(ObStmtComparer::compute_cond_property_map(stmt, map_info))) {
+        LOG_WARN("failed to compute cond property map", K(ret));
       } else if (OB_FAIL(check_stmt_can_extract_temp_table(helper->stmt_,
                                                            stmt,
                                                            map_info,
@@ -584,6 +592,8 @@ int ObTransformTempTable::inner_extract_common_table_expression(ObDMLStmt &root_
         LOG_WARN("unexpect null compare helper", K(ret));
       } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(stmt, stmt, map_info, relation))) {
         LOG_WARN("failed to check stmt containment", K(ret));
+      } else if (OB_FAIL(ObStmtComparer::compute_cond_property_map(stmt, map_info))) {
+        LOG_WARN("failed to compute cond property map", K(ret));
       } else if (OB_FAIL(new_helper->similar_stmts_.push_back(stmt))) {
         LOG_WARN("failed to push back stmt", K(ret));
       } else if (OB_FAIL(new_helper->stmt_map_infos_.push_back(map_info))) {
@@ -1155,7 +1165,9 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
     LOG_WARN("unexpect null param", K(ret));
   } else if (OB_FAIL(try_trans_helper.fill_helper(root_stmt.get_query_ctx()))) {
     LOG_WARN("failed to fill try trans helper", K(ret));
-  } else if (OB_FAIL(compute_common_map_info(compare_info.stmt_map_infos_, common_map_info))) {
+  } else if (OB_FAIL(compute_common_map_info(compare_info.stmt_map_infos_,
+                                             compare_info.similar_stmts_,
+                                             common_map_info))) {
     LOG_WARN("failed to compute common map info", K(ret));
   } else if (compare_info.stmt_map_infos_.count() != compare_info.similar_stmts_.count()) {
     ret = OB_ERR_UNEXPECTED;
@@ -1327,11 +1339,244 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
   return ret;
 }
 
+int ObTransformTempTable::extract_pullup_group_expr(ObRawExpr &pred_expr,
+                                                    ObRawExpr* &pullup_expr,
+                                                    bool &can_pullup)
+{
+  int ret = OB_SUCCESS;
+  can_pullup = false;
+  if (pred_expr.get_expr_type() == T_OP_EQ) {
+    ObRawExpr *param_1 = pred_expr.get_param_expr(0);
+    ObRawExpr *param_2 = pred_expr.get_param_expr(1);
+    if (OB_ISNULL(param_1) || OB_ISNULL(param_2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param is null", K(ret), K(param_1), K(param_2));
+    } else if (param_1->is_column_ref_expr() && param_2->is_const_expr()) {
+      pullup_expr = param_1;
+      can_pullup = true;
+    } else if (param_1->is_const_expr() && param_2->is_column_ref_expr()) {
+      pullup_expr = param_2;
+      can_pullup = true;
+    } else {
+      //do nothing
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::pullup_where_to_having_conds(
+    const ObIArray<ObRawExpr*> &pushdown_aggr,
+    const ObIArray<ObRawExpr*> &origin_where_exprs,
+    const ObIArray<ObStmtMapInfo::CondProperty> &cond_property_map,
+    ObIArray<ObRawExpr*> &pullup_having)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = NULL;
+
+  if (OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
+      OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or ctx or expr factory is null", K(ret));
+  } else if (origin_where_exprs.count() != cond_property_map.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("where exprs count not match cond property map count", K(ret),
+             K(origin_where_exprs.count()), K(cond_property_map.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cond_property_map.count(); ++i) {
+      if (ObStmtMapInfo::CONV_TO_MINMAX != cond_property_map.at(i)) {
+        // do nothing
+      } else if (pushdown_aggr.count() != 1 || OB_ISNULL(pushdown_aggr.at(0)) ||
+                 !pushdown_aggr.at(0)->is_aggr_expr()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aggr item size should be 1", K(ret), K(pushdown_aggr));
+      } else {
+        ObRawExpr *where_pred = origin_where_exprs.at(i);
+        const ObAggFunRawExpr *aggr_expr = static_cast<const ObAggFunRawExpr*>(pushdown_aggr.at(0));
+
+        if (OB_ISNULL(where_pred)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("where pred or aggr expr is null", K(ret));
+        } else if (where_pred->get_param_count() != 2) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("comparison expr should have 2 params", K(ret));
+        } else if (OB_ISNULL(aggr_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("aggr expr is null", K(ret));
+        } else if (aggr_expr->get_real_param_count() != 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("aggr expr should have 1 param", K(ret));
+        } else {
+          const ObRawExpr *left = where_pred->get_param_expr(0);
+          const ObRawExpr *right = where_pred->get_param_expr(1);
+          ObItemType op_type = where_pred->get_expr_type();
+          const ObRawExpr *norm_left = left;
+          const ObRawExpr *norm_right = right;
+          ObItemType norm_op = op_type;
+          const ObRawExpr *aggr_param = aggr_expr->get_real_param_exprs().at(0);
+          ObRawExpr *having_left = NULL;
+          ObRawExpr *having_right = NULL;
+          if (OB_ISNULL(left) || OB_ISNULL(right)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("left or right is null", K(ret));
+          } else {
+            if (op_type == T_OP_GT) {
+              norm_op = T_OP_LT;
+              norm_left = right;
+              norm_right = left;
+            } else if (op_type == T_OP_GE) {
+              norm_op = T_OP_LE;
+              norm_left = right;
+              norm_right = left;
+            }
+
+            if ((norm_op == T_OP_LT || norm_op == T_OP_LE) &&
+                aggr_expr->get_expr_type() == T_FUN_MIN &&
+                norm_left == aggr_param &&
+                norm_right->is_const_expr()) {
+              having_left = const_cast<ObRawExpr*>(static_cast<const ObRawExpr*>(aggr_expr));
+              having_right = const_cast<ObRawExpr*>(norm_right);
+            } else if ((norm_op == T_OP_LT || norm_op == T_OP_LE) &&
+                       aggr_expr->get_expr_type() == T_FUN_MAX &&
+                       norm_left->is_const_expr() &&
+                       norm_right == aggr_param) {
+              having_left = const_cast<ObRawExpr*>(norm_left);
+              having_right = const_cast<ObRawExpr*>(static_cast<const ObRawExpr*>(aggr_expr));
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected where predicate pattern", K(ret));
+            }
+
+            if (OB_SUCC(ret)) {
+              ObRawExpr *having_expr = NULL;
+              if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*expr_factory,
+                                                                ctx_->session_info_,
+                                                                norm_op,
+                                                                having_expr,
+                                                                having_left,
+                                                                having_right))) {
+                LOG_WARN("failed to create comparison expr", K(ret));
+              } else if (OB_FAIL(pullup_having.push_back(having_expr))) {
+                LOG_WARN("failed to push back having expr", K(ret));
+              } else {
+                OPT_TRACE("convert WHERE to HAVING", where_pred, "=>", having_expr);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTransformTempTable::check_expr_array_equal(ObSelectStmt *first_stmt,
+                                                 ObSelectStmt *second_stmt,
+                                                 ObStmtMapInfo &map_info,
+                                                 const ObIArray<ObRawExpr*> &first_exprs,
+                                                 const ObIArray<ObRawExpr*> &second_exprs,
+                                                 bool &is_equal)
+{
+  int ret = OB_SUCCESS;
+  is_equal = false;
+  ObSqlBitSet<> matched_items;
+  if (OB_ISNULL(first_stmt) ||
+      OB_ISNULL(second_stmt) ||
+      OB_ISNULL(first_stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(first_stmt), K(second_stmt));
+  } else if (first_exprs.count() != second_exprs.count()) {
+    is_equal = false;
+  } else if (first_exprs.empty()) {
+    is_equal = true;
+  } else {
+    ObStmtCompareContext context(first_stmt, second_stmt, map_info,
+                                 &first_stmt->get_query_ctx()->calculable_items_,
+                                 NULL, NULL, false, true);
+    bool all_matched = true;
+    for (int64_t i = 0; OB_SUCC(ret) && all_matched && i < first_exprs.count(); ++i) {
+      bool is_match = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !is_match && j < second_exprs.count(); ++j) {
+        if (matched_items.has_member(j)) {
+          // do nothing
+        } else if (OB_FAIL(ObStmtComparer::is_same_condition(first_exprs.at(i),
+                                                             second_exprs.at(j),
+                                                             context,
+                                                             is_match))) {
+          LOG_WARN("failed to check is condition equal", K(ret));
+        } else if (!is_match) {
+          // do nothing
+        } else if (OB_FAIL(matched_items.add_member(j))) {
+          LOG_WARN("failed to add member", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && !is_match) {
+        all_matched = false;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_equal = all_matched;
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::pullup_group_exprs_from_conditions(ObIArray<ObRawExpr*> &where_exprs,
+                                                             const ObIArray<ObStmtMapInfo::CondProperty> &cond_property_map,
+                                                             ObIArray<ObRawExpr*> &groupby_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (cond_property_map.count() != where_exprs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pull up group cond map is not equal to condition size", K(ret),
+             K(cond_property_map.count()), K(where_exprs.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cond_property_map.count(); ++i) {
+      ObRawExpr *pullup_group_expr = NULL;
+      bool cur_can_pullup = false;
+      if (OB_ISNULL(where_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("where expr is null", K(ret), K(i));
+      } else if (ObStmtMapInfo::SIMPLE_COND != cond_property_map.at(i)) {
+        // do nothing
+      } else if (OB_FAIL(extract_pullup_group_expr(*where_exprs.at(i),
+                                                   pullup_group_expr,
+                                                   cur_can_pullup))) {
+        LOG_WARN("failed to extract pullup group expr", K(ret));
+      } else if (OB_UNLIKELY(!cur_can_pullup) || OB_ISNULL(pullup_group_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pullup group expr is not can pullup or is null", K(ret),
+                 K(cur_can_pullup), KPC(pullup_group_expr), KPC(where_exprs.at(i)), K(i));
+      } else if (OB_FAIL(add_var_to_array_no_dup(groupby_exprs, pullup_group_expr))) {
+        LOG_WARN("failed to add var to array", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObTransformTempTable::is_similar_condition(const ObIArray<int64_t> &common_cond_map,
+                                               const ObIArray<int64_t> &cond_map,
+                                               int64_t idx)
+{
+  bool is_common = false;
+  int64_t first_idx = -1;
+  if (!ObOptimizerUtil::find_item(cond_map, idx, &first_idx)) {
+    is_common = false;
+  } else if (first_idx >= 0 && first_idx < common_cond_map.count()) {
+    is_common = OB_INVALID_ID != common_cond_map.at(first_idx);
+  } else {
+    is_common = false;
+  }
+  return is_common;
+}
+
 /**
  * @brief compute_common_map_info
  * 计算相似stmt的最大公共部分
  */
 int ObTransformTempTable::compute_common_map_info(ObIArray<ObStmtMapInfo>& map_infos,
+                                                  ObIArray<ObSelectStmt*> &stmts,
                                                   ObStmtMapInfo &common_map_info)
 {
   int ret = OB_SUCCESS;
@@ -1361,10 +1606,7 @@ int ObTransformTempTable::compute_common_map_info(ObIArray<ObStmtMapInfo>& map_i
             common_map_info.is_group_equal_ &= map_info.is_group_equal_;
           }
         } else {
-          common_map_info.group_map_.reset();
-          common_map_info.having_map_.reset();
-          common_map_info.select_item_map_.reset();
-          common_map_info.is_distinct_equal_ = false;
+          common_map_info.is_group_equal_ &= map_info.is_group_equal_;
         }
       }
       //compute common having map
@@ -1401,6 +1643,113 @@ int ObTransformTempTable::compute_common_map_info(ObIArray<ObStmtMapInfo>& map_i
         }
       }
     }
+  }
+
+  if (OB_SUCC(ret) && common_map_info.is_group_equal_ && !common_map_info.is_cond_equal_) {
+    bool can_extract = true;
+    ObSEArray<ObRawExpr*, 4> const_group_exprs;
+    ObSEArray<ObRawExpr*, 4> tmp_const_group_exprs;
+    ObSelectStmt *first_stmt = NULL;
+    if (OB_UNLIKELY(map_infos.count() != stmts.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("map infos count is not equal to stmts count", K(ret), K(map_infos.count()), K(stmts.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && can_extract && i < map_infos.count(); ++i) {
+      ObStmtMapInfo &map_info = map_infos.at(i);
+      ObSelectStmt *stmt = stmts.at(i);
+      tmp_const_group_exprs.reuse();
+      if (OB_ISNULL(stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("stmt is null", K(ret));
+      } else if (OB_UNLIKELY(!stmt->has_group_by())) {
+        can_extract = false;
+        OPT_TRACE("stmt has no group by, cannot extract common group by info");
+      } else if (OB_UNLIKELY(stmt->get_condition_size() != map_info.cond_property_map_.count())) {
+        can_extract = false;
+        OPT_TRACE("stmt condition size is not equal to cond property map size");
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && can_extract && j < stmt->get_condition_size(); ++j) {
+        int64_t first_idx = OB_INVALID_ID;
+        ObRawExpr *pullup_group_expr = NULL;
+        if (is_similar_condition(common_map_info.cond_map_, map_info.cond_map_, j)) {
+          OPT_TRACE("ignore common condition: ", stmt->get_condition_expr(j));
+        } else if (ObStmtMapInfo::PULLUP_GROUP == map_info.cond_property_map_.at(j)) {
+          OPT_TRACE("pullup group expr: ", stmt->get_condition_expr(j));
+        } else if (ObStmtMapInfo::CONV_TO_MINMAX == map_info.cond_property_map_.at(j)) {
+          OPT_TRACE("pullup to having expr: ", stmt->get_condition_expr(j));
+        } else if (ObStmtMapInfo::SIMPLE_COND == map_info.cond_property_map_.at(j)) {
+          /*
+          * Handle the case where GROUP BY columns have been eliminated due to constant predicates,
+          * which may prevent temp table extraction for similar statements.
+          *
+          * Problem: When simplify_groupby rewrites "WHERE c1 = 1 GROUP BY c1, c2" to "WHERE c1 = 1 GROUP BY c2",
+          * the column c1 is removed from GROUP BY because it's constant. This causes issues when trying to
+          * extract a common temp table from similar statements like:
+          *   - Stmt1: SELECT ... FROM t WHERE c1 = 1 GROUP BY c1, c2
+          *   - Stmt2: SELECT ... FROM t WHERE c1 = 2 GROUP BY c1, c2
+          *
+          * After simplification, both become "GROUP BY c2", but the different WHERE predicates (c1=1 vs c1=2)
+          * cannot be pulled up to HAVING because c1 is no longer in GROUP BY. This prevents temp table extraction.
+          *
+          * Solution: For simple predicates like "c1 = const", we extract the column expression (c1) and check
+          * if all similar statements have the same set of such columns. If so, we can add these columns back
+          * to GROUP BY in the extracted CTE, allowing the different predicates to be pulled up to HAVING.
+          *
+          * For example, after this handling:
+          *   CTE:   SELECT ... FROM t GROUP BY c1, c2
+          *   Stmt1: SELECT ... FROM CTE WHERE c1 = 1
+          *   Stmt2: SELECT ... FROM CTE WHERE c1 = 2
+          */
+          if (OB_FAIL(extract_pullup_group_expr(*stmt->get_condition_expr(j),
+                                                pullup_group_expr,
+                                                can_extract))) {
+            LOG_WARN("failed to extract pullup group expr", K(ret));
+          } else if (!can_extract) {
+            OPT_TRACE("cannot extract pullup group expr with simple condition", stmt->get_condition_expr(j));
+          } else if (OB_FAIL(add_var_to_array_no_dup(tmp_const_group_exprs, pullup_group_expr))) {
+            LOG_WARN("failed to add var to array", K(ret));
+          }
+        } else {
+          can_extract = false;
+          OPT_TRACE("cannot process expr in condition: ", stmt->get_condition_expr(j));
+        }
+      }
+      if (OB_SUCC(ret) && can_extract) {
+        if (i == 0) {
+          if (OB_FAIL(const_group_exprs.assign(tmp_const_group_exprs))) {
+            LOG_WARN("failed to assign const group exprs", K(ret));
+          } else {
+            first_stmt = stmt;
+            OPT_TRACE("check common const group expr, first is:", const_group_exprs);
+          }
+        } else {
+          bool is_const_group_exprs_equal = false;
+          if (OB_FAIL(check_expr_array_equal(first_stmt,
+                                             stmt,
+                                             map_info,
+                                             const_group_exprs,
+                                             tmp_const_group_exprs,
+                                             is_const_group_exprs_equal))) {
+            LOG_WARN("failed to check expr array equal", K(ret));
+          } else if (!is_const_group_exprs_equal) {
+            can_extract = false;
+            OPT_TRACE("const group exprs are not equal, second:", tmp_const_group_exprs);
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      common_map_info.is_group_equal_ = can_extract;
+      OPT_TRACE("where condition can extract common group by:", common_map_info.is_group_equal_);
+    }
+  }
+  if (OB_SUCC(ret) && !common_map_info.is_group_equal_) {
+    common_map_info.group_map_.reset();
+    common_map_info.having_map_.reset();
+    common_map_info.select_item_map_.reset();
+    common_map_info.is_having_equal_ = false;
+    common_map_info.is_select_item_equal_ = false;
+    common_map_info.is_distinct_equal_ = false;
   }
   return ret;
 }
@@ -1448,15 +1797,19 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
     ObSEArray<ObRawExpr *, 8> pushdown_groupby;
     ObSEArray<ObRawExpr *, 8> pushdown_rollup;
     ObSEArray<ObRawExpr *, 8> pushdown_having;
+    ObSEArray<ObRawExpr *, 8> origin_condition_exprs;
 
-    if (parent_stmt->get_condition_size() > 0 &&
+    if (common_map_info.is_group_equal_ &&
+        OB_FAIL(origin_condition_exprs.assign(parent_stmt->get_condition_exprs()))) {
+      LOG_WARN("failed to assign origin condition exprs", K(ret));
+    } else if (parent_stmt->get_condition_size() > 0 &&
               OB_FAIL(pushdown_conditions(parent_stmt,
                                           map_info.cond_map_,
                                           common_map_info.cond_map_,
+                                          map_info.cond_property_map_,
                                           pushdown_where))) {
       LOG_WARN("failed to pushdown conditions", K(ret));
-    } else if (!common_map_info.is_cond_equal_ ||
-              !common_map_info.is_group_equal_) {
+    } else if (!common_map_info.is_group_equal_) {
       //do nothing
       //下压group by
     } else if (parent_stmt->has_group_by() &&
@@ -1465,6 +1818,17 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
                                                           pushdown_rollup,
                                                           pushdown_select))) {
       LOG_WARN("failed to pushdown group by", K(ret));
+    } else if (!map_info.cond_property_map_.empty() &&
+               OB_FAIL(pullup_group_exprs_from_conditions(origin_condition_exprs,
+                                                          map_info.cond_property_map_,
+                                                          pushdown_groupby))) {
+      LOG_WARN("failed to pushdown group exprs from conditions", K(ret));
+    } else if (!map_info.cond_property_map_.empty() &&
+               OB_FAIL(pullup_where_to_having_conds(pushdown_select,
+                                                    origin_condition_exprs,
+                                                    map_info.cond_property_map_,
+                                                    pushdown_having))) {
+      LOG_WARN("failed to pullup where to having conds", K(ret));
       //下压having
     } else if (parent_stmt->get_having_expr_size() > 0 &&
               OB_FAIL(pushdown_having_conditions(parent_stmt,
@@ -1530,6 +1894,7 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
 int ObTransformTempTable::pushdown_conditions(ObSelectStmt *parent_stmt,
                                               const ObIArray<int64_t> &cond_map,
                                               const ObIArray<int64_t> &common_cond_map,
+                                              const ObIArray<ObStmtMapInfo::CondProperty> &cond_property_map,
                                               ObIArray<ObRawExpr*> &pushdown_conds)
 {
   int ret = OB_SUCCESS;
@@ -1542,12 +1907,13 @@ int ObTransformTempTable::pushdown_conditions(ObSelectStmt *parent_stmt,
     LOG_WARN("unexpect map info", K(cond_map), K(common_cond_map), K(ret));
   } else {
     ObIArray<ObRawExpr*> &conditions = parent_stmt->get_condition_exprs();
+    bool is_group_equal = cond_property_map.count() == conditions.count();
     //找到相同的condition
     for (int64_t i = 0; OB_SUCC(ret) && i < cond_map.count(); ++i) {
       int64_t idx = cond_map.at(i);
       if (OB_INVALID_ID == common_cond_map.at(i)) {
         //do nothing
-      } else if (idx < 0 || idx > conditions.count()) {
+      } else if (idx < 0 || idx >= conditions.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect cond index", K(idx), K(ret));
       } else if (OB_FAIL(pushdown_conds.push_back(conditions.at(idx)))) {
@@ -1557,7 +1923,9 @@ int ObTransformTempTable::pushdown_conditions(ObSelectStmt *parent_stmt,
     //找到不同的condition
     for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
       if (ObOptimizerUtil::find_item(pushdown_conds, conditions.at(i))) {
-        //do nothing
+      } else if (is_group_equal &&
+                 ObStmtMapInfo::CONV_TO_MINMAX == cond_property_map.at(i)) {
+        OPT_TRACE("extract group by stmt mark condition for pullup to HAVING", conditions.at(i));
       } else if (OB_FAIL(keep_conds.push_back(conditions.at(i)))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
@@ -1596,7 +1964,7 @@ int ObTransformTempTable::pushdown_having_conditions(ObSelectStmt *parent_stmt,
       int64_t idx = having_map.at(i);
       if (OB_INVALID_ID == common_having_map.at(i)) {
         //do nothing
-      } else if (idx < 0 || idx > conditions.count()) {
+      } else if (idx < 0 || idx >= conditions.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect cond index", K(idx), K(ret));
       } else if (OB_FAIL(pushdown_conds.push_back(conditions.at(idx)))) {

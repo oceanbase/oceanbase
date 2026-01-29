@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SQL_OB_LOG_SORT_H
 #define OCEANBASE_SQL_OB_LOG_SORT_H
 #include "lib/container/ob_array.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_logical_operator.h"
 
 namespace oceanbase
@@ -21,6 +22,8 @@ namespace sql
 {
 class ObRawExpr;
 class ObLogSort;
+template<typename R, typename C>
+class PlanVisitor;
 
 struct ObTopNFilterInfo
 {
@@ -82,7 +85,10 @@ public:
   int get_sort_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
   int create_encode_sortkey_expr(const common::ObIArray<OrderItem> &order_keys);
   int get_sort_exprs(common::ObIArray<ObRawExpr*> &sort_exprs);
-
+  inline bool is_topn_op()
+  {
+    return topn_expr_ != NULL;
+  }
   inline void set_topn_expr(ObRawExpr *expr) { topn_expr_ = expr; }
   inline void set_prefix_pos(int64_t prefix_pos) { prefix_pos_ = prefix_pos; }
   inline void set_local_merge_sort(bool is_local_merge_sort) { is_local_merge_sort_ = is_local_merge_sort; }

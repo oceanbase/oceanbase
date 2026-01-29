@@ -941,6 +941,10 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 < val.get_int());
       break;
     }
+    case INDEX_MERGE_THRESHOLD_FOR_MULTIVALUE: {
+      is_valid = val.is_int() && (0 <= val.get_int());
+      break;
+    }
     case WORKAREA_SIZE_POLICY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANULE"));
       break;
@@ -3552,7 +3556,9 @@ bool ObWindowDistHint::WinDistOption::is_valid() const
     bret = false;
   } else if (WinDistAlgo::WIN_DIST_HASH != algo_ &&
              WinDistAlgo::WIN_DIST_NONE != algo_ &&
-             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_
+             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_ &&
+             WinDistAlgo::WIN_DIST_RANGE != algo_ &&
+             WinDistAlgo::WIN_DIST_LIST != algo_
             && (use_hash_sort_ || use_topn_sort_)) {
     bret = false;
   } else {

@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OB_LOG_GROUP_BY_H
 #include "lib/allocator/page_arena.h"
 #include "ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "ob_select_log_plan.h"
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
 namespace oceanbase
@@ -24,6 +25,8 @@ namespace sql
 
 using GroupDistinctExprs = ObSqlArray<ObRawExpr*>;
 class ObLogSort;
+template<typename R, typename C>
+class PlanVisitor;
 struct ObThreeStageAggrInfo
 {
   ObThreeStageAggrInfo(common::ObIAllocator &allocator) :
@@ -196,6 +199,7 @@ public:
   inline void set_merge_type() { algo_ = MERGE_AGGREGATE; }
   inline void set_scalar_type() { algo_ = SCALAR_AGGREGATE; }
   inline void set_step(AggregatePathType step) { step_ = step; }
+  inline AggregatePathType get_step() const { return step_; }
   inline void set_step_partial() { step_ = PARTIAL; }
   inline void set_step_final() { step_ = FINAL; }
   inline bool is_final() { return step_ == FINAL; }

@@ -99,6 +99,13 @@ enum AggregateAlgo
   SCALAR_AGGREGATE
 };
 
+enum LimitType
+{
+  SINGLE_LIMIT = 0,
+  FINAL_LIMIT,
+  PARTIAL_LIMIT
+};
+
 enum AggregatePathType
 {
   SINGLE = 0,

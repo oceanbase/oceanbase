@@ -345,6 +345,37 @@ public:
                               const EqualSets &equal_sets,
                               int64_t &idx);
 
+  /**
+   * @brief rewrite_expr_using_equal_sets
+   * Rewrites an input expression using EqualSets to find an equivalent expression
+   * whose relation_ids is a subset of the given tableset or is empty.
+   * Returns the equivalent expression if found, otherwise returns the original expression.
+   * @param input_expr - The input expression to rewrite
+   * @param tableset - The tableset that defines the valid range (ObRelIds)
+   * @param equal_sets - EqualSets containing equivalence information
+   * @param output_expr - Output parameter: the rewritten expression (or original if not found)
+   * @return OB_SUCCESS if successful, error code otherwise
+   */
+  static int rewrite_expr_using_equal_sets(const ObRawExpr *input_expr,
+                                            const ObRelIds &tableset,
+                                            const EqualSets &equal_sets,
+                                            ObRawExpr *&output_expr);
+
+  /**
+   * @brief find_equivalent_in_range
+   * Finds an equivalent expression in EqualSets whose relation_ids is a subset
+   * of the given tableset or is empty.
+   * @param input_expr - The input expression to find equivalent for
+   * @param tableset - The tableset that defines the valid range (ObRelIds)
+   * @param equal_sets - EqualSets containing equivalence information
+   * @param equivalent_expr - Output parameter: the equivalent expression if found, NULL otherwise
+   * @return true if equivalent expression found, false otherwise
+   */
+  static int find_equivalent_in_range(const ObRawExpr *input_expr,
+                                      const ObRelIds &tableset,
+                                      const EqualSets &equal_sets,
+                                      ObRawExpr *&equivalent_expr);
+
   static int append_exprs_no_dup(ObIArray<ObRawExpr *> &dst, const ObIArray<ObRawExpr *> &src);
 
   static int find_stmt_expr_direction(const ObDMLStmt &stmt,

@@ -9134,7 +9134,7 @@ int ObResolverUtils::uv_check_dup_base_col(const TableItem &table_item,
       }
       ObRawExpr *expr = si->expr_;
       if (T_REF_ALIAS_COLUMN == expr->get_expr_type()) {
-        expr = static_cast<ObAliasRefRawExpr*>(expr)->get_ref_expr();
+        expr = static_cast<ObAliasRefRawExpr*>(expr)->get_ref_select_expr();
       }
       if (T_REF_COLUMN != expr->get_expr_type()) {
         has_non_col_ref = true;

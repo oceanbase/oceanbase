@@ -28,7 +28,10 @@
 #include "share/catalog/odps/ob_odps_catalog.h"
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "share/stat/ob_lake_table_stat.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/expr/ob_expr_json_utils.h"
 #include "sql/optimizer/ob_join_order_enum.h"
+
 
 using namespace oceanbase;
 using namespace sql;
@@ -1209,6 +1212,7 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                                      is_oracle_inner_index_table ?
                                                                        agent_table_filter : helper.filters_,
                                                                      query_range_provider,
+                                                                     range_info.get_expr_constraints(),
                                                                      helper.is_index_merge_))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if(is_fts_index && OB_FAIL(extract_fts_preliminary_query_range(range_columns,
@@ -2634,6 +2638,7 @@ int ObJoinOrder::add_access_filters(AccessPath *path,
                                                 get_plan()->get_equal_sets())) {
           found = true;
           bool extract_unprecise_range = false;
+          bool is_precise_range_expr = false;
           // old query range unprecise check
           if (OB_FAIL(can_extract_unprecise_range(path->table_id_,
                                                   deduced_expr_info.deduced_expr_,
@@ -2643,11 +2648,14 @@ int ObJoinOrder::add_access_filters(AccessPath *path,
             LOG_WARN("failed to check can extract unprecise range", K(ret));
           } else if (extract_unprecise_range ||
                      (OB_NOT_NULL(range_exprs) &&
-                     ObOptimizerUtil::find_equal_expr(*range_exprs, restrict_infos.at(i))) ||
+                     (is_precise_range_expr = ObOptimizerUtil::find_equal_expr(*range_exprs, restrict_infos.at(i)))) ||
                      (OB_NOT_NULL(unprecise_range_exprs) &&
                      ObOptimizerUtil::find_equal_expr(*unprecise_range_exprs, restrict_infos.at(i)))) {
+            if (extract_unprecise_range && OB_NOT_NULL(range_exprs)) {
+              is_precise_range_expr = ObOptimizerUtil::find_equal_expr(*range_exprs, restrict_infos.at(i));
+            }
             bool is_vec_adaptive_scan = path->vec_idx_info_.vec_extra_info_.is_vec_adaptive_scan();
-            if (path->est_cost_info_.index_meta_info_.is_multivalue_index_ && (!deduced_expr_info.is_precise_ || is_vec_adaptive_scan)) {
+            if (path->est_cost_info_.index_meta_info_.is_multivalue_index_ && (!is_precise_range_expr || is_vec_adaptive_scan)) {
               // when multivalue_index as filter of vector adaptive scan, we need old query range as filter for post-filter.
               // deduced new pred for multivalue needn't add into new filter, just remain orginal filter is ok
             } else if (OB_FAIL(path->filter_.push_back(restrict_infos.at(i)))) {
@@ -3573,8 +3581,9 @@ int ObJoinOrder::create_index_merge_access_paths(const uint64_t table_id,
   ObQueryCtx *query_ctx = NULL;
   ObIndexMergeNode *index_merge_tree = NULL;
   bool is_match_hint = false;
-  bool prune_happened = false;
+  ObSEArray<ObRawExpr*, 4> unprecise_filters;
   bool contain_fts = false;
+  bool contain_multivalue = false;
   ignore_normal_access_path = false;
   LOG_TRACE("check can use index merge begin", K(ref_table_id), K(helper.filters_));
   OPT_TRACE_TITLE("BEGIN CREATE INDEX MERGE PATHS");
@@ -3599,14 +3608,14 @@ int ObJoinOrder::create_index_merge_access_paths(const uint64_t table_id,
                                           helper,
                                           index_merge_tree,
                                           is_match_hint,
-                                          prune_happened))) {
+                                          unprecise_filters))) {
     LOG_WARN("failed to get valid index ids", K(ret));
   } else if (NULL == index_merge_tree) {
     LOG_TRACE("can not generate index merge tree", K(table_id));
   } else if (OB_FAIL(do_create_index_merge_path(table_id,
                                                 ref_table_id,
                                                 helper,
-                                                prune_happened, /* need_table_filter */
+                                                unprecise_filters,
                                                 index_merge_tree,
                                                 access_paths))) {
     LOG_WARN("failed to create index merge path", K(ret));
@@ -3620,11 +3629,13 @@ int ObJoinOrder::create_index_merge_access_paths(const uint64_t table_id,
     LOG_TRACE("[EN_FORCE_INDEX_MERGE_PLAN] finish create index merge path ", K(ref_table_id), K(is_match_hint), K(contain_fts), K(access_paths));
   } else if (OB_FAIL(check_index_merge_paths_contain_fts(access_paths, contain_fts))) {
     LOG_WARN("failed to check index merge paths contain FTS", K(ret));
-  } else if (!is_match_hint && !contain_fts
+  } else if (OB_FAIL(check_index_merge_paths_contain_multivalue(access_paths, contain_multivalue))) {
+    LOG_WARN("failed to check index merge paths contain multivalue", K(ret));
+  } else if (!is_match_hint && !contain_fts && !contain_multivalue
              && OB_FAIL(prune_index_merge_path(access_paths))) {
     LOG_WARN("failed to prune index merge path", K(ret));
   } else {
-    ignore_normal_access_path = (is_match_hint || contain_fts) && !access_paths.empty();
+    ignore_normal_access_path = (is_match_hint || contain_fts || contain_multivalue) && !access_paths.empty();
     LOG_TRACE("finish create index merge path", K(ref_table_id), K(is_match_hint), K(contain_fts), K(access_paths));
   }
 
@@ -3651,15 +3662,15 @@ int ObJoinOrder::get_index_merge_tree(const uint64_t table_id,
                                       const PathHelper &helper,
                                       ObIndexMergeNode *&index_merge_tree,
                                       bool &is_match_hint,
-                                      bool &prune_happened)
+                                      ObIArray<ObRawExpr*> &unprecise_filters)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> valid_index_ids; // all valid indexes
   ObSEArray<ObSEArray<uint64_t, 4>, 4> valid_index_cols; // column ids in the valid indexes
+  ObSEArray<ObCandiIndexMergeNode, 4> candi_index_nodes;
   ObIndexMergeNode *candi_index_tree = NULL;
   index_merge_tree = NULL;
   is_match_hint = false;
-  prune_happened = false;
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_plan()));
@@ -3673,18 +3684,18 @@ int ObJoinOrder::get_index_merge_tree(const uint64_t table_id,
                                                      helper.filters_,
                                                      valid_index_ids,
                                                      valid_index_cols,
-                                                     candi_index_tree,
-                                                     prune_happened))) {
+                                                     candi_index_nodes))) {
     LOG_WARN("failed to generate candi index merge trees", K(ret));
-  } else if (OB_FAIL(prune_candi_index_merge_tree(table_id,
-                                                  ref_table_id,
-                                                  helper,
-                                                  valid_index_ids,
-                                                  valid_index_cols,
-                                                  true, /* is_match_hint */
-                                                  candi_index_tree,
-                                                  prune_happened))) {
-    LOG_WARN("failed to prune candi index merge tree", K(ret), KPC(candi_index_tree));
+  } else if (OB_FAIL(prune_and_merge_candi_index_merge_nodes(table_id,
+                                                             ref_table_id,
+                                                             helper,
+                                                             valid_index_ids,
+                                                             valid_index_cols,
+                                                             true, /* is_match_hint */
+                                                             candi_index_nodes,
+                                                             candi_index_tree,
+                                                             unprecise_filters))) {
+    LOG_WARN("failed to prune and merge candi index merge nodes", K(ret));
   } else if (NULL != candi_index_tree) {
     index_merge_tree = candi_index_tree;
     is_match_hint = true;
@@ -3693,6 +3704,8 @@ int ObJoinOrder::get_index_merge_tree(const uint64_t table_id,
   } else if (get_plan()->get_log_plan_hint().is_outline_data_
              || (!OPT_CTX.is_enable_index_merge() && OB_LIKELY(!EN_FORCE_INDEX_MERGE_PLAN))) {
     OPT_TRACE("can not create index merge paths due to outline or tenant config");
+  } else if (OB_FALSE_IT(candi_index_nodes.reuse())) {
+  } else if (OB_FALSE_IT(unprecise_filters.reuse())) {
   } else if (OB_FAIL(get_valid_index_merge_indexes(table_id,
                                                    ref_table_id,
                                                    valid_index_ids,
@@ -3703,18 +3716,18 @@ int ObJoinOrder::get_index_merge_tree(const uint64_t table_id,
                                                      helper.filters_,
                                                      valid_index_ids,
                                                      valid_index_cols,
-                                                     candi_index_tree,
-                                                     prune_happened))) {
+                                                     candi_index_nodes))) {
     LOG_WARN("failed to generate candi index merge trees", K(ret));
-  } else if (OB_FAIL(prune_candi_index_merge_tree(table_id,
-                                                  ref_table_id,
-                                                  helper,
-                                                  valid_index_ids,
-                                                  valid_index_cols,
-                                                  false, /* is_match_hint */
-                                                  candi_index_tree,
-                                                  prune_happened))) {
-    LOG_WARN("failed to prune candi index merge tree", K(ret), KPC(candi_index_tree));
+  } else if (OB_FAIL(prune_and_merge_candi_index_merge_nodes(table_id,
+                                                             ref_table_id,
+                                                             helper,
+                                                             valid_index_ids,
+                                                             valid_index_cols,
+                                                             false, /* is_match_hint */
+                                                             candi_index_nodes,
+                                                             candi_index_tree,
+                                                             unprecise_filters))) {
+    LOG_WARN("failed to prune and merge candi index merge nodes", K(ret));
   } else if (NULL != candi_index_tree) {
     index_merge_tree = candi_index_tree;
     is_match_hint = false;
@@ -3813,113 +3826,279 @@ int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
   return ret;
 }
 
+struct FilterWithDeducedInfo
+{
+public:
+  FilterWithDeducedInfo()
+    : filter_(NULL)
+  {}
+
+  FilterWithDeducedInfo(ObRawExpr *filter)
+    : filter_(filter)
+  {}
+
+  bool has_deduced_exprs() const { return !deduced_exprs_.empty(); }
+
+  static bool cmp_deduced_expr_by_precise(const DeducedExprInfo &a, const DeducedExprInfo &b)
+  {
+    return a.is_precise_ > b.is_precise_;
+  }
+
+  void sort_deduced_exprs()
+  {
+    lib::ob_sort(deduced_exprs_.begin(), deduced_exprs_.end(), cmp_deduced_expr_by_precise);
+  }
+
+  TO_STRING_KV(KPC_(filter), K_(deduced_exprs));
+public:
+  ObRawExpr *filter_;
+  common::ObSEArray<DeducedExprInfo, 2, common::ModulePageAllocator, false> deduced_exprs_;
+};
+
+static int build_filters_with_deduced_info(const ObIArray<ObRawExpr*> &filters,
+                                           const ObIArray<DeducedExprInfo> &deduced_exprs_info,
+                                           ObIArray<FilterWithDeducedInfo> &filter_infos)
+{
+  int ret = OB_SUCCESS;
+  filter_infos.reuse();
+  common::hash::ObHashSet<uint64_t> deduced_expr_set;
+  common::hash::ObHashMap<uint64_t, int64_t> filter_idx_map;
+  if (OB_FAIL(deduced_expr_set.create(deduced_exprs_info.count() + 1))) {
+    LOG_WARN("failed to create hash set", K(ret));
+  } else if (OB_FAIL(filter_idx_map.create(filters.count() + 1, "FilterIdxMap"))) {
+    LOG_WARN("failed to create hash map", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < deduced_exprs_info.count(); ++i) {
+    uint64_t key = reinterpret_cast<uint64_t>(deduced_exprs_info.at(i).deduced_expr_);
+    if (OB_FAIL(deduced_expr_set.set_refactored(key))) {
+      if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to set deduced expr", K(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+    ObRawExpr *filter = filters.at(i);
+    uint64_t key = reinterpret_cast<uint64_t>(filter);
+    int64_t temp_idx = -1;
+    if (OB_HASH_EXIST == deduced_expr_set.exist_refactored(key) ||
+        OB_SUCCESS == filter_idx_map.get_refactored(key, temp_idx)) {
+      // do nothing
+    } else if (OB_ISNULL(filter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null filter", K(ret), K(i));
+    } else if (OB_FAIL(filter_infos.push_back(FilterWithDeducedInfo(filter)))) {
+      LOG_WARN("failed to push back filter info", K(ret));
+    } else if (OB_FAIL(filter_idx_map.set_refactored(key, filter_infos.count() - 1))) {
+      LOG_WARN("failed to set filter index", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < deduced_exprs_info.count(); ++i) {
+    uint64_t from_key = reinterpret_cast<uint64_t>(deduced_exprs_info.at(i).deduced_from_expr_);
+    int64_t idx = -1;
+    if (OB_FAIL(filter_idx_map.get_refactored(from_key, idx))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get filter index", K(ret));
+      }
+    } else if (OB_FAIL(filter_infos.at(idx).deduced_exprs_.push_back(deduced_exprs_info.at(i)))) {
+      LOG_WARN("failed to push back deduced expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; i < filter_infos.count(); ++i) {
+      filter_infos.at(i).sort_deduced_exprs();
+    }
+  }
+  if (deduced_expr_set.created()) {
+    deduced_expr_set.destroy();
+  }
+  if (filter_idx_map.created()) {
+    filter_idx_map.destroy();
+  }
+  return ret;
+}
+
+int ObJoinOrder::add_candi_index_merge_node(ObRawExpr *filter,
+                                            ObIndexMergeNode *node,
+                                            bool prune_happened,
+                                            ObIArray<ObCandiIndexMergeNode> &candi_index_nodes)
+{
+  int ret = OB_SUCCESS;
+  ObCandiIndexMergeNode *candi_index_node = NULL;
+  if (OB_ISNULL(candi_index_node = candi_index_nodes.alloc_place_holder())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate candi index node", K(ret));
+  } else if (OB_FAIL(candi_index_node->add_filter(filter))) {
+    LOG_WARN("failed to add filter", K(ret));
+  } else {
+    candi_index_node->node_ = node;
+    candi_index_node->prune_happened_ = prune_happened;
+  }
+  return ret;
+}
+
+int ObJoinOrder::prune_candi_index_merge_nodes(const ObIArray<ObIndexMergeNodeSelPair> &valid_children_pair,
+                                         ObIArray<ObCandiIndexMergeNode> &candi_index_nodes)
+{
+  int ret = OB_SUCCESS;
+  common::hash::ObHashSet<uint64_t> valid_node_set;
+  if (OB_FAIL(valid_node_set.create(valid_children_pair.count() + 1))) {
+    LOG_WARN("failed to create hash set", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < valid_children_pair.count(); ++i) {
+    uint64_t key = reinterpret_cast<uint64_t>(valid_children_pair.at(i).node_);
+    if (OB_FAIL(valid_node_set.set_refactored(key))) {
+      LOG_WARN("failed to set valid node", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < candi_index_nodes.count(); ++i) {
+    uint64_t key = reinterpret_cast<uint64_t>(candi_index_nodes.at(i).node_);
+    bool is_pruned = (NULL == candi_index_nodes.at(i).node_)
+                     || (OB_HASH_NOT_EXIST == valid_node_set.exist_refactored(key));
+    if (is_pruned) {
+      candi_index_nodes.at(i).prune_happened_ = true;
+      if (OB_NOT_NULL(candi_index_nodes.at(i).node_)) {
+        OB_DELETEx(ObIndexMergeNode, allocator_, candi_index_nodes.at(i).node_);
+        candi_index_nodes.at(i).node_ = NULL;
+      }
+    }
+  }
+  if (valid_node_set.created()) {
+    valid_node_set.destroy();
+  }
+  return ret;
+}
+
+int ObJoinOrder::collect_unprecise_filters_from_candi_nodes(const ObIArray<ObCandiIndexMergeNode> &candi_index_nodes,
+                                                            ObIArray<ObRawExpr*> &unprecise_filters)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < candi_index_nodes.count(); ++i) {
+    if (candi_index_nodes.at(i).prune_happened_) {
+      const ObIndexMergeNode *node = candi_index_nodes.at(i).node_;
+      if (OB_NOT_NULL(node) &&
+          node->is_scan_node() &&
+          OB_NOT_NULL(node->ap_) &&
+          OB_NOT_NULL(node->ap_->get_query_range_provider())) {
+        const ObIArray<ObRawExpr*> &range_exprs = node->ap_->get_query_range_provider()->get_range_exprs();
+        for (int64_t j = 0; OB_SUCC(ret) && j < candi_index_nodes.at(i).filters_.count(); ++j) {
+          ObRawExpr *filter = candi_index_nodes.at(i).filters_.at(j);
+          if (ObOptimizerUtil::find_item(range_exprs, filter)) {
+            // do nothing
+          } else if (OB_FAIL(unprecise_filters.push_back(filter))) {
+            LOG_WARN("failed to push back unprecise filter", K(ret));
+          }
+        }
+      } else if (OB_FAIL(append(unprecise_filters, candi_index_nodes.at(i).filters_))) {
+        LOG_WARN("failed to append unprecise filters", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObJoinOrder::generate_candi_index_merge_tree(const uint64_t ref_table_id,
                                                  const ObIArray<ObRawExpr*> &filters,
                                                  const ObIArray<uint64_t> &valid_index_ids,
                                                  const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
-                                                 ObIndexMergeNode *&candi_index_tree,
-                                                 bool &prune_happened)
+                                                 ObIArray<ObCandiIndexMergeNode> &candi_index_nodes)
 {
   int ret = OB_SUCCESS;
-  candi_index_tree = NULL;
-  prune_happened = false;
+  ObSEArray<FilterWithDeducedInfo, 4> filter_infos;
   if (valid_index_ids.empty()) {
     // do nothing
-  } else if (OB_ISNULL(candi_index_tree = OB_NEWx(ObIndexMergeNode, allocator_, *allocator_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate index merge node", K(ret));
+  } else if (OB_FAIL(build_filters_with_deduced_info(filters,
+                                                     deduced_exprs_info_,
+                                                     filter_infos))) {
+    LOG_WARN("failed to build filters with deduced info", K(ret));
   } else {
-    ObSEArray<ObRawExpr*, 8> valid_ori_filters;
-    ObSEArray<DeducedExprInfo, 4> deduced_filters;
-    candi_index_tree->node_type_ = INDEX_MERGE_INTERSECT;
-    // handle original filters
-    for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
-      ObRawExpr *filter = filters.at(i);
-      ObIndexMergeNode *candi_node = NULL;
-      bool is_deduced_expr = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter_infos.count(); ++i) {
+      FilterWithDeducedInfo &filter_info = filter_infos.at(i);
       bool is_valid = false;
-      for (int64_t j = 0; OB_SUCC(ret) && j < deduced_exprs_info_.count(); ++j) {
-        if (deduced_exprs_info_.at(j).deduced_expr_ == filter) {
-          if (OB_FAIL(deduced_filters.push_back(deduced_exprs_info_.at(j)))) {
-            LOG_WARN("failed to push back deduced filter", K(ret));
+      ObIndexMergeNode *node = NULL;
+      bool prune_happened = false;
+      if (OB_ISNULL(filter_info.filter_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null filter", K(ret), K(i));
+      } else if (OB_FAIL(try_merge_filter_to_candi_node(filter_info.filter_,
+                                                        NULL,
+                                                        true,
+                                                        candi_index_nodes,
+                                                        is_valid))) {
+        LOG_WARN("failed to try merge filter to candi node", K(ret));
+      } else if (is_valid) {
+        // do nothing
+      } else if (OB_FAIL(generate_candi_index_merge_node(ref_table_id,
+                                                          filter_info.filter_,
+                                                          valid_index_ids,
+                                                          valid_index_cols,
+                                                          node,
+                                                          is_valid,
+                                                          prune_happened))) {
+        LOG_WARN("failed to generate candi index merge node", K(ret));
+      } else if (is_valid) {
+        if (OB_FAIL(add_candi_index_merge_node(filter_info.filter_,
+                                               node,
+                                               prune_happened,
+                                               candi_index_nodes))) {
+          LOG_WARN("failed to add candi index merge node", K(ret));
+        }
+      } else {
+        bool has_valid_node = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !has_valid_node && j < filter_info.deduced_exprs_.count(); ++j) {
+          DeducedExprInfo &deduced_expr_info = filter_info.deduced_exprs_.at(j);
+          if (OB_ISNULL(deduced_expr_info.deduced_expr_) ||
+              OB_UNLIKELY(deduced_expr_info.deduced_from_expr_ != filter_info.filter_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null deduced expr or from expr", K(ret), K(j));
+          } else if (OB_FAIL(try_merge_filter_to_candi_node(deduced_expr_info.deduced_expr_,
+                                                            deduced_expr_info.deduced_from_expr_,
+                                                            deduced_expr_info.is_precise_,
+                                                            candi_index_nodes,
+                                                            is_valid))) {
+            LOG_WARN("failed to try merge filter to candi node", K(ret));
+          } else if (is_valid) {
+            has_valid_node = true;
+          } else if (OB_FAIL(generate_candi_index_merge_node(ref_table_id,
+                                                             deduced_expr_info.deduced_expr_,
+                                                             valid_index_ids,
+                                                             valid_index_cols,
+                                                             node,
+                                                             is_valid,
+                                                             prune_happened))) {
+            LOG_WARN("failed to generate candi index merge node", K(ret));
+          } else if (!is_valid) {
+            // do nothing
+          } else if (OB_FAIL(add_candi_index_merge_node(deduced_expr_info.deduced_from_expr_,
+                                                        node,
+                                                        prune_happened || !deduced_expr_info.is_precise_,
+                                                        candi_index_nodes))) {
+            LOG_WARN("failed to add candi index merge node", K(ret));
           } else {
-            is_deduced_expr = true;
-            break;
+            has_valid_node = true;
+          }
+        }
+
+        if (OB_SUCC(ret) && !has_valid_node) {
+          if (OB_FAIL(add_candi_index_merge_node(filter_info.filter_,
+                                                 NULL,
+                                                 true,
+                                                 candi_index_nodes))) {
+            LOG_WARN("failed to add candi index merge node", K(ret));
           }
         }
       }
-      if (OB_FAIL(ret)) {
-      } else if (is_deduced_expr) {
-        // do nothing
-      } else if (OB_ISNULL(filter)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null filter", K(ret), K(i));
-      } else if (OB_FAIL(try_merge_intersect_child(candi_index_tree,
-                                                   filter,
-                                                   is_valid))) {
-        LOG_WARN("failed to try merge intersect child", K(ret));
-      } else if (is_valid) {
-        if (OB_FAIL(valid_ori_filters.push_back(filter))) {
-          LOG_WARN("failed to push back valid ori filter", K(ret));
-        }
-      } else if (OB_FAIL(generate_candi_index_merge_node(ref_table_id,
-                                                         filter,
-                                                         valid_index_ids,
-                                                         valid_index_cols,
-                                                         candi_node,
-                                                         is_valid,
-                                                         prune_happened))) {
-        LOG_WARN("failed to generate one index merge tree for filter", K(ret), KPC(filter));
-      } else if (!is_valid) {
-        prune_happened = true;
-      } else if (OB_FAIL(candi_index_tree->children_.push_back(candi_node))) {
-        LOG_WARN("failed to push back candi node", K(ret));
-      } else if (OB_FAIL(valid_ori_filters.push_back(filter))) {
-        LOG_WARN("failed to push back valid ori filter", K(ret));
-      }
     }
-    // handle deduced filters
-    for (int64_t i = 0; OB_SUCC(ret) && i < deduced_filters.count(); ++i) {
-      ObRawExpr *filter = deduced_filters.at(i).deduced_expr_;
-      ObRawExpr *from_filter = deduced_filters.at(i).deduced_from_expr_;
-      ObIndexMergeNode *candi_node = NULL;
-      bool is_valid = false;
-      if (OB_ISNULL(filter) || OB_ISNULL(from_filter)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null filter", K(ret), K(i), K(deduced_filters.at(i)));
-      } else if (ObOptimizerUtil::find_item(valid_ori_filters, from_filter)) {
-        // do nothing, original filter already exists in candi index tree
-      } else if (OB_FAIL(try_merge_intersect_child(candi_index_tree,
-                                                   filter,
-                                                   is_valid))) {
-        LOG_WARN("failed to try merge intersect child", K(ret));
-      } else if (is_valid) {
-        if (OB_FAIL(valid_ori_filters.push_back(from_filter))) {
-          LOG_WARN("failed to push back valid ori filter", K(ret));
-        }
-      } else if (OB_FAIL(generate_candi_index_merge_node(ref_table_id,
-                                                         filter,
-                                                         valid_index_ids,
-                                                         valid_index_cols,
-                                                         candi_node,
-                                                         is_valid,
-                                                         prune_happened))) {
-        LOG_WARN("failed to generate one index merge tree for filter", K(ret), KPC(filter));
-      } else if (!is_valid) {
-        prune_happened = true;
-      } else if (OB_FAIL(candi_index_tree->children_.push_back(candi_node))) {
-        LOG_WARN("failed to push back candi node", K(ret));
-      } else if (OB_FAIL(valid_ori_filters.push_back(from_filter))) {
-        LOG_WARN("failed to push back valid ori filter", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (candi_index_tree->children_.empty()) {
-      // not a valid index merge tree
-      OB_DELETEx(ObIndexMergeNode, allocator_, candi_index_tree);
-      candi_index_tree = NULL;
-    } else if (OB_FAIL(ObIndexMergeNode::formalize_index_merge_tree(candi_index_tree))) {
-      LOG_WARN("failed to formalize index merge tree", K(ret), KPC(candi_index_tree));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < candi_index_nodes.count(); ++i) {
+    ObCandiIndexMergeNode &candi_index_node = candi_index_nodes.at(i);
+    if (OB_ISNULL(candi_index_node.node_)) {
+      // do nothing
+    } else if (OB_FAIL(ObIndexMergeNode::formalize_index_merge_tree(candi_index_node.node_, *allocator_))) {
+      LOG_WARN("failed to formalize index merge tree", K(ret), KPC(candi_index_node.node_));
     }
   }
   return ret;
@@ -4001,6 +4180,14 @@ int ObJoinOrder::generate_candi_index_merge_node(const uint64_t ref_table_id,
       for (int64_t i = 0; OB_SUCC(ret) && !is_valid_node && i < valid_index_cols.count(); ++i) {
         is_valid_node |= ObOptimizerUtil::is_subset(column_ids, valid_index_cols.at(i));
       }
+      if (!is_valid_node && filter->is_multivalue_expr()) {
+        ObSEArray<ObRawExpr*, 4> deduced_filters;
+        if (OB_FAIL(try_deduce_multivalue_index_filter(filter, deduced_filters))) {
+          LOG_WARN("failed to try deduce multivalue index filter", K(ret));
+        } else if (OB_FAIL(check_deduced_multivalue_filters(deduced_filters, valid_index_cols, is_valid_node, filter))) {
+          LOG_WARN("failed to check deduced multivalue filters", K(ret));
+        }
+      }
     }
     if (OB_FAIL(ret) || !is_valid_node) {
       // do nothing
@@ -4014,8 +4201,356 @@ int ObJoinOrder::generate_candi_index_merge_node(const uint64_t ref_table_id,
         candi_node->node_type_ = INDEX_MERGE_FTS_INDEX;
       } else if (filter->is_multivalue_expr()) {
         candi_node->node_type_ = INDEX_MERGE_MULTIVALUE_INDEX;
+        ObRawExpr *skip_expr = ObRawExprUtils::skip_inner_added_expr(filter);
+        common::ObDomainOpType op_type = ObDomainOpType::T_DOMAIN_OP_END;
+        if (OB_ISNULL(skip_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null");
+        } else if (OB_FALSE_IT(op_type = ObQueryRange::get_domain_op_type(skip_expr->get_expr_type()))) {
+        } else if (ObDomainOpType::T_JSON_CONTAINS == op_type) {
+          int64_t json_contains_threshold = 100;
+          if (OB_FAIL(get_index_merge_threshold_for_multivalue(json_contains_threshold))) {
+            LOG_WARN("failed to get json contains rewrite threshold", K(ret));
+          } else if (json_contains_threshold == 0) {
+          } else if (OB_FAIL(process_json_contains_expr(skip_expr, candi_node, is_valid_node))) {
+            LOG_WARN("failed to process json contains expr", K(ret));
+          }
+        } else {
+          candi_node->node_type_ = INDEX_MERGE_MULTIVALUE_INDEX;
+        }
       } else {
         candi_node->node_type_ = INDEX_MERGE_SCAN;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::try_deduce_multivalue_index_filter(ObRawExpr *filter,
+                                                    ObIArray<ObRawExpr*> &deduced_filters)
+{
+  int ret = OB_SUCCESS;
+  uint64_t table_id = OB_INVALID_ID;
+  const TableItem *table_item = NULL;
+  ObSEArray<ObColumnRefRawExpr*, 4> multivalue_cols;
+  ObSEArray<ObRawExpr*, 4> simple_multivalue_preds;
+  bool match_multivalue_idx = false;
+  if (OB_ISNULL(filter) || OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(filter));
+  } else if (OB_FALSE_IT(table_id = get_table_id())) {
+  } else if (OB_ISNULL(table_item = get_plan()->get_stmt()->get_table_item_by_id(table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is null", K(ret), K(table_id));
+  } else if (OB_FAIL(get_plan()->get_stmt()->get_column_exprs(multivalue_cols))) {
+    LOG_WARN("get column exprs failed", K(ret));
+  } else if (OB_FAIL(check_match_common_gen_col_index(filter,
+                                                      table_item,
+                                                      multivalue_cols,
+                                                      simple_multivalue_preds,
+                                                      match_multivalue_idx))) {
+    LOG_WARN("check match multivalue index failed", K(ret));
+  } else if (!match_multivalue_idx || multivalue_cols.empty()) {
+    // do nothing
+  } else {
+    for (int64_t j = 0; OB_SUCC(ret) && j < multivalue_cols.count(); j++) {
+      ObRawExpr *deduced_filter = NULL;
+      if (OB_FAIL(deduce_common_gen_col_index_expr(filter,
+                                                   table_item,
+                                                   multivalue_cols.at(j),
+                                                   simple_multivalue_preds,
+                                                   deduced_filter))) {
+        LOG_WARN("deduce multivalue index expr failed", K(ret));
+      } else if (OB_ISNULL(deduced_filter)) {
+        // do nothing
+      } else if (OB_FAIL(deduced_filters.push_back(deduced_filter))) {
+        LOG_WARN("failed to push back deduced filter", K(ret));
+      } else {
+        LOG_TRACE("deduce multivalue index expr", KPC(deduced_filter), KPC(filter));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_deduced_multivalue_filters(const ObIArray<ObRawExpr*> &deduced_filters,
+                                                  const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                                  bool &is_valid_node,
+                                                  ObRawExpr *&filter)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t j = 0; OB_SUCC(ret) && !is_valid_node && j < deduced_filters.count(); j++) {
+    ObRawExpr *deduced_filter = deduced_filters.at(j);
+    ObSEArray<uint64_t, 4> deduced_column_ids;
+    if (OB_ISNULL(deduced_filter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deduced filter is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(deduced_filter, deduced_column_ids))) {
+      LOG_WARN("failed to extract column ids", K(deduced_filter), K(ret));
+    } else {
+      for (int64_t k = 0; OB_SUCC(ret) && !is_valid_node && k < valid_index_cols.count(); ++k) {
+        if (ObOptimizerUtil::is_subset(deduced_column_ids, valid_index_cols.at(k))) {
+          is_valid_node = true;
+          filter = deduced_filter;
+        }
+      }
+    }
+    LOG_TRACE("check deduced multivalue index expr", KPC(deduced_filter), K(is_valid_node));
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_index_merge_threshold_for_multivalue(int64_t &threshold)
+{
+  int ret = OB_SUCCESS;
+  bool has_hint = false;
+  threshold = 100;
+  if (OB_FAIL(OPT_CTX.get_global_hint().opt_params_.get_integer_opt_param(
+        ObOptParamHint::INDEX_MERGE_THRESHOLD_FOR_MULTIVALUE, threshold, has_hint))) {
+    LOG_WARN("failed to get integer opt param", K(ret));
+  } else if (!has_hint) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OPT_CTX.get_session_info()->get_effective_tenant_id()));
+    if (tenant_config.is_valid()) {
+      threshold = tenant_config->_index_merge_threshold_for_multivalue;
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::build_member_of_expr_from_json_path(const ObRawExpr *const_param,
+                                                     const ObColumnRefRawExpr *column_param,
+                                                     const char *json_path,
+                                                     ObRawExpr *&member_of_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *extract_expr = NULL;
+  member_of_expr = NULL;
+  if (OB_ISNULL(const_param) || OB_ISNULL(column_param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null param", K(ret), KP(const_param), KP(column_param));
+  } else if (OB_FAIL(ObRawExprUtils::build_json_extract_expr(OPT_CTX.get_expr_factory(),
+                                                             *OPT_CTX.get_session_info(),
+                                                             const_cast<ObRawExpr*>(const_param),
+                                                             ObString::make_string(json_path),
+                                                             extract_expr))) {
+    LOG_WARN("failed to build json extract expr", K(ret));
+  } else if (OB_ISNULL(extract_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("extract expr is null", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_json_member_of_expr(OPT_CTX.get_expr_factory(),
+                                                               *OPT_CTX.get_session_info(),
+                                                               extract_expr,
+                                                               const_cast<ObColumnRefRawExpr*>(column_param),
+                                                               member_of_expr))) {
+    LOG_WARN("failed to build json member of expr", K(ret));
+  } else if (OB_ISNULL(member_of_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("member of expr is null", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::process_json_scalar_type(ObIndexMergeNode *candi_node,
+                                          const ObRawExpr *const_param,
+                                          const ObColumnRefRawExpr *column_param,
+                                          bool &need_add_constraint,
+                                          PreCalcExprExpectResult &expect_result,
+                                          int64_t &extra)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *cast_expr = NULL;
+  ObRawExpr *member_of_expr = NULL;
+  ObRawExprResType json_type;
+  if (OB_ISNULL(candi_node) || OB_ISNULL(const_param) || OB_ISNULL(column_param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(candi_node), KP(const_param), KP(column_param));
+  } else {
+    json_type.set_type(ObJsonType);
+    if (ob_is_string_type(const_param->get_data_type())) {
+      json_type.set_collation_type(const_param->get_collation_type());
+      json_type.set_collation_level(const_param->get_collation_level());
+    } else {
+      json_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      json_type.set_collation_level(CS_LEVEL_IMPLICIT);
+    }
+    json_type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
+    if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&OPT_CTX.get_expr_factory(),
+                                                        OPT_CTX.get_session_info(),
+                                                        *const_cast<ObRawExpr*>(const_param),
+                                                        json_type,
+                                                        cast_expr))) {
+      LOG_WARN("failed to add cast expr above", K(ret));
+    } else if (OB_ISNULL(cast_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cast expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_json_member_of_expr(OPT_CTX.get_expr_factory(),
+                                                               *OPT_CTX.get_session_info(),
+                                                               cast_expr,
+                                                               const_cast<ObColumnRefRawExpr*>(column_param),
+                                                               member_of_expr))) {
+      LOG_WARN("failed to build json member of expr", K(ret));
+    } else if (OB_ISNULL(member_of_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("member of expr is null", K(ret));
+    } else if (OB_FALSE_IT(candi_node->filter_.reuse())) {
+    } else if (OB_FAIL(candi_node->filter_.push_back(member_of_expr))) {
+      LOG_WARN("failed to push back filter", K(ret));
+    } else {
+      need_add_constraint = true;
+      expect_result = PRE_CALC_JSON_TYPE;
+      extra = ObJsonTypeConstraint::make_extra(ObJsonTypeConstraint::JSON_TYPE_SCALAR, 0);
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::process_json_array_type(ObIndexMergeNode *candi_node,
+                                         ObIJsonBase *j_base,
+                                         const ObRawExpr *const_param,
+                                         const ObColumnRefRawExpr *column_param,
+                                         bool &is_valid_node,
+                                         bool &need_add_constraint,
+                                         PreCalcExprExpectResult &expect_result,
+                                         int64_t &extra)
+{
+  int ret = OB_SUCCESS;
+  int64_t element_size = 0;
+  int64_t json_contains_threshold = 100;
+  if (OB_ISNULL(candi_node) || OB_ISNULL(j_base) || OB_ISNULL(const_param) || OB_ISNULL(column_param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(candi_node), KP(j_base), KP(const_param), KP(column_param));
+  } else if (OB_FAIL(get_index_merge_threshold_for_multivalue(json_contains_threshold))) {
+    LOG_WARN("failed to get json contains rewrite threshold", K(ret));
+  } else if (FALSE_IT(element_size = j_base->element_count())) {
+  } else if (element_size == 0) {
+    is_valid_node = false;
+  } else if (element_size == 1) {
+    ObRawExpr *member_of_expr = NULL;
+    if (OB_FAIL(build_member_of_expr_from_json_path(const_param, column_param, "$[0]", member_of_expr))) {
+      LOG_WARN("failed to build member of expr from json path", K(ret));
+    } else if (OB_FALSE_IT(candi_node->filter_.reuse())) {
+    } else if (OB_FAIL(candi_node->filter_.push_back(member_of_expr))) {
+      LOG_WARN("failed to push back filter", K(ret));
+    } else {
+      need_add_constraint = true;
+      expect_result = PRE_CALC_JSON_TYPE;
+      extra = ObJsonTypeConstraint::make_extra(ObJsonTypeConstraint::JSON_TYPE_ARRAY, element_size);
+    }
+  } else if (element_size <= json_contains_threshold) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < element_size; ++i) {
+      ObRawExpr *member_of_expr = NULL;
+      ObIndexMergeNode *child_node = NULL;
+      char *json_path = NULL;
+      const static int64_t json_path_size = 128;
+      if (OB_ISNULL(json_path = static_cast<char*>(allocator_->alloc(json_path_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate json path", K(ret));
+      } else if (OB_ISNULL(child_node = OB_NEWx(ObIndexMergeNode, allocator_, *allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate index merge node", K(ret));
+      } else if (OB_FALSE_IT(snprintf(json_path, json_path_size, "$[%ld]", i))) {
+      } else if (OB_FAIL(build_member_of_expr_from_json_path(const_param, column_param, json_path, member_of_expr))) {
+        LOG_WARN("failed to build member of expr from json path", K(ret));
+      } else if (OB_FAIL(child_node->filter_.push_back(member_of_expr))) {
+        LOG_WARN("failed to push back filter", K(ret));
+      } else if (OB_FAIL(candi_node->children_.push_back(child_node))) {
+        LOG_WARN("failed to push back child node", K(ret));
+      } else {
+        child_node->node_type_ = INDEX_MERGE_MULTIVALUE_INDEX;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      candi_node->node_type_ = INDEX_MERGE_INTERSECT;
+      need_add_constraint = true;
+      expect_result = PRE_CALC_JSON_TYPE;
+      extra = ObJsonTypeConstraint::make_extra(ObJsonTypeConstraint::JSON_TYPE_ARRAY, element_size);
+    }
+  } else {
+    candi_node->node_type_ = INDEX_MERGE_MULTIVALUE_INDEX;
+    need_add_constraint = true;
+    expect_result = PRE_CALC_JSON_TYPE;
+    extra = ObJsonTypeConstraint::make_extra(ObJsonTypeConstraint::JSON_TYPE_JSON_CONTAINS_NO_INDEX_MERGE,
+                                             json_contains_threshold);
+  }
+  return ret;
+}
+
+int ObJoinOrder::process_json_contains_expr(ObRawExpr *skip_expr,
+                                           ObIndexMergeNode *candi_node,
+                                           bool &is_valid_node)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *l_expr = NULL;
+  const ObRawExpr *r_expr = NULL;
+  const ObRawExpr *const_param = NULL;
+  const ObColumnRefRawExpr *column_param = NULL;
+  int64_t json_contains_threshold = 10;
+  if (OB_ISNULL(skip_expr) || OB_ISNULL(candi_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(skip_expr), KP(candi_node));
+  } else if (FALSE_IT(l_expr = skip_expr->get_param_expr(0))) {
+  } else if (FALSE_IT(r_expr = skip_expr->get_param_expr(1))) {
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(r_expr, r_expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else if (l_expr->has_flag(CNT_COLUMN)) {
+    column_param = ObRawExprUtils::get_column_ref_expr_recursively(l_expr);
+    const_param = r_expr;
+  }
+  if (OB_FAIL(ret) || OB_ISNULL(column_param) || OB_ISNULL(const_param)) {
+  } else if (!const_param->is_const_expr()) {
+  } else {
+    bool got_value = false;
+    ObObj result;
+    ObIJsonBase *j_base = NULL;
+    bool need_add_constraint = false;
+    PreCalcExprExpectResult expect_result = PRE_CALC_JSON_TYPE;
+    int64_t extra = -1;
+    if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(OPT_CTX.get_exec_ctx(),
+                                                          const_param,
+                                                          result,
+                                                          got_value,
+                                                          *allocator_))) {
+      LOG_WARN("failed to calc const or calculable expr", K(ret));
+    } else if (!got_value) {
+      need_add_constraint = true;
+      expect_result = PRE_CALC_ERROR;
+    } else if (result.is_null()) {
+      need_add_constraint = true;
+      expect_result = PRE_CALC_RESULT_NULL;
+    } else if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(result,
+                                                                       OPT_CTX.get_exec_ctx(),
+                                                                       false,
+                                                                       allocator_,
+                                                                       j_base))) {
+      LOG_WARN("failed to refine range json value const", K(ret));
+    } else if (OB_ISNULL(j_base)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get json base", K(ret));
+    } else if (j_base->is_json_scalar(j_base->json_type())) {
+      if (OB_FAIL(process_json_scalar_type(candi_node, const_param, column_param,
+                                           need_add_constraint, expect_result, extra))) {
+        LOG_WARN("failed to process json scalar type", K(ret));
+      }
+    } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+      if (OB_FAIL(process_json_array_type(candi_node, j_base, const_param, column_param,
+                                          is_valid_node, need_add_constraint, expect_result,
+                                          extra))) {
+        LOG_WARN("failed to process json array type", K(ret));
+      }
+    } else {
+      need_add_constraint = true;
+      expect_result = PRE_CALC_JSON_TYPE;
+      extra = ObJsonTypeConstraint::make_extra(ObJsonTypeConstraint::JSON_TYPE_NOT_ARRAY_OR_SCALAR, 0);
+    }
+    if (OB_SUCC(ret) && need_add_constraint) {
+      ObConstraintExtra const_extra;
+      const_extra.extra_ = extra;
+      if (OB_FAIL(candi_node->all_expr_constraints_.push_back(ObExprConstraint(const_cast<ObRawExpr*>(const_param),
+                                                                               expect_result,
+                                                                               const_extra)))) {
+        LOG_WARN("failed to push back expr constraint", K(ret));
       }
     }
   }
@@ -4072,6 +4607,72 @@ int ObJoinOrder::try_merge_intersect_child(ObIndexMergeNode *intersect_node,
   return ret;
 }
 
+int ObJoinOrder::try_merge_filter_to_candi_node(ObRawExpr *new_filter,
+                                                ObRawExpr *from_filter,
+                                                bool is_precise,
+                                                ObIArray<ObCandiIndexMergeNode> &candi_nodes,
+                                                bool &merge_happened)
+{
+  int ret = OB_SUCCESS;
+  merge_happened = false;
+  if (OB_ISNULL(new_filter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(new_filter));
+  } else if (candi_nodes.empty()) {
+    // do nothing
+  } else if (new_filter->has_flag(IS_SIMPLE_COND) || new_filter->has_flag(IS_RANGE_COND)) {
+    ObSEArray<uint64_t, 4> filter_column_ids;
+    if (OB_FAIL(ObRawExprUtils::extract_column_ids(new_filter, filter_column_ids))) {
+      LOG_WARN("failed to extract column ids", K(new_filter), K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !merge_happened && i < candi_nodes.count(); ++i) {
+      ObIndexMergeNode *candi_node = candi_nodes.at(i).node_;
+      if (OB_ISNULL(candi_node)) {
+        // do nothing
+      } else if (OB_FAIL(try_merge_filter_to_scan_node(new_filter,
+                                                       filter_column_ids,
+                                                       candi_node,
+                                                       merge_happened))) {
+        LOG_WARN("failed to try merge filter to scan node", K(ret));
+      } else if (merge_happened) {
+        if (OB_FAIL(candi_nodes.at(i).add_filter(from_filter == NULL ? new_filter : from_filter))) {
+          LOG_WARN("failed to add filter", K(ret));
+        } else {
+          candi_nodes.at(i).prune_happened_ |= !is_precise;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::try_merge_filter_to_scan_node(ObRawExpr *new_filter,
+                                               const ObIArray<uint64_t> &filter_column_ids,
+                                               ObIndexMergeNode *child,
+                                               bool &merge_happened)
+{
+  int ret = OB_SUCCESS;
+  merge_happened = false;
+  ObRawExpr *child_filter = NULL;
+  ObSEArray<uint64_t, 4> child_column_ids;
+  if (OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(child));
+  } else if (INDEX_MERGE_SCAN != child->node_type_) {
+  } else if (OB_UNLIKELY(child->filter_.empty()) || OB_ISNULL(child_filter = child->filter_.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected child node filter", K(ret), KPC(child));
+  } else if (!(child_filter->has_flag(IS_SIMPLE_COND) || child_filter->has_flag(IS_RANGE_COND))) {
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(child_filter, child_column_ids))) {
+    LOG_WARN("failed to extract column ids", K(ret), KPC(child_filter));
+  } else if (!is_array_equal(filter_column_ids, child_column_ids)) {
+  } else if (OB_FAIL(child->filter_.push_back(new_filter))) {
+    LOG_WARN("failed to push back filter", K(ret));
+  } else {
+    merge_happened = true;
+  }
+  return ret;
+}
 int ObJoinOrder::collect_candicate_indexes(const uint64_t ref_table_id,
                                            const ObIArray<ObRawExpr*> &filters,
                                            const ObIArray<uint64_t> &valid_index_ids,
@@ -4237,6 +4838,52 @@ int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
   return ret;
 }
 
+int ObJoinOrder::prune_and_sort_intersect_children(const bool ignore_sel_prune,
+                                                   const bool force_preserve,
+                                                   const double min_selectivity,
+                                                   ObIndexMergeNode *min_sel_child,
+                                                   const ObIArray<ObIndexMergeNodeSelPair> &valid_children_pair,
+                                                   const ObIArray<bool> &children_force_preserve,
+                                                   ObIArray<ObIndexMergeNodeSelPair> &reserved_children_pair,
+                                                   bool &prune_happened)
+{
+  int ret = OB_SUCCESS;
+  const double MAX_INTERSECTION_MERGE_SEL = 0.20;
+  const double MAX_SEL_GAP_RATIO = 2.0;
+  reserved_children_pair.reuse();
+  if (ignore_sel_prune) {
+    if (OB_FAIL(reserved_children_pair.assign(valid_children_pair))) {
+      LOG_WARN("failed to assign new children pair", K(ret));
+    }
+  } else if (min_selectivity > MAX_INTERSECTION_MERGE_SEL && !force_preserve) {
+    if (OB_FAIL(reserved_children_pair.push_back(ObIndexMergeNodeSelPair(min_sel_child, min_selectivity)))) {
+      LOG_WARN("failed to push back child node", K(ret));
+    } else {
+      prune_happened = true;
+    }
+  } else {
+    const double max_sel = std::min(min_selectivity * MAX_SEL_GAP_RATIO, MAX_INTERSECTION_MERGE_SEL);
+    for (int64_t i = 0; OB_SUCC(ret) && i < valid_children_pair.count(); ++i) {
+      if (children_force_preserve.at(i) || valid_children_pair.at(i).selectivity_ <= max_sel) {
+        if (OB_FAIL(reserved_children_pair.push_back(valid_children_pair.at(i)))) {
+          LOG_WARN("failed to push back child node", K(ret), K(valid_children_pair.at(i)));
+        }
+      } else {
+        prune_happened = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(reserved_children_pair.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected empty reserved children", K(ret), K(min_selectivity), K(children_force_preserve), K(valid_children_pair));
+    } else if (reserved_children_pair.count() > 1) {
+      lib::ob_sort(&reserved_children_pair.at(0), &reserved_children_pair.at(0) + reserved_children_pair.count());
+    }
+  }
+  return ret;
+}
+
 /**
  * @brief ObJoinOrder::prune_candi_index_merge_tree
  *
@@ -4251,47 +4898,111 @@ int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
  *   1. Prune the children by selectivity and whether it is an FTS index.
  *   2. Sort the children by whether it is ror scan node and the selectivity.
  */
-int ObJoinOrder::prune_candi_index_merge_tree(const uint64_t table_id,
-                                              const uint64_t ref_table_id,
-                                              const PathHelper &helper,
-                                              const ObIArray<uint64_t> &valid_index_ids,
-                                              const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
-                                              const bool is_match_hint,
-                                              ObIndexMergeNode* &candi_index_tree,
-                                              bool &prune_happened)
+int ObJoinOrder::prune_and_merge_candi_index_merge_nodes(const uint64_t table_id,
+                                                        const uint64_t ref_table_id,
+                                                        const PathHelper &helper,
+                                                        const ObIArray<uint64_t> &valid_index_ids,
+                                                        const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                                        const bool is_match_hint,
+                                                        ObIArray<ObCandiIndexMergeNode> &candi_index_nodes,
+                                                        ObIndexMergeNode* &candi_index_tree,
+                                                        ObIArray<ObRawExpr*> &unprecise_filters)
 {
   int ret = OB_SUCCESS;
-  bool is_valid = false;
+  candi_index_tree = NULL;
+  unprecise_filters.reuse();
   bool ignore_sel_prune = is_match_hint || OB_UNLIKELY(EN_FORCE_INDEX_MERGE_PLAN)
-                          || is_one_layer_intersect_with_fts(candi_index_tree);
+                          || is_one_layer_intersect_with_fts(candi_index_nodes);
   bool force_preserve = false;
-  double dummy_value = 0.0;
-  if (NULL == candi_index_tree) {
-    // do nothing
-  } else if (OB_FAIL(prune_one_index_merge_node(table_id,
-                                                ref_table_id,
-                                                helper,
-                                                valid_index_ids,
-                                                valid_index_cols,
-                                                candi_index_tree,
-                                                ignore_sel_prune,
-                                                is_valid,
-                                                force_preserve,
-                                                prune_happened,
-                                                dummy_value /* sum_child_sel */ ))) {
-    LOG_WARN("failed to prune candi index merge tree", K(ret), KPC(candi_index_tree));
-  } else if (!is_valid) {
-    OB_DELETEx(ObIndexMergeNode, allocator_, candi_index_tree);
-    candi_index_tree = NULL;
-  } else if (OB_ISNULL(candi_index_tree)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null index merge tree", K(ret), KPC(candi_index_tree));
-  } else if (OB_FAIL(ObIndexMergeNode::formalize_index_merge_tree(candi_index_tree))) {
-    LOG_WARN("failed to formalize index merge tree", K(ret), KPC(candi_index_tree));
-  } else if (!candi_index_tree->is_merge_node()) {
-    // only contains one scan node, not a valid index merge tree
-    OB_DELETEx(ObIndexMergeNode, allocator_, candi_index_tree);
-    candi_index_tree = NULL;
+  double min_selectivity = 1.0;
+  ObIndexMergeNode *min_sel_child = NULL;
+  ObSEArray<ObIndexMergeNodeSelPair, 8> valid_children_pair;
+  ObSEArray<bool, 8> children_force_preserve;
+  for (int64_t i = 0; OB_SUCC(ret) && i < candi_index_nodes.count(); ++i) {
+    bool is_valid = false;
+    bool child_force_preserve = false;
+    bool prune_happened = false;
+    double child_selectivity = 1.0;
+    if (OB_ISNULL(candi_index_nodes.at(i).node_)) {
+      candi_index_nodes.at(i).prune_happened_ = true;
+    } else if (OB_FAIL(prune_one_index_merge_node(table_id,
+                                                  ref_table_id,
+                                                  helper,
+                                                  valid_index_ids,
+                                                  valid_index_cols,
+                                                  candi_index_nodes.at(i).node_,
+                                                  ignore_sel_prune,
+                                                  is_valid,
+                                                  child_force_preserve,
+                                                  prune_happened,
+                                                  child_selectivity))) {
+      LOG_WARN("failed to prune candi index merge node", K(ret), K(i), KPC(candi_index_nodes.at(i).node_));
+    } else if (!is_valid) {
+      OB_DELETEx(ObIndexMergeNode, allocator_, candi_index_nodes.at(i).node_);
+      candi_index_nodes.at(i).node_ = NULL;
+      candi_index_nodes.at(i).prune_happened_ = true;
+    } else if (OB_FAIL(valid_children_pair.push_back(ObIndexMergeNodeSelPair(candi_index_nodes.at(i).node_,
+                                                                             child_selectivity)))) {
+      LOG_WARN("failed to push back child node pair", K(ret));
+    } else if (OB_FALSE_IT(force_preserve |= child_force_preserve)) {
+    } else if (OB_FAIL(children_force_preserve.push_back(child_force_preserve))) {
+      LOG_WARN("failed to push back child force preserve", K(ret));
+    } else if (NULL == min_sel_child || child_selectivity < min_selectivity) {
+      min_selectivity = child_selectivity;
+      min_sel_child = candi_index_nodes.at(i).node_;
+      candi_index_nodes.at(i).prune_happened_ |= prune_happened;
+    } else {
+      candi_index_nodes.at(i).prune_happened_ |= prune_happened;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (valid_children_pair.empty()) {
+  } else {
+    ObSEArray<ObIndexMergeNodeSelPair, 4> reserved_children_pair;
+    bool prune_happened = false;
+    if (OB_FAIL(prune_and_sort_intersect_children(ignore_sel_prune,
+                                                   force_preserve,
+                                                   min_selectivity,
+                                                   min_sel_child,
+                                                   valid_children_pair,
+                                                   children_force_preserve,
+                                                   reserved_children_pair,
+                                                   prune_happened))) {
+      LOG_WARN("failed to prune and sort intersect children", K(ret));
+    } else if (prune_happened && OB_FAIL(prune_candi_index_merge_nodes(reserved_children_pair, candi_index_nodes))) {
+      LOG_WARN("failed to mark pruned candi nodes", K(ret));
+    } else if (1 == reserved_children_pair.count()) {
+      candi_index_tree = reserved_children_pair.at(0).node_;
+    } else if (OB_ISNULL(candi_index_tree = OB_NEWx(ObIndexMergeNode, allocator_, *allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate index merge node", K(ret));
+    } else {
+      candi_index_tree->node_type_ = INDEX_MERGE_INTERSECT;
+      for (int64_t i = 0; OB_SUCC(ret) && i < reserved_children_pair.count(); ++i) {
+        if (OB_FAIL(candi_index_tree->children_.push_back(reserved_children_pair.at(i).node_))) {
+          LOG_WARN("failed to push back child node", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && NULL != candi_index_tree) {
+      if (OB_FAIL(ObIndexMergeNode::formalize_index_merge_tree(candi_index_tree, *allocator_))) {
+        LOG_WARN("failed to formalize index merge tree", K(ret), KPC(candi_index_tree));
+      } else if (!candi_index_tree->is_merge_node()) {
+        OB_DELETEx(ObIndexMergeNode, allocator_, candi_index_tree);
+        candi_index_tree = NULL;
+        for (int64_t i = 0; OB_SUCC(ret) && i < candi_index_nodes.count(); ++i) {
+          candi_index_nodes.at(i).prune_happened_ = true;
+          if (OB_NOT_NULL(candi_index_nodes.at(i).node_)) {
+            OB_DELETEx(ObIndexMergeNode, allocator_, candi_index_nodes.at(i).node_);
+            candi_index_nodes.at(i).node_ = NULL;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(collect_unprecise_filters_from_candi_nodes(candi_index_nodes,
+                                                                         unprecise_filters))) {
+    LOG_WARN("failed to collect unprecise filters from candi nodes", K(ret));
   }
   return ret;
 }
@@ -4382,50 +5093,27 @@ int ObJoinOrder::prune_one_index_merge_node(const uint64_t table_id,
     } else if (valid_children_pair.empty()) {
       is_valid = false;
     } else {
-      // prune and sort the children of the intersect merge node
-      const double MAX_INTERSECTION_MERGE_SEL = 0.20;
-      const double MAX_SEL_GAP_RATIO = 2.0;
-      ObSEArray<ObIndexMergeNodeSelPair, 4> new_children_pair; // children which is not pruned
-      // 1. prune the child nodes
-      if (ignore_sel_prune) {
-        if (OB_FAIL(new_children_pair.assign(valid_children_pair))) {
-          LOG_WARN("failed to assign new children pair", K(ret));
-        }
-      } else if (min_selectivity > MAX_INTERSECTION_MERGE_SEL && !force_preserve) {
-        if (OB_FAIL(new_children_pair.push_back(ObIndexMergeNodeSelPair(min_sel_child, min_selectivity)))) {
-          LOG_WARN("failed to push back child node", K(ret));
-        } else {
-          prune_happened = true;
-        }
+      ObSEArray<ObIndexMergeNodeSelPair, 4> pruned_children_pair;
+      if (OB_FAIL(prune_and_sort_intersect_children(ignore_sel_prune,
+                                                     force_preserve,
+                                                     min_selectivity,
+                                                     min_sel_child,
+                                                     valid_children_pair,
+                                                     children_force_preserve,
+                                                     pruned_children_pair,
+                                                     prune_happened))) {
+        LOG_WARN("failed to prune and sort intersect children", K(ret));
+      } else if (1 == pruned_children_pair.count()) {
+        candi_node = pruned_children_pair.at(0).node_;
+        sum_child_sel = pruned_children_pair.at(0).selectivity_;
       } else {
-        const double max_sel = std::min(min_selectivity * MAX_SEL_GAP_RATIO, MAX_INTERSECTION_MERGE_SEL);
-        for (int64_t i = 0; OB_SUCC(ret) && i < valid_children_pair.count(); ++i) {
-          if (children_force_preserve.at(i) || valid_children_pair.at(i).selectivity_ <= max_sel) {
-            if (OB_FAIL(new_children_pair.push_back(valid_children_pair.at(i)))) {
-              LOG_WARN("failed to push back child node", K(ret), K(valid_children_pair.at(i)));
-            } else {
-              prune_happened = true;
-            }
-          }
-        }
-      }
-      // 2. sort child nodes by selectivity and ror scan node
-      if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(new_children_pair.empty())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected empty new children", K(ret), K(min_selectivity), K(children_force_preserve), K(valid_children_pair));
-      } else if (1 == new_children_pair.count()) {
-        candi_node = new_children_pair.at(0).node_;
-        sum_child_sel = new_children_pair.at(0).selectivity_;
-      } else {
-        lib::ob_sort(new_children_pair.begin(), new_children_pair.end());
         candi_node->children_.reuse();
         sum_child_sel = 0.0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < new_children_pair.count(); ++i) {
-          if (OB_FAIL(candi_node->children_.push_back(new_children_pair.at(i).node_))) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < pruned_children_pair.count(); ++i) {
+          if (OB_FAIL(candi_node->children_.push_back(pruned_children_pair.at(i).node_))) {
             LOG_WARN("failed to push back child node", K(ret));
           } else {
-            sum_child_sel += new_children_pair.at(i).selectivity_;
+            sum_child_sel += pruned_children_pair.at(i).selectivity_;
           }
         }
       }
@@ -4455,10 +5143,27 @@ bool ObJoinOrder::is_one_layer_intersect_with_fts(const ObIndexMergeNode *node)
   return bret;
 }
 
+bool ObJoinOrder::is_one_layer_intersect_with_fts(const ObIArray<ObCandiIndexMergeNode> &candi_index_nodes)
+{
+  bool bret = false;
+  bool is_one_layer = true;
+  bool has_fts_index = false;
+  for (int64_t i = 0; is_one_layer && i < candi_index_nodes.count(); ++i) {
+    const ObIndexMergeNode *child_node = candi_index_nodes.at(i).node_;
+    if (OB_ISNULL(child_node) || !child_node->is_scan_node()) {
+      is_one_layer = false;
+    } else if (INDEX_MERGE_FTS_INDEX == child_node->node_type_) {
+      has_fts_index = true;
+    }
+  }
+  bret = is_one_layer && has_fts_index;
+  return bret;
+}
+
 int ObJoinOrder::do_create_index_merge_path(const uint64_t table_id,
                                             const uint64_t ref_table_id,
                                             const PathHelper &helper,
-                                            const bool need_table_filter,
+                                            const ObIArray<ObRawExpr*> &unprecise_filters,
                                             ObIndexMergeNode* root_node,
                                             ObIArray<AccessPath*> &access_paths)
 {
@@ -4484,7 +5189,8 @@ int ObJoinOrder::do_create_index_merge_path(const uint64_t table_id,
   } else if (OB_FAIL(create_one_index_merge_path(table_id,
                                                  ref_table_id,
                                                  helper,
-                                                 need_table_filter,
+                                                 !unprecise_filters.empty(),
+                                                 unprecise_filters,
                                                  equal_param_constraints,
                                                  const_param_constraints,
                                                  expr_constraints,
@@ -4526,6 +5232,8 @@ int ObJoinOrder::collect_index_merge_tree_info(ObIndexMergeNode *node,
   if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KPC(node));
+  } else if (OB_FAIL(append_array_no_dup(expr_constraints, node->all_expr_constraints_))) {
+    LOG_WARN("failed to append all expr constraints", K(ret));
   } else if (node->is_scan_node()) {
     node->scan_node_idx_ = scan_node_count++;
     if (OB_ISNULL(node->ap_)) {
@@ -4604,6 +5312,7 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
                                              const uint64_t ref_table_id,
                                              const PathHelper &helper,
                                              const bool need_table_filter,
+                                             const ObIArray<ObRawExpr*> &unprecise_filters,
                                              ObIArray<ObPCParamEqualInfo> &equal_param_constraints,
                                              ObIArray<ObPCConstParamInfo> &const_param_constraints,
                                              ObIArray<ObExprConstraint> &expr_constraints,
@@ -4632,8 +5341,8 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
     LOG_WARN("failed to get all match exprs", K(ret), K(table_id));
   } else if (OB_FAIL(index_merge_path->est_cost_info_.table_filters_.assign(helper.filters_))) {
     LOG_WARN("failed to assign filters", K(ret));
-  } else if (need_table_filter && OB_FAIL(index_merge_path->filter_.assign(helper.filters_))) {
-    LOG_WARN("failed to assign filters", K(ret));
+  } else if (need_table_filter && OB_FAIL(index_merge_path->filter_.assign(unprecise_filters))) {
+    LOG_WARN("failed to assign unprecise filters", K(ret));
   } else if (OB_FAIL(index_merge_path->subquery_exprs_.assign(helper.subquery_exprs_))) {
     LOG_WARN("failed to assign subquery exprs", K(ret));
   } else if (OB_FAIL(get_plan()->get_rowkey_exprs(table_id, ref_table_id, rowkey_exprs))) {
@@ -4910,7 +5619,34 @@ int ObJoinOrder::check_index_merge_paths_contain_fts(ObIArray<AccessPath*> &acce
   return ret;
 }
 
-int ObIndexMergeNode::formalize_index_merge_tree(ObIndexMergeNode *&node)
+int ObJoinOrder::check_index_merge_paths_contain_multivalue(ObIArray<AccessPath*> &access_paths,
+                                                            bool &contain_multivalue)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObIndexMergeNode*, 8> scan_nodes;
+  contain_multivalue = false;
+  if (OB_UNLIKELY(access_paths.empty())
+      || OB_ISNULL(access_paths.at(0))
+      || OB_UNLIKELY(!access_paths.at(0)->is_index_merge_path())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected index merge path", K(ret), K(access_paths));
+  } else if (OB_FAIL(static_cast<IndexMergePath*>(access_paths.at(0))->get_all_scan_nodes(scan_nodes))) {
+    LOG_WARN("failed to get all scan access paths", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < scan_nodes.count(); ++i) {
+    ObIndexMergeNode *scan_node = scan_nodes.at(i);
+    if (OB_ISNULL(scan_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected index merge node", K(ret), K(i), K(scan_node));
+    } else if (INDEX_MERGE_MULTIVALUE_INDEX == scan_node->node_type_) {
+      contain_multivalue = true;
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObIndexMergeNode::formalize_index_merge_tree(ObIndexMergeNode *&node, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node)) {
@@ -4919,26 +5655,38 @@ int ObIndexMergeNode::formalize_index_merge_tree(ObIndexMergeNode *&node)
   } else if (!node->is_merge_node()) {
     // do nothing
   } else if (1 == node->children_.count()) {
+    ObIndexMergeNode *prev_node = node;
     node = node->children_.at(0);
+    if (OB_FAIL(append(node->all_expr_constraints_, prev_node->all_expr_constraints_))) {
+      LOG_WARN("failed to append expr constraints", K(ret));
+    }
   } else {
-    ObSEArray<ObIndexMergeNode*, 4> new_children;
+    ObSqlArray<ObIndexMergeNode*> new_children(allocator);
+    ObSqlArray<ObExprConstraint> new_expr_constraints(allocator);
     for (int64_t i = 0; OB_SUCC(ret) && i < node->children_.count(); ++i) {
       ObIndexMergeNode *child = node->children_.at(i);
       if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null child", K(ret), K(i), K(node->children_));
-      } else if (OB_FAIL(SMART_CALL(formalize_index_merge_tree(child)))) {
+      } else if (OB_FAIL(SMART_CALL(formalize_index_merge_tree(child, allocator)))) {
         LOG_WARN("failed to formalize child node", K(ret), K(i), KPC(child));
       } else if (child->node_type_ == node->node_type_) {
         if (OB_FAIL(append(new_children, child->children_))) {
           LOG_WARN("failed to append new children", K(ret));
+        } else if (OB_FAIL(append(new_expr_constraints, child->all_expr_constraints_))) {
+          LOG_WARN("failed to append new expr constraints", K(ret));
         }
       } else if (OB_FAIL(new_children.push_back(child))) {
         LOG_WARN("failed to push back new child", K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(node->children_.assign(new_children))) {
-      LOG_WARN("failed to assign new children", K(ret), K(new_children));
+
+    if (OB_SUCC(ret)) {
+      if(OB_FAIL(node->children_.assign(new_children))) {
+        LOG_WARN("failed to assign new children", K(ret), K(new_children));
+      } else if (OB_FAIL(append(node->all_expr_constraints_, new_expr_constraints))) {
+        LOG_WARN("failed to append new expr constraints", K(ret), K(new_expr_constraints));
+      }
     }
   }
   return ret;
@@ -6489,6 +7237,7 @@ int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> 
 int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                                      const ObIArray<ObRawExpr*> &predicates,
                                                      ObQueryRangeProvider *&query_range,
+                                                     ObIArray<ObExprConstraint> &expr_constraints,
                                                      const bool is_index_merge_path)
 {
   int ret = OB_SUCCESS;
@@ -6515,7 +7264,7 @@ int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<Colum
       pre_range_graph = new(ptr)ObPreRangeGraph(*allocator_);
       if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, new_predicates,
                                                                    opt_ctx->get_exec_ctx(),
-                                                                   nullptr,
+                                                                   &expr_constraints,
                                                                    params, false, true,
                                                                    -1, NULL))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
@@ -9969,7 +10718,7 @@ int JoinPath::compute_hash_hash_sharding_info()
                     join_type_,
                     *right_expr,
                     popular_values))) {
-          LOG_WARN("fail check if use hybrid hash distribution", K(ret));
+          LOG_WARN("fail to check whether use hybrid hash distribution", K(ret));
         } else if (popular_values.count() > 0) {
           use_hybrid_hash_dm_ = true;
         }
@@ -14802,7 +15551,9 @@ int ObJoinOrder::generate_join_filter_infos(const Path &left_path,
   *  4. 检查代价是否可以生成.
   *  5. 检查hint是否可以生成.
   */
-  if (ObGlobalHint::DEFAULT_PARALLEL >= join_parallel) {
+  if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_5_0)) {
+    OPT_TRACE("plan will generate join filter after phase one");
+  } else if (ObGlobalHint::DEFAULT_PARALLEL >= join_parallel) {
     OPT_TRACE("hash join parallel <= 1, plan will not use join filter");
   } else if (RIGHT_OUTER_JOIN == join_type ||
             FULL_OUTER_JOIN == join_type ||
@@ -14887,6 +15638,15 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
   return ret;
 }
 
+/*
+ * given join_filter_info.rexprs_
+ * this function will fill in the following info
+ * - row_count_
+ * - right_distinct_card_
+ * - is_right_contain_pk_
+ * - is_right_union_pk_
+ * - right_origin_rows_
+ */
 int ObJoinOrder::fill_join_filter_info(JoinFilterInfo &join_filter_info)
 {
   int ret = OB_SUCCESS;
@@ -14915,6 +15675,11 @@ int ObJoinOrder::fill_join_filter_info(JoinFilterInfo &join_filter_info)
       join_filter_info.right_distinct_card_ = std::max(1.0, table_meta->get_rows());
     }
     if (OB_NOT_NULL(table_meta = get_plan()->get_basic_table_metas().get_table_meta_by_table_id(join_filter_info.table_id_))) {
+      join_filter_info.right_origin_rows_ = std::max(1.0, table_meta->get_rows());
+    }
+  } else {
+    const OptTableMeta *table_meta = get_plan()->get_basic_table_metas().get_table_meta_by_table_id(join_filter_info.table_id_);
+    if (OB_NOT_NULL(table_meta)) {
       join_filter_info.right_origin_rows_ = std::max(1.0, table_meta->get_rows());
     }
   }
@@ -20453,8 +21218,7 @@ int ObJoinOrder::get_generated_col_index_qual(const int64_t table_id,
                                                       table_item,
                                                       common_gen_cols.at(j),
                                                       simple_gen_col_preds,
-                                                      new_qual,
-                                                      helper))) {
+                                                      new_qual))) {
             LOG_WARN("deduce gen col index expr failed", K(ret));
           } else if (OB_ISNULL(new_qual)) {
             // do nothing
@@ -22769,12 +23533,13 @@ int ObJoinOrder::check_match_common_gen_col_index(ObRawExpr *expr,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObColumnRefRawExpr*, 4> cur_gen_cols;
-  if (OB_ISNULL(expr) || OB_ISNULL(table_item)) {
+  if (OB_ISNULL(expr) || OB_ISNULL(table_item) || OB_ISNULL(OPT_CTX.get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(expr), K(table_item));
   } else if (expr->get_expr_type() == T_OP_AND || expr->get_expr_type() == T_OP_OR) {
-    is_match = true;
-    for (int64_t i = 0; OB_SUCC(ret) && is_match && i < expr->get_param_count(); ++i) {
+    bool match_one_branch = OPT_CTX.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_5_1;
+    is_match = !match_one_branch;
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *param = expr->get_param_expr(i);
       bool child_match = false;
       if (OB_ISNULL(param)) {
@@ -22786,8 +23551,11 @@ int ObJoinOrder::check_match_common_gen_col_index(ObRawExpr *expr,
                                                                     simple_gen_col_preds,
                                                                     child_match)))) {
         LOG_WARN("failed to check match common gen col index", K(ret));
+      } else if (match_one_branch) {
+        is_match = child_match ? true : is_match;
       } else if (!child_match) {
         is_match = false;
+        break;
       }
     }
   } else if (OB_FAIL(check_simple_expr_match_gen_col_index(expr, table_item, cur_gen_cols, is_match))) {
@@ -22906,7 +23674,7 @@ int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
           LOG_WARN("param expr is null", K(ret));
         } else {
           matched_expr = expr->get_json_domain_param_expr();
-          is_precise_deduced = expr->get_expr_type() == T_FUN_SYS_JSON_MEMBER_OF;
+          is_precise_deduced = true;
         }
       }
       // collect param constraints
@@ -22924,8 +23692,7 @@ int ObJoinOrder::deduce_common_gen_col_index_expr(ObRawExpr *pred,
                                                   const TableItem *table_item,
                                                   ObColumnRefRawExpr *gen_col,
                                                   ObIArray<ObRawExpr*> &simple_gen_col_preds,
-                                                  ObRawExpr *&new_pred,
-                                                  PathHelper &helper)
+                                                  ObRawExpr *&new_pred)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> from_exprs;

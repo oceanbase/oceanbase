@@ -13,11 +13,14 @@
 #ifndef _OB_LOG_FUNCTION_TABLE_H
 #define _OB_LOG_FUNCTION_TABLE_H
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogFunctionTable : public ObLogicalOperator
 {
 public:

@@ -2023,11 +2023,52 @@ int ObLogPlanHint::check_use_join_filter(uint64_t filter_table_id,
   }
   return ret;
 }
+int ObLogPlanHint::check_join_filter_pushdown_hints(ObIAllocator &allocator,
+                                                    const ObQueryHint &query_hint,
+                                                    uint64_t filter_table_id,
+                                                    const ObRelIds &left_tables,
+                                                    TableItem* view_tableitem,
+                                                    TableItem* tableitem,
+                                                    bool part_join_filter,
+                                                    bool config_disable,
+                                                    bool &can_use,
+                                                    const ObJoinFilterHint *&force_hint) const
+{
+  int ret = OB_SUCCESS;
+  JoinFilterPushdownHintInfo hint_info(allocator);
+  bool has_hints = false;
+  if (OB_FAIL(get_pushdown_join_filter_hints(filter_table_id,
+                                             left_tables,
+                                             config_disable,
+                                             hint_info,
+                                             true))) {
+      LOG_WARN("failed to check use join filter", K(ret));
+  } else if (OB_FALSE_IT(has_hints = part_join_filter ? !hint_info.part_join_filter_hints_.empty() : !hint_info.join_filter_hints_.empty())) {
+  } else if (has_hints) {
+    if (OB_FAIL(hint_info.check_use_join_filter_v2(tableitem,
+                                                   view_tableitem,
+                                                   query_hint,
+                                                   part_join_filter,
+                                                   can_use,
+                                                   force_hint))) {
+      LOG_WARN("failed to check use join filter", K(ret));
+    }
+  } else if (is_outline_data_) {
+    can_use = false;
+    force_hint = NULL;
+  } else {
+    can_use = !config_disable;
+    force_hint = NULL;
+  }
+  return ret;
+}
+
 
 int ObLogPlanHint::get_pushdown_join_filter_hints(uint64_t filter_table_id,
                                                   const ObRelIds &left_tables,
                                                   bool config_disable,
-                                                  JoinFilterPushdownHintInfo& info) const
+                                                  JoinFilterPushdownHintInfo& info,
+                                                  bool left_table_empty_included) const
 {
   int ret = OB_SUCCESS;
   const LogTableHint *log_table_hint = get_log_table_hint(filter_table_id);
@@ -2035,10 +2076,12 @@ int ObLogPlanHint::get_pushdown_join_filter_hints(uint64_t filter_table_id,
   info.config_disable_ = config_disable;
   if (NULL == log_table_hint) {
   } else if(OB_FAIL(log_table_hint->get_join_filter_hints(left_tables, false,
-                                                          info.join_filter_hints_))) {
+                                                          info.join_filter_hints_,
+                                                          left_table_empty_included))) {
     LOG_WARN("failed to get join filter hints", K(ret));
   } else if (OB_FAIL(log_table_hint->get_join_filter_hints(left_tables, true,
-                                                          info.part_join_filter_hints_))) {
+                                                           info.part_join_filter_hints_,
+                                                           left_table_empty_included))) {
     LOG_WARN("failed to get join filter hints", K(ret));
   }
   return ret;
@@ -2908,7 +2951,8 @@ int LogTableHint::get_join_filter_hint(const ObRelIds &left_tables,
 
 int LogTableHint::get_join_filter_hints(const ObRelIds &left_tables,
                                         bool part_join_filter,
-                                        ObIArray<const ObJoinFilterHint*> &hints) const
+                                        ObIArray<const ObJoinFilterHint*> &hints,
+                                        bool match_empty_tables) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(left_tables.is_empty()) ||
@@ -2923,7 +2967,8 @@ int LogTableHint::get_join_filter_hints(const ObRelIds &left_tables,
         LOG_WARN("unexpected null", K(ret));
       } else if (cur_hint->is_part_join_filter_hint() != part_join_filter) {
         /* do nothing */
-      } else if (!left_tables.equal(left_tables_.at(i))) {
+      } else if (!(match_empty_tables && !cur_hint->has_left_tables()) &&
+                 !left_tables.equal(left_tables_.at(i))) {
         /* do nothing */
       } else if (OB_FAIL(hints.push_back(cur_hint))) {
         LOG_WARN("failed to push back hints", K(ret));
@@ -3028,6 +3073,109 @@ int LogTableHint::get_index_prefix(const uint64_t index_id, int64_t &index_prefi
   return ret;
 }
 
+/*
+ * px_join_filter(filter_table left_tables pushdown_filter_table)
+ *
+ * px_join_filter(z/v)
+ *    - filter_table: z/v
+ *    - left tables: empty
+ *    - pushdown_filter_table: empty
+ *
+ * px_join_filter(z/v (a b))
+ *    - filter_table: z/v
+ *    - left tables: (a b)
+ *    - pushdown_filter_table: empty
+ *
+ * px_join_filter(v (a b) z)
+ *    - left_tables: (a b)
+ *    - filter_table: v
+ *    - pushdown_filter_table: z
+ */
+
+bool JoinFilterPushdownHintInfo::match_table(const ObQueryHint &query_hint,
+                                             ObTableInHint table,
+                                             const TableItem *table_item) const
+{
+  return (table.qb_name_.empty() || 0 == table.qb_name_.case_compare(table_item->qb_name_))
+         && table.is_match_table_item(query_hint.cs_type_, *table_item);
+}
+int JoinFilterPushdownHintInfo::check_use_join_filter_v2(const TableItem *table_item,
+                                                         const TableItem *view_tableitem,
+                                                         const ObQueryHint &query_hint,
+                                                         bool part_join_filter,
+                                                         bool &can_use,
+                                                         const ObJoinFilterHint *&force_hint) const
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<const ObJoinFilterHint*> &join_filters = part_join_filter ? part_join_filter_hints_ :
+                                                                             join_filter_hints_;
+  const ObJoinFilterHint* current_hint = NULL;
+  bool found = false;
+  bool found_one = false;
+  ObTableInHint table;
+  for (int64_t i = 0; OB_SUCC(ret) && !found && i < join_filters.count(); ++i) {
+    const ObJoinFilterHint *hint;
+    if (OB_ISNULL(hint = join_filters.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (hint->get_left_tables().empty() || hint->get_pushdown_filter_table().table_name_.empty()) {
+      // skip those with left table empty or with no pushdown filter table
+    } else if (OB_FALSE_IT(table = hint->get_pushdown_filter_table())) {
+    } else if (match_table(query_hint, table, table_item)) {
+      current_hint = hint;
+      found_one = true;
+      if (hint->is_disable_hint()) {
+        found = true;
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !found_one && !found && i < join_filters.count(); ++i) {
+    const ObJoinFilterHint *hint;
+    if (OB_ISNULL(hint = join_filters.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (hint->get_left_tables().empty()) {
+      // skip those with left table empty
+    } else if (OB_FALSE_IT(table = (hint->get_pushdown_filter_table().table_name_.empty()) ?
+                                   hint->get_filter_table() : hint->get_pushdown_filter_table())) {
+    } else if (match_table(query_hint, table, table_item) || (hint->get_pushdown_filter_table().table_name_.empty() &&
+                                           match_table(query_hint, table, view_tableitem))) {
+      current_hint = hint;
+      found_one = true;
+      if (hint->is_disable_hint()) {
+        found = true;
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !found_one && !found && i < join_filters.count(); ++i) {
+    const ObJoinFilterHint *hint;
+    if (OB_ISNULL(hint = join_filters.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (!hint->get_left_tables().empty() || !hint->get_pushdown_filter_table().table_name_.empty()) {
+    } else if (OB_FALSE_IT(table = (hint->get_pushdown_filter_table().table_name_.empty()) ?
+                                   hint->get_filter_table() : hint->get_pushdown_filter_table())) {
+    } else if (match_table(query_hint, table, table_item) || (hint->get_pushdown_filter_table().table_name_.empty() &&
+                                           match_table(query_hint, table, view_tableitem))) {
+      current_hint = hint;
+      if (hint->is_disable_hint()) {
+        found = true;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (NULL != current_hint) {
+    can_use = current_hint->is_enable_hint();
+    force_hint = can_use ? current_hint : NULL;
+  } else if (query_hint.has_outline_data()) {
+    can_use = false;
+    force_hint = NULL;
+  } else {
+    can_use = !config_disable_;
+    force_hint = NULL;
+  }
+  return ret;
+}
 int JoinFilterPushdownHintInfo::check_use_join_filter(const ObDMLStmt &stmt,
                                                       const ObQueryHint &query_hint,
                                                       uint64_t filter_table_id,

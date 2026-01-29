@@ -6849,24 +6849,8 @@ int ObSelectLogPlan::create_one_window_function(CandidatePlan &candidate_plan,
                                                         prefix_pos,
                                                         all_plans))) {
         LOG_WARN("failed to create hash local dist win func window function", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    has_topn_plan = (win_func_helper.use_topn_ || win_func_helper.use_part_topn_) &&
-                     plan_count >= 0 && plan_count < all_plans.count();
-    if (has_topn_plan) {
-      LOG_TRACE("skip create range/list dist window");
-      OPT_TRACE("skip create range/list dist window");
-    }
-  }
-  for (uint64_t i = WinDistAlgo::WIN_DIST_NONE; OB_SUCC(ret) && !has_topn_plan && i <= WinDistAlgo::WIN_DIST_LIST; i = (i << 1)) {
-    if (win_dist_methods & i) {
-      WinDistAlgo win_dist_algo = get_win_dist_algo(i);
-      if (WinDistAlgo::WIN_DIST_RANGE == win_dist_algo ||
-          WinDistAlgo::WIN_DIST_LIST == win_dist_algo) {
-        // range-type window need a sort before window op (partition topn is not sufficient)
-        // see DIMA-2025101600111453350 for more info
+      } else if (WinDistAlgo::WIN_DIST_RANGE == win_dist_algo ||
+                WinDistAlgo::WIN_DIST_LIST == win_dist_algo) {
         if (OB_FAIL(create_range_list_dist_win_func(top,
                                                     win_func_helper,
                                                     all_plans))) {
@@ -7996,6 +7980,9 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
   const ObIArray<OrderItem> &sort_keys = win_func_helper.sort_keys_;
   bool single_part_parallel = false;
   bool is_partition_wise = false;
+  bool use_part_topn = false;
+  bool use_topn = false;
+  OrderItem hash_sortkey;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(top));
@@ -8007,15 +7994,29 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                            exch_info,
                                                            random_expr))) {
     LOG_WARN("failed to get range list win func exchange info", K(ret));
-} else if (OB_FAIL(allocate_sort_and_exchange_as_top(top,
+  } else if (OB_FALSE_IT(use_part_topn = need_sort && win_func_helper.part_cnt_ > 0 &&
+                                         !win_func_helper.force_normal_sort_ &&
+                                         win_func_helper.enable_topn_ &&
+                                         prefix_pos == 0 &&
+                                         NULL != win_func_helper.topn_const_ &&
+                                         range_dist_keys.count() == win_func_helper.sort_keys_.count())) {
+  } else if (OB_FALSE_IT(use_topn = !win_func_helper.force_hash_sort_ &&
+                                     win_func_helper.enable_topn_ &&
+                                     win_func_helper.partition_exprs_.empty() &&
+                                     NULL != win_func_helper.topn_const_ &&
+                                     range_dist_keys.count() == win_func_helper.sort_keys_.count())) {
+  } else if (use_part_topn && OB_FAIL(create_hash_sortkey(win_func_helper.part_cnt_, sort_keys, hash_sortkey))) {
+    LOG_WARN("failed to create hash sort key", K(ret), K(win_func_helper.part_cnt_), K(sort_keys));
+  } else if (OB_FAIL(allocate_sort_and_exchange_as_top(top,
                                                      exch_info,
                                                      range_dist_keys,
                                                      need_sort,
                                                      prefix_pos,
                                                      top->get_is_local_order(),
-                                                     NULL,
+                                                     (use_part_topn || use_topn) ? win_func_helper.topn_const_ : NULL,
                                                      false,
-                                                     NULL))) {
+                                                     use_part_topn ? &hash_sortkey : NULL,
+                                                     true))) {
     LOG_WARN("failed to allocate sort and exchange as top", K(ret));
   } else if (OB_FAIL(set_exchange_random_expr(top, random_expr))) {
     LOG_WARN("failed to set exchange random expr", K(ret));
@@ -8024,7 +8025,7 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                      single_part_parallel,
                                                      is_partition_wise,
                                                      false, /* use hash sort */
-                                                     false, /* use hash topn sort */
+                                                     use_part_topn || use_topn, /* use hash topn sort for outline hint */
                                                      ObLogWindowFunction::WindowFunctionRoleType::NORMAL,
                                                      range_dist_keys,
                                                      range_dist_keys.count(),

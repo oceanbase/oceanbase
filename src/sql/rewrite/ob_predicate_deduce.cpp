@@ -840,10 +840,17 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
   int64_t param_idx = -1;
   ObRawExpr *param_expr = NULL;
   const TableItem* table_item = NULL;
-  if (OB_ISNULL(pred) || OB_ISNULL(param_expr = pred->get_param_expr(0))) {
+  bool use_new_version = false;
+  if (OB_ISNULL(pred) || OB_ISNULL(param_expr = pred->get_param_expr(0)) || OB_ISNULL(stmt_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("prediate is invalid", K(ret), K(pred), K(param_expr));
-  } else if (OB_FAIL(find_similar_expr(pred, general_preds, first_params))) {
+  } else if (OB_ISNULL(stmt_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query ctx is null", K(ret));
+  } else if (FALSE_IT(use_new_version = stmt_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2))) {
+  } else if (!use_new_version && OB_FAIL(find_similar_expr(pred, general_preds, first_params))) {
+    LOG_WARN("failed to find similar expr", K(ret));
+  } else if (use_new_version && OB_FAIL(find_exclusive_expr(pred, general_preds, first_params))) {
     LOG_WARN("failed to find general expr", K(ret));
   } else if (ObOptimizerUtil::find_item(input_exprs_, param_expr, &param_idx)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
@@ -863,14 +870,18 @@ int ObPredicateDeduce::get_equal_exprs(ObRawExpr *pred,
         // do nothing
       } else if (ObOptimizerUtil::find_item(first_params, expr)) {
         // do nothing
-      } else if (OB_ISNULL(table_item = stmt_.get_table_item_by_id(
-                                              static_cast<const ObColumnRefRawExpr*>(real_expr)->get_table_id()))) {
+      } else if (!use_new_version
+                 && OB_ISNULL(table_item = stmt_.get_table_item_by_id(static_cast<const ObColumnRefRawExpr *>(real_expr)
+                                                                      ->get_table_id()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (T_OP_IN == pred->get_expr_type() &&
-                 (!table_item->is_basic_table() ||
-                  has_raw_const_equal_condition(i))) {
+      } else if (!use_new_version
+                 && (T_OP_IN == pred->get_expr_type()
+                     && (!table_item->is_basic_table() || has_raw_const_equal_condition(i)))) {
         // deduce IN predicates for column parameters that only have basic tables and do not contain const equal predicates and IN predicates
+      } else if (use_new_version && has_raw_const_equal_condition(i)) {
+        // if ther is already a raw const equal condition, we don't need to
+        // deduce a general predicate.
         // do nothing
       } else if (param_expr->get_result_type().get_type() != expr->get_result_type().get_type()) {
         need_check_type_safe = is_type_safe(param_idx, i);
@@ -993,6 +1004,110 @@ int ObPredicateDeduce::find_similar_expr(ObRawExpr *pred,
       }
     }
     if (OB_SUCC(ret) && is_similar) {
+      if (OB_FAIL(first_params.push_back(general_preds.at(i)->get_param_expr(0)))) {
+        LOG_WARN("failed to push back param expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPredicateDeduce::is_similar_expr(ObRawExpr *pred,
+                                       ObRawExpr *general_pred,
+                                       bool &is_similar)
+{
+  int ret = OB_SUCCESS;
+  ObExprEqualCheckContext equal_ctx;
+  equal_ctx.override_const_compare_ = true;
+  if (OB_ISNULL(pred) || OB_ISNULL(general_pred)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param expr", K(ret), K(pred), K(general_pred));
+  }
+  is_similar = false;
+  if (general_pred == pred) {
+    is_similar = true;
+  } else if (general_pred->get_expr_type() == pred->get_expr_type() &&
+             general_pred->get_param_count() == pred->get_param_count()) {
+    is_similar = true;
+    for (int64_t j = 1; OB_SUCC(ret) && is_similar && j < pred->get_param_count(); ++j) {
+      ObRawExpr *param1 = NULL;
+      ObRawExpr *param2 = NULL;
+      if (OB_ISNULL(param1 = pred->get_param_expr(j)) ||
+          OB_ISNULL(param2 = general_pred->get_param_expr(j))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param expr is null", K(ret));
+      } else {
+        is_similar = param1->same_as(*param2, &equal_ctx);
+      }
+    }
+  } else {
+    is_similar = false;
+  }
+  return ret;
+}
+
+/**
+ * For columns that already have general predicates, decide whether to reject
+ * deducing new predicates. For example, if a column already has an 'in'
+ * predicate, we won't deduce new 'in' predicates or '!=' predicates.  This is
+ * to avoid consuming too many resources on unnecessary predicate deduction.
+ *
+ * This 'exclusion' relationship is summarized in the table below:
+ * Row headers represent existing predicate types, column headers represent
+ * predicate types to be deduced.
+ * × means reject new deduced predicate, √ means allow.
+ *
+ * |      | !=  | like | in  |
+ * |------|-----|------|-----|
+ * | !=   | √   | √    | √   |
+ * | like | ×   | √    | ×   |
+ * | in   | ×   | √    | ×   |
+ *
+ * In addition, we also need to avoid deducing duplicate predicates.
+ */
+int ObPredicateDeduce::find_exclusive_expr(ObRawExpr *pred,
+                                           ObIArray<ObRawExpr *> &general_preds,
+                                           ObIArray<ObRawExpr *> &first_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pred)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param expr", K(ret), K(pred));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < general_preds.count(); ++i) {
+    bool is_exclusive = true;
+    bool is_similar = false;
+    if (OB_ISNULL(general_preds.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("general predicate is null", K(ret));
+    } else if (general_preds.at(i) == pred) {
+      is_exclusive = true;
+    } else if (T_OP_NE == pred->get_expr_type()) {
+      if (T_OP_NE == general_preds.at(i)->get_expr_type()) {
+        is_exclusive = false;
+      } else {
+        is_exclusive = true;
+      }
+    } else if (T_OP_IN == pred->get_expr_type()) {
+      if (T_OP_NE == general_preds.at(i)->get_expr_type()) {
+        is_exclusive = false;
+      } else {
+        is_exclusive = true;
+      }
+    } else if (T_OP_LIKE == pred->get_expr_type()) {
+      is_exclusive = false;
+    }
+
+    // Exclude similar to avoid duplicate predicates
+    // for example, 'a.c1 = b.c1 and a.c1 like 'a%' and b.c1 like 'a%', we
+    // shouldn't deduce new 'like 'a%'' predicates. If we don't do this, the
+    // transformation might not converge.
+    if (OB_SUCC(ret) && !is_exclusive && OB_FAIL(is_similar_expr(pred, general_preds.at(i), is_similar))) {
+      LOG_WARN("failed to check is similar", K(ret));
+    } else if (is_similar) {
+      is_exclusive = true;
+    }
+    if (OB_SUCC(ret) && is_exclusive) {
       if (OB_FAIL(first_params.push_back(general_preds.at(i)->get_param_expr(0)))) {
         LOG_WARN("failed to push back param expr", K(ret));
       }

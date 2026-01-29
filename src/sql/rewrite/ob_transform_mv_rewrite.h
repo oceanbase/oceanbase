@@ -33,6 +33,8 @@ class ObIArray;
 namespace sql
 {
 
+struct ObNotNullContext;
+
 struct PtrKey
 {
   PtrKey () : ptr_(NULL) {}
@@ -186,6 +188,37 @@ private:
     ObSEArray<ObExprConstraint, 4> expr_cons_info_;
   };
 
+  struct ColumnRangeDesc {
+    ColumnRangeDesc ()
+      : left_open_greatest_(NULL),
+        left_close_greatest_(NULL),
+        right_open_least_(NULL),
+        right_close_least_(NULL) {}
+    int update_borders(ObRawExpr *range_cond);
+    int update_border(ObRawExpr *range_cond,
+                      bool is_left,
+                      bool is_open);
+    int compute_range(ObRawExprFactory *expr_factory,
+                      const ObSQLSessionInfo *session_info);
+    int get_greatest_or_least_expr(bool is_greatest,
+                                   ObIArray<ObRawExpr *> &param_exprs,
+                                   ObRawExprFactory *expr_factory,
+                                   const ObSQLSessionInfo *session_info,
+                                   ObRawExpr *&func_expr);
+    int get_const_expr_in_range_cond(ObRawExpr *range_cond,
+                                     ObRawExpr *&const_expr,
+                                     bool &is_left_border,
+                                     bool &is_open_border);
+    ObRawExpr *left_open_greatest_;
+    ObRawExpr *left_close_greatest_;
+    ObRawExpr *right_open_least_;
+    ObRawExpr *right_close_least_;
+    ObSEArray<ObRawExpr*, 2> left_open_borders_;
+    ObSEArray<ObRawExpr*, 2> left_close_borders_;
+    ObSEArray<ObRawExpr*, 2> right_open_borders_;
+    ObSEArray<ObRawExpr*, 2> right_close_borders_;
+  };
+
 private:
   virtual int need_transform(const common::ObIArray<ObParentDMLStmt> &parent_stmts,
                              const int64_t current_level,
@@ -301,12 +334,56 @@ private:
   int map_to_mv_column(MvRewriteHelper &helper,
                        const ObColumnRefRawExpr *query_expr,
                        ObColumnRefRawExpr *&mv_expr);
+  int map_to_query_column(MvRewriteHelper &helper,
+                          const ObColumnRefRawExpr *mv_expr,
+                          ObColumnRefRawExpr *&query_expr);
   int check_mv_equal_set_used(MvRewriteHelper &helper,
                               ObIArray<int64_t> &mv_map_query_ids,
                               int64_t current_query_es_id);
-  int check_other_predicate(MvRewriteHelper &helper,
-                            const ObIArray<ObRawExpr*> &mv_conds,
-                            const ObIArray<ObRawExpr*> &query_conds);
+  int check_identical_predicate(MvRewriteHelper &helper,
+                                const ObIArray<ObRawExpr*> &mv_conds,
+                                const ObIArray<ObRawExpr*> &query_conds);
+  int add_query_compensation_pred(MvRewriteHelper &helper,
+                                  ObRawExpr *mv_pred);
+  int add_query_compensation_preds(MvRewriteHelper &helper,
+                                   const ObIArray<ObRawExpr*> &mv_range_conds);
+  int check_range_predicate(MvRewriteHelper &helper,
+                            ObIArray<ObRawExpr*> &mv_range_conds,
+                            ObIArray<ObRawExpr*> &query_range_conds);
+  int check_column_range_validity(MvRewriteHelper &helper,
+                                  const ObIArray<ObRawExpr*> &mv_range_conds,
+                                  const ObIArray<ObRawExpr*> &query_range_conds);
+  int build_column_range_desc(const ObIArray<ObRawExpr*> &range_conds,
+                              ColumnRangeDesc &col_range_desc);
+  int inner_check_column_range_validity(MvRewriteHelper &helper,
+                                        ColumnRangeDesc &mv_col_range_desc,
+                                        ColumnRangeDesc &query_col_range_desc,
+                                        ObRawExpr *&current_range_constraint,
+                                        bool &is_valid);
+  int build_range_constraint(ObRawExprCopier &mv_expr_copier,
+                             ColumnRangeDesc &mv_col,
+                             ColumnRangeDesc &query_col,
+                             ObRawExpr* &range_constraint);
+  int build_left_border_constraint(ObRawExprCopier &mv_expr_copier,
+                                   ColumnRangeDesc &mv_col,
+                                   ColumnRangeDesc &query_col,
+                                   ObRawExpr* &left_border_constraint);
+  int build_right_border_constraint(ObRawExprCopier &mv_expr_copier,
+                                    ColumnRangeDesc &mv_col,
+                                    ColumnRangeDesc &query_col,
+                                    ObRawExpr* &right_border_constraint);
+  int merge_conds(ObRawExpr* &left_cond,
+                  ObRawExpr* &right_cond,
+                  ObItemType merge_type,
+                  ObRawExpr* &output_cond);
+  int create_single_bound_constraint(ObRawExprCopier &mv_expr_copier,
+                                     ObRawExpr *mv_col_range,
+                                     ObRawExpr *query_col_range,
+                                     ObItemType cmp_type,
+                                     ObRawExpr* &cmp_expr);
+  int split_single_column_range_preds(ObRawExpr *target_column,
+                                      ObIArray<ObRawExpr *> &all_range_preds,
+                                      ObIArray<ObRawExpr *> &column_range_preds);
   int check_compensation_preds_validity(MvRewriteHelper &helper,
                                         bool &is_valid);
   int is_same_condition(MvRewriteHelper &helper,
@@ -375,13 +452,15 @@ private:
   int check_condition_match_index(MvRewriteHelper &helper,
                                   bool &is_match_index);
   int add_param_constraint(MvRewriteHelper &helper);
-
+  int classify_predicates(const ObIArray<ObRawExpr*> &input_conds,
+                          ObIArray<ObRawExpr*> &equal_conds,
+                          ObIArray<ObRawExpr*> &range_conds,
+                          ObIArray<ObRawExpr*> &other_conds);
+  int check_range_cond(ObNotNullContext &not_null_ctx,
+                       ObRawExpr *expr,
+                       bool &is_range_cond);
   static int find_query_rel_id(MvRewriteHelper &helper, int64_t mv_relid);
-  static int classify_predicates(const ObIArray<ObRawExpr*> &input_conds,
-                                 ObIArray<ObRawExpr*> &equal_conds,
-                                 ObIArray<ObRawExpr*> &other_conds);
   static bool is_equal_cond(ObRawExpr *expr);
-  static bool is_range_cond(ObRawExpr *expr);
 
 private:
   ObArenaAllocator allocator_;

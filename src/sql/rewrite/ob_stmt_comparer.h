@@ -36,6 +36,17 @@ enum QueryRelation
 };
 
 struct ObStmtMapInfo {
+
+  /**
+   * Property of WHERE condition for temp table extraction.
+   * Indicates how a WHERE predicate can be handled when extracting common temp table.
+   */
+  enum CondProperty {
+    NONE = 0,            // cannot be pulled up to HAVING
+    PULLUP_GROUP = 1,    // can be directly pulled up through GROUP BY
+    SIMPLE_COND = 2,     // simple equality like "c1 = const", need to restore c1 to GROUP BY first
+    CONV_TO_MINMAX = 3   // can be converted to MIN/MAX in HAVING (e.g., c1 > 0 -> MAX(c1) > 0)
+  };
   common::ObSEArray<common::ObSEArray<int64_t, 4>, 4> view_select_item_map_;
   common::ObSEArray<ObExprConstraint, 4> expr_cons_map_;
   common::ObSEArray<ObPCConstParamInfo, 4> const_param_map_;
@@ -47,6 +58,7 @@ struct ObStmtMapInfo {
   common::ObSEArray<int64_t, 4> group_map_;
   common::ObSEArray<int64_t, 4> having_map_;
   common::ObSEArray<int64_t, 4> select_item_map_;
+  common::ObSEArray<CondProperty, 4> cond_property_map_;
   bool is_table_equal_;
   bool is_from_equal_;
   bool is_semi_info_equal_;
@@ -89,7 +101,15 @@ struct ObStmtMapInfo {
                K_(view_select_item_map),
                K_(is_order_equal),
                K_(is_distinct_equal),
-               K_(left_can_be_replaced));
+               K_(left_can_be_replaced),
+               K_(is_table_equal),
+               K_(is_from_equal),
+               K_(is_semi_info_equal),
+               K_(is_cond_equal),
+               K_(is_group_equal),
+               K_(is_having_equal),
+               K_(is_select_item_equal),
+               K_(is_qualify_filter_equal));
 };
 
 struct StmtCompareHelper {
@@ -286,7 +306,8 @@ public:
                                     QueryRelation &relation,
                                     bool is_strict_select_list = false,
                                     bool need_check_select_items = true,
-                                    bool is_in_same_stmt = true);
+                                    bool is_in_same_stmt = true,
+                                    bool force_check_group_by = false);
   static int can_compare_by_set_semantics(const ObSelectStmt *stmt,
                                           bool ignore_filling_null,
                                           bool &bret);
@@ -334,6 +355,12 @@ public:
                                const ObRawExpr *right,
                                ObStmtCompareContext &context,
                                bool &is_same);
+
+  static int compute_cond_property_map(const ObSelectStmt *stmt,
+                                       ObStmtMapInfo &map_info);
+  static int check_where_pullup_to_having(const ObSelectStmt *stmt,
+                                          const ObRawExpr *where_pred,
+                                          bool &can_pullup);
 
   static int compute_semi_infos_map(const ObDMLStmt *first,
                                     const ObDMLStmt *second,

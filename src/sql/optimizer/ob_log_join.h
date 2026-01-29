@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OB_LOG_JOIN_H
 #include "ob_log_operator_factory.h"
 #include "ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "ob_join_order.h"
 #include "sql/engine/join/ob_join_filter_material_control_info.h"
 
@@ -22,6 +23,8 @@ namespace oceanbase
 namespace sql
 {
   class ObLogicalOperator;
+  template<typename R, typename C>
+  class PlanVisitor;
   class ObLogJoin : public ObLogicalOperator
   {
   public:
@@ -50,7 +53,6 @@ namespace sql
         above_pushdown_right_params_(plan.get_allocator())
     { }
     virtual ~ObLogJoin() {}
-
     inline void set_join_type(const ObJoinType join_type) { join_type_ = join_type; }
     inline ObJoinType get_join_type() const { return join_type_; }
     inline bool is_right_semi_or_anti_join() const { return join_type_ == RIGHT_SEMI_JOIN ||
@@ -67,6 +69,19 @@ namespace sql
     inline bool is_shared_hash_join() const
     { return HASH_JOIN == join_algo_ && DIST_BC2HOST_NONE == join_dist_algo_; }
     int is_left_unique(bool &left_unique) const;
+    inline bool is_left_join()
+    {
+      return join_type_ == LEFT_OUTER_JOIN ||
+             join_type_ == LEFT_ANTI_JOIN ||
+             join_type_ == LEFT_SEMI_JOIN;
+    }
+
+    inline bool is_right_join()
+    {
+      return join_type_ == RIGHT_OUTER_JOIN ||
+             join_type_ == RIGHT_ANTI_JOIN ||
+             join_type_ == RIGHT_SEMI_JOIN;
+    }
     inline int add_join_condition(ObRawExpr *expr) { return join_conditions_.push_back(expr); }
     inline int add_join_filter(ObRawExpr *expr) { return join_filters_.push_back(expr); }
     const common::ObIArray<ObRawExpr *> &get_equal_join_conditions() const { return join_conditions_; }
@@ -152,7 +167,9 @@ namespace sql
     inline void set_px_batch_rescan(bool flag) { enable_px_batch_rescan_ = flag; }
 
     int set_join_filter_infos(const common::ObIArray<JoinFilterInfo*> &infos) { return join_filter_infos_.assign(infos); }
+    int append_join_filter_infos(const common::ObIArray<JoinFilterInfo*> &infos) { return append(join_filter_infos_, infos); }
     const common::ObIArray<JoinFilterInfo*> &get_join_filter_infos() const { return join_filter_infos_; }
+    common::ObIArray<JoinFilterInfo*> &get_join_filter_infos() { return join_filter_infos_; }
 
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }

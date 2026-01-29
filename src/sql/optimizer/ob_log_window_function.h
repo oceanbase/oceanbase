@@ -13,11 +13,15 @@
 #ifndef OCEANBASE_SQL_OB_LOG_WINDOW_FUNCTION_H
 #define OCEANBASE_SQL_OB_LOG_WINDOW_FUNCTION_H
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_set.h"
+
 namespace oceanbase
 {
 namespace sql
 {
+  template<typename R, typename C>
+  class PlanVisitor;
   class ObLogWindowFunction : public ObLogicalOperator
   {
   public:

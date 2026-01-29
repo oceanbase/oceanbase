@@ -1746,6 +1746,9 @@ DEF_BOOL(_enable_nlj_spf_use_rich_format, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_index_merge, OB_TENANT_PARAMETER, "False",
          "enable index merge optimization",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_index_merge_threshold_for_multivalue, OB_TENANT_PARAMETER, "100", "[0,1024]",
+        "threshold for json contains rewrite optimization, 0 means disable",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_index_merge_intersect_bitmap, OB_TENANT_PARAMETER, "True",
          "enable bitmap optimization for index merge intersect",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2135,6 +2138,12 @@ DEF_BOOL(_enable_dblink_reuse_connection, OB_TENANT_PARAMETER, "True",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_with_subquery, OB_TENANT_PARAMETER, "0", "[0,2]",
         "WITH subquery transformation,0: optimizer,1: materialize,2: inline",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_rtf_creator_max_row_count, OB_TENANT_PARAMETER, "64000000", "[0,)",
+        "The maximum estimated row count for a join’s build side to qualify as a join filter creator",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_rtf_user_min_partition_count, OB_TENANT_PARAMETER, "1000", "[0,)",
+        "The minimum partition count required for a table to qualify as a user for a partition join filter",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_max_dblink_conn_per_observer, OB_TENANT_PARAMETER, "256", "[0,)",
         "The maximum limit on the number of connections that can be opened simultaneously for a specific observer for any DBLink, default value is 256",
@@ -3092,7 +3101,6 @@ DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000",
 DEF_BOOL(_enable_runtime_filter_adaptive_apply, OB_TENANT_PARAMETER, "True",
          "Enable or disable runtime filter adaptive apply.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_BOOL(_update_all_columns_for_trigger, OB_TENANT_PARAMETER, "True",
          "control the switch determining whether the UPDATE statement always updates all columns when the table contains a row-level BEFORE UPDATE trigger.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -14,6 +14,7 @@
 #define _OB_LOG_JOIN_FILTER_H 1
 #include "lib/container/ob_array.h"
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/resolver/dml/ob_sql_hint.h"
 #include "sql/engine/px/ob_px_basic_info.h"
@@ -24,6 +25,9 @@ namespace oceanbase
 {
 namespace sql
 {
+
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogJoinFilter : public ObLogicalOperator
 {

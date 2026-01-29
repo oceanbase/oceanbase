@@ -1070,6 +1070,22 @@ int ObSqlPlan::print_constraint_info(char *buf,
       ret = BUF_PRINTF("NOT_PRECISE");
     } else if (PRE_CALC_ROWID == info.expect_result_) {
       ret = BUF_PRINTF("ROWID");
+    } else if (PRE_CALC_JSON_TYPE == info.expect_result_) {
+      int32_t json_type = ObJsonTypeConstraint::get_json_type(info.cons_extra_.extra_);
+      int32_t element_count = ObJsonTypeConstraint::get_element_count(info.cons_extra_.extra_);
+      if (json_type == ObJsonTypeConstraint::JSON_TYPE_SCALAR) {
+        ret = BUF_PRINTF("JSON_TYPE_SCALAR");
+      } else if (json_type == ObJsonTypeConstraint::JSON_TYPE_ARRAY) {
+        ret = BUF_PRINTF("JSON_TYPE_ARRAY_%d_ELEMENT", element_count);
+      } else if (json_type == ObJsonTypeConstraint::JSON_TYPE_JSON_CONTAINS_NO_INDEX_MERGE) {
+        ret = BUF_PRINTF("JSON_TYPE_ARRAY_GREATER_%d_ELEMENT", element_count);
+      } else if (json_type == ObJsonTypeConstraint::JSON_TYPE_NOT_ARRAY_OR_SCALAR) {
+        ret = BUF_PRINTF("JSON_TYPE_NOT_ARRAY_OR_SCALAR");
+      }
+    } else if (PRE_CALC_JSON_CONTAINS_PRECISE == info.expect_result_) {
+      ret = BUF_PRINTF("JSON_CONTAINS_PRECISE");
+    } else if (PRE_CALC_JSON_CONTAINS_NOT_PRECISE == info.expect_result_) {
+      ret = BUF_PRINTF("JSON_CONTAINS_NOT_PRECISE");
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {

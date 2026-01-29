@@ -113,7 +113,7 @@ int ObAggrExprPushUpAnalyzer::analyze_aggr_param_expr(ObRawExpr *&param_expr,
       }
     }
     while (OB_SUCC(ret) && T_REF_ALIAS_COLUMN == param_expr->get_expr_type()) {
-      if (OB_ISNULL(param_expr = static_cast<ObAliasRefRawExpr*>(param_expr)->get_ref_expr())) {
+      if (OB_ISNULL(param_expr = static_cast<ObAliasRefRawExpr*>(param_expr)->get_ref_select_expr())) {
         //去掉alias expr
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("alias ref expr is null", K(ret));
@@ -396,7 +396,7 @@ int ObAggrExprPushUpAnalyzer::remove_alias_exprs()
       LOG_WARN("exec column is null", K(ret));
     }
     while (OB_SUCC(ret) && ref_expr->get_expr_type() == T_REF_ALIAS_COLUMN) {
-      if (OB_ISNULL(ref_expr = static_cast<ObAliasRefRawExpr *>(ref_expr)->get_ref_expr())) {
+      if (OB_ISNULL(ref_expr = static_cast<ObAliasRefRawExpr *>(ref_expr)->get_ref_select_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("alias ref expr is null", K(ret));
       }
@@ -416,7 +416,7 @@ int ObAggrExprPushUpAnalyzer::remove_alias_exprs(ObRawExpr* &expr)
     LOG_WARN("expr is null", K(ret));
   } else if (expr->get_expr_type() == T_REF_ALIAS_COLUMN) {
     while (OB_SUCC(ret) && expr->get_expr_type() == T_REF_ALIAS_COLUMN) {
-      if (OB_ISNULL(expr = static_cast<ObAliasRefRawExpr *>(expr)->get_ref_expr())) {
+      if (OB_ISNULL(expr = static_cast<ObAliasRefRawExpr *>(expr)->get_ref_select_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("alias ref expr is null", K(ret));
       }

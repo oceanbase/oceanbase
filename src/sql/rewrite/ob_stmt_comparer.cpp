@@ -14,6 +14,7 @@
 
 #include "ob_stmt_comparer.h"
 #include "ob_transform_utils.h"
+#include "ob_transform_predicate_move_around.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 
 
@@ -40,6 +41,7 @@ void ObStmtMapInfo::reset()
   is_qualify_filter_equal_ = false;
   equal_param_map_.reset();
   view_select_item_map_.reset();
+  cond_property_map_.reset();
 }
 
 int ObStmtMapInfo::assign(const ObStmtMapInfo& other)
@@ -62,6 +64,8 @@ int ObStmtMapInfo::assign(const ObStmtMapInfo& other)
   } else if (OB_FAIL(equal_param_map_.assign(other.equal_param_map_))) {
     LOG_WARN("failed to assign table map", K(ret));
   } else if (OB_FAIL(view_select_item_map_.assign(other.view_select_item_map_))) {
+    LOG_WARN("failed to assign table map", K(ret));
+  } else if (OB_FAIL(cond_property_map_.assign(other.cond_property_map_))) {
     LOG_WARN("failed to assign table map", K(ret));
   } else {
     is_table_equal_ = other.is_table_equal_;
@@ -595,7 +599,8 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
                                            QueryRelation &relation,
                                            bool is_strict_select_list,
                                            bool need_check_select_items,
-                                           bool is_in_same_stmt)
+                                           bool is_in_same_stmt,
+                                           bool force_check_group_by)
 {
   int ret = OB_SUCCESS;
   int64_t first_count = 0;
@@ -702,8 +707,10 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
     }
 
     // check group by exprs
-    if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
+    if (OB_SUCC(ret) &&
+        (QueryRelation::QUERY_UNCOMPARABLE != relation || force_check_group_by)) {
       bool is_consistent = false;
+      QueryRelation tmp_relation = relation;
       first_count = first_sel->get_group_exprs().count();
       second_count = second_sel->get_group_exprs().count();
       int64_t first_rollup_count = first_sel->get_rollup_exprs().count();
@@ -720,8 +727,9 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
         relation = QueryRelation::QUERY_LEFT_SUBSET;
         LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
       } else if ((first_sel->get_aggr_item_size() > 0 ||
-           second_sel->get_aggr_item_size() > 0)
-           && relation != QueryRelation::QUERY_EQUAL) {
+                  second_sel->get_aggr_item_size() > 0) &&
+                 relation != QueryRelation::QUERY_EQUAL &&
+                 !force_check_group_by) {
         relation = QueryRelation::QUERY_UNCOMPARABLE;
         LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
       } else if (first_rollup_count != second_rollup_count ||
@@ -773,12 +781,17 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
         map_info.is_group_equal_ = true;
         LOG_TRACE("succeed to check group by map", K(relation), K(map_info));
       }
+      if (OB_SUCC(ret) && tmp_relation == QueryRelation::QUERY_UNCOMPARABLE) {
+        relation = tmp_relation;
+      }
     }
 
     // check having exprs
-    if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
+    if (OB_SUCC(ret) && (QueryRelation::QUERY_UNCOMPARABLE != relation ||
+        (force_check_group_by && map_info.is_group_equal_))) {
       first_count = first_sel->get_having_expr_size();
       second_count = second_sel->get_having_expr_size();
+      QueryRelation tmp_relation = relation;
       QueryRelation this_relation;
       if (0 == first_count && 0 == second_count) {
         map_info.is_having_equal_ = true;
@@ -809,6 +822,9 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
       } else {
         relation = QueryRelation::QUERY_UNCOMPARABLE;
         LOG_TRACE("succeed to check having map", K(relation), K(map_info));
+      }
+      if (OB_SUCC(ret) && tmp_relation == QueryRelation::QUERY_UNCOMPARABLE) {
+        relation = tmp_relation;
       }
     }
 
@@ -1309,6 +1325,141 @@ int ObStmtComparer::is_same_condition(const ObRawExpr *left,
       // do nothing
     } else {
       is_same = true;
+    }
+  }
+  return ret;
+}
+
+/**
+ * During predicate derivation, a HAVING predicate like "HAVING MAX(c1) > 0" can derive
+ * a redundant WHERE predicate "WHERE c1 > 0". This function checks whether we can reverse
+ * this derivation process: instead of keeping the redundant WHERE predicate, we can remove
+ * it and regenerate "MAX(c1) > 0" directly in the HAVING clause.
+ *
+ * This optimization is important for temp table transformation. The redundant WHERE predicate
+ * may cause two similar statements to be considered different, preventing them from being
+ * merged into a single temp table. By converting the WHERE predicate back to HAVING, we can
+ * eliminate this difference and enable more temp table reuse opportunities.
+ *
+ * For example:
+ *   Original: SELECT MAX(c1) FROM t WHERE c1 > 0 GROUP BY ... HAVING MAX(c1) > 0
+ *   After:    SELECT MAX(c1) FROM t GROUP BY ... HAVING MAX(c1) > 0
+ *   The "WHERE c1 > 0" is semantically redundant and can be safely removed.
+ */
+int ObStmtComparer::check_where_pullup_to_having(const ObSelectStmt *stmt,
+                                                 const ObRawExpr *where_pred,
+                                                 bool &can_pullup)
+{
+  int ret = OB_SUCCESS;
+  can_pullup = false;
+
+  if (OB_ISNULL(stmt) || OB_ISNULL(where_pred)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or where pred is null", K(ret), K(stmt), K(where_pred));
+  } else if (stmt->get_aggr_item_size() != 1 ||
+             stmt->has_rollup() ||
+             stmt->is_scala_group_by()) {
+    can_pullup = false;
+  } else if (where_pred->get_expr_type() < T_OP_LE ||
+             where_pred->get_expr_type() > T_OP_GT) {
+    can_pullup = false;
+  } else if (where_pred->get_param_count() != 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("comparison expr should have 2 params", K(ret));
+  } else {
+    const ObRawExpr *left = where_pred->get_param_expr(0);
+    const ObRawExpr *right = where_pred->get_param_expr(1);
+    ObItemType op_type = where_pred->get_expr_type();
+    const ObAggFunRawExpr *aggr_expr = stmt->get_aggr_item(0);
+
+    if (OB_ISNULL(left) || OB_ISNULL(right)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("left or right is null", K(ret));
+    } else {
+      const ObRawExpr *norm_left = left;
+      const ObRawExpr *norm_right = right;
+      ObItemType norm_op = op_type;
+
+      if (op_type == T_OP_GT) {
+        norm_op = T_OP_LT;
+        norm_left = right;
+        norm_right = left;
+      } else if (op_type == T_OP_GE) {
+        norm_op = T_OP_LE;
+        norm_left = right;
+        norm_right = left;
+      }
+
+      if (OB_ISNULL(aggr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aggr expr is null", K(ret));
+      } else if (aggr_expr->get_real_param_count() != 1) {
+        can_pullup = false;
+      } else {
+        const ObRawExpr *aggr_param = aggr_expr->get_real_param_exprs().at(0);
+        if (OB_ISNULL(aggr_param)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("aggr param is null", K(ret));
+        } else if ((norm_op == T_OP_LT || norm_op == T_OP_LE) &&
+                   aggr_expr->get_expr_type() == T_FUN_MIN &&
+                   norm_left == aggr_param &&
+                   norm_right->is_const_expr()) {
+          can_pullup = true;
+        } else if ((norm_op == T_OP_LT || norm_op == T_OP_LE) &&
+                   aggr_expr->get_expr_type() == T_FUN_MAX &&
+                   norm_left->is_const_expr() &&
+                   norm_right == aggr_param) {
+          can_pullup = true;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObStmtComparer::compute_cond_property_map(const ObSelectStmt *stmt,
+                                              ObStmtMapInfo &map_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (OB_FAIL(map_info.cond_property_map_.prepare_allocate(stmt->get_condition_size()))) {
+    LOG_WARN("failed to preallocate cond property map", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); ++i) {
+      map_info.cond_property_map_.at(i) = ObStmtMapInfo::NONE;
+    }
+    if (stmt->has_group_by()) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < stmt->get_condition_size(); ++j) {
+        ObRawExpr *pred_expr = NULL;
+        ObRawExpr *pullup_group_expr = NULL;
+        bool cur_can_pullup = false;
+        if (OB_ISNULL(pred_expr = const_cast<ObRawExpr*>(stmt->get_condition_expr(j)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("predicate expr is null", K(ret));
+        } else if (!stmt->is_scala_group_by() &&
+                   OB_FAIL(ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(
+                                                            const_cast<ObSelectStmt&>(*stmt),
+                                                            pred_expr,
+                                                            cur_can_pullup))) {
+          LOG_WARN("failed to check predicate pullup validity", K(ret));
+        } else if (cur_can_pullup) {
+          map_info.cond_property_map_.at(j) = ObStmtMapInfo::PULLUP_GROUP;
+        } else if (stmt->get_group_expr_size() > 0 &&
+                   !stmt->has_rollup() &&
+                   pred_expr->has_flag(IS_SIMPLE_COND)) {
+          map_info.cond_property_map_.at(j) = ObStmtMapInfo::SIMPLE_COND;
+        } else {
+          bool can_pullup_to_having = false;
+          if (OB_FAIL(check_where_pullup_to_having(stmt, pred_expr, can_pullup_to_having))) {
+            LOG_WARN("failed to check where pullup to having", K(ret));
+          } else if (can_pullup_to_having) {
+            map_info.cond_property_map_.at(j) = ObStmtMapInfo::CONV_TO_MINMAX;
+          }
+        }
+      }
     }
   }
   return ret;

@@ -307,6 +307,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     px_node_selection_mode_(ObPxNodeSelectionMode::DEFAULT),
     enable_distributed_das_scan_(true),
     enable_topn_runtime_filter_(true),
+    rtf_creator_max_row_count_(-1),
+    rtf_user_min_partition_count_(-1),
     enable_partial_group_by_pushdown_(true),
     enable_partial_limit_pushdown_(true),
     enable_storage_aggr_push_down_(false),
@@ -319,6 +321,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     extend_sql_plan_monitor_metrics_(false),
     enable_delete_insert_scan_(false),
     min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
+    next_op_id_(0),
     enable_hash_groupby_limit_pushdown_(true),
     join_order_enum_threshold_(10),
     max_permutation_(2000),
@@ -573,7 +576,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_use_default_stat() { force_default_stat_ = true; }
   void set_cost_evaluation() { eval_plan_cost_ = true; }
   bool is_cost_evaluation() { return eval_plan_cost_; }
-  bool enable_runtime_filter() {
+  bool enable_runtime_filter() const {
     if (0 > runtime_filter_type_) {
       get_runtime_filter_type();
     }
@@ -597,15 +600,12 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     }
     return 0 != (runtime_filter_type_ & (1 << RuntimeFilterType::IN));
   }
-  void get_runtime_filter_type() {
-    runtime_filter_type_ = session_info_->get_runtime_filter_type();
-    if (OB_ISNULL(query_ctx_)) {
-      // do nothing
-    } else {
-      query_ctx_->get_global_hint().opt_params_.get_opt_param_runtime_filter_type(runtime_filter_type_);
-    }
+  inline void set_runtime_filter_type(int64_t runtime_filter_type) {
+    runtime_filter_type_ = runtime_filter_type;
   }
-
+  inline int64_t get_runtime_filter_type() const {
+    return runtime_filter_type_;
+  }
   int64_t get_batch_size() const { return batch_size_; }
   void set_batch_size(const int64_t v) { batch_size_ = v; }
   inline ObDMLStmt* get_root_stmt() { return root_stmt_; }
@@ -817,6 +817,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_enable_distributed_das_scan(bool enabled) { enable_distributed_das_scan_ = enabled; }
   inline bool enable_topn_runtime_filter() const { return enable_topn_runtime_filter_; }
   inline void set_enable_topn_runtime_filter(bool enabled) { enable_topn_runtime_filter_ = enabled; }
+  inline void set_rtf_creator_max_row_count(int64_t max_row_count) { rtf_creator_max_row_count_ = max_row_count; }
+  inline int64_t get_rtf_creator_max_row_count() { return rtf_creator_max_row_count_; }
+  inline void set_rtf_user_min_partition_count(int64_t min_partition_count) { rtf_user_min_partition_count_ = min_partition_count; }
+  inline int64_t get_rtf_user_min_partition_count() { return rtf_user_min_partition_count_; }
   inline bool enable_partial_group_by_pushdown() const { return enable_partial_group_by_pushdown_; }
   inline void set_enable_partial_group_by_pushdown(bool enabled) { enable_partial_group_by_pushdown_ = enabled; }
   inline bool enable_partial_limit_pushdown() const { return enable_partial_limit_pushdown_; }
@@ -838,6 +842,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
   inline bool enable_delete_insert_scan() const { return enable_delete_insert_scan_; }
   inline void set_enable_delete_insert_scan(bool enabled) { enable_delete_insert_scan_ = enabled; }
+  inline int64_t get_next_op_id() { return next_op_id_++; }
   inline bool enable_hash_groupby_limit_pushdown() const { return enable_hash_groupby_limit_pushdown_; }
   inline void set_enable_hash_groupby_limit_pushdown(bool enabled) { enable_hash_groupby_limit_pushdown_= enabled; }
   inline uint64_t get_join_order_enum_threshold() const { return join_order_enum_threshold_; }
@@ -970,6 +975,8 @@ private:
   ObPxNodeSelectionMode px_node_selection_mode_;
   bool enable_distributed_das_scan_;
   bool enable_topn_runtime_filter_;
+  int64_t rtf_creator_max_row_count_;
+  int64_t rtf_user_min_partition_count_;
   bool enable_partial_group_by_pushdown_;
   bool enable_partial_limit_pushdown_;
   bool enable_storage_aggr_push_down_;
@@ -982,6 +989,7 @@ private:
   bool extend_sql_plan_monitor_metrics_;
   bool enable_delete_insert_scan_;
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
+  int64_t next_op_id_;
   bool enable_hash_groupby_limit_pushdown_;
   uint64_t join_order_enum_threshold_;
   uint64_t max_permutation_;

@@ -1606,6 +1606,85 @@ bool ObOptimizerUtil::find_equal_expr(const ObIArray<const ObRawExpr *> &exprs,
   return found;
 }
 
+int ObOptimizerUtil::rewrite_expr_using_equal_sets(const ObRawExpr *input_expr,
+                                                   const ObRelIds &tableset,
+                                                   const EqualSets &equal_sets,
+                                                   ObRawExpr *&output_expr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(input_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input_expr is null", K(ret));
+  } else {
+    ObRawExpr *equivalent_expr = NULL;
+    if (OB_FAIL(find_equivalent_in_range(input_expr, tableset, equal_sets, equivalent_expr))) {
+      LOG_WARN("failed to find equivalent expression", K(ret));
+    } else if (OB_NOT_NULL(equivalent_expr)) {
+      output_expr = equivalent_expr;
+    } else {
+      // No equivalent expression found that satisfies the condition, return original
+      output_expr = const_cast<ObRawExpr *>(input_expr);
+    }
+  }
+
+  return ret;
+}
+
+int ObOptimizerUtil::find_equivalent_in_range(const ObRawExpr *input_expr,
+                                              const ObRelIds &tableset,
+                                              const EqualSets &equal_sets,
+                                              ObRawExpr *&equivalent_expr)
+{
+  bool found = false;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(input_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("input_expr is null", K(ret));
+  } else {
+    // First check if input_expr itself satisfies the condition
+    const ObRelIds &input_rel_ids = input_expr->get_relation_ids();
+    equivalent_expr = NULL;
+    if (input_rel_ids.is_subset(tableset)) {
+      found = true;
+      equivalent_expr = const_cast<ObRawExpr *>(input_expr);
+    } else {
+      // Search for equivalent expression in EqualSets
+      int64_t N = equal_sets.count();
+      for (int64_t i = 0; !found && i < N; ++i) {
+        if (OB_ISNULL(equal_sets.at(i))) {
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null equal set");
+        } else {
+          // Check if input_expr is in this equal set
+          if (find_equal_expr(*equal_sets.at(i), input_expr)) {
+            // Found the equal set containing input_expr, search for equivalent expression
+            const EqualSet &equal_set = *equal_sets.at(i);
+            for (int64_t j = 0; !found && j < equal_set.count(); ++j) {
+              const ObRawExpr *candidate = equal_set.at(j);
+              if (OB_ISNULL(candidate)) {
+                LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null expr in equal set");
+              } else {
+                const ObRelIds &candidate_rel_ids = candidate->get_relation_ids();
+                // Check if candidate's relation_ids is subset of tableset or is empty
+                if (candidate_rel_ids.is_subset(tableset)) {
+                  found = true;
+                  equivalent_expr = const_cast<ObRawExpr *>(candidate);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (!found) {
+        equivalent_expr = NULL;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObOptimizerUtil::find_stmt_expr_direction(const ObDMLStmt &stmt,
                                               const common::ObIArray<ObRawExpr*> &exprs,
                                               const EqualSets &equal_sets,

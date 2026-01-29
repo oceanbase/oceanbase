@@ -9,7 +9,7 @@
 | ObLogLimit | 1104 |
 | ObLogExchange | 1720 |
 | ObLogSubPlanScan | 1096 |
-| ObLogSubPlanFilter | 1656 |
+| ObLogSubPlanFilter | 1696 |
 | ObLogInsert | 1488 |
 | ObLogSet | 1344 |
 | ObLogUpdate | 1368 |

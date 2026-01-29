@@ -67,7 +67,7 @@ order by
         s_name,
         p_partkey)
 limit 100;
-memory usage: parser = 39680, resolve = 407600, transform = 889888, optimize = 5289520, total = 6585104
+memory usage: parser = 39680, resolve = 407600, transform = 889888, optimize = 4583216, total = 5878800
 ***************   Case 3   ***************
 select /*+ TPCH_Q3 PARALLEL(144) */* from (
 select
@@ -94,7 +94,7 @@ order by
         o_orderdate
 )
 limit 10;
-memory usage: parser = 23808, resolve = 334832, transform = 166688, optimize = 1124280, total = 1615960
+memory usage: parser = 23808, resolve = 334832, transform = 166688, optimize = 1092536, total = 1584216
 ***************   Case 4   ***************
 select /*+ TPCH_Q4 PARALLEL(144) */
         o_orderpriority,
@@ -143,7 +143,7 @@ group by
         n_name
 order by
         revenue desc;
-memory usage: parser = 23808, resolve = 334832, transform = 198680, optimize = 2850792, total = 3349536
+memory usage: parser = 23808, resolve = 334832, transform = 198680, optimize = 2112744, total = 2611488
 ***************   Case 6   ***************
 select /*+ TPCH_Q6 PARALLEL(144) */
         sum(l_extendedprice * l_discount) as revenue
@@ -195,7 +195,7 @@ order by
         cust_nation,
         l_year
 ;
-memory usage: parser = 39680, resolve = 358640, transform = 747640, optimize = 2811192, total = 3890640
+memory usage: parser = 39680, resolve = 358640, transform = 747640, optimize = 2350904, total = 3430352
 ***************   Case 8   ***************
 select /*+  TPCH_Q8 PARALLEL(144) */
         o_year,
@@ -234,7 +234,7 @@ group by
         o_year
 order by
         o_year;
-memory usage: parser = 39680, resolve = 358640, transform = 222240, optimize = 3806552, total = 4352664
+memory usage: parser = 39680, resolve = 358640, transform = 222240, optimize = 2759000, total = 3305112
 ***************   Case 9   ***************
 select /*+ TPCH_Q9 PARALLEL(144) */
         nation,
@@ -268,7 +268,7 @@ group by
 order by
         nation,
         o_year desc;
-memory usage: parser = 31744, resolve = 358640, transform = 182560, optimize = 3306584, total = 3820952
+memory usage: parser = 31744, resolve = 358640, transform = 182560, optimize = 2473304, total = 2987672
 ***************   Case 10   ***************
 select */*+ TPCH_Q10 */ from (
 select /*+ PARALLEL(144) */
@@ -304,7 +304,7 @@ order by
         revenue desc
 )
 limit 20;
-memory usage: parser = 31744, resolve = 367920, transform = 236440, optimize = 1292056, total = 1869584
+memory usage: parser = 31744, resolve = 367920, transform = 236440, optimize = 1220632, total = 1798160
 ***************   Case 11   ***************
 SELECT /*+ TPCH_Q11 PARALLEL(144) */ ps_partkey,
        Sum(ps_supplycost * ps_availqty) AS value
@@ -324,7 +324,7 @@ HAVING Sum(ps_supplycost * ps_availqty) > (SELECT
                                                   AND s_nationkey = n_nationkey
                                                   AND n_name = 'MOZAMBIQUE')
 ORDER  BY value DESC;
-memory usage: parser = 23808, resolve = 350704, transform = 381024, optimize = 859808, total = 1581696
+memory usage: parser = 23808, resolve = 350704, transform = 381024, optimize = 836000, total = 1557888
 ***************   Case 12   ***************
 select /*+ TPCH_Q12 PARALLEL(144)  */
         l_shipmode,
@@ -376,7 +376,7 @@ group by
 order by
         custdist desc,
         c_count desc;
-memory usage: parser = 15872, resolve = 326896, transform = 119104, optimize = 710144, total = 1113440
+memory usage: parser = 15872, resolve = 326896, transform = 119104, optimize = 702208, total = 1105504
 ***************   Case 14   ***************
 select /*+ TPCH_Q14 PARALLEL(144) */
         100.00 * sum(case
@@ -391,7 +391,7 @@ where
         l_partkey = p_partkey
         and l_shipdate >= date '1995-09-01'
         and l_shipdate < date '1995-09-01' + interval '1' month;
-memory usage: parser = 15872, resolve = 318960, transform = 8216, optimize = 701352, total = 993760
+memory usage: parser = 15872, resolve = 318960, transform = 8216, optimize = 693416, total = 985824
 ***************   Case 15   ***************
 select /*+ TPCH_Q15 PARALLEL(144) */
         s_suppkey,
@@ -444,7 +444,7 @@ order by
         p_brand,
         p_type,
         p_size;
-memory usage: parser = 23808, resolve = 334832, transform = 71488, optimize = 1493008, total = 1864560
+memory usage: parser = 23808, resolve = 334832, transform = 71488, optimize = 1456624, total = 1828176
 ***************   Case 17   ***************
 select /*+ TPCH_Q17 PARALLEL(144) */
         sum(l_extendedprice) / 7.0 as avg_yearly
@@ -499,7 +499,7 @@ order by
         o_totalprice desc,
         o_orderdate)
 limit 10;
-memory usage: parser = 23808, resolve = 375856, transform = 576024, optimize = 1093392, total = 2027496
+memory usage: parser = 23808, resolve = 375856, transform = 576024, optimize = 1069584, total = 2003688
 ***************   Case 19   ***************
 select /*+ TPCH_Q19 PARALLEL(144) */
         sum(l_extendedprice* (1 - l_discount)) as revenue
@@ -536,7 +536,7 @@ where
                 and l_shipmode in ('AIR', 'AIR REG')
                 and l_shipinstruct = 'DELIVER IN PERSON'
         );
-memory usage: parser = 39680, resolve = 350704, transform = 563736, optimize = 860072, total = 1747680
+memory usage: parser = 39680, resolve = 350704, transform = 563736, optimize = 852136, total = 1739744
 ***************   Case 20   ***************
 select /*+ TPCH_Q20 PARALLEL(144) */
         s_name,
@@ -575,7 +575,7 @@ where
         and n_name = 'EGYPT'
 order by
         s_name;
-memory usage: parser = 23808, resolve = 366576, transform = 698776, optimize = 2816680, total = 3839328
+memory usage: parser = 23808, resolve = 366576, transform = 698776, optimize = 2745256, total = 3767904
 ***************   Case 21   ***************
 select * from (
 select /*+ TPCH_Q21  PARALLEL(144) */
@@ -619,7 +619,7 @@ order by
         s_name
 )
 limit 100;
-memory usage: parser = 39680, resolve = 465776, transform = 640440, optimize = 2426544, total = 3505928
+memory usage: parser = 39680, resolve = 465776, transform = 640440, optimize = 1990064, total = 3069448
 ***************   Case 22   ***************
 select /*+ TPCH_Q22 PARALLEL(144) */
         cntrycode,
@@ -658,56 +658,56 @@ group by
         cntrycode
 order by
         cntrycode;
-memory usage: parser = 31744, resolve = 412208, transform = 125336, optimize = 1055872, total = 1541656
+memory usage: parser = 31744, resolve = 412208, transform = 125336, optimize = 1063808, total = 1549592
 
 memory usage
 | query | parser | resolve | transform | optimize | total |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 23,808 | 356,656 | 24,088 | 396,424 | 766,208 |
-| 2 | 39,680 | 407,600 | 889,888 | 5,289,520 | 6,585,104 |
-| 3 | 23,808 | 334,832 | 166,688 | 1,124,280 | 1,615,960 |
+| 2 | 39,680 | 407,600 | 889,888 | 4,583,216 | 5,878,800 |
+| 3 | 23,808 | 334,832 | 166,688 | 1,092,536 | 1,584,216 |
 | 4 | 15,872 | 356,656 | 406,968 | 821,328 | 1,542,248 |
-| 5 | 23,808 | 334,832 | 198,680 | 2,850,792 | 3,349,536 |
+| 5 | 23,808 | 334,832 | 198,680 | 2,112,744 | 2,611,488 |
 | 6 | 7,936 | 311,024 | 16,152 | 332,936 | 641,216 |
-| 7 | 39,680 | 358,640 | 747,640 | 2,811,192 | 3,890,640 |
-| 8 | 39,680 | 358,640 | 222,240 | 3,806,552 | 4,352,664 |
-| 9 | 31,744 | 358,640 | 182,560 | 3,306,584 | 3,820,952 |
-| 10 | 31,744 | 367,920 | 236,440 | 1,292,056 | 1,869,584 |
-| 11 | 23,808 | 350,704 | 381,024 | 859,808 | 1,581,696 |
+| 7 | 39,680 | 358,640 | 747,640 | 2,350,904 | 3,430,352 |
+| 8 | 39,680 | 358,640 | 222,240 | 2,759,000 | 3,305,112 |
+| 9 | 31,744 | 358,640 | 182,560 | 2,473,304 | 2,987,672 |
+| 10 | 31,744 | 367,920 | 236,440 | 1,220,632 | 1,798,160 |
+| 11 | 23,808 | 350,704 | 381,024 | 836,000 | 1,557,888 |
 | 12 | 23,808 | 318,960 | 198,680 | 828,408 | 1,311,280 |
-| 13 | 15,872 | 326,896 | 119,104 | 710,144 | 1,113,440 |
-| 14 | 15,872 | 318,960 | 8,216 | 701,352 | 993,760 |
+| 13 | 15,872 | 326,896 | 119,104 | 702,208 | 1,105,504 |
+| 14 | 15,872 | 318,960 | 8,216 | 693,416 | 985,824 |
 | 15 | 15,872 | 402,960 | 555,712 | 749,824 | 1,657,536 |
-| 16 | 23,808 | 334,832 | 71,488 | 1,493,008 | 1,864,560 |
+| 16 | 23,808 | 334,832 | 71,488 | 1,456,624 | 1,828,176 |
 | 17 | 15,872 | 326,896 | 307,424 | 749,824 | 1,349,376 |
-| 18 | 23,808 | 375,856 | 576,024 | 1,093,392 | 2,027,496 |
-| 19 | 39,680 | 350,704 | 563,736 | 860,072 | 1,747,680 |
-| 20 | 23,808 | 366,576 | 698,776 | 2,816,680 | 3,839,328 |
-| 21 | 39,680 | 465,776 | 640,440 | 2,426,544 | 3,505,928 |
-| 22 | 31,744 | 412,208 | 125,336 | 1,055,872 | 1,541,656 |
+| 18 | 23,808 | 375,856 | 576,024 | 1,069,584 | 2,003,688 |
+| 19 | 39,680 | 350,704 | 563,736 | 852,136 | 1,739,744 |
+| 20 | 23,808 | 366,576 | 698,776 | 2,745,256 | 3,767,904 |
+| 21 | 39,680 | 465,776 | 640,440 | 1,990,064 | 3,069,448 |
+| 22 | 31,744 | 412,208 | 125,336 | 1,063,808 | 1,549,592 |
 
 max memory usage
 | query | parser | resolve | transform | optimize | total |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 23,808 | 403,432 | 2,120,544 | 483,312 | 2,517,200 |
-| 2 | 39,680 | 458,864 | 6,126,248 | 5,388,016 | 6,741,376 |
-| 3 | 23,808 | 381,608 | 1,640,856 | 1,274,440 | 2,015,688 |
-| 4 | 15,872 | 455,552 | 2,511,640 | 971,488 | 2,900,360 |
-| 5 | 23,808 | 397,480 | 3,647,992 | 2,960,896 | 4,022,824 |
+| 2 | 39,680 | 458,864 | 5,388,232 | 4,681,744 | 6,035,104 |
+| 3 | 23,808 | 381,608 | 1,632,952 | 1,242,696 | 2,007,784 |
+| 4 | 15,872 | 455,552 | 2,511,640 | 963,552 | 2,900,360 |
+| 5 | 23,808 | 397,480 | 2,925,848 | 2,222,880 | 3,300,680 |
 | 6 | 7,936 | 365,736 | 2,120,824 | 495,144 | 2,455,976 |
-| 7 | 39,680 | 400,912 | 4,725,864 | 2,961,352 | 5,140,376 |
-| 8 | 39,680 | 413,352 | 2,959,256 | 3,956,712 | 4,585,528 |
-| 9 | 31,744 | 405,416 | 2,760,856 | 3,456,744 | 4,045,880 |
-| 10 | 31,744 | 403,312 | 2,317,304 | 1,442,216 | 2,733,160 |
-| 11 | 23,808 | 457,536 | 1,870,544 | 946,696 | 2,261,248 |
+| 7 | 39,680 | 400,912 | 4,249,736 | 2,501,064 | 4,664,248 |
+| 8 | 39,680 | 413,352 | 2,625,976 | 2,909,160 | 3,537,976 |
+| 9 | 31,744 | 405,416 | 2,395,832 | 2,623,464 | 3,212,600 |
+| 10 | 31,744 | 403,312 | 2,317,304 | 1,370,792 | 2,733,160 |
+| 11 | 23,808 | 457,536 | 1,822,960 | 922,888 | 2,213,664 |
 | 12 | 23,808 | 373,672 | 2,287,480 | 978,568 | 2,646,440 |
-| 13 | 15,872 | 365,736 | 836,016 | 808,640 | 1,286,704 |
-| 14 | 15,872 | 373,672 | 2,104,672 | 776,632 | 2,455,696 |
-| 15 | 15,872 | 481,344 | 1,291,280 | 836,712 | 1,811,256 |
-| 16 | 23,808 | 417,856 | 137,144 | 1,603,112 | 2,049,432 |
-| 17 | 15,872 | 417,856 | 1,323,352 | 836,712 | 1,682,312 |
-| 18 | 23,808 | 427,120 | 2,634,400 | 1,243,552 | 3,050,256 |
-| 19 | 39,680 | 512,016 | 2,652,536 | 935,352 | 3,059,112 |
-| 20 | 23,808 | 481,344 | 3,168,864 | 2,915,176 | 4,012,592 |
-| 21 | 39,680 | 540,864 | 2,874,544 | 2,624,320 | 3,786,408 |
-| 22 | 31,744 | 471,424 | 2,112,608 | 1,177,584 | 2,572,752 |
+| 13 | 15,872 | 365,736 | 836,048 | 800,704 | 1,278,768 |
+| 14 | 15,872 | 373,672 | 2,104,672 | 768,696 | 2,455,696 |
+| 15 | 15,872 | 481,344 | 1,275,440 | 836,712 | 1,811,256 |
+| 16 | 23,808 | 417,856 | 137,144 | 1,566,728 | 2,013,048 |
+| 17 | 15,872 | 417,856 | 1,291,640 | 836,712 | 1,650,600 |
+| 18 | 23,808 | 427,120 | 2,634,400 | 1,219,744 | 3,050,256 |
+| 19 | 39,680 | 512,016 | 2,652,536 | 927,416 | 3,059,112 |
+| 20 | 23,808 | 481,344 | 3,113,344 | 2,843,752 | 3,941,168 |
+| 21 | 39,680 | 540,864 | 2,430,160 | 2,187,840 | 3,349,928 |
+| 22 | 31,744 | 471,424 | 2,112,608 | 1,185,552 | 2,572,752 |

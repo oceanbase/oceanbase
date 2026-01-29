@@ -638,7 +638,7 @@ const ObString* ObSelectStmt::get_select_alias(const char *col_name, uint64_t ta
   for (int64_t i = 0; OB_SUCC(ret) && !hit && i < get_select_item_size(); i++) {
     expr = get_select_item(i).expr_;
     if (T_REF_ALIAS_COLUMN == expr->get_expr_type()) {
-      expr = static_cast<ObAliasRefRawExpr*>(expr)->get_ref_expr();
+      expr = static_cast<ObAliasRefRawExpr*>(expr)->get_ref_select_expr();
     }
 
     if (T_REF_COLUMN != expr->get_expr_type()) {

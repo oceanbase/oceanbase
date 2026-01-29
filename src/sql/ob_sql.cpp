@@ -5992,8 +5992,6 @@ int ObSql::calc_pre_calculable_exprs(const ObDMLStmt &stmt,
 int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObHiddenColumnItem, 4> pre_calc_exprs;
-  ObHiddenColumnItem hidden_column_item;
   int64_t idx = -1;
   if (query_ctx.all_expr_constraints_.empty()) {
     // do nothing
@@ -6001,12 +5999,23 @@ int ObSql::create_expr_constraints(ObQueryCtx &query_ctx, ObExecContext &exec_ct
     ObIArray<ObExprConstraint> &expr_constraints = query_ctx.all_expr_constraints_;
     ObSEArray<ObHiddenColumnItem, 4> pre_calc_exprs;
     ObSEArray<ObConstraintExtra, 4> cons_extras;
+    ObSEArray<PreCalcExprExpectResult, 16> pre_calc_result_arr;
     ObHiddenColumnItem hidden_column_item;
     int64_t idx = -1;
     const int64_t dummy_count = -1;
     bool has_extra = false;
     for (int64_t i = PRE_CALC_RESULT_NULL; OB_SUCC(ret) && i <= PRE_CALC_NOT_PRECISE; ++i) {
-      PreCalcExprExpectResult expect_result = static_cast<PreCalcExprExpectResult>(i);
+      if (OB_FAIL(pre_calc_result_arr.push_back(static_cast<PreCalcExprExpectResult>(i)))) {
+        LOG_WARN("failed to push back arr", K(ret));
+      }
+    }
+    for (int64_t i = PRE_CALC_JSON_CONTAINS_PRECISE; OB_SUCC(ret) && i <= PRE_CALC_JSON_TYPE; ++i) {
+      if (OB_FAIL(pre_calc_result_arr.push_back(static_cast<PreCalcExprExpectResult>(i)))) {
+        LOG_WARN("failed to push back arr", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < pre_calc_result_arr.count(); ++i) {
+      PreCalcExprExpectResult expect_result = pre_calc_result_arr.at(i);
       pre_calc_exprs.reuse();
       cons_extras.reuse();
       for (int64_t j = 0; OB_SUCC(ret) && j < expr_constraints.count(); ++j) {

@@ -16,11 +16,14 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "share/stat/ob_stat_define.h"
-
+#include "sql/optimizer/ob_log_plan.h"
 namespace oceanbase
 {
 namespace sql
 {
+
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogPlan;
 

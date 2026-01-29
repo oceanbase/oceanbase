@@ -14,12 +14,15 @@
 #define OCEANBASE_SQL_OB_LOG_EXCHANGE_H
 #include "lib/allocator/page_arena.h"
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/px/ob_px_basic_info.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogExchange : public ObLogicalOperator
 {
 public:

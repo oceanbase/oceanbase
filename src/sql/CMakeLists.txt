@@ -1241,6 +1241,16 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_operator_factory.cpp
   optimizer/ob_log_plan.cpp
   optimizer/ob_log_plan_factory.cpp
+  optimizer/optimizer_plan_rewriter/ob_optimize_rule.cpp
+  optimizer/optimizer_plan_rewriter/ob_plan_visitor.cpp
+  optimizer/optimizer_plan_rewriter/ob_join_filter_pushdown_rewriter.cpp
+  optimizer/optimizer_plan_rewriter/ob_join_filter_pushdown.cpp
+  optimizer/optimizer_plan_rewriter/ob_partial_limit_pushdown_rewriter.cpp
+  optimizer/optimizer_plan_rewriter/ob_partial_limit_pushdown.cpp
+  optimizer/optimizer_plan_rewriter/ob_preprocess_plan_tree_rule.cpp
+  optimizer/optimizer_plan_rewriter/ob_set_parent_visitor.cpp
+  optimizer/optimizer_plan_rewriter/ob_groupby_pushdown_rule.cpp
+  optimizer/optimizer_plan_rewriter/ob_distinct_pushdown_rule.cpp
   optimizer/ob_log_select_into.cpp
   optimizer/ob_log_sequence.cpp
   optimizer/ob_log_set.cpp

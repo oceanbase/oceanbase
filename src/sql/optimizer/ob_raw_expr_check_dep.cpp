@@ -78,6 +78,7 @@ int ObRawExprCheckDep::check(const ObRawExpr &expr)
       break;
     }
     case ObRawExpr::EXPR_QUERY_REF:
+    case ObRawExpr::EXPR_ALIAS_REF:
     case ObRawExpr::EXPR_SYS_FUNC:
     case ObRawExpr::EXPR_UDF:
     case ObRawExpr::EXPR_AGGR:

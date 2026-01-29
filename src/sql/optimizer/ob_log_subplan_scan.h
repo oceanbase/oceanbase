@@ -13,11 +13,15 @@
 #ifndef _OB_LOG_SUBQUERY_SCAN_H_
 #define _OB_LOG_SUBQUERY_SCAN_H_
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
+
 
 namespace oceanbase
 {
 namespace sql
 {
+template<typename R, typename C>
+class PlanVisitor;
 class ObLogSubPlanScan : public ObLogicalOperator
 {
 public:

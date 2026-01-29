@@ -662,17 +662,17 @@ int ObRawExprInfoExtractor::visit(ObAliasRefRawExpr &expr)
     LOG_WARN("fail to clear info", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_ALIAS))) {
     LOG_WARN("failed to add flag", K(ret));
-  } else if (OB_ISNULL(expr.get_ref_expr())) {
+  } else if (OB_ISNULL(expr.get_query_ref_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref expr is null");
   } else if (expr.is_ref_query_output()) {
     if (OB_FAIL(expr.add_flag(CNT_SUB_QUERY))) {
       LOG_WARN("failed to add expr flag", K(ret));
     }
-  } else if (OB_FAIL(expr.add_child_flags(expr.get_ref_expr()->get_expr_info()))) {
+  } else if (OB_FAIL(expr.add_child_flags(expr.get_query_ref_expr()->get_expr_info()))) {
     LOG_WARN("add child flags to expr failed", K(ret));
   } else {
-    expr.set_is_deterministic(expr.get_ref_expr()->is_deterministic());
+    expr.set_is_deterministic(expr.get_query_ref_expr()->is_deterministic());
   }
   return ret;
 }

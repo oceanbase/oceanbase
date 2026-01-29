@@ -1314,7 +1314,8 @@ struct ObExprConstraint
   static bool has_extra(PreCalcExprExpectResult expect_result)
   {
     return PRE_CALC_PRECISE == expect_result ||
-           PRE_CALC_NOT_PRECISE == expect_result;
+           PRE_CALC_NOT_PRECISE == expect_result ||
+           PRE_CALC_JSON_TYPE;
   }
   ObRawExpr *pre_calc_expr_;
   PreCalcExprExpectResult expect_result_;
@@ -1322,7 +1323,8 @@ struct ObExprConstraint
   ObConstraintExtra cons_extra_;
   TO_STRING_KV(KP_(pre_calc_expr),
                K_(expect_result),
-               K_(ignore_const_check));
+               K_(ignore_const_check),
+               K_(cons_extra));
 };
 
 struct ObPreCalcExprConstraint : public common::ObDLinkBase<ObPreCalcExprConstraint>
@@ -1362,6 +1364,33 @@ struct ObRowidConstraint : public ObPreCalcExprConstraint
                                bool &is_match) const override;
     uint8_t rowid_version_;
     ObFixedArray<ObObjType, common::ObIAllocator> rowid_type_array_;
+};
+
+struct ObJsonTypeConstraint
+{
+  public:
+    enum JsonType {
+      JSON_TYPE_SCALAR,
+      JSON_TYPE_ARRAY,
+      JSON_TYPE_JSON_CONTAINS_NO_INDEX_MERGE,
+      JSON_TYPE_NOT_ARRAY_OR_SCALAR,
+    };
+    static int check_is_match(ObObjParam &obj_param,
+                              ObExecContext &exec_ctx,
+                              ObConstraintExtra *extra,
+                              bool &is_match);
+    static int64_t make_extra(int32_t json_type, int32_t element_count)
+    {
+      return (static_cast<int64_t>(json_type) << 32) | (static_cast<uint32_t>(element_count));
+    }
+    static int32_t get_json_type(int64_t extra)
+    {
+      return static_cast<int32_t>(extra >> 32);
+    }
+    static int32_t get_element_count(int64_t extra)
+    {
+      return static_cast<int32_t>(extra & 0xFFFFFFFF);
+    }
 };
 
 //this guard use to link the exec context and session

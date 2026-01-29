@@ -2,9 +2,9 @@
 | class | sizeof(class) |
 | --- | --- |
 | BaseTableOptInfo | 168 |
-| JoinFilterInfo | 296 |
+| JoinFilterInfo | 304 |
 | DomainIndexAccessInfo | 288 |
-| ObIndexMergeNode | 160 |
+| ObIndexMergeNode | 200 |
 | InnerPathInfo | 264 |
 | ObConflictDetector | 392 |
 | JoinInfo | 160 |

@@ -32,6 +32,7 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_conflict_detector.h"
 #include "sql/ob_sql_define.h"
+#include "sql/optimizer/optimizer_plan_rewriter/ob_plan_visitor.h"
 
 namespace test
 {
@@ -69,11 +70,15 @@ class TempTablePath;
 class CteTablePath;
 class ObJoinOrder;
 class ObOptimizerContext;
+class ObOptimizeRule;
 class ObLogDistinct;
 class ObLogJoin;
 struct JoinInfo;
 struct TableDependInfo;
 class ObLogSort;
+class ObLogLimit;
+class ObLogCount;
+class ObLogGroupBy;
 class ObLogJoinFilter;
 class ObLogSubPlanFilter;
 struct ObAllocExprContext;
@@ -120,120 +125,6 @@ struct TableDependInfo {
 
 #undef KYES_DEF
 
-
-struct GroupByPushdownContext {
-  GroupByPushdownContext(common::ObIAllocator &allocator)
-    : pushed_down_through_shuffle_(false), aggr_exprs_(allocator),
-      group_by_exprs_(allocator), is_forced_pushdown_(false)
-  { }
-
-  virtual ~GroupByPushdownContext() {}
-  inline common::ObIArray<ObRawExpr *> &get_aggr_exprs()
-  {
-    return aggr_exprs_;
-  }
-  inline const ObIArray<ObRawExpr*>& get_aggr_exprs() const
-  { return aggr_exprs_; }
-  inline common::ObIArray<ObRawExpr *> &get_group_by_exprs()
-  {
-    return group_by_exprs_;
-  }
-  inline const ObIArray<ObRawExpr*>& get_group_by_exprs() const
-  { return group_by_exprs_; }
-  inline bool is_pushed_down_through_shuffle() const { return pushed_down_through_shuffle_; }
-  inline void set_pushed_down_through_shuffle(bool pushed_down_through_shuffle)
-  { pushed_down_through_shuffle_ = pushed_down_through_shuffle; }
-  inline bool is_forced_pushdown() const {
-    return is_forced_pushdown_;
-  }
-  inline void set_is_forced_pushdown(bool is_forced_pushdown)
-  {
-    is_forced_pushdown_ = is_forced_pushdown;
-  }
-  int map(const common::ObIArray<ObRawExpr *> &from_exprs,
-          const common::ObIArray<ObRawExpr *> &to_exprs,
-          ObRawExprFactory *expr_factory,
-          const ObSQLSessionInfo *session_info);
-  int assign_aggr_exprs(const common::ObIArray<ObRawExpr*> &aggr_exprs)
-  { return aggr_exprs_.assign(aggr_exprs); }
-  int assign_group_by_exprs(const common::ObIArray<ObRawExpr*> &group_by_exprs)
-  { return group_by_exprs_.assign(group_by_exprs); }
-  int assign_to(ObIAllocator *allocator, GroupByPushdownContext* &copied_context);
-
-  int assign_to(ObIAllocator *allocator,
-                GroupByPushdownContext* &copied_context,
-                ObRawExprFactory *expr_factory,
-                const ObSQLSessionInfo *session_info);
-
-  static int init(ObIAllocator *allocator, GroupByPushdownContext* &new_context);
-
-  int build_from(const GroupByPushdownContext* &copied_from_context);
-
-  int get_dependent_exprs(common::ObIArray<ObRawExpr*> &dependent_exprs);
-  int get_aggr_items(common::ObIArray<ObAggFunRawExpr*> &aggr_items);
-
-  int append_group_by_exprs(const common::ObIArray<ObRawExpr*> &groupby_exprs);
-  bool pushed_down_through_shuffle_;
-  ObSqlArray<ObRawExpr*> aggr_exprs_;
-  ObSqlArray<ObRawExpr*> group_by_exprs_;
-  bool is_forced_pushdown_;
-
-  TO_STRING_KV(K_(pushed_down_through_shuffle),
-               K_(is_forced_pushdown),
-               K_(aggr_exprs),
-               K_(group_by_exprs));
-};
-
-struct GroupByPushdownResult {
-  GroupByPushdownResult(common::ObIAllocator &allocator)
-  : is_materialized_(false), aggr_exprs_(allocator), new_aggr_exprs_(allocator)
-  { }
-
-  virtual ~GroupByPushdownResult() {}
-  int assign_aggr_exprs(const common::ObIArray<ObRawExpr*> &aggr_exprs)
-  { return aggr_exprs_.assign(aggr_exprs); }
-
-  int assign_mapped_exprs(const common::ObIArray<ObRawExpr*> &aggr_exprs)
-  { return new_aggr_exprs_.assign(aggr_exprs); }
-  inline common::ObIArray<ObRawExpr *> &get_original_aggr_exprs()
-  {
-    return aggr_exprs_;
-  }
-  inline common::ObIArray<ObRawExpr *> &get_mapped_aggr_exprs()
-  {
-    return new_aggr_exprs_;
-  }
-  inline const ObIArray<ObRawExpr*>& get_original_aggr_exprs() const
-  { return aggr_exprs_; }
-
-  inline const ObIArray<ObRawExpr*>& get_mapped_aggr_exprs() const
-  { return new_aggr_exprs_; }
-
-  inline bool is_materialized() const { return is_materialized_; }
-
-  static int init(ObIAllocator *allocator, GroupByPushdownResult* &new_result);
-
-  int build_from(const GroupByPushdownResult* &copied_from_result);
-
-  int assign_to(ObIAllocator *allocator, GroupByPushdownResult* &copied_result);
-
-  inline void set_is_materialized(bool is_materialized)
-  { is_materialized_ = is_materialized; }
-  int map(const common::ObIArray<ObRawExpr *> &from_exprs,
-          const common::ObIArray<ObRawExpr *> &to_exprs,
-          ObRawExprFactory *expr_factory,
-          const ObSQLSessionInfo *session_info);
-
-  bool is_materialized_;
-  ObSqlArray<ObRawExpr*> aggr_exprs_;
-  // original aggr expr to new column mapping
-  ObSqlArray<ObRawExpr*> new_aggr_exprs_;
-
-  TO_STRING_KV(K_(is_materialized),
-               K_(aggr_exprs),
-               K_(new_aggr_exprs));
-};
-
 struct SubPlanInfo
 {
   SubPlanInfo() : init_expr_(NULL), subplan_(NULL), init_plan_(false), allocated_(false) {}
@@ -267,39 +158,67 @@ struct ObDistinctAggrBatch
   TO_STRING_KV(K(mocked_aggrs_), K(mocked_params_));
 };
 
-struct DistinctPushdownContext {
-  DistinctPushdownContext(common::ObIAllocator &allocator)
-  : pushed_down_through_shuffle_(false), distinct_exprs_(allocator)
-  { }
-
-  virtual ~DistinctPushdownContext() {}
-  int assign_distinct_exprs(const common::ObIArray<ObRawExpr*> &distinct_exprs)
-  { return distinct_exprs_.assign(distinct_exprs); }
-  inline common::ObIArray<ObRawExpr *> &get_distinct_exprs()
+// 去除无用谓词的工具类
+class ObUselessPredicateRemoval
+{
+public:
+  struct ObUselessPredCtx
   {
-    return distinct_exprs_;
-  }
-  inline const ObIArray<ObRawExpr*>& get_distinct_exprs() const
-  { return distinct_exprs_; }
-  inline bool get_is_pushed_down_through_shuffle() const { return pushed_down_through_shuffle_; }
-  inline void set_pushed_down_through_shuffle(bool pushed_down_through_shuffle)
-  { pushed_down_through_shuffle_ = pushed_down_through_shuffle; }
-  int merge_with(const common::ObIArray<ObRawExpr *> &distinct_expr, bool & update, bool & pushded);
-  int normalize();
-  int map(const common::ObIArray<ObRawExpr *> &from_exprs,
-          const common::ObIArray<ObRawExpr *> &to_exprs,
-          ObRawExprFactory *expr_factory,
-          const ObSQLSessionInfo *session_info);
+    struct CtxItem
+    {
+      CtxItem() :
+        op_(NULL),
+        exec_param_expr_(NULL),
+        cur_expr_(NULL),
+        pred_pairs_() {}
+      CtxItem(const CtxItem &other) :
+        op_(other.op_),
+        exec_param_expr_(other.exec_param_expr_),
+        cur_expr_(other.cur_expr_),
+        pred_pairs_(other.pred_pairs_) {}
 
-  int assign_to(ObIAllocator *allocator, DistinctPushdownContext* &copied_context);
+      ObLogicalOperator *op_;
+      ObExecParamRawExpr *exec_param_expr_;
+      ObRawExpr *cur_expr_;
+      ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4> pred_pairs_;
+      TO_STRING_KV(KP_(op), KP_(exec_param_expr), KP_(cur_expr));
+    };
 
-  int append_distinct_exprs(const common::ObIArray<ObRawExpr*> &distinct_exprs);
+    ObUselessPredCtx() : processing_items_(), final_items_(), processing_bound_(0) {}
 
-  bool pushed_down_through_shuffle_;
-  ObSqlArray<ObRawExpr*> distinct_exprs_;
+    int add_exec_params(ObLogicalOperator *op, ObIArray<ObExecParamRawExpr *> &exec_param_exprs);
+    int finish_processing(ObLogicalOperator *op);
+    int remove_ctx_items(ObLogicalOperator *op);
 
-  TO_STRING_KV(K_(pushed_down_through_shuffle),
-               K_(distinct_exprs));
+    ObSEArray<CtxItem, 4> processing_items_;
+    ObSEArray<CtxItem, 4> final_items_;
+    int64_t processing_bound_;
+  };
+
+public:
+  ObUselessPredicateRemoval() {}
+  virtual ~ObUselessPredicateRemoval() {}
+
+  static int remove_useless_predicate(ObLogicalOperator *root);
+
+  static int traverse_plan_normal(ObLogicalOperator *op, ObUselessPredCtx& ctx);
+  static int traverse_plan_remove_only(ObLogicalOperator *op, ObUselessPredCtx& ctx);
+  static int traverse_plan_with_new_ctx(ObLogicalOperator *op);
+
+  static int rec_remove_useless_predicate(ObLogicalOperator *op, ObUselessPredCtx& ctx);
+  static int rename_cur_exprs(ObLogicalOperator *op, ObUselessPredCtx &ctx);
+  static int add_pred_to_useless_pred_ctx(ObUselessPredCtx &ctx, ObIArray<ObRawExpr *> &preds);
+  static int remove_for_single_op(ObLogicalOperator &op, ObUselessPredCtx &ctx);
+  static int do_removal(ObLogicalOperator &op,
+                        ObRawExpr *target_expr,
+                        ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &pred_pairs);
+  static int check_is_useless_predicate(ObRawExpr *target_pred,
+                                        ObRawExpr *target_expr,
+                                        ObRawExpr *leading_pred,
+                                        ObRawExpr *equal_expr,
+                                        bool &is_useless);
+
+
 };
 
 struct CandidatePlan
@@ -426,7 +345,9 @@ public:
 
   int adjust_final_plan_info(ObLogicalOperator *&op);
 
-  int adjust_final_plan_tree(ObLogicalOperator *&op);
+  int init_tree_optimizers(common::ObIArray<ObOptimizeRule *> &tree_optimizers);
+
+  int adjust_final_plan_tree();
 
   int set_use_batch_for_table_scan(ObLogicalOperator *op, bool check_gi, bool in_batch_rescan);
   int reset_use_batch_due_to_gi_allocated_below(ObLogicalOperator *op);
@@ -1194,7 +1115,8 @@ public:
                                         const bool is_local_order,
                                         ObRawExpr *topn_expr = NULL,
                                         bool is_fetch_with_ties = false,
-                                        const OrderItem *hash_sortkey = NULL);
+                                        const OrderItem *hash_sortkey = NULL,
+                                        bool only_pushdown_topn = false);
 
   int allocate_dist_range_sort_as_top(ObLogicalOperator *&top,
                                       const ObIArray<OrderItem> &sort_keys,
@@ -1273,7 +1195,7 @@ public:
                         const bool is_fetch_with_ties,
                         const ObIArray<OrderItem> *ties_ordering);
 
-   int try_push_limit_into_table_scan(ObLogicalOperator *top,
+  int try_push_limit_into_table_scan(ObLogicalOperator *top,
                                       ObRawExpr *limit_expr,
                                       ObRawExpr *pushed_expr,
                                       ObRawExpr *offset_expr,
@@ -1356,7 +1278,8 @@ public:
   int candi_allocate_subplan_filter(const ObIArray<ObRawExpr *> &subquery_exprs,
                                     const ObIArray<ObRawExpr *> *filters = NULL,
                                     const bool is_update_set = false,
-                                    const bool for_on_condition = false);
+                                    const bool for_on_condition = false,
+                                    const ObIArray<ObAliasRefRawExpr *> *project_ref_exprs = NULL);
 
   int inner_candi_allocate_subplan_filter(ObIArray<ObLogPlan*> &subplans,
                                           ObIArray<ObQueryRefRawExpr *> &query_refs,
@@ -1366,7 +1289,8 @@ public:
                                           ObBitSet<> &onetime_idxs,
                                           const ObIArray<ObRawExpr *> &filters,
                                           const bool or_cursor_expr,
-                                          const bool is_update_set);
+                                          const bool is_update_set,
+                                          const ObIArray<ObAliasRefRawExpr *> *project_refs = NULL);
 
   int inner_candi_allocate_subplan_filter(ObIArray<ObSEArray<CandidatePlan, 4>> &best_list,
                                           ObIArray<ObSEArray<CandidatePlan, 4>> &dist_best_list,
@@ -1379,7 +1303,8 @@ public:
                                           const bool for_cursor_expr,
                                           const bool is_update_set,
                                           const int64_t dist_methods,
-                                          ObIArray<CandidatePlan> &subquery_plans);
+                                          ObIArray<CandidatePlan> &subquery_plans,
+                                          const ObIArray<ObAliasRefRawExpr *> *project_refs = NULL);
 
   int inner_candi_allocate_massive_subplan_filter(ObIArray<ObSEArray<CandidatePlan,4>> &best_list,
                                                   ObIArray<ObSEArray<CandidatePlan,4>> &dist_best_list,
@@ -1392,7 +1317,8 @@ public:
                                                   const bool for_cursor_expr,
                                                   const bool is_update_set,
                                                   const int64_t dist_methods,
-                                                  ObIArray<CandidatePlan> &subquery_plans);
+                                                  ObIArray<CandidatePlan> &subquery_plans,
+                                                  const ObIArray<ObAliasRefRawExpr *> *project_refs = NULL);
 
   int prepare_subplan_candidate_list(ObIArray<ObLogPlan*> &subplans,
                                      ObIArray<ObExecParamRawExpr *> &params,
@@ -1431,7 +1357,8 @@ public:
                                  const int64_t dist_methods,
                                  const ObIArray<ObRawExpr*> &filters,
                                  const bool is_update_set,
-                                 const bool for_cursor_expr);
+                                 const bool for_cursor_expr,
+                                 const ObIArray<ObAliasRefRawExpr *> *project_refs = NULL);
 
   int check_contains_recursive_cte(ObIArray<ObLogicalOperator*> &child_ops,
                                    bool &is_recursive_cte);
@@ -1479,40 +1406,16 @@ public:
                                      const ObBitSet<> &onetime_idxs,
                                      const ObIArray<ObRawExpr*> &filters,
                                      const DistAlgo dist_algo,
-                                     const bool is_update_set);
+                                     const bool is_update_set,
+                                     const ObIArray<ObAliasRefRawExpr *> *project_refs = NULL);
 
   int allocate_subplan_filter_as_top(ObLogicalOperator *&old_top,
                                      const common::ObIArray<ObRawExpr*> &subquery_exprs,
                                      const bool is_filter = false,
-                                     const bool for_on_condition = false);
+                                     const bool for_on_condition = false,
+                                     const ObIArray<ObAliasRefRawExpr *> *project_refs = NULL);
 
   int allocate_subplan_filter_for_on_condition(ObIArray<ObRawExpr*> &subquery_exprs, ObLogicalOperator* &top);
-
-  int prepare_partial_groupby_info(GroupByPushdownResult *&result,
-                                   ObLogicalOperator *&top);
-  int partial_group_by_pushdown(ObLogicalOperator *&top);
-
-  int partial_group_by_pushdown(ObLogicalOperator *&top,
-                                GroupByPushdownResult *&result,
-                                GroupByPushdownContext *&context);
-
-  int filter_groupby_context_by(GroupByPushdownContext *&context,
-                                ObLogicalOperator *&op,
-                                bool &can_push);
-  int default_rewrite_for_partial_group_by_pushdown(ObLogicalOperator *&top,
-                                                    GroupByPushdownResult *&result,
-                                                    GroupByPushdownContext *&current_context);
-
-  int is_eligible_for_groupby_pushdown(ObLogicalOperator *&top, bool &is_eligible);
-
-  int extract_partial_groupby_context(ObLogicalOperator *&top,
-                                      GroupByPushdownContext *&context);
-
-  int check_and_add_partial_group_by(ObLogicalOperator *&top,
-                                     GroupByPushdownContext *&context,
-                                     GroupByPushdownResult *&result);
-
-  int check_and_add_const_to_group_by(GroupByPushdownContext *&context);
 
   int partial_limit_pushdown(ObLogicalOperator *&top,
                              const int64_t limit_count,
@@ -1525,40 +1428,19 @@ public:
 
   int partial_limit_pushdown(ObLogicalOperator *&top);
 
-  int check_and_add_partial_distinct(ObLogicalOperator* &top,
-                                  DistinctPushdownContext *&context,
-                                  bool & is_materialized);
+  int add_partial_limit_as_top(ObLogicalOperator* &top, ObRawExpr *&limit_expr);
+
+  int add_partial_limit_1_as_top(ObLogicalOperator* &top);
 
   int add_partial_distinct_as_top(ObLogicalOperator* &top,
                                   const ObIArray<ObRawExpr*> &exprs,
                                   double ndv);
 
-  int get_partial_distinct_context(const ObLogDistinct *distinct_node,
-                                   DistinctPushdownContext *&context);
-
-  int get_partial_distinct_context(ObLogGroupBy *groupby_node,
-                                   DistinctPushdownContext *&context);
-
-  int alloc_partial_distinct_context(DistinctPushdownContext *&context);
-  int all_distinct_exprs_depdend_on(const ObIArray<ObRawExpr*> &exprs,
-                                    ObLogicalOperator *&op,
-                                    bool & is_true);
-
-  int filter_distinct_exprs_by(DistinctPushdownContext *&context,
-                               ObLogicalOperator *&op,
-                               ObLogicalOperator *&join_op,
-                               const common::ObIArray<ObRawExpr*> &join_exprs,
-                               bool &can_push);
-  int push_partial_distinct_into_table_scan(ObLogicalOperator *&top,
-                                            DistinctPushdownContext *&context,
-                                            bool & result);
-
-  int partial_distinct_pushdown(ObLogicalOperator *&top);
-
-  int partial_distinct_pushdown(ObLogicalOperator *&top,
-                                DistinctPushdownContext *&context,
-                                bool & result);
-  int default_rewrite_for_partial_distinct_pushdown(ObLogicalOperator *&top);
+  int add_partial_groupby_as_top(ObLogicalOperator* &top,
+                                 const ObIArray<ObRawExpr*> &groupby_exprs,
+                                 const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                 double ndv,
+                                 double child_card);
 
   int extract_strict_equal_keys(ObLogicalOperator* &top,
                                 ObIArray<ObRawExpr*> &left_keys,
@@ -1566,7 +1448,8 @@ public:
                                 ObIArray<ObRawExpr*> &left_join_exprs,
                                 ObIArray<ObRawExpr*> &right_join_exprs,
                                 bool & has_other_conditions);
-  int add_partial_limit_as_top(ObLogicalOperator* &top, ObConstRawExpr *&limit_expr);
+
+  int insert_new_node_into_plan(ObLogicalOperator *parent, ObLogicalOperator *child, ObLogicalOperator *new_node);
 
   int candi_allocate_filter(const ObIArray<ObRawExpr*> &filter_exprs);
 

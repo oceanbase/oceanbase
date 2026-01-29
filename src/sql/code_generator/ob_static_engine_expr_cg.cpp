@@ -601,6 +601,9 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
           LOG_DEBUG("external file col expr", K(ret), "path", data_access_info->data_access_path_);
         }
       }
+    } else if (T_REF_ALIAS_COLUMN == raw_expr->get_expr_type()) {
+      ObAliasRefRawExpr *alias_ref_expr = static_cast<ObAliasRefRawExpr*>(raw_expr);
+      rt_expr->extra_ = alias_ref_expr->get_project_index();
     } else if (!IS_EXPR_OP(rt_expr->type_) || IS_AGGR_FUN(rt_expr->type_)) {
       // do nothing
     } else if (OB_FAIL(expr_cg_impl.generate_expr_operator(*raw_expr, expr_op_fetcher))) {

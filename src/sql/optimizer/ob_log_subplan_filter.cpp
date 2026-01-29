@@ -25,6 +25,8 @@ int ObLogSubPlanFilter::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to get vector expr", K(ret));
   } else if (OB_FAIL(append(all_exprs, subquery_exprs_))) {
     LOG_WARN("failed to append subquery exprs", K(ret));
+  } else if (OB_FAIL(append(all_exprs, project_ref_exprs_))) {
+    LOG_WARN("failed to append project ref exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, onetime_exprs_))) {
     LOG_WARN("failed to append onetime exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, exec_params_))) {

@@ -20,6 +20,9 @@ namespace oceanbase
 namespace sql
 {
 
+template<typename R, typename C>
+class PlanVisitor;
+
 typedef common::ObIArray<common::ObString> ObStringIArray;
 
 enum LinkType {

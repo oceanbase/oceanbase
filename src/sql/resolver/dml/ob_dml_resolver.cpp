@@ -15925,10 +15925,10 @@ int ObDMLResolver::check_insert_into_select_use_fast_column_convert(const ObColu
       const ObRawExpr *target_real_ref = target_expr;
       const ObRawExpr *source_real_ref = source_expr;
       while (target_real_ref != NULL && T_REF_ALIAS_COLUMN == target_real_ref->get_expr_type()) {
-        target_real_ref = static_cast<const ObAliasRefRawExpr *>(target_real_ref)->get_ref_expr();
+        target_real_ref = static_cast<const ObAliasRefRawExpr *>(target_real_ref)->get_ref_select_expr();
       }
       while (source_real_ref != NULL && T_REF_ALIAS_COLUMN == source_real_ref->get_expr_type()) {
-        source_real_ref = static_cast<const ObAliasRefRawExpr *>(source_real_ref)->get_ref_expr();
+        source_real_ref = static_cast<const ObAliasRefRawExpr *>(source_real_ref)->get_ref_select_expr();
       }
 
       if (OB_ISNULL(target_real_ref)

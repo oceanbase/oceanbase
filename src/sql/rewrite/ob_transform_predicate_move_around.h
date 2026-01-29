@@ -60,6 +60,11 @@ public:
                                               bool &trans_happened) override;
 
   virtual int construct_transform_hint(ObDMLStmt &stmt, void *trans_params) override;
+
+  static int check_pushdown_through_groupby_validity(ObSelectStmt &stmt,
+                                                     ObRawExpr *having_expr,
+                                                     bool &is_valid);
+
 private:
   int do_transform_predicate_move_around(ObDMLStmt *&stmt, bool &trans_happened);
 
@@ -291,13 +296,9 @@ private:
   int pushdown_through_groupby(ObSelectStmt &stmt,
                                ObIArray<ObRawExpr *> &output_predicates);
 
-  int check_pushdown_through_groupby_validity(ObSelectStmt &stmt,
-                                          ObRawExpr *having_expr,
-                                          bool &is_valid);
-
-  int check_pushdown_through_rollup_validity(ObRawExpr *having_expr,
-                               const ObIArray<ObRawExpr *> &rollup_exprs,
-                               bool &is_valid);
+  static int check_pushdown_through_rollup_validity(ObRawExpr *having_expr,
+                                                    const ObIArray<ObRawExpr *> &rollup_exprs,
+                                                    bool &is_valid);
 
   int deduce_param_cond_from_aggr_cond(ObItemType expr_type,
                                        ObRawExpr *first,
@@ -364,8 +365,8 @@ private:
                         ObIArray<ObRawExpr *> &new_conds,
                         const bool preserve_conds = false);
 
-  int extract_generalized_column(ObRawExpr *expr,
-                                 ObIArray<ObRawExpr *> &output);
+  static int extract_generalized_column(ObRawExpr *expr,
+                                        ObIArray<ObRawExpr *> &output);
 
   int acquire_transform_params(ObDMLStmt *stmt, ObIArray<ObRawExpr *> *&preds);
 
@@ -392,22 +393,7 @@ private:
 
   int generate_pullup_predicates_for_subquery(ObDMLStmt &stmt, ObIArray<ObRawExpr *> &pullup_preds);
 
-  int choose_and_rename_predicates_for_subquery(ObQueryRefRawExpr *subquery,
-                                     ObIArray<ObRawExpr *> &preds,
-                                     ObIArray<ObRawExpr *> &renamed_preds);
-
   int generate_basic_table_pullup_preds(ObDMLStmt *stmt, ObIArray<ObRawExpr *> &preds);
-
-  int update_current_property(ObDMLStmt &stmt,
-                              ObIArray<ObRawExpr *> &exprs,
-                              ObIArray<ObRawExpr *> &push_down_exprs);
-
-  int get_exprs_cnt_exec(ObDMLStmt &stmt,
-                         ObIArray<ObRawExpr *> &pullup_preds,
-                         ObIArray<ObRawExpr *> &conds);
-
-  int update_subquery_pullup_preds(ObIArray<ObQueryRefRawExpr *> &subquery_exprs,
-                                  ObIArray<ObRawExpr *> &current_exprs_can_push);
 
   int remove_simple_op_null_condition(ObSelectStmt &stmt, ObIArray<ObRawExpr *> &pullup_preds);
 

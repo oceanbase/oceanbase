@@ -479,50 +479,6 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_view(
   }
   return ret;
 }
-
-int ObTransformPredicateMoveAround::update_current_property(ObDMLStmt &stmt,
-                                                    ObIArray<ObRawExpr *> &exprs,
-                                                    ObIArray<ObRawExpr *> &preds_for_subquery)
-{
-  int ret = OB_SUCCESS;
-  for (int i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
-    if (OB_NOT_NULL(exprs.at(i)) && !exprs.at(i)->has_flag(CNT_SUB_QUERY)) {
-      if (OB_FAIL(preds_for_subquery.push_back(exprs.at(i)))) {
-        LOG_WARN("push back failed", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-
-int ObTransformPredicateMoveAround::update_subquery_pullup_preds(ObIArray<ObQueryRefRawExpr *> &subquery_exprs,
-                                                                 ObIArray<ObRawExpr *> &current_property)
-{
-  int ret = OB_SUCCESS;
-  ObIArray<ObRawExpr *> *subquery_pullup_exprs = NULL;
-  ObSEArray<ObRawExpr *, 4> renamed_preds;
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); i++) {
-    ObQueryRefRawExpr *subquery = subquery_exprs.at(i);
-    renamed_preds.reuse();
-    if (OB_ISNULL(subquery)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sub query is null", K(ret));
-    } else if (OB_FAIL(choose_and_rename_predicates_for_subquery(subquery, current_property, renamed_preds))) {
-      LOG_WARN("rename predicates failed", K(ret));
-    } else if (OB_FAIL(acquire_transform_params(subquery->get_ref_stmt(), subquery_pullup_exprs))) {
-      LOG_WARN("failed to acquire pull up preds", K(ret));
-    } else if (OB_ISNULL(subquery_pullup_exprs)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(append(*subquery_pullup_exprs, renamed_preds))) {
-      LOG_WARN("push back failed", K(ret));
-    }
-  }
-
-  return ret;
-}
-
 int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDMLStmt &stmt,
                                                                     ObIArray<ObRawExpr *> &pullup_preds)
 {
@@ -533,88 +489,6 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates_for_subquery(ObDM
   if (OB_FAIL(append(current_property, pullup_preds))) {
     LOG_WARN("append failed", K(ret));
   } else {
-      // where condition
-    if (OB_FAIL(update_current_property(stmt, stmt.get_condition_exprs(), current_property))) {
-      LOG_WARN("get scope preds failed", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(stmt.get_condition_exprs(),
-                                                                subquery_exprs, /*with_nest*/false))) {
-      LOG_WARN("extract subquery failed", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::remove_dup_expr(processed_subquery, subquery_exprs))) {
-        LOG_WARN("remove dup failed", K(ret));
-    } else if (OB_FAIL(update_subquery_pullup_preds(subquery_exprs, current_property))) {
-      LOG_WARN("update subquery pullup preds failed", K(ret));
-    } else if (OB_FAIL(append_array_no_dup(processed_subquery, subquery_exprs))) {
-      LOG_WARN("add var no dup failed", K(ret));
-    }
-
-    if (OB_SUCC(ret) && stmt.is_select_stmt()) {
-      ObSelectStmt &sel_stmt = static_cast<ObSelectStmt &>(stmt);
-      // group by
-      subquery_exprs.reset();
-      if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(sel_stmt.get_group_exprs(),
-                                                                  subquery_exprs, /*with_nest*/false))) {
-        LOG_WARN("extract subquery failed", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::remove_dup_expr(processed_subquery, subquery_exprs))) {
-        LOG_WARN("remove dup failed", K(ret));
-      } else if (OB_FAIL(update_subquery_pullup_preds(subquery_exprs, current_property))) {
-        LOG_WARN("update subquery pullup preds failed", K(ret));
-      } else if (OB_FAIL(append_array_no_dup(processed_subquery, subquery_exprs))) {
-        LOG_WARN("add var no dup failed", K(ret));
-      }
-
-      // having
-      if (OB_FAIL(ret)) {
-      } else if (OB_FALSE_IT(subquery_exprs.reset())) {
-      } else if (OB_FAIL(update_current_property(stmt, sel_stmt.get_having_exprs(),
-                                                            current_property))) {
-        LOG_WARN("get scope preds failed", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(sel_stmt.get_having_exprs(),
-                                                                  subquery_exprs, /*with_nest*/false))) {
-        LOG_WARN("extract subquery failed", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::remove_dup_expr(processed_subquery, subquery_exprs))) {
-        LOG_WARN("remove dup failed", K(ret));
-      } else if (OB_FAIL(update_subquery_pullup_preds(subquery_exprs, current_property))) {
-        LOG_WARN("update subquery pullup preds failed", K(ret));
-      } else if (OB_FAIL(append_array_no_dup(processed_subquery, subquery_exprs))) {
-        LOG_WARN("add var no dup failed", K(ret));
-      }
-
-
-      //select
-      ObSEArray<ObRawExpr *, 4> select_exprs;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FALSE_IT(subquery_exprs.reset())) {
-      } else if (OB_FAIL(sel_stmt.get_select_exprs(select_exprs))) {
-        LOG_WARN("get sel expr failed", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(select_exprs,
-                                                                  subquery_exprs, /*with_nest*/false))) {
-        LOG_WARN("extract subquery failed", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::remove_dup_expr(processed_subquery, subquery_exprs))) {
-        LOG_WARN("remove dup failed", K(ret));
-      } else if (OB_FAIL(update_subquery_pullup_preds(subquery_exprs, current_property))) {
-        LOG_WARN("update subquery pullup preds failed", K(ret));
-      } else if (OB_FAIL(append_array_no_dup(processed_subquery, subquery_exprs))) {
-        LOG_WARN("add var no dup failed", K(ret));
-      }
-
-      //order
-      ObSEArray<ObRawExpr *, 4> order_exprs;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FALSE_IT(subquery_exprs.reset())) {
-      } else if (OB_FAIL(sel_stmt.get_order_exprs(order_exprs))) {
-        LOG_WARN("get sel expr failed", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(order_exprs,
-                                                                  subquery_exprs, /*with_nest*/false))) {
-        LOG_WARN("extract subquery failed", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::remove_dup_expr(processed_subquery, subquery_exprs))) {
-        LOG_WARN("remove dup failed", K(ret));
-      } else if (OB_FAIL(update_subquery_pullup_preds(subquery_exprs, current_property))) {
-        LOG_WARN("update subquery pullup preds failed", K(ret));
-      } else if (OB_FAIL(append_array_no_dup(processed_subquery, subquery_exprs))) {
-        LOG_WARN("add var no dup failed", K(ret));
-      }
-    }
-
     ObArray<int64_t> dummy_sels;
     ObArray<ObRawExpr *> dummy_expr;
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_subquery_exprs().count(); i++) {
@@ -672,55 +546,6 @@ int ObTransformPredicateMoveAround::generate_basic_table_pullup_preds(ObDMLStmt 
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObTransformPredicateMoveAround::choose_and_rename_predicates_for_subquery(ObQueryRefRawExpr *subquery,
-                                                                   ObIArray<ObRawExpr *> &preds,
-                                                                   ObIArray<ObRawExpr *> &renamed_preds)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 4> exec_params;
-  ObSEArray<ObRawExpr *, 4> subquery_columns;
-  if (OB_ISNULL(subquery) || OB_ISNULL(ctx_) ||
-      OB_ISNULL(subquery->get_ref_stmt()) || OB_ISNULL(ctx_->expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sub query is null", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < subquery->get_param_count(); i++) {
-      if (OB_FAIL(subquery_columns.push_back(subquery->get_param_expr(i)))) {
-        LOG_WARN("push back failed", K(ret));
-      } else if (OB_FAIL(exec_params.push_back(subquery->get_exec_param(i)))) {
-        LOG_WARN("push back failed", K(ret));
-      }
-    }
-    ObRawExprCopier copier(*ctx_->expr_factory_);
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(copier.add_replaced_expr(subquery_columns, exec_params))) {
-      LOG_WARN("add replaced expr failed", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < preds.count(); i++) {
-      int64_t state = 0;
-      ObRawExpr *new_pred = NULL;
-      if (OB_FAIL(check_expr_pullup_validity(preds.at(i), subquery_columns, state))) {
-        LOG_WARN("check expr pullup validity failed", K(ret));
-      } else if (state != 1) {
-        LOG_DEBUG("state is not 1");
-      } else if (OB_FAIL(copier.copy(preds.at(i), new_pred))) {
-        LOG_WARN("failed to copy on replace expr", K(ret));
-      } else if (OB_ISNULL(new_pred)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("pred is null", K(ret));
-      } else if (OB_FAIL(new_pred->formalize(ctx_->session_info_))) {
-        LOG_WARN("failed to formalize expr", K(ret));
-      } else if (OB_FAIL(new_pred->pull_relation_id())) {
-        LOG_WARN("failed to pull relation id and levels", K(ret));
-      } else if (OB_FAIL(renamed_preds.push_back(new_pred))) {
-        LOG_WARN("push back failed", K(ret));
-      }
-    }
-    LOG_TRACE("show renamed preds", K(preds), K(renamed_preds));
   }
   return ret;
 }
@@ -2091,8 +1916,6 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(sel_stmt, pullup_preds,
                                                            table_set, input_preds))) {
     LOG_WARN("failed to get related pullup preds", K(ret));
-  } else if (OB_FAIL(get_exprs_cnt_exec(sel_stmt, pullup_preds, input_preds))) { //exec param stored in pullup is useful certainly.
-    LOG_WARN("get exec expr failed", K(ret));
   } else if (OB_FAIL(append(input_preds, pushdown_preds))) {
     LOG_WARN("failed to append push down predicates", K(ret));
   } else if (OB_FAIL(append(target_exprs, columns))) {
@@ -2109,41 +1932,6 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
                                        pullup_preds,
                                        new_having_exprs))) {
     LOG_WARN("failed to check different", K(ret));
-  }
-  return ret;
-}
-
-int ObTransformPredicateMoveAround::get_exprs_cnt_exec(ObDMLStmt &stmt,
-                                                       ObIArray<ObRawExpr *> &pullup_preds,
-                                                       ObIArray<ObRawExpr *> &conds)
-{
-  int ret = OB_SUCCESS;
-  ObSqlBitSet<> right_rel_ids;
-  SemiInfo *semi_info = NULL;
-  int32_t idx = OB_INVALID_INDEX;
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_semi_infos().count(); ++i) {
-    if (OB_ISNULL(semi_info = stmt.get_semi_infos().at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("semi info is null", K(ret));
-    } else if (OB_FALSE_IT(idx = stmt.get_table_bit_index(semi_info->right_table_id_))) {
-    } else if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect idx", K(ret));
-    } else if (OB_FAIL(right_rel_ids.add_member(idx))) {
-      LOG_WARN("failed to add members", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < pullup_preds.count(); i++)  {
-    ObRawExpr *expr = pullup_preds.at(i);
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null", K(ret));
-    } else if (expr->get_relation_ids().overlap(right_rel_ids)) {
-    } else if (!expr->has_flag(CNT_DYNAMIC_PARAM)) {
-      //do nothing
-    } else if (OB_FAIL(conds.push_back(expr))) {
-      LOG_WARN("push back failed", K(ret));
-    }
   }
   return ret;
 }
@@ -2176,8 +1964,6 @@ int ObTransformPredicateMoveAround::pushdown_into_where(ObDMLStmt &stmt,
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(stmt, pullup_preds,
                                                            table_set, all_conds))) {
     LOG_WARN("failed to get related pullup preds", K(ret));
-  } else if (OB_FAIL(get_exprs_cnt_exec(stmt, pullup_preds, all_conds))) { //exec param stored in pullup is useful.
-    LOG_WARN("get exec expr failed", K(ret));
   } else if (OB_FAIL(append(all_conds, predicates))) {
     LOG_WARN("failed to append push down predicates", K(ret));
   } else if (OB_FAIL(transform_predicates(stmt, conditions, all_conds, columns, new_conds,
@@ -2311,7 +2097,8 @@ int ObTransformPredicateMoveAround::pushdown_into_qualify_filter(ObIArray<ObRawE
 }
 
 int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSelectStmt &stmt,
-  ObRawExpr *having_expr, bool &is_valid)
+                                                                            ObRawExpr *having_expr,
+                                                                            bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = false;

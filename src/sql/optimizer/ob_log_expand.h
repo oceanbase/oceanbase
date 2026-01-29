@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_OB_LOG_EXPAND_H_
 
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "lib/container/ob_tuple.h"
 
 namespace oceanbase
@@ -23,6 +24,8 @@ namespace sql
 class ObHashRollupInfo;
 class ObGroupingSetInfo;
 using DupRawExprPair = ObTuple<ObRawExpr *, ObRawExpr *>;
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogExpand : public ObLogicalOperator
 {

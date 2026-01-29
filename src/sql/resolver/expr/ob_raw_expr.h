@@ -3502,8 +3502,10 @@ public:
   int inner_deep_copy(ObIRawExprCopier &copier) override;
   virtual int replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
                            const common::ObIArray<ObRawExpr *> &new_exprs);
-  const ObRawExpr *get_ref_expr() const;
-  ObRawExpr *get_ref_expr();
+  const ObRawExpr *get_ref_select_expr() const;
+  ObRawExpr *get_ref_select_expr();
+  const ObRawExpr *get_query_ref_expr() const { return ref_expr_; }
+  ObRawExpr *get_query_ref_expr() { return ref_expr_; }
   void set_ref_expr(ObRawExpr *ref_expr) { ref_expr_ = ref_expr; }
   bool is_ref_query_output() const
   { return ref_expr_->is_query_ref_expr() && project_index_ != OB_INVALID_INDEX; }

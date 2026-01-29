@@ -22,6 +22,8 @@ namespace oceanbase
 namespace sql
 {
 class ObSelectLogPlan;
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogInsert : public ObLogDelUpd
 {

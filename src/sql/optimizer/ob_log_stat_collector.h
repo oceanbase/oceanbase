@@ -13,12 +13,16 @@
 #ifndef OCEANBASE_SQL_OB_LOG_STAT_COLLECTOR_H_
 #define OCEANBASE_SQL_OB_LOG_STAT_COLLECTOR_H_
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/px/ob_px_basic_info.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+template<typename R, typename C>
+class PlanVisitor;
 
 class ObLogStatCollector : public ObLogicalOperator
 {

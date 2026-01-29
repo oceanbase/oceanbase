@@ -37,6 +37,7 @@
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "observer/ob_server.h"
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -5303,6 +5304,37 @@ int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
         }
       }
       break;
+      case PRE_CALC_JSON_CONTAINS_PRECISE:
+      case PRE_CALC_JSON_CONTAINS_NOT_PRECISE: {
+        ObArenaAllocator allocator(ObModIds::JSON_PARSER);
+        ObIJsonBase *j_base = nullptr;
+        if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(obj_param,
+                                                                    &exec_ctx,
+                                                                    false,
+                                                                    &allocator,
+                                                                    j_base))) {
+          LOG_WARN("failed to refine range json value const", K(ret));
+        } else if (OB_ISNULL(j_base)) {
+          is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_NOT_PRECISE;
+        } else if (j_base->is_json_scalar(j_base->json_type())) {
+          is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_PRECISE;
+        } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+          if (j_base->element_count() == 1) {
+            is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_PRECISE;
+          } else {
+            is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_NOT_PRECISE;
+          }
+        } else {
+          is_match = expect_result_ == PRE_CALC_JSON_CONTAINS_NOT_PRECISE;
+        }
+      }
+      break;
+      case PRE_CALC_JSON_TYPE: {
+        if (OB_FAIL(ObJsonTypeConstraint::check_is_match(obj_param, exec_ctx, extra, is_match))) {
+          LOG_WARN("failed to check json type is match", K(ret));
+        }
+      }
+      break;
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected expect res type", K_(expect_result), K(ret));
@@ -5357,6 +5389,50 @@ int ObRowidConstraint::check_is_match(ObDatumObjParam &datum_param,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObJsonTypeConstraint::check_is_match(ObObjParam &obj_param,
+                                         ObExecContext &exec_ctx,
+                                         ObConstraintExtra *extra,
+                                         bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::JSON_PARSER);
+  ObIJsonBase *j_base = nullptr;
+  JsonType json_type = JSON_TYPE_SCALAR;
+  int32_t array_element_count = 0;
+  if (OB_ISNULL(extra)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected extra", K(ret));
+  } else if (OB_FALSE_IT(json_type = static_cast<JsonType>(get_json_type(extra->extra_)))) {
+  } else if (OB_FALSE_IT(array_element_count = get_element_count(extra->extra_))) {
+  } else if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(obj_param,
+                                                                     &exec_ctx,
+                                                                     false,
+                                                                     &allocator,
+                                                                     j_base))) {
+    LOG_WARN("failed to refine range json value const", K(ret));
+  } else if (OB_ISNULL(j_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get json base", K(ret));
+  } else if (json_type == JSON_TYPE_SCALAR) {
+    is_match = j_base->is_json_scalar(j_base->json_type());
+  } else if (json_type == JSON_TYPE_ARRAY) {
+    int32_t element_count = static_cast<int32_t>(j_base->element_count());
+    is_match = array_element_count == element_count;
+  } else if (json_type == JSON_TYPE_JSON_CONTAINS_NO_INDEX_MERGE) {
+    if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+      is_match = j_base->element_count() >= array_element_count;
+    } else {
+      is_match = false;
+    }
+  } else if (json_type == JSON_TYPE_NOT_ARRAY_OR_SCALAR) {
+    is_match = !j_base->is_json_scalar(j_base->json_type()) &&
+               j_base->json_type() != common::ObJsonNodeType::J_ARRAY;
+  } else {
+    is_match = false;
   }
   return ret;
 }

@@ -390,6 +390,11 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             ret = OB_ERR_NOT_SUBQUERY;
             LOG_WARN("subquery is cte", K(ret));
           } else if (columns.count() > 1) {
+            // TODO tuliwei.tlw change to new version
+            // if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0 && OB_FAIL(try_add_remove_const_epxr(*sel_stmt))) {
+            //   LOG_WARN("failed to add remove const expr", K(ret));
+            // }
+            // YIHUA-TAG
             if (OB_FAIL(try_add_remove_const_epxr(*sel_stmt))) {
               LOG_WARN("failed to add remove const expr", K(ret));
             }

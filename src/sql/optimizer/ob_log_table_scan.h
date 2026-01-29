@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_SQL_OB_LOG_TABLE_SCAN_H
 #define OCEANBASE_SQL_OB_LOG_TABLE_SCAN_H
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
@@ -27,6 +28,8 @@ namespace oceanbase
 namespace sql
 {
 class Path;
+template<typename R, typename C>
+class PlanVisitor;
 
 struct ObTextRetrievalInfo
 {
@@ -725,6 +728,10 @@ public:
 
   inline common::ObIArray<ObRawExpr *> &get_pushdown_groupby_columns() { return pushdown_groupby_columns_; }
 
+  inline bool has_group_by_or_aggr()
+  {
+    return !(pushdown_groupby_columns_.empty() && pushdown_aggr_exprs_.empty());
+  }
   inline const common::ObIArray<ObRawExpr *> &get_pushdown_groupby_columns() const { return pushdown_groupby_columns_; }
   inline const common::ObIArray<ObRawExpr *> &get_domain_exprs() const { return domain_exprs_; }
 
@@ -836,6 +843,7 @@ public:
     return ret;
   }
   int get_path_ordering(common::ObIArray<ObRawExpr *> &order_exprs);
+  int update_optimizer_info(const JoinFilterInfo &join_filter_info) const override;
 
   inline void set_table_opt_info(BaseTableOptInfo *table_opt_info)
   { table_opt_info_ = table_opt_info; }
@@ -849,7 +857,6 @@ public:
   ObPxBFStaticInfo &get_join_filter_info() { return bf_info_; }
 
   void set_join_filter_info(ObPxBFStaticInfo &bf_info) { bf_info_ = bf_info; }
-
   inline BaseTableOptInfo* get_table_opt_info() { return table_opt_info_; }
 
   ObPxRFStaticInfo &get_px_rf_info() { return px_rf_info_; }
@@ -1145,7 +1152,10 @@ public:
   inline bool is_spiv_vec_scan() const {return vector_index_info_.is_spiv_scan();}
   inline ObVecIndexInfo &get_vector_index_info() { return vector_index_info_; }
   inline const ObVecIndexInfo &get_vector_index_info() const { return vector_index_info_; }
-
+  inline bool has_limit() const {
+    return (push_down_top_n_info_.limit_count_expr_ != NULL ||
+            push_down_top_n_info_.limit_offset_expr_ != NULL);
+  }
   inline bool das_need_keep_ordering() const { return das_keep_ordering_; }
   inline bool need_get_rowkey_exprs() const
   {
