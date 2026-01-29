@@ -401,7 +401,7 @@ TEST_F(ObTTLSchemaServiceTest, append_only_merge_engine_defense_test)
   EXEC_FAIL(sql); // should fail
 }
 
-TEST_F(ObTTLSchemaServiceTest, DISABLED_ttl_flag_and_inheritance)
+TEST_F(ObTTLSchemaServiceTest, ttl_flag_and_inheritance)
 {
   ObTenantSwitchGuard tguard;
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(tenant_id_));

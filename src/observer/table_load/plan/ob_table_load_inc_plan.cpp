@@ -25,6 +25,8 @@
 #include "observer/table_load/plan/ob_table_load_table_op_define.h"
 #include "observer/table_load/plan/ob_table_load_unique_index_table_row_handler.h"
 #include "observer/table_load/plan/ob_table_load_unique_index_to_delete_data_table_channel.h"
+#include "observer/table_load/plan/ob_table_load_data_to_insert_index_table_channel.h"
+#include "observer/table_load/plan/ob_table_load_data_to_delete_index_table_channel.h"
 
 namespace oceanbase
 {
@@ -147,12 +149,17 @@ private:
   OB_DEFINE_TABLE_LOAD_LOB_TABLE_OP(INC_LOB_TABLE_DELETE_OP, IncLobTableDeleteOp, CHANNEL_INPUT,
                                     LOB_ID, MERGE_WITH_ORIGIN_QUERY_FOR_LOB, INC,
                                     ObTableLoadNormalRowHandler, OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG);
-  // 普通索引表插入算子
-  OB_DEFINE_TABLE_LOAD_INDEX_TABLE_OP(INC_INDEX_TABLE_INSERT_OP, IncIndexTableInsertOp,
+  //索引表插入delete行保留完成行 DELETE_INSERT_ENGINE
+  OB_DEFINE_TABLE_LOAD_INDEX_TABLE_OP(INC_INDEX_TABLE_DELETE_OP, IncIndexTableDeleteOp,
                                       CHANNEL_INPUT, FULL_ROW, NORMAL, INC,
                                       ObTableLoadNormalRowHandler,
                                       OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG);
 
+  //索引表插入insert行 DELE_INSERT_ENGINE
+  OB_DEFINE_TABLE_LOAD_INDEX_TABLE_OP(INC_INDEX_TABLE_INSERT_OP, IncIndexTableInsertOp,
+                                      CHANNEL_INPUT, FULL_ROW, NORMAL, INC,
+                                      ObTableLoadNormalRowHandler,
+                                      OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG);
   //////////////////////// 定义TableChannel ////////////////////////
   // 格式: up_table_op_type, down_table_op_type, table_channel, desc
 private:
@@ -163,7 +170,9 @@ private:
       "data_insert -> data_delete_conflict")                                                   \
   DEF(INC_DATA_TABLE_INSERT_OP, INC_DATA_TABLE_INSERT_CONFLICT_OP, ObTableLoadDataToInsertDataTableChannel,   \
       "data_insert -> data_insert_conflict")                                                   \
-  DEF(INC_DATA_TABLE_INSERT_OP, INC_INDEX_TABLE_INSERT_OP, ObTableLoadDataToIndexTableChannel, \
+  DEF(INC_DATA_TABLE_INSERT_OP, INC_INDEX_TABLE_DELETE_OP, ObTableLoadDataToDeleteIndexTableChannel, \
+      "data_insert -> index_delete") \
+  DEF(INC_DATA_TABLE_INSERT_OP, INC_INDEX_TABLE_INSERT_OP, ObTableLoadDataToInsertIndexTableChannel, \
       "data_insert -> index_insert")
 
   OB_TABLE_LOAD_TABLE_ALLOC_CHANNEL_DEFINE();
@@ -255,14 +264,26 @@ int ObTableLoadIncPKTablePlan::generate()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected table has unique index", KR(ret));
       } else { // 普通索引
+        ObTableLoadIncIndexTableDeleteOp *index_table_delete_op = nullptr;
         ObTableLoadIncIndexTableInsertOp *index_table_insert_op = nullptr;
-        if (OB_FAIL(ObTableLoadIncIndexTableInsertOp::build(this, index_table_ctx,
-                                                            index_table_insert_op))) {
+        if (OB_FAIL(ObTableLoadIncIndexTableDeleteOp::build(this, index_table_ctx,
+                                                            index_table_delete_op))) {
+          LOG_WARN("fail to alloc op", KR(ret));
+        }
+        // 普通索引表数据来源于数据表
+        else if (OB_FAIL(index_table_delete_op->add_dependency(
+                   data_table_insert_op, ObTableLoadDependencyType::DATA_DEPENDENCY))) {
+          LOG_WARN("fail to add dependency", KR(ret));
+        } else if (OB_FAIL(ObTableLoadIncIndexTableInsertOp::build(this, index_table_ctx,
+                                                                   index_table_insert_op))) {
           LOG_WARN("fail to alloc op", KR(ret));
         }
         // 普通索引表数据来源于数据表
         else if (OB_FAIL(index_table_insert_op->add_dependency(
                    data_table_insert_op, ObTableLoadDependencyType::DATA_DEPENDENCY))) {
+          LOG_WARN("fail to add dependency", KR(ret));
+        } else if (OB_FAIL(index_table_insert_op->add_dependency(
+                     index_table_delete_op, ObTableLoadDependencyType::BUSINESS_DEPENDENCY))) {
           LOG_WARN("fail to add dependency", KR(ret));
         }
       }
@@ -324,7 +345,7 @@ private:
                                       OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG);
   //唯一索引表删除冲突行算子
   OB_DEFINE_TABLE_LOAD_INDEX_TABLE_OP(INC_UNIQUE_INDEX_TABLE_DELETE_CONFLICT_OP, IncUniqueIndexTableDeleteConflictOp,
-                                      CHANNEL_INPUT, FULL_ROW, NORMAL_WITH_PK_DELETE_ROW, INC,
+                                      CHANNEL_INPUT, FULL_ROW, NORMAL, INC,
                                       ObTableLoadNormalRowHandler,
                                       OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG);
   //唯一索引表插入冲突行算子
@@ -351,7 +372,7 @@ private:
                                     ObTableLoadNormalRowHandler, OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG);
   // 普通索引表删除算子
   OB_DEFINE_TABLE_LOAD_INDEX_TABLE_OP(INC_INDEX_TABLE_DELETE_OP, IncIndexTableDeleteOp,
-                                      CHANNEL_INPUT, FULL_ROW, NORMAL_WITH_PK_DELETE_ROW, INC,
+                                      CHANNEL_INPUT, FULL_ROW, NORMAL, INC,
                                       ObTableLoadNormalRowHandler,
                                       OB_TABLE_LOAD_INC_BASIC_OPEN_FLAG);
   //////////////////////// 定义TableChannel ////////////////////////

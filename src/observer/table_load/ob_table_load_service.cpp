@@ -588,12 +588,12 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       } else if (OB_FAIL(ObTableLoadSchema::check_has_delete_insert_engine_index(
                    schema_guard, table_schema, has_delete_insert_engine_index))) {
         LOG_WARN("fail to check has delete insert engine index", KR(ret));
-      } else if (has_delete_insert_engine_index) {
+      } else if (has_delete_insert_engine_index && compat_version < DATA_VERSION_4_5_1_0) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("incremental direct-load does not support table with delete insert engine index",
+          LOG_WARN("version lower than 4.5.1.0 does not support table with delete insert engine index",
                    KR(ret));
           FORWARD_USER_ERROR_MSG(
-            ret, "incremental direct-load does not support table with delete insert engine index");
+            ret, "version lower than 4.5.1.0 does not support table with delete insert engine index");
       } else if (compat_version < DATA_VERSION_4_4_0_0 &&
                table_schema->is_delete_insert_merge_engine() &&
                ObDirectLoadInsertMode::INC_REPLACE == insert_mode) {

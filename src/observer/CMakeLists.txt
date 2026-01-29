@@ -352,7 +352,9 @@ ob_set_subtarget(ob_server table_load
   table_load/plan/ob_table_load_data_channel.cpp
   table_load/plan/ob_table_load_data_table_row_handler.cpp
   table_load/plan/ob_table_load_data_to_delete_data_table_channel.cpp
+  table_load/plan/ob_table_load_data_to_delete_index_table_channel.cpp
   table_load/plan/ob_table_load_data_to_insert_data_table_channel.cpp
+  table_load/plan/ob_table_load_data_to_insert_index_table_channel.cpp
   table_load/plan/ob_table_load_data_to_index_table_channel.cpp
   table_load/plan/ob_table_load_data_to_lob_table_channel.cpp
   table_load/plan/ob_table_load_dml_row_handler.cpp

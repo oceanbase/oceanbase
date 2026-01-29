@@ -2053,6 +2053,13 @@ int ObIndexBuilder::generate_schema(
       if (data_schema.is_append_only_merge_engine()) {
         // index should inherit the append_only merge engine type of the data table
         schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY);
+      } else if (data_schema.is_delete_insert_merge_engine()) {
+        if (arg.store_columns_.count() > 0) {
+          FLOG_INFO("index with storing column will not inherit the delete insert merge engine type of the data table",
+              K(arg.index_type_), K(arg.index_table_id_), K(arg.data_table_id_), K(arg.store_columns_), K(arg.hidden_store_columns_));
+        } else {
+          schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+        }
       }
     }
     if (OB_FAIL(ret)) {

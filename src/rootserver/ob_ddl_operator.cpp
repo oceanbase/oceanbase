@@ -4597,10 +4597,7 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_enable_macro_block_bloom_filter(new_table_schema.get_enable_macro_block_bloom_filter());
           new_aux_table_schema.set_lob_inrow_threshold(new_table_schema.get_lob_inrow_threshold());
           new_aux_table_schema.set_micro_block_format_version(new_table_schema.get_micro_block_format_version());
-          if (!new_table_schema.is_delete_insert_merge_engine()) {
-            // index should inherit the append_only merge engine type of the data table
-            new_aux_table_schema.set_merge_engine_type(new_table_schema.get_merge_engine_type());
-          }
+          new_aux_table_schema.set_merge_engine_type(new_table_schema.get_merge_engine_type());
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(new_aux_table_schema.set_ttl_definition(
