@@ -458,10 +458,20 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           obrpc::ObAlterTableRes res;
           alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
+          if (create_table_res.table_id_ != OB_INVALID_ID) {
+            alter_table_arg.alter_table_schema_.set_table_id(create_table_res.table_id_);
+          }
           if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
             LOG_WARN("failed to update table session", K(ret), K(alter_table_arg));
             if (alter_table_arg.compat_mode_ == lib::Worker::CompatMode::ORACLE && OB_ERR_TABLE_EXIST == ret) {
               ret = OB_ERR_EXIST_OBJECT;
+            }
+          }
+          if (OB_SUCC(ret) && res.schema_version_ != OB_INVALID_VERSION) {
+            // alter table成功后需要刷到最新的schema，防止CTAS清理任务看到过期的CTAS临时表的schema后将表误删了
+            if (OB_FAIL(gctx.schema_service_->async_refresh_schema(my_session->get_effective_tenant_id(),
+                                                                   res.schema_version_))) {
+              LOG_WARN("failed to async refresh schema");
             }
           }
         }
