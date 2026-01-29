@@ -2243,7 +2243,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
           SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
         }
       } else if ((0 == func_name.case_compare("str_to_date") // STR_TO_DATE(str,format)
-                  || 0 == func_name.case_compare("to_date") // TO_DATE(str,format) - Oracle DFM format should not be parameterized
+                  || (lib::is_mysql_mode() && 0 == func_name.case_compare("to_date") ) // TO_DATE(str,format) - MySQL mode cannot parameterize, need deduce type depend on format
                   || 0 == func_name.case_compare("date_format") //DATE_FORMAT(date,format)
                   || 0 == func_name.case_compare("formatDateTime") //formatDateTime(date,format)
                   || 0 == func_name.case_compare("from_unixtime")//FROM_UNIXTIME(unix_timestamp), FROM_UNIXTIME(unix_timestamp,format)
