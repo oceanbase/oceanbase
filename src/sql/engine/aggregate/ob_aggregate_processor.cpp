@@ -1536,7 +1536,7 @@ int ObAggregateProcessor::init()
       if (aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT
           || aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS
           || aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-        approx_cnt_distinct_prec_ = aggr_info.expr_->extra_;
+        approx_cnt_distinct_prec_ = ObAggrInfo::get_valid_approx_cnt_prec(aggr_info.expr_->extra_);
       }
       if (T_FUN_MEDIAN == aggr_info.get_expr_type()
           || T_FUN_GROUP_PERCENTILE_CONT == aggr_info.get_expr_type()) {
