@@ -570,7 +570,7 @@ public:
   uint64_t get_rowkey_vid_table_id() { return rowkey_vid_table_id_; }
   uint64_t get_vid_rowkey_table_id() { return vid_rowkey_table_id_; }
   void close_snap_data_rb_flag() {
-    if (is_mem_data_init_atomic(VIRT_SNAP)) {
+    if (OB_NOT_NULL(snap_data_)) {
       snap_data_->rb_flag_ = false;
     }
   }
@@ -762,6 +762,8 @@ public:
            && snapshot_tablet_id_ == ctx.snapshot_tablet_id_
            && data_tablet_id_ == ctx.data_tablet_id_;
   }
+  void set_index_statistics_updated(bool value) { index_statistics_updated_ = value; }
+
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
               KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),
               K_(data_tablet_id),K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id),
@@ -855,6 +857,7 @@ private:
   common::ObSpinLock reload_lock_;  // lock for reload from table
   RWLock query_lock_;// lock for async task and query
   bool reload_finish_;
+  bool index_statistics_updated_;
 
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;

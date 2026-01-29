@@ -411,7 +411,7 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
     ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
-    query_lock_(), reload_finish_(false)
+    query_lock_(), reload_finish_(false), index_statistics_updated_(false)
 {
 }
 
@@ -1514,7 +1514,14 @@ int ObPluginVectorIndexAdaptor::check_if_need_optimize(ObVectorQueryAdaptorResul
   int64_t incr_count = follower_sync_statistics_.incr_count_;
   int64_t bitmap_count = follower_sync_statistics_.vbitmap_count_;
   bitmap_count = MAX(incr_count, bitmap_count);
-  if (!need_be_optimized_) {
+  bool snap_data_loaded = false;
+  if (OB_NOT_NULL(snap_data_)) {
+    snap_data_loaded = !snap_data_->rb_flag_;
+  }
+  if (snap_count == 0 && (!snap_data_loaded || !index_statistics_updated_)) {
+    // skip optimize
+    LOG_DEBUG("skip optimize", K(ret), K(snap_data_loaded), K_(index_statistics_updated), K(snap_count), K(incr_count), K(bitmap_count));
+  } else if (!need_be_optimized_) {
     int64_t delete_count = 0;
     int64_t insert_count = 0;
     if (OB_NOT_NULL(ctx) && OB_NOT_NULL(ctx->bitmaps_)) {
@@ -1528,6 +1535,7 @@ int ObPluginVectorIndexAdaptor::check_if_need_optimize(ObVectorQueryAdaptorResul
     if (snap_count + incr_count + insert_count == 0) {
     } else if (static_cast<double_t>(delete_count + insert_count + bitmap_count) / static_cast<double_t>(snap_count + incr_count + insert_count) > VEC_INDEX_OPTIMIZE_RATIO) {
       need_be_optimized_ = true;
+      LOG_INFO("need optimize", K(ret), K(snap_count), K(incr_count), K(insert_count), K(delete_count), K(bitmap_count), K_(need_be_optimized), K(snap_data_loaded), K_(index_statistics_updated));
     }
   }
   return ret;
@@ -2320,6 +2328,9 @@ int ObPluginVectorIndexAdaptor::renew_single_snap_index(bool mem_saving_mode)
         LOG_WARN("failed to free snap memdata", K(ret), KPC(this));
       } else if (OB_FAIL(set_snapshot_key_prefix(invalid_prefix))) {
         LOG_WARN("fail to set snapshot key prefix", K(ret));
+      } else {
+        snap_data_->rb_flag_ = true;
+        index_statistics_updated_ = false;
       }
     }
   // snap_data_->index_ is null for empty table 
@@ -3511,6 +3522,8 @@ int ObPluginVectorIndexAdaptor::merge_parital_index_adapter(ObPluginVectorIndexA
         LOG_WARN("partial vector index adapter not valid", K(partial_idx_adpt), K(*this), KR(ret));
       } else if (OB_FAIL(merge_mem_data_(VIRT_SNAP, partial_idx_adpt, partial_idx_adpt->snap_data_, snap_data_))){
         LOG_WARN("partial vector index adapter not valid", K(partial_idx_adpt), K(*this), KR(ret));
+      } else {
+        set_index_statistics_updated(partial_idx_adpt->index_statistics_updated_);
       }
       if (OB_SUCC(ret) && !partial_idx_adpt->get_snapshot_key_prefix().empty()) {
         if (OB_FAIL(set_snapshot_key_prefix(partial_idx_adpt->get_snapshot_key_prefix()))) {
@@ -3627,6 +3640,7 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(ObPlu
       follower_sync_statistics_.incr_count_ = current_incr_count;
       follower_sync_statistics_.vbitmap_count_ = current_bitmap_count;
       follower_sync_statistics_.snap_count_ = current_snapshot_count;
+      index_statistics_updated_ = true;
     }
 
     int tmp_ret = OB_SUCCESS;

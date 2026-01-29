@@ -592,6 +592,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
     if (OB_FAIL(table_scan_iter->get_next_row(row))) {
       if (OB_ITER_END == ret) {
+        adapter->close_snap_data_rb_flag();
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get next row", K(ret));
