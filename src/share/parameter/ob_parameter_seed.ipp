@@ -2862,7 +2862,9 @@ DEF_INT(_max_access_entries_for_external_table_partition, OB_TENANT_PARAMETER, "
 DEF_BOOL(_enable_direct_load_hidden_table_partition_pruning, OB_TENANT_PARAMETER, "False",
          "Enable or disable hidden table partition pruning for direct load.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_INT(_mv_adaptive_complete_refresh_threshold, OB_TENANT_PARAMETER, "0", "[0, 100]",
+        "adaptive complete refresh percentage threshold, set to 0 to disable adaptive complete refresh",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // for upgraded tenant, default _append_update_global_indexes_for_dynamic_partition will be OFF
 // for new created tenant, default _append_update_global_indexes_for_dynamic_partition will be AUTO
 DEF_STR_WITH_CHECKER(_append_update_global_indexes_for_dynamic_partition, OB_TENANT_PARAMETER, "OFF",
