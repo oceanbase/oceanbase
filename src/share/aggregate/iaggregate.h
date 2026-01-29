@@ -1491,11 +1491,10 @@ public:
   {
     int ret = OB_SUCCESS;
     if (!is_lob_outrow(data, data_len)) {
-      sql::EvalBound bound(batch_size, batch_idx, batch_idx + 1, true);
-      int64_t mock_skip_data = 0;
-      ObBitVector &mock_skip = *to_bit_vector(&mock_skip_data);
-      ret = static_cast<Aggregate *>(agg_)->add_batch_rows(agg_ctx, agg_col_idx, mock_skip, bound,
-                                                           agg_cell);
+      if (OB_FAIL(static_cast<Aggregate *>(agg_)->add_one_row(agg_ctx, batch_idx, batch_size, is_null,
+                                                              data, data_len, agg_col_idx, agg_cell))) {
+        SQL_LOG(WARN, "add one row failed", K(ret));
+      }
     }
     return ret;
   }
