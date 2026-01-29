@@ -158,7 +158,6 @@ int ObStaticDataStoreDesc::init(
     concurrent_cnt_ = concurrent_cnt;
     micro_block_format_version_ = merge_schema.get_micro_block_format_version();
     reorganization_scn_ = reorganization_scn;
-    ObSemiStructEncodingType semi_type;
 
     if (compaction::is_mds_merge(merge_type_)) {
       // Disable for mds table.
@@ -176,12 +175,23 @@ int ObStaticDataStoreDesc::init(
 
     if (FAILEDx(init_encryption_info(merge_schema))) {
       STORAGE_LOG(WARN, "fail to get encrypt info from table schema", K(ret));
-    } else if (OB_FAIL(merge_schema.get_semistruct_encoding_type(semi_type))) {
-      STORAGE_LOG(WARN, "Failed to get semistruct encoding type", K(ret), K(semi_type));
-    } else if (semi_type.is_enable_semistruct_encoding() &&
-          OB_FAIL(semistruct_properties_.resolve_semistruct_properties(semi_type.mode_, merge_schema.get_semistruct_properties()))) {
-      STORAGE_LOG(WARN, "Failed to resolve semistruct properties", K(ret), K(semi_type));
+    } else if (is_major) {
+      // only enable semistruct encoding for major merge
+      ObSemiStructEncodingType semi_type;
+      if (OB_FAIL(merge_schema.get_semistruct_encoding_type(semi_type))) {
+        STORAGE_LOG(WARN, "Failed to get semistruct encoding type", K(ret),
+                    K(semi_type));
+      } else if (semi_type.is_enable_semistruct_encoding() &&
+                 OB_FAIL(semistruct_properties_.resolve_semistruct_properties(
+                     semi_type.mode_,
+                     merge_schema.get_semistruct_properties()))) {
+        STORAGE_LOG(WARN, "Failed to resolve semistruct properties", K(ret),
+                    K(semi_type));
+      }
     } else {
+      semistruct_properties_.reset();
+    }
+    if (OB_SUCC(ret)) {
       schema_version_ = merge_schema.get_schema_version();
       snapshot_version_ = snapshot_version;
       progressive_merge_round_ = merge_schema.get_progressive_merge_round();
