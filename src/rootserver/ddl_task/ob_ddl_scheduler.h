@@ -447,7 +447,8 @@ private:
       const obrpc::ObCreateIndexArg *create_index_arg,
       const uint64_t tenant_data_version,
       ObIAllocator &allocator,
-      ObDDLTaskRecord &task_record);
+      ObDDLTaskRecord &task_record,
+      const bool ddl_need_retry_at_executor = false);
   int create_build_vec_index_task(
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *data_table_schema,

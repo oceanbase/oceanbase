@@ -60,7 +60,8 @@ ObVecIVFIndexBuildTask::ObVecIVFIndexBuildTask()
     is_rebuild_index_(false),
     root_service_(nullptr),
     create_index_arg_(),
-    dependent_task_result_map_()
+    dependent_task_result_map_(),
+    is_retryable_ddl_(true)
 {
 }
 
@@ -81,7 +82,8 @@ int ObVecIVFIndexBuildTask::init(
     const uint64_t tenant_data_version,
     const int64_t parent_task_id /* = 0 */,
     const int64_t task_status /* PREPARE */,
-    const int64_t snapshot_version)
+    const int64_t snapshot_version,
+    const bool is_retryable_ddl)
 {
   int ret = OB_SUCCESS;
   const bool is_rebuild_index = create_index_arg.is_rebuild_index_;
@@ -136,6 +138,7 @@ int ObVecIVFIndexBuildTask::init(
     start_time_ = ObTimeUtility::current_time();
     data_format_version_ = tenant_data_version;
     is_rebuild_index_ = is_rebuild_index;
+    is_retryable_ddl_ = is_retryable_ddl;
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(task_status_ = static_cast<ObDDLTaskStatus>(task_status))) {
     } else if (OB_FAIL(init_ddl_task_monitor_info(index_schema->get_table_id()))) {
@@ -1381,6 +1384,7 @@ int ObVecIVFIndexBuildTask::serialize_params_to_message(
   int8_t pq_rowkey_cid_table_task_submitted = static_cast<int8_t>(pq_rowkey_cid_table_task_submitted_);
   int8_t drop_index_submitted = static_cast<int8_t>(drop_index_task_submitted_);
   int8_t is_rebuild_index = static_cast<int8_t>(is_rebuild_index_);
+  int8_t is_retryable_ddl = static_cast<int8_t>(is_retryable_ddl_);
 
   if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1461,6 +1465,9 @@ int ObVecIVFIndexBuildTask::serialize_params_to_message(
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos,
                                            is_rebuild_index))) {
     LOG_WARN("serialize drop index task id failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos,
+                                           is_retryable_ddl))) {
+    LOG_WARN("serialize is retryable ddl failed", K(ret));
   }
   return ret;
 }
@@ -1483,6 +1490,7 @@ int ObVecIVFIndexBuildTask::deserialize_params_from_message(
   int8_t drop_index_submitted = 0;
   int8_t is_rebuild_index = 0;
   int64_t child_task_num = 0;
+  int8_t is_retryable_ddl = true;
   SMART_VAR(obrpc::ObCreateIndexArg, tmp_arg) {
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf ||  data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1566,6 +1574,8 @@ int ObVecIVFIndexBuildTask::deserialize_params_from_message(
     LOG_WARN("fail to deserialize drop vec index task id", K(ret));
   } else if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &is_rebuild_index))) {
     LOG_WARN("fail to deserialize is_rebuild_index", K(ret));
+  } else if (data_len - pos > 0 && OB_FAIL(serialization::decode_i8(buf, data_len, pos, &is_retryable_ddl))) {
+    LOG_WARN("fail to deserialize is_retryable_ddl", K(ret));
   } else {
     centroid_table_task_submitted_ = centroid_table_task_submitted;
     cid_vector_table_task_submitted_ = cid_vector_table_task_submitted;
@@ -1576,7 +1586,7 @@ int ObVecIVFIndexBuildTask::deserialize_params_from_message(
     pq_rowkey_cid_table_task_submitted_ = pq_rowkey_cid_table_task_submitted;
     drop_index_task_submitted_ = drop_index_submitted;
     is_rebuild_index_ = is_rebuild_index;
-
+    is_retryable_ddl_ = is_retryable_ddl;
     if (share::schema::is_vec_ivfflat_index(create_index_arg_.index_type_)) {
       if (OB_FAIL(build_ivfflat_dependent_task_result_map())) {
         LOG_WARN("fail to build ivfflat dependent task result map", K(ret));
@@ -1741,6 +1751,7 @@ int64_t ObVecIVFIndexBuildTask::get_serialize_param_size() const
   int8_t pq_rowkey_cid_table_task_submitted = static_cast<int8_t>(pq_rowkey_cid_table_task_submitted_);
   int8_t drop_index_submitted = static_cast<int8_t>(drop_index_task_submitted_);
   int8_t is_rebuild_index = static_cast<int8_t>(is_rebuild_index_);
+  int8_t is_retryable_ddl = static_cast<int8_t>(is_retryable_ddl_);
   return create_index_arg_.get_serialize_size()
       + ObDDLTask::get_serialize_param_size()
       + serialization::encoded_length(centroid_table_id_)
@@ -1766,7 +1777,8 @@ int64_t ObVecIVFIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i64(pq_rowkey_cid_table_id_)
       + serialization::encoded_length_i8(drop_index_submitted)
       + serialization::encoded_length_i64(drop_index_task_id_)
-      + serialization::encoded_length_i8(is_rebuild_index);
+      + serialization::encoded_length_i8(is_rebuild_index)
+      + serialization::encoded_length_i8(is_retryable_ddl);
 }
 
 int ObVecIVFIndexBuildTask::print_child_task_ids(char *buf, int64_t len)
