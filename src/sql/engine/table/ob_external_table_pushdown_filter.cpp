@@ -323,11 +323,13 @@ int ObExternalTablePushdownFilter::apply_bloom_filter(
           } else {
             node.filter_->get_filter_bool_mask().set_uncertain();
             const ObDatum* datum = nullptr;
-            get_datum_to_apply_bloom_filter(eval_ctx, *node.filter_, &datum);
             const int64_t ext_tbl_col_id = file_filter_col_ids_.at(i);
-            if (datum == nullptr) {
+            if (OB_FAIL(get_datum_to_apply_bloom_filter(eval_ctx, *node.filter_, &datum))) {
+              LOG_TRACE("failed to get datum to apply bloom filter, ignore it", K(ret), K(*node.filter_));
+              ret = OB_SUCCESS;
+            } else if (datum == nullptr || datum->is_null()) {
               LOG_TRACE("filter is not qualified to apply bloom filter",
-                        K(ext_tbl_col_id), K(*node.filter_));
+                        K(ext_tbl_col_id), K(*node.filter_), KP(datum));
             } else {
               // group by ext_tbl_col_id
               common::ObSEArray<int64_t, 1> *res =
