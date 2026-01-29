@@ -595,16 +595,16 @@ bool ObBasicTabletMergeCtx::is_valid() const
   bool bret = false;
   if (OB_UNLIKELY(!static_param_.is_valid())) {
     bret = false;
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "static param is invalid", K(ret), K(static_param_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "static param is invalid", K(static_param_));
   } else if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
     bret = false;
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "tablet handle is invalid", K(ret), K(tablet_handle_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "tablet handle is invalid", K(tablet_handle_));
   } else if (OB_UNLIKELY(!parallel_merge_ctx_.is_valid())) {
     bret = false;
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "parallel_merge_ctx is invalid", K(ret), K(parallel_merge_ctx_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "parallel_merge_ctx is invalid", K(parallel_merge_ctx_));
   } else if (OB_UNLIKELY(!read_info_.is_valid())) {
     bret = false;
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "read_info is invalid", K(ret), K(read_info_));
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "read_info is invalid", K(read_info_));
   } else {
     bret = true;
   }
@@ -1314,8 +1314,10 @@ int ObBasicTabletMergeCtx::alloc_mds_info_compaction_filter()
     LOG_WARN("unexpected not ready static param", KR(ret), KP_(static_param_.rowkey_read_info));
   } else if (OB_FAIL(mds_info_mgr.init(tmp_allocator, *get_tablet(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
     LOG_WARN("failed to init mds filter info mgr", KR(ret), K(read_version_range));
-  } else if (OB_FAIL(mds_info_mgr.check_mds_filter_info(filter_ctx_.mds_filter_info_))) {
+  } else if (!is_meta_major_merge(get_merge_type()) && OB_FAIL(mds_info_mgr.check_mds_filter_info(filter_ctx_.mds_filter_info_))) {
     LOG_WARN("failed to check mds filter info", KR(ret), K(read_version_range));
+  } else if (is_meta_major_merge(get_merge_type()) && OB_FAIL(mds_info_mgr.fill_mds_filter_info(mem_ctx_.get_allocator(), filter_ctx_.mds_filter_info_))) {
+    LOG_WARN("failed to fill mds filter info", KR(ret), K(read_version_range));
   } else if (filter_ctx_.mds_filter_info_.is_empty()) {
     LOG_DEBUG("mds filter info is empty", KR(ret), K_(filter_ctx), K(read_version_range));
   } else if (FALSE_IT(schema_rowkey_cnt = static_param_.rowkey_read_info_->get_schema_rowkey_count())) {

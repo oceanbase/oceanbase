@@ -1827,8 +1827,8 @@ bool ObCOMergeDagNet::operator ==(const ObIDagNet &other) const
   if (get_type() == other.get_type()) {
     const ObCOMergeDagNet &other_dag_net = static_cast<const ObCOMergeDagNet&>(other);
     if (merge_type_ == other_dag_net.merge_type_
-        || ls_id_ == other_dag_net.ls_id_
-        || tablet_id_ == other_dag_net.tablet_id_) {
+        && ls_id_ == other_dag_net.ls_id_
+        && tablet_id_ == other_dag_net.tablet_id_) {
       bret = true;
     }
   }

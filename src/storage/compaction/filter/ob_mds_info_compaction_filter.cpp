@@ -56,7 +56,7 @@ int ObMdsInfoCompactionFilter::filter(
     filter_ret = FILTER_RET_NOT_CHANGE;
     LOG_TRACE("[TRUNCATE_INFO] keep row", KR(ret), K(row), K(filtered)); // for debug, remove later
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 
