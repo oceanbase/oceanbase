@@ -251,7 +251,7 @@ ObExternalStreamFileReader::~ObExternalStreamFileReader()
 }
 
 const char *  ObExternalStreamFileReader::MEMORY_LABEL = "ExternalReader";
-const int64_t ObExternalStreamFileReader::COMPRESSED_DATA_BUFFER_SIZE = 2 * 1024 * 1024;
+const int64_t ObExternalStreamFileReader::DEFAULT_COMPRESSED_DATA_BUFFER_SIZE = 2 * 1024 * 1024;
 
 int ObExternalStreamFileReader::init(const common::ObString &location,
                              const ObString &access_info,
@@ -312,6 +312,9 @@ void ObExternalStreamFileReader::close()
     is_file_end_ = true;
     file_offset_ = 0;
     file_size_   = 0;
+    compress_data_size_ = 0;
+    consumed_data_size_ = 0;
+    uncompressed_size_ = 0;
     LOG_DEBUG("close file");
   }
 }
@@ -424,10 +427,35 @@ int ObExternalStreamFileReader::read_compressed_data()
     compress_data_size_ = 0;
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (decompressor_->compression_format() == ObCSVGeneralFormat::ObCSVCompression::SNAPPY) {
+    // guarantee to read all data in once
+    int64_t capacity  = compressed_data_capacity_ - compress_data_size_;
+    char *read_pos = read_buffer;
+    bool is_read_empty = false;
+    while (OB_SUCC(ret)
+           && capacity > 0
+           && file_offset_ < file_size_
+           && !is_read_empty) {
+      int64_t read_size = 0;
+      ret = read_from_driver(read_pos, capacity, read_size);
+      if (OB_SUCC(ret)) {
+        compress_data_size_ += read_size;
+        capacity -= read_size;
+        read_pos += read_size;
+      }
+      is_read_empty = (read_size == 0);
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (file_offset_ < file_size_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unable to read all data in once", K(ret), K(compressed_data_capacity_), K(compress_data_size_), K(capacity), K(file_offset_), K(file_size_));
+    }
+  } else {
     // read data from source reader
     int64_t read_size = 0;
-    int64_t capacity  = COMPRESSED_DATA_BUFFER_SIZE - compress_data_size_;
+    int64_t capacity  = compressed_data_capacity_ - compress_data_size_;
     ret = read_from_driver(read_buffer, capacity, read_size);
     if (OB_SUCC(ret)) {
       compress_data_size_ += read_size;
@@ -445,7 +473,20 @@ int ObExternalStreamFileReader::create_decompressor(ObCSVGeneralFormat::ObCSVCom
     ObDecompressor::destroy(decompressor_);
     decompressor_ = nullptr;
   } else if (OB_NOT_NULL(decompressor_) && decompressor_->compression_format() == compression_format) {
-    // do nothing
+    // reuse decompressor, but need to check buffer size for snappy
+    if (decompressor_->compression_format() == ObCSVGeneralFormat::ObCSVCompression::SNAPPY) {
+      if (file_size_ > compressed_data_capacity_) {
+        if (OB_NOT_NULL(compressed_data_)) {
+          allocator_->free(compressed_data_);
+          compressed_data_ = nullptr;
+        }
+        compressed_data_capacity_ = file_size_;
+        if (OB_ISNULL(compressed_data_ = (char *)allocator_->alloc(compressed_data_capacity_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to reallocate memory for larger snappy file", K(ret), K(compressed_data_capacity_), K(file_size_));
+        }
+      }
+    }
   } else {
     if (OB_NOT_NULL(decompressor_)) {
       ObDecompressor::destroy(decompressor_);
@@ -454,10 +495,15 @@ int ObExternalStreamFileReader::create_decompressor(ObCSVGeneralFormat::ObCSVCom
 
     if (OB_FAIL(ObDecompressor::create(compression_format, *allocator_, decompressor_))) {
       LOG_WARN("failed to create decompressor", K(ret));
-    } else if (OB_ISNULL(compressed_data_) &&
-               OB_ISNULL(compressed_data_ = (char *)allocator_->alloc(COMPRESSED_DATA_BUFFER_SIZE))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(COMPRESSED_DATA_BUFFER_SIZE));
+    } else if (OB_ISNULL(compressed_data_)) {
+      compressed_data_capacity_ = DEFAULT_COMPRESSED_DATA_BUFFER_SIZE;
+      if (decompressor_->compression_format() == ObCSVGeneralFormat::ObCSVCompression::SNAPPY) {
+        compressed_data_capacity_ = file_size_;  // snappy need read all data in one call
+      }
+      if (OB_ISNULL(compressed_data_ = (char *)allocator_->alloc(compressed_data_capacity_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(compressed_data_capacity_));
+      }
     }
   }
   return ret;

@@ -170,8 +170,6 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
 
   if (OB_FAIL(ret)) {
   } else if (ObLakeTableFormat::HIVE == table_format) {
-    Strings partition_names;
-    PartitionValuesRows part_values_rows;
     hive::ObHiveTableMetadata *hive_table_metadata = NULL;
     if (OB_ISNULL(hive_table_metadata
                   = OB_NEWx(hive::ObHiveTableMetadata, &allocator, allocator))) {

@@ -550,18 +550,49 @@ int ObExternalTableFileManager::get_external_files_from_cache(
                K(tmp_external_table_files.count()),
                K(reorder_part_id.count()));
     } else {
+      int64_t file_id_base = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < tmp_external_table_files.count(); ++i) {
-        OZ(convert_to_file_infos(allocator,
-                                 tmp_external_table_files.at(i),
-                                 range_filter,
-                                 reorder_part_id.at(i),
-                                 is_local_file_on_disk,
-                                 file_path_filter,
-                                 external_files));
+        OZ(convert_collected_files_to_infos(allocator,
+                                            tmp_external_table_files.at(i),
+                                            range_filter,
+                                            reorder_part_id.at(i),
+                                            is_local_file_on_disk,
+                                            file_path_filter,
+                                            file_id_base,
+                                            external_files));
       }
     }
   }
 
+  return ret;
+}
+
+// 从文件系统收集后转换，file_id 由调用者通过 file_id_base 控制
+int ObExternalTableFileManager::convert_collected_files_to_infos(
+    ObIAllocator &allocator, const ObExternalTableFiles *ext_files,
+    ObIArray<ObNewRange *> *range_filter, int64_t partition_id,
+    const bool is_local_file_on_disk, ObExternalPathFilter &filter,
+    int64_t &file_id_base, ObIArray<ObExternalFileInfo> &external_files) {
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < ext_files->file_urls_.count(); ++i) {
+    bool in_ranges = false;
+    bool is_filtered = false;
+    if (filter.is_inited() &&
+        OB_FAIL(filter.is_filtered(ext_files->file_urls_.at(i), is_filtered))) {
+      LOG_WARN("fail to check is filtered", K(ret),
+               K(ext_files->file_urls_.at(i)));
+    }
+    int64_t file_id = ++file_id_base;
+    if (OB_FAIL(ret)) {
+    } else if (range_filter != NULL &&
+               OB_FAIL(ObExternalTableUtils::is_file_id_in_ranges(
+                   *range_filter, file_id, in_ranges))) {
+      LOG_WARN("failed to judge file id in ranges", K(ret));
+    } else if ((range_filter == NULL || in_ranges) && !is_filtered) {
+      OZ(fill_single_file_info(allocator, ext_files, i, partition_id, file_id,
+                               is_local_file_on_disk, external_files));
+    }
+  }
   return ret;
 }
 
@@ -783,8 +814,6 @@ int ObExternalTableFileManager::get_external_files_by_part_id(
     }
   }
 
-  ObExprRegexContext regexp_ctx;
-  ObExternalPathFilter filter(regexp_ctx, allocator);
   if ((OB_SUCC(ret) && is_cache_value_timeout(*ext_files))
       || OB_ENTRY_NOT_EXIST == ret) {
     if (OB_FAIL(fill_cache_from_inner_table(key, ext_files, handle))) {
@@ -793,14 +822,13 @@ int ObExternalTableFileManager::get_external_files_by_part_id(
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(convert_to_file_infos(allocator,
-                                      ext_files,
-                                      range_filter,
-                                      partition_id,
-                                      is_local_file_on_disk,
-                                      filter,
-                                      external_files))) {
-      LOG_WARN("fail to convert to file infos", K(ret));
+    if (OB_FAIL(convert_cached_files_to_infos(allocator,
+                                              ext_files,
+                                              range_filter,
+                                              partition_id,
+                                              is_local_file_on_disk,
+                                              external_files))) {
+      LOG_WARN("fail to convert cached files to infos", K(ret));
     }
   }
 
@@ -808,55 +836,56 @@ int ObExternalTableFileManager::get_external_files_by_part_id(
   return ret;
 }
 
-int ObExternalTableFileManager::convert_to_file_infos(
+// 从内部表缓存转换，使用已有的 file_ids
+int ObExternalTableFileManager::convert_cached_files_to_infos(
     ObIAllocator &allocator,
     const ObExternalTableFiles *ext_files,
-    ObIArray<ObNewRange *> *range_filter /*default = NULL*/,
+    ObIArray<ObNewRange *> *range_filter,
     int64_t partition_id,
     const bool is_local_file_on_disk,
-    ObExternalPathFilter &filter,
     ObIArray<ObExternalFileInfo> &external_files)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < ext_files->file_urls_.count(); ++i) {
     bool in_ranges = false;
-    bool is_filtered = false;
-    if (filter.is_inited()
-        && OB_FAIL(filter.is_filtered(ext_files->file_urls_.at(i), is_filtered))) {
-      LOG_WARN("fail to check is filtered", K(ret), K(ext_files->file_urls_.at(i)));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (range_filter != NULL
-               && OB_FAIL(ObExternalTableUtils::is_file_id_in_ranges(*range_filter,
-                                                                     ext_files->file_ids_.at(i),
-                                                                     in_ranges))) {
+    int64_t file_id = ext_files->file_ids_.at(i);
+    if (range_filter != NULL
+        && OB_FAIL(ObExternalTableUtils::is_file_id_in_ranges(*range_filter, file_id, in_ranges))) {
       LOG_WARN("failed to judge file id in ranges", K(ret));
-    } else if ((range_filter == NULL || in_ranges) && !is_filtered) {
-      ObExternalFileInfo file_info;
-      ObString file_url = ext_files->file_urls_.at(i);
-      file_info.file_size_ = ext_files->file_sizes_.at(i);
-      file_info.part_id_ = partition_id;
-      if (i < ext_files->file_ids_.count() - 1) {
-        file_info.file_id_ = ext_files->file_ids_.at(i);
-      }
-      if (i < ext_files->modify_times_.count() - 1) {
-        file_info.modify_time_ = ext_files->modify_times_.at(i);
-      }
-      if (is_local_file_on_disk) {
-        ObString ip_port = file_url.split_on(ip_delimiter);
-        OZ(file_info.file_addr_.parse_from_string(ip_port));
-      }
-      OZ(ob_write_string(allocator, file_url, file_info.file_url_));
-      if (i < ext_files->content_digests_.count() - 1) {
-        ObString content_digest = ext_files->content_digests_.at(i);
-        OZ(ob_write_string(allocator, content_digest, file_info.content_digest_));
-      }
-      OZ(external_files.push_back(file_info));
+    } else if (range_filter == NULL || in_ranges) {
+      OZ(fill_single_file_info(allocator, ext_files, i, partition_id, file_id, is_local_file_on_disk, external_files));
     }
   }
   return ret;
 }
 
+
+int ObExternalTableFileManager::fill_single_file_info(
+    ObIAllocator &allocator, const ObExternalTableFiles *ext_files,
+    int64_t index, int64_t partition_id, int64_t file_id,
+    const bool is_local_file_on_disk,
+    ObIArray<ObExternalFileInfo> &external_files) {
+  int ret = OB_SUCCESS;
+  ObExternalFileInfo file_info;
+  ObString file_url = ext_files->file_urls_.at(index);
+  file_info.file_size_ = ext_files->file_sizes_.at(index);
+  file_info.part_id_ = partition_id;
+  file_info.file_id_ = file_id;
+  if (index < ext_files->modify_times_.count()) {
+    file_info.modify_time_ = ext_files->modify_times_.at(index);
+  }
+  if (is_local_file_on_disk) {
+    ObString ip_port = file_url.split_on(ip_delimiter);
+    OZ(file_info.file_addr_.parse_from_string(ip_port));
+  }
+  OZ(ob_write_string(allocator, file_url, file_info.file_url_));
+  if (index < ext_files->content_digests_.count()) {
+    ObString content_digest = ext_files->content_digests_.at(index);
+    OZ(ob_write_string(allocator, content_digest, file_info.content_digest_));
+  }
+  OZ(external_files.push_back(file_info));
+  return ret;
+}
 
 int ObExternalTableFileManager::build_row_for_file_name(ObNewRow &row, ObIAllocator &allocator)
 {
@@ -1710,131 +1739,6 @@ int ObExternalTableFileManager::collect_files_content_digest(
   } else if (OB_FAIL(collector.collect_files_content_digest(file_urls, content_digests))) {
     LOG_WARN("failed to get file list", K(ret));
   }
-  return ret;
-}
-
-int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
-    const ObString &location,
-    const uint64_t tenant_id,
-    const ObString &pattern,
-    const ObExprRegexpSessionVariables &regexp_vars,
-    ObExternalTableFiles &external_table_files,
-    const ObString &access_info,
-    ObIAllocator &allocator,
-    int64_t refresh_interval_ms)
-{
-  int ret = OB_SUCCESS;
-  const ObExternalTableFiles *table_files_from_cache = NULL;
-
-  if (refresh_interval_ms > 0) {
-    ObExternalTableFiles tmp_file_list;
-    ObKVCacheHandle handle;
-    ObExternalTableFileListKey key;
-    key.tenant_id_ = tenant_id;
-    key.path_ = location;
-    ObExternalFileInfoCollector collector(allocator);
-    ObSEArray<ObString, 1> tmp_locations;
-    ObSEArray<int64_t, 1> tmp_location_modify_ts;
-    int64_t modify_ts = -1;
-
-    if (OB_FAIL(tmp_locations.push_back(location))) {
-      LOG_WARN("fail to push back location", K(ret), K(location));
-    } else if (OB_FAIL(collector.init(location, access_info))) {
-      LOG_WARN("failed to init", K(ret), K(location), K(access_info));
-    } else if (OB_FAIL(
-                   collector.collect_files_modify_time(tmp_locations, tmp_location_modify_ts))) {
-      LOG_WARN("failed to get file list", K(ret), K(location));
-    } else if (tmp_location_modify_ts.count() != 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("should get one modify ts", K(ret), K(location), K(tmp_location_modify_ts.count()));
-    } else if (OB_FALSE_IT(modify_ts = tmp_location_modify_ts.at(0))) {
-    } else if (OB_FAIL(external_file_list_cache_.get(key, table_files_from_cache, handle))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("fail to get from external_file_list_cache", K(ret), K(key));
-      }
-    }
-
-    if ((OB_SUCC(ret)
-         && (modify_ts != table_files_from_cache->modify_ts_
-             || is_cache_value_timeout(table_files_from_cache->create_ts_, refresh_interval_ms)))
-        || OB_ENTRY_NOT_EXIST == ret) {
-      // only one worker need do the job
-      int64_t bucket_id = key.hash() % LOAD_CACHE_LOCK_CNT;
-      int64_t total_wait_secs = 0;
-
-      // lock
-      while (OB_FAIL(get_lock(bucket_id)->lock(LOCK_TIMEOUT)) && OB_TIMEOUT == ret
-             && OB_SUCC(THIS_WORKER.check_status())) {
-        total_wait_secs += (LOCK_TIMEOUT / 1000000);
-        LOG_WARN("fill external table cache wait", K(ret), K(total_wait_secs));
-      }
-
-      // fetch again
-      if (OB_FAIL(external_file_list_cache_.get(key, table_files_from_cache, handle))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("fail to get from external_file_list_cache", K(ret), K(key));
-        }
-      }
-
-      if ((OB_SUCC(ret)
-           && (modify_ts != table_files_from_cache->modify_ts_
-               || is_cache_value_timeout(table_files_from_cache->create_ts_, refresh_interval_ms)))
-          || OB_ENTRY_NOT_EXIST == ret) {
-        if (OB_FAIL(get_external_file_list_on_device(location,
-                                                     modify_ts,
-                                                     pattern,
-                                                     regexp_vars,
-                                                     access_info,
-                                                     allocator,
-                                                     tmp_file_list))) {
-          LOG_WARN("fail to get from external file list",
-                   K(ret),
-                   K(key),
-                   K(location),
-                   K(modify_ts),
-                   K(pattern),
-                   K(access_info));
-        } else if (OB_FAIL(external_file_list_cache_.put_and_fetch(key,
-                                                                   tmp_file_list,
-                                                                   table_files_from_cache,
-                                                                   handle,
-                                                                   true))) {
-          LOG_WARN("fail to put and get external file list to cache", K(ret), K(key));
-        }
-      }
-
-      // unlock
-      if (get_lock(bucket_id)->self_locked()) {
-        get_lock(bucket_id)->unlock();
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_NOT_NULL(table_files_from_cache)) {
-        external_table_files.file_urls_.assign(table_files_from_cache->file_urls_);
-        external_table_files.file_sizes_.assign(table_files_from_cache->file_sizes_);
-        external_table_files.modify_times_.assign(table_files_from_cache->modify_times_);
-      } else {
-        LOG_WARN("fail to get external files from cache", K(ret), K(key));
-      }
-    }
-  } else {
-    if (OB_FAIL(get_external_file_list_on_device(location,
-                                                 -1,  // useless
-                                                 pattern,
-                                                 regexp_vars,
-                                                 access_info,
-                                                 allocator,
-                                                 external_table_files))) {
-      LOG_WARN("fail to get from external file list",
-               K(ret),
-               K(location),
-               K(pattern),
-               K(access_info));
-    }
-  }
-
-  LOG_TRACE("get files from cache", K(external_table_files));
   return ret;
 }
 

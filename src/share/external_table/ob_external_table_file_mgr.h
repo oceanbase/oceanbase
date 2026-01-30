@@ -337,13 +337,23 @@ public:
       common::ObIArray<ObExternalFileInfo> &external_files,
       common::ObIArray<ObNewRange *> *range_filter = NULL);
 
-  int convert_to_file_infos(ObIAllocator &allocator,
-                            const ObExternalTableFiles *ext_files,
-                            ObIArray<ObNewRange *> *range_filter /*default = NULL*/,
-                            int64_t partition_id,
-                            const bool is_local_file_on_disk,
-                            ObExternalPathFilter &filter,
-                            ObIArray<ObExternalFileInfo> &external_files);
+  int convert_cached_files_to_infos(ObIAllocator &allocator,
+                                    const ObExternalTableFiles *ext_files,
+                                    ObIArray<ObNewRange *> *range_filter,
+                                    int64_t partition_id,
+                                    const bool is_local_file_on_disk,
+                                    ObIArray<ObExternalFileInfo> &external_files);
+
+  int convert_collected_files_to_infos(ObIAllocator &allocator,
+                                       const ObExternalTableFiles *ext_files,
+                                       ObIArray<ObNewRange *> *range_filter,
+                                       int64_t partition_id,
+                                       const bool is_local_file_on_disk,
+                                       ObExternalPathFilter &filter,
+                                       int64_t &file_id_base,
+                                       ObIArray<ObExternalFileInfo> &external_files);
+
+
 
   int flush_cache(
       const uint64_t tenant_id,
@@ -391,16 +401,6 @@ public:
     const uint64_t table_id,
     const uint64_t part_id,
     ObMySQLTransaction &trans);
-
-  int get_external_file_list_on_device_with_cache(
-      const common::ObString &location,
-      const uint64_t tenant_id,
-      const common::ObString &pattern,
-      const sql::ObExprRegexpSessionVariables &regexp_vars,
-      ObExternalTableFiles &external_table_files,
-      const common::ObString &access_info,
-      common::ObIAllocator &allocator,
-      int64_t refresh_interval_ms);
 
   int get_external_file_list_on_device_with_cache(
       ObSQLSessionInfo &session,
@@ -472,6 +472,12 @@ public:
                                           common::ObIArray<ObString> &content_digests);
 
 private:
+  int fill_single_file_info(ObIAllocator &allocator,
+                            const ObExternalTableFiles *ext_files,
+                            int64_t index, int64_t partition_id,
+                            int64_t file_id, const bool is_local_file_on_disk,
+                            ObIArray<ObExternalFileInfo> &external_files);
+
   int collect_odps_table_statistics(const bool collect_statistic,
                                     const uint64_t tenant_id,
                                     const uint64_t table_id,

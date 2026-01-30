@@ -248,7 +248,7 @@
 #include "observer/virtual_table/ob_all_virtual_ls_migration_task.h"
 #include "observer/virtual_table/ob_all_virtual_ss_ls_tablet_reorg_info.h"
 #include "observer/virtual_table/ob_all_virtual_logservice_cluster_info.h"
-#include "observer/virtual_table/ob_list_file.h"
+#include "observer/virtual_table/ob_all_virtual_external_location_list_file.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_status.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_detect_info.h"
 #include "observer/virtual_table/ob_all_virtual_ss_diagnose_info.h"
@@ -1396,8 +1396,8 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             break;
           }
           case OB_TENANT_VIRTUAL_LIST_FILE_TID: {
-            ObListFile *listfile = NULL;
-            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObListFile, listfile))) {
+            ObExternalLocationListFile *listfile = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObExternalLocationListFile, listfile))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(listfile);
             }
             break;

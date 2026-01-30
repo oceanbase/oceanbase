@@ -180,6 +180,9 @@ int ObJavaEnv::setup_useful_path()
     LOG_WARN("failed to copy path variables from global conf", K(ret));
   } else if (OB_FAIL(check_path_exists(temp_path.ptr(), found))) {
     LOG_WARN("unable to find out connector path", K(ret), K(temp_path));
+  } else if (!found) {
+    ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
+    LOG_WARN("unable to find out java connector path", K(ret));
   } else {
     connector_path_ = temp_path.ptr();
   }
@@ -357,7 +360,7 @@ int ObJavaEnv::setup_java_env()
   jh_ = std::getenv(JAVA_HOME);
   jo_ = std::getenv(JAVA_OPTS);
 
-  LOG_INFO("setup env variables", K(ret), K(jh_), K(jo_));
+  LOG_INFO("setup basic java variables", K(ret), K(jh_), K(jo_));
   return ret;
 }
 
@@ -382,7 +385,7 @@ int ObJavaEnv::setup_java_env_classpath_and_ldlib_path()
   ch_ = std::getenv(CONNECTOR_PATH);
   cp_ = std::getenv(CLASSPATH);
   ld_ = std::getenv(LD_LIBRARY_PATH);
-  LOG_INFO("setup env variables", K(ret), K(jh_), K(jo_), K(ljo_), K(ch_), K(cp_), K(ld_));
+  LOG_INFO("setup all env variables", K(ret), K(jh_), K(jo_), K(ljo_), K(ch_), K(cp_), K(ld_));
   return ret;
 }
 

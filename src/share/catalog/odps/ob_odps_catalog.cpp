@@ -465,11 +465,16 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
       }
 
       if (OB_SUCC(ret)) {
-        common::hash::ObHashMap<ObOdpsPartitionKey, int64_t> partition_str_to_file_size;
+        common::hash::ObHashMap<ObOdpsPartitionKey, int64_t>& partition_str_to_file_size = exec_ctx->get_odps_partition_str_to_file_size();
         // get size for odps partition
-        OZ(ObExternalTableUtils::fetch_odps_partition_info(*session, format_str, partition_values_to_collect_statistic, 1,
-                            tenant_id, ref_table_id, 1, partition_str_to_file_size, allocator));
-        for (int64_t i = 0; OB_SUCC(ret) && i < partition_values_to_collect_statistic.count(); ++i) {
+        OZ(ObExternalTableUtils::fetch_odps_all_partitions_size(
+            *session, format_str, partition_values_to_collect_statistic,
+            tenant_id,
+            ref_table_id, exec_ctx->get_allocator(),
+            partition_str_to_file_size));
+        for (int64_t i = 0;
+             OB_SUCC(ret) && i < partition_values_to_collect_statistic.count();
+             ++i) {
           int64_t file_size = 0;
           OZ(partition_str_to_file_size.get_refactored(ObOdpsPartitionKey(ref_table_id, partition_values_to_collect_statistic.at(i)), file_size));
           if (file_size > max_partition_file_size) {
@@ -492,11 +497,12 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
           #if defined(OB_BUILD_CPP_ODPS)
             // get row count for odps partition
             sql::ObODPSTableRowIterator odps_driver;
-            if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::init_odps_driver(0, session, format_str, odps_driver))) {
+            ObString session_id = ObString::make_empty_string();
+            if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::init_odps_driver(ObOdpsJniConnector::OdpsFetchType::GET_ODPS_TABLE_ROW_COUNT, session, format_str, odps_driver))) {
               LOG_WARN("failed to init odps driver", K(ret));
-            } else if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::fetch_row_count(max_partition, 0, odps_driver, max_row_count))) {
-              LOG_WARN("failed to fetch row count", K(ret));
-            } else if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::fetch_row_count(ObString::make_empty_string(), 1, odps_driver, total_data_size))) {
+            } else if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::fetch_odps_partition_row_count(odps_driver, max_partition, max_row_count))) {
+              LOG_WARN("failed to obtain odps partition row count and session id", K(ret));
+            } else if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::fetch_odps_partition_size(ObString::make_empty_string(), odps_driver, total_data_size))) {
               LOG_WARN("failed to fetch row count", K(ret));
             } else {
               total_partition_count = table_schema->get_partition_num();
@@ -508,11 +514,15 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         } else {
           #if defined(OB_BUILD_JNI_ODPS)
             ObODPSJNITableRowIterator odps_driver;
-            if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(0, session, format_str, odps_driver))) {
+            ObString session_id = ObString::make_empty_string();
+            if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::init_odps_driver(ObOdpsJniConnector::OdpsFetchType::GET_ODPS_TABLE_ROW_COUNT, session, format_str, odps_driver))) {
               LOG_WARN("failed to init odps driver", K(ret));
-            } else if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::fetch_row_count(max_partition, 0, odps_driver, max_row_count))) {
-              LOG_WARN("failed to fetch row count", K(ret));
-            } else if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::fetch_row_count(ObString::make_empty_string(), 1, odps_driver, total_data_size))) {
+            } else if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::fetch_odps_partition_row_count(odps_driver, max_partition, max_row_count))) {
+              LOG_WARN("failed to obtain odps partition row count and session id", K(ret));
+            } else if (max_row_count == -1) {
+              // do nothing
+              total_data_size = 0;
+            } else if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::fetch_odps_partition_size(ObString::make_empty_string(), odps_driver, total_data_size))) {
               LOG_WARN("failed to fetch row count", K(ret));
             } else {
               total_partition_count = table_schema->get_partition_num();
@@ -601,7 +611,7 @@ int ObOdpsCatalog::get_session_and_ctx(ObSQLSessionInfo *&session, ObExecContext
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else {
-    ObExecContext *exec_ctx = session->get_cur_exec_ctx();
+    exec_ctx = session->get_cur_exec_ctx();
     if (OB_ISNULL(exec_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("exec ctx is null", K(ret));

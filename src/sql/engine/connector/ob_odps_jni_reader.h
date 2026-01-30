@@ -107,25 +107,30 @@ public:
     return cur_arrow_batch_;
   }
   // ------------ public methods for odps ------------
-  int get_odps_partition_row_count(ObIAllocator &allocator,
+  int get_odps_tunnel_partition_row_count(ObIAllocator &allocator,
                                    const ObString &partition_spec,
                                    int64_t &row_count);
-  int get_odps_partition_phy_size(ObIAllocator &allocator,
+  int get_odps_tunnel_partition_row_count_for_given_session_id(ObIAllocator &allocator,
+                                   const ObString &session_id,
+                                   const ObString &partition_spec,
+                                   int64_t &row_count);
+  int get_odps_tunnel_session_id(ObIAllocator &allocator, ObString& str);
+  int get_odps_tunnel_partition_size(ObIAllocator &allocator,
                                 const ObString &partition_spec,
                                 int64_t &phy_size);
-  int get_odps_partition_row_count_specs(ObIAllocator &allocator,
+  int get_odps_tunnel_existing_reader_row_count(int64_t &row_count);
+  int get_odps_tunnel_partitions_row_counts_specs(ObIAllocator &allocator,
                                ObSEArray<ObString, 4> &partition_specs);
-  int get_odps_partition_phy_specs(ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs);
+  int get_odps_tunnel_partitions_sizes_specs(ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs);
   int get_odps_mirror_data_columns(ObIAllocator &allocator,
                               ObSEArray<ObString, 4> &mirror_colums,
                               const ObString& mode);
-  int add_extra_optional_part_spec(const ObString& partition_spec);
-  int get_file_total_row_count(int64_t &count);
-  int get_file_total_size(int64_t &count);
-  int get_split_count(int64_t& size);
-  int get_session_id(ObIAllocator &allocator, ObString& str);
+  int get_storage_file_total_row_count(int64_t &count);
+  int get_storage_file_total_size(int64_t &count);
+  int get_storage_split_count(int64_t& size);
   int get_serilize_session(ObIAllocator& alloc, ObString& session_str);
   int get_project_timezone_info(ObIAllocator& alloc, ObString &project_timezone);
+  int add_extra_optional_part_spec(const ObString& partition_spec);
   int total_read_rows_ = 0;
   int remain_total_rows_ = 0;
   int start_offset_ = 0;

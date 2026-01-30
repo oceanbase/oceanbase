@@ -749,7 +749,34 @@ int ObGranuleIteratorOp::inner_open()
       LOG_TRACE("runtime filter extract query range in GI", K(ret), K(query_range_rf_keys_));
     }
   }
-
+  if (OB_SUCC(ret)) {
+    GITaskGenRunner *external_runner = NULL;
+     if (OB_ISNULL(pump_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pump_ is null", K(ret));
+    } else if (OB_FALSE_IT(pump_->find_external_task_runner(tsc_op_id_, external_runner))) {
+      LOG_WARN("failed to find external task generator", K(ret), K(tsc_op_id_));
+    } else {
+      ObGranuleIteratorState init_state = state_;
+      state_ = GI_EXTERNAL_TASK_GEN;
+      if (OB_NOT_NULL(external_runner)) {
+        bool is_finished = false;
+        if (OB_FAIL(external_runner->is_finished(is_finished))) {
+          LOG_WARN("failed to check if finished", K(ret));
+        } else if (!is_finished) {
+          if (OB_FAIL(external_runner->run_task(this))) {
+            LOG_WARN("failed to get next granule task", K(ret));
+          }
+        } else { // should not finish before open
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("finish before open", K(ret), K(tsc_op_id_));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        state_ = init_state;
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(child_)) {
       ret = OB_NOT_INIT;
@@ -767,8 +794,13 @@ int ObGranuleIteratorOp::inner_open()
       // we must set state_ = GI_PREPARED to get all tasks during rescan
       state_ = GI_PREPARED;
       skip_prepare_table_scan = true;
-    } else if (!skip_prepare_table_scan && OB_FAIL(prepare_table_scan())) {
-      LOG_WARN("prepare table scan failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (!skip_prepare_table_scan) {
+      if (OB_FAIL (prepare_table_scan())) {
+        LOG_WARN("prepare table scan failed", K(ret));
+      }
     }
   }
 
@@ -1076,6 +1108,38 @@ int ObGranuleIteratorOp::try_get_rows(const int64_t max_row_cnt)
     }
     }
   } while(!(got_next_row || OB_FAIL(ret)));
+  return ret;
+}
+
+// round_robin = true means limit count of fetched tasks <= total_task_count /
+// parallelism
+int ObGranuleIteratorOp::get_next_granule_task_map_for_range_gen_parallel() {
+  int ret = OB_SUCCESS;
+  bool partition_pruning = true;
+  while (OB_SUCC(ret) && partition_pruning) {
+    if (OB_FAIL(do_get_next_granule_task(partition_pruning, false))) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("failed to get all granule task", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObGranuleIteratorOp::fetch_task_for_range_gen_parallel(
+    int64_t tsc_op_id, ObGranuleTaskInfo &task_info) {
+  int ret = OB_SUCCESS;
+  GIPrepareTaskMap *gi_prepare_map = nullptr;
+  if (OB_FAIL(ctx_.get_gi_task_map(gi_prepare_map))) {
+    LOG_WARN("Failed to get gi task map", K(ret));
+  } else if (OB_FAIL(gi_prepare_map->get_refactored(tsc_op_id_, task_info))) {
+    if (ret != OB_HASH_NOT_EXIST) {
+      LOG_WARN("failed to get prepare gi task", K(ret), K(tsc_op_id_));
+    } else {
+      LOG_TRACE("no prepared task info", K(tsc_op_id_), K(this), K(lbt()));
+      ret = OB_SUCCESS;
+    }
+  }
   return ret;
 }
 

@@ -1030,6 +1030,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/ob_dfo_scheduler.cpp
   engine/px/ob_granule_iterator_op.cpp
   engine/px/ob_granule_pump.cpp
+  engine/px/ob_granule_parallel_task_gen.cpp
   engine/px/ob_granule_util.cpp
   engine/px/ob_px_admission.cpp
   engine/px/ob_px_bloom_filter.cpp

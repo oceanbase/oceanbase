@@ -30,7 +30,17 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
 {
   int ret = OB_SUCCESS;
   bool has_file_format = false;
-  if (OB_FAIL(format.csv_format_.init_format(ObDataInFileStruct(),
+  ObDataInFileStruct data_in_file_struct;
+  bool default_csv_escape_char_is_none = true;
+  OZ(params.session_info_->check_feature_enable(
+                      ObCompatFeatureType::DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
+                      default_csv_escape_char_is_none));
+  // feature version >= 4.5.1.0, default escaped char is none in external table and url table
+  if (OB_SUCC(ret) && default_csv_escape_char_is_none) {
+    data_in_file_struct.field_escaped_char_ = INT64_MAX;
+    data_in_file_struct.field_escaped_str_ = "";
+  }
+  if (OB_SUCC(ret) && OB_FAIL(format.csv_format_.init_format(data_in_file_struct,
                                             OB_MAX_COLUMN_NUMBER,
                                             CS_TYPE_UTF8MB4_BIN))) {
     LOG_WARN("failed to init csv format", K(ret));

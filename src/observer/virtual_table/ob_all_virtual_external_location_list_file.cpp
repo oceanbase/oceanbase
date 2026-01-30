@@ -11,7 +11,7 @@
 */
 
 #define USING_LOG_PREFIX SERVER
-#include "observer/virtual_table/ob_list_file.h"
+#include "observer/virtual_table/ob_all_virtual_external_location_list_file.h"
 #include "share/schema/ob_schema_printer.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_utils.h"
@@ -26,21 +26,21 @@ namespace oceanbase
 namespace observer
 {
 
-ObListFile::ObListFile()
+ObExternalLocationListFile::ObExternalLocationListFile()
     : ObVirtualTableScannerIterator()
 {
 }
 
-ObListFile::~ObListFile()
+ObExternalLocationListFile::~ObExternalLocationListFile()
 {
 }
 
-void ObListFile::reset()
+void ObExternalLocationListFile::reset()
 {
   ObVirtualTableScannerIterator::reset();
 }
 
-int ObListFile::inner_open()
+int ObExternalLocationListFile::inner_open()
 {
   int ret = OB_SUCCESS;
   const ObLocationSchema *location_schema = NULL;
@@ -100,7 +100,7 @@ int ObListFile::inner_open()
   return ret;
 }
 
-int ObListFile::inner_get_next_row(common::ObNewRow *&row)
+int ObExternalLocationListFile::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
@@ -113,7 +113,7 @@ int ObListFile::inner_get_next_row(common::ObNewRow *&row)
   return ret;
 }
 
-int ObListFile::resolve_param(uint64_t &location_id, ObString &sub_path, ObString &pattern)
+int ObExternalLocationListFile::resolve_param(uint64_t &location_id, ObString &sub_path, ObString &pattern)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0;
@@ -145,7 +145,7 @@ int ObListFile::resolve_param(uint64_t &location_id, ObString &sub_path, ObStrin
   return ret;
 }
 
-int ObListFile::fill_row_cells(uint64_t location_id,
+int ObExternalLocationListFile::fill_row_cells(uint64_t location_id,
                                const ObString &sub_path,
                                const ObString &pattern,
                                const ObString &file_url,

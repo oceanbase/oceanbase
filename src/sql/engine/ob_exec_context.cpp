@@ -271,6 +271,9 @@ ObExecContext::~ObExecContext()
     lake_table_file_map_ = NULL;
   }
   need_try_serialize_package_var_ = false;
+  if (odps_partition_str_to_file_size_.created()) {
+    odps_partition_str_to_file_size_.destroy();
+  }
 }
 
 void ObExecContext::clean_resolve_ctx()

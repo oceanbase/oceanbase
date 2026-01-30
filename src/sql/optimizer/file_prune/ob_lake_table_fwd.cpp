@@ -274,5 +274,18 @@ int ObHiveScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
   return ret;
 }
 
+int ObExtTableScanTask::init_parallel_parse_csv_info(ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(parallel_parse_csv_info_)) {
+    parallel_parse_csv_info_ = OB_NEWx(ObCsvParallelInfo, (&allocator));
+    if (OB_ISNULL(parallel_parse_csv_info_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObCsvParallelInfo", K(ret));
+    }
+  }
+  return ret;
+}
+
 }
 }

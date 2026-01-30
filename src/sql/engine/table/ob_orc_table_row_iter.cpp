@@ -792,7 +792,7 @@ int ObOrcTableRowIterator::next_file()
         }
 
         if (OB_FAIL(ret)) {
-        } else if (!is_abs_url(state_.cur_file_url_)) {
+        } else if (!share::ObExternalTableUtils::is_abs_url(state_.cur_file_url_)) {
           OZ(url_.append_fmt(
               "%.*s%s%.*s",
               location.length(),

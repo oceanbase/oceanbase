@@ -523,13 +523,18 @@ int JVMFunctionHelper::init_jni_env() {
   } else if (OB_FAIL(load_lib(java_env_ctx_, hdfs_env_ctx_))) {
     LOG_WARN("failed to load dynamic library", K(ret));
   } else if (nullptr == jni_env_) {
-    jni_env_ = getJNIEnv();
-    if (nullptr == jni_env_) {
+    if (OB_ISNULL(getJNIEnv)) {
       ret = OB_JNI_ENV_ERROR;
-      if (nullptr == error_msg_) {
-        error_msg_ = "could not get a JNIEnv please check jvm opts";
+      LOG_WARN("getJNIEnv is null", K(ret));
+    } else {
+      jni_env_ = getJNIEnv();
+      if (nullptr == jni_env_) {
+        ret = OB_JNI_ENV_ERROR;
+        if (nullptr == error_msg_) {
+          error_msg_ = "could not get a JNIEnv please check jvm opts";
+        }
+        LOG_WARN("could not get a JNIEnv please check jvm opts", K(ret), K(lbt()));
       }
-      LOG_WARN("could not get a JNIEnv please check jvm opts", K(ret), K(lbt()));
     }
   }
   return ret;

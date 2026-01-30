@@ -124,6 +124,7 @@ public:
      */
     UNKNOWN
   };
+  enum class OdpsFetchType { GET_ODPS_TABLE_ROW_COUNT, GET_ODPS_TABLE_SIZE };
 
   struct MirrorOdpsJniColumn {
     MirrorOdpsJniColumn():

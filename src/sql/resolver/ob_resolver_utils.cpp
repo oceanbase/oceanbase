@@ -10665,6 +10665,54 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         }
         break;
       }
+      case T_PARALLEL_PARSE_ON_SINGLE_FILE: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.1.0, parallel_parse_on_single_file");
+        } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+          format.csv_format_.parallel_parse_on_single_file_ = node->children_[0]->value_;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid file format option", K(ret), K(node->type_));
+        }
+        break;
+      }
+      case T_PARALLEL_PARSE_FILE_SIZE_THRESHOLD: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.1.0, parallel_parse_file_size_threshold");
+        } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+          if (OB_FAIL(resolve_file_size_node(node, format.csv_format_.parallel_parse_file_size_threshold_))) {
+            LOG_WARN("failed to resolve file size node", K(ret));
+          } else if (format.csv_format_.parallel_parse_file_size_threshold_ <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("parallel_parse_file_size_threshold must be greater than 0", K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parallel_parse_file_size_threshold must be greater than 0");
+          }
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid file format option", K(ret), K(node->type_));
+        }
+        break;
+      }
+      case T_MAX_ROW_LENGTH: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.5.1.0, max_row_length");
+        } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+          if (OB_FAIL(resolve_file_size_node(node, format.csv_format_.max_row_length_))) {
+            LOG_WARN("failed to resolve file size node", K(ret));
+          } else if (format.csv_format_.max_row_length_ <= 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("max_row_length must be greater than 0", K(ret));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "max_row_length must be greater than 0");
+          }
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid file format option", K(ret), K(node->type_));
+        }
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));

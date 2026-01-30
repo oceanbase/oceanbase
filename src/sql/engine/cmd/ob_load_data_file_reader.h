@@ -17,6 +17,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/allocator/ob_allocator.h"
 #include "lib/file/ob_file.h"
+#include "lib/compress/snappy_1_2_2/ob_snappy_compressor_1_2_2.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "share/backup/ob_backup_struct.h"
@@ -321,6 +322,33 @@ private:
   void *zstd_stream_context_ = nullptr;
 };
 
+/**
+ * snappy decompressor
+*/
+class ObSnappyDecompressor : public ObDecompressor
+{
+public:
+  explicit ObSnappyDecompressor(ObIAllocator &allocator);
+  virtual ~ObSnappyDecompressor();
+  int  init() override;
+  void destroy() override;
+
+  int decompress(const char *src, int64_t src_size, int64_t &consumed_size,
+                 char *dest, int64_t dest_capacity, int64_t &decompressed_size) override;
+
+  ObCSVGeneralFormat::ObCSVCompression compression_format() const override
+  {
+    return ObCSVGeneralFormat::ObCSVCompression::SNAPPY;
+  }
+
+private:
+  char *buffer_ = nullptr;           // buffer for storing decompressed data
+  int64_t read_size_ = 0;            // already read size in buffer
+  int64_t data_size_ = 0;            // decompressed size in buffer
+  int64_t buffer_capacity_ = 0;      // buffer capacity
+  bool is_decompressed_ = false;
+  oceanbase::common::snappy_1_2_2::ObSnappyCompressor1_2_2 snappy_compressor_;
+};
 } // namespace sql
 } // namespace oceanbase
 
