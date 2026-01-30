@@ -302,6 +302,10 @@ int assign(const ObColumnSchemaV2 &src_schema);
            ObSchemaUtils::is_vec_hnsw_vector_column(column_flags_);
   }
   inline bool is_vec_hnsw_visible_column() const { return ObSchemaUtils::is_vec_hnsw_visible_column(column_flags_); }
+  inline bool is_vec_independent_column() const
+  {
+    return is_hybrid_embedded_vec_column();
+  }
 
   inline bool is_vec_spiv_dim_column() const { return ObSchemaUtils::is_vec_spiv_dim_column(column_flags_); }
   inline bool is_vec_spiv_value_column() const { return ObSchemaUtils::is_vec_spiv_value_column(column_flags_); }

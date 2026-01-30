@@ -311,6 +311,8 @@ struct LogTableHint
     : table_(NULL),
       index_list_(allocator),
       index_hints_(allocator),
+      vec_index_list_(allocator),
+      vec_index_hints_(allocator),
       parallel_hint_(NULL),
       use_das_hint_(NULL),
       use_column_store_hint_(NULL),
@@ -321,10 +323,14 @@ struct LogTableHint
       dynamic_sampling_hint_(NULL),
       is_ds_hint_conflict_(false) {}
   int assign(const LogTableHint &other);
+  int check_vec_hint_index_id(const ObDMLStmt &stmt,
+                              ObSqlSchemaGuard &schema_guard,
+                              const uint64_t hint_index_id,
+                              bool &is_valid);
   int init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &schema_guard);
   bool is_use_index_hint() const { return !index_hints_.empty() && NULL != index_hints_.at(0)
                                           && index_hints_.at(0)->is_use_index_hint(); }
-  bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
+  bool is_valid() const { return !index_list_.empty() || !vec_index_list_.empty() || NULL != parallel_hint_
                                 || NULL != use_das_hint_ || !join_filter_hints_.empty()
                                 || dynamic_sampling_hint_ != NULL
                                 || NULL != use_column_store_hint_
@@ -351,11 +357,13 @@ struct LogTableHint
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint), K_(index_merge_list),
                K_(index_merge_hints), K_(join_filter_hints), K_(left_tables),
-               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_));
+               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_), K_(vec_index_list), K_(vec_index_hints));
 
   const TableItem *table_;
   ObSqlArray<uint64_t> index_list_;
   ObSqlArray<const ObIndexHint*> index_hints_;
+  ObSqlArray<uint64_t> vec_index_list_;
+  ObSqlArray<const ObIndexHint*> vec_index_hints_;
   const ObTableParallelHint *parallel_hint_;
   const ObIndexHint *use_das_hint_;
   const ObIndexHint *use_column_store_hint_;

@@ -16003,7 +16003,7 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
         LOG_WARN("set query param fail", K(ret));
       } else if (vc_info.is_hnsw_vec_scan()) {
         vc_info.is_hybrid_index = is_hybrid_index; // TODO by tanzhu, only support hnsw now
-        if (OB_FAIL(prepare_hnsw_vector_index_scan(schema_guard, *table_schema, vec_col_id, table_scan, is_hybrid_index))) {
+        if (OB_FAIL(prepare_hnsw_vector_index_scan(schema_guard, *table_schema, ap->vec_idx_info_.vec_index_ids_.at(0), table_scan, is_hybrid_index))) {
           LOG_WARN("fail to init hnsw aux index table info",
             K(ret), K(table_scan->get_table_id()), K(vec_col_id), K(vc_info), K(table_schema->get_table_name_str()));
         }
@@ -16178,7 +16178,7 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (vc_info.is_vec_adaptive_iter_scan()) {
+    } else {
       const ObTableSchema *vec_table_schema = nullptr;
       if (OB_FAIL(schema_guard->get_table_schema(get_optimizer_context().get_session_info()->get_effective_tenant_id(),
                                                   center_id_tid, vec_table_schema))) {
@@ -16196,7 +16196,7 @@ int ObLogPlan::prepare_ivf_vector_index_scan(ObSchemaGetterGuard *schema_guard,
 
 int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
                                               const ObTableSchema &table_schema,
-                                              const uint64_t& vec_col_id,
+                                              const uint64_t& vec_idx_tid,
                                               ObLogTableScan *table_scan,
                                               bool is_hybrid)
 {
@@ -16227,15 +16227,15 @@ int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
       }
     }
     ObVecIndexInfo &vc_info = table_scan->get_vector_index_info();
-    if (FAILEDx(ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(schema_guard,
-                                                                                   table_schema, // data table schema
-                                                                                   vec_col_id,
-                                                                                   delta_buffer_tid,
-                                                                                   index_id_tid,
-                                                                                   index_snapshot_data_tid,
-                                                                                   hybrid_index_embedded_tid,
-                                                                                   is_hybrid))) {
-      LOG_WARN("fail to get latest avaliable index tids for hnsw ", K(ret), K(vec_col_id), K(table_schema));
+    if (FAILEDx(ObVectorIndexUtil::get_index_tids_for_hnsw_by_prefix(schema_guard,
+                                                                     table_schema, // data table schema
+                                                                     vec_idx_tid,
+                                                                     delta_buffer_tid,
+                                                                     index_id_tid,
+                                                                     index_snapshot_data_tid,
+                                                                     hybrid_index_embedded_tid,
+                                                                     is_hybrid))) {
+      LOG_WARN("fail to get latest avaliable index tids for hnsw ", K(ret), K(vec_idx_tid), K(table_schema));
     } else if (delta_buffer_tid == OB_INVALID_ID || index_id_tid == OB_INVALID_ID || index_snapshot_data_tid == OB_INVALID_ID) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to init aux table id", K(delta_buffer_tid), K(index_id_tid), K(index_snapshot_data_tid), K(ret));
@@ -16263,7 +16263,7 @@ int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
       }
 
       if (OB_FAIL(ret)) {
-      } else if (vc_info.is_vec_adaptive_iter_scan()) {
+      } else {
         const ObTableSchema *vec_table_schema = nullptr;
         if (OB_FAIL(schema_guard->get_table_schema(get_optimizer_context().get_session_info()->get_effective_tenant_id(),
                                                    delta_buffer_tid,

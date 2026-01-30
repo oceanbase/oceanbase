@@ -3089,8 +3089,6 @@ public:
       SHARE_LOG(WARN, "fail to assign index schema", K(ret));
     } else if (OB_FAIL(local_session_var_.deep_copy(other.local_session_var_))){
       SHARE_LOG(WARN, "fail to copy local session vars", K(ret));
-    } else if (OB_FAIL(generated_column_names_.assign(other.generated_column_names_))) {
-      SHARE_LOG(WARN, "fail to assign generated column names", K(ret));
     } else {
       index_type_ = other.index_type_;
       index_option_ = other.index_option_;
@@ -3114,6 +3112,14 @@ public:
       index_key_ = other.index_key_;
       data_version_ = other.data_version_;
       def_index_id_ = other.def_index_id_;
+      for (int i = 0; i < other.generated_column_names_.count() && OB_SUCC(ret); i++) {
+        ObString column_name;
+        if (OB_FAIL(ob_write_string(allocator_, other.generated_column_names_.at(i), column_name))) {
+          SHARE_LOG(WARN, "failed to write generated column name", K(ret), K(other.generated_column_names_.at(i)));
+        } else if (OB_FAIL(generated_column_names_.push_back(column_name))) {
+          SHARE_LOG(WARN, "failed to push back genearete column name", K(ret), K(column_name), K(generated_column_names_));
+        }
+      }
     }
     return ret;
   }

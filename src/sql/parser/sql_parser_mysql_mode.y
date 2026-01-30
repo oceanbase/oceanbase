@@ -199,7 +199,7 @@ MV_REWRITE NO_MV_REWRITE TRANSFORM_DISTINCT_AGG NO_TRANSFORM_DISTINCT_AGG PUSH_S
 DECORRELATE NO_DECORRELATE
 // optimize hint
 INDEX_HINT INDEX_ASC_HINT INDEX_DESC_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT UNION_MERGE_HINT
-INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT INDEX_MERGE_HINT NO_INDEX_MERGE_HINT
+INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT INDEX_MERGE_HINT NO_INDEX_MERGE_HINT VECTOR_INDEX_HINT PRE_FILTER POST_FILTER
 USE_COLUMN_STORE_HINT NO_USE_COLUMN_STORE_HINT
 LEADING_HINT ORDERED
 USE_NL USE_MERGE USE_HASH NO_USE_HASH NO_USE_MERGE NO_USE_NL
@@ -578,7 +578,7 @@ END_P SET_VAR DELIMITER
 %type <node> external_table_partitions external_table_partition
 %type <node> skip_index_type opt_skip_index_type_list
 %type <node> opt_rebuild_column_store
-%type <node> vec_index_params vec_index_param vec_index_param_value opt_with_vector_index_parameters
+%type <node> vec_index_params vec_index_param vec_index_param_value opt_with_vector_index_parameters vec_index_filter_type
 %type <node> json_table_expr rb_iterate_expr ai_split_document_expr unnest_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
@@ -12412,6 +12412,21 @@ PARAMETERS '(' vec_index_params ')'
 }
 ;
 
+vec_index_filter_type:
+PRE_FILTER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRE_FILTER);
+}
+| POST_FILTER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_POST_FILTER);
+}
+|/*empty*/
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_FILTER_ADAPTIVE);
+}
+;
+
 simple_select_with_order_and_limit:
 simple_select order_by
 {
@@ -13571,6 +13586,12 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_inde
   ParseNode *index_list = NULL;
   merge_nodes(index_list, result, T_NAME_LIST, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_INDEX_MERGE_HINT, 3, $3, $4, index_list);
+}
+| VECTOR_INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_comma vec_index_filter_type ')'
+{
+  (void)($5);               /* unused */
+  (void)($7);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VECTOR_INDEX_HINT, 4, $3, $4, $6, $8);
 }
 | FULL_HINT '(' qb_name_option relation_factor_in_hint ')'
 {

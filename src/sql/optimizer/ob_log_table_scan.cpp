@@ -2495,6 +2495,9 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
             } else if (is_descending_direction(get_scan_direction()) &&
                 OB_FAIL(BUF_PRINTF("%s", COMMA_REVERSE))) {
               LOG_WARN("BUF_PRINTF fails", K(ret));
+            } else if (!vc_info.get_vec_index_name().empty() && (OB_FAIL(BUF_PRINTF(","))
+                      || OB_FAIL(BUF_PRINTF("%.*s", vc_info.get_vec_index_name().length(), vc_info.get_vec_index_name().ptr())))) {
+              LOG_WARN("BUF_PRINTF fails", K(ret));
             } else if (OB_FAIL(BUF_PRINTF("%s", RIGHT_BRACKET))) {
               LOG_WARN("BUF_PRINTF fails", K(ret));
             }
@@ -2502,11 +2505,13 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
         }
       }
     } else if (is_index_scan()) {
+      bool is_vec_post_scan = !vc_info.get_vec_index_name().empty()
+          && (vc_info.vec_type_ == VEC_INDEX_POST_WITHOUT_FILTER || vc_info.adaptive_try_path_ == VEC_INDEX_ITERATIVE_FILTER || vc_info.adaptive_try_path_ == VEC_INDEX_POST_FILTER);
       if (OB_FAIL(BUF_PRINTF("%s", LEFT_BRACKET))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (OB_FAIL(BUF_PRINTF("%.*s", index_name.length(), index_name.ptr()))) {
+      } else if (!is_vec_post_scan && OB_FAIL(BUF_PRINTF("%.*s", index_name.length(), index_name.ptr()))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (vc_info.is_vec_adaptive_iter_scan() && (OB_FAIL(BUF_PRINTF(","))
+      } else if (!vc_info.get_vec_index_name().empty() && ((!is_vec_post_scan && OB_FAIL(BUF_PRINTF(",")))
                 || OB_FAIL(BUF_PRINTF("%.*s", vc_info.get_vec_index_name().length(), vc_info.get_vec_index_name().ptr())))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (is_descending_direction(get_scan_direction()) &&
@@ -3021,8 +3026,6 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     use_desc_hint &= stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5);
   }
   if (OB_FAIL(ret) || use_index_merge()) {
-  } else if (vc_info.is_vec_adaptive_iter_scan()) {
-    index_name = &vc_info.get_vec_index_name();
   } else if (is_skip_scan()) {
     index_type = use_desc_hint ? T_INDEX_SS_DESC_HINT : T_INDEX_SS_HINT;
     if (ref_table_id_ == index_table_id_) {
@@ -3077,6 +3080,24 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
       index_hint.get_index_prefix() = index_prefix;
       if (NULL != index_name) {
         index_hint.get_index_name().assign_ptr(index_name->ptr(), index_name->length());
+      }
+      if (OB_FAIL(index_hint.print_hint(plan_text))) {
+        LOG_WARN("failed to print index hint", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && !get_vector_index_info().get_vec_index_name().empty()) {
+      ObIndexHint index_hint(T_VECTOR_INDEX_HINT);
+      index_hint.set_qb_name(qb_name);
+      index_hint.get_table().set_table(*table_item);
+      index_hint.get_index_name().assign_ptr(get_vector_index_info().get_vec_index_name().ptr(), get_vector_index_info().get_vec_index_name().length());
+      if (get_vector_index_info().vec_type_ == VEC_INDEX_ADAPTIVE_SCAN) {
+        if (get_vector_index_info().adaptive_try_path_ == VEC_INDEX_PRE_FILTER || get_vector_index_info().adaptive_try_path_ ==VEC_INDEX_IN_FILTER) {
+          index_hint.get_filter_type() = VecFilterType::PRE_FILTER;
+        } else if (get_vector_index_info().adaptive_try_path_ == VEC_INDEX_POST_FILTER || get_vector_index_info().adaptive_try_path_ == VEC_INDEX_ITERATIVE_FILTER) {
+          index_hint.get_filter_type() = VecFilterType::POST_FILTER;
+        } else {
+          index_hint.get_filter_type() = VecFilterType::ADAPTIVE;
+        }
       }
       if (OB_FAIL(index_hint.print_hint(plan_text))) {
         LOG_WARN("failed to print index hint", K(ret));
@@ -3165,6 +3186,37 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
           LOG_WARN("unexpected NULL", K(ret), K(hint));
         } else if (OB_FAIL(hint->print_hint(plan_text))) {
           LOG_WARN("failed to print index hint", K(ret), KPC(hint));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (NULL == table_hint) {
+    } else if (table_hint->vec_index_list_.empty()) {
+    } else if (OB_UNLIKELY(table_hint->vec_index_list_.count() != table_hint->vec_index_hints_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected log index hint", K(ret), K(*table_hint));
+    } else {
+      // print vector index hint.
+      const ObIndexHint *index_hint = NULL;
+      ObVecIndexInfo &vc_info = get_vector_index_info();
+      if (vc_info.aux_table_id_.empty()) {
+      } else if (ObOptimizerUtil::find_item(table_hint->vec_index_list_, vc_info.aux_table_id_.at(0), &idx)) {
+        if (OB_UNLIKELY(idx < 0 || idx >= table_hint->index_list_.count())
+            || OB_ISNULL(index_hint = static_cast<const ObIndexHint *>(table_hint->vec_index_hints_.at(idx)))) {
+          // found invalid vector index hint, not print.
+        } else {
+          bool need_print_hint = false;
+          if (index_hint->get_filter_type() == VecFilterType::ADAPTIVE) {
+            need_print_hint = true;
+          } else if (index_hint->get_filter_type() == VecFilterType::PRE_FILTER) {
+            need_print_hint = vc_info.vec_index_pre_filter() || (vc_info.is_vec_adaptive_scan() && vc_info.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);
+          } else if (index_hint->get_filter_type() == VecFilterType::POST_FILTER) {
+            need_print_hint = vc_info.vec_index_post_filter() || vc_info.is_vec_adaptive_iter_scan();
+          }
+          if (need_print_hint && OB_FAIL(index_hint->print_hint(plan_text))) {
+            LOG_WARN("failed to print index hint", K(ret), KPC(index_hint));
+          }
         }
       }
     }

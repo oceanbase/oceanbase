@@ -514,9 +514,6 @@ public:
       const ObString &new_add_param,
       ObIAllocator &allocator,
       ObString &current_index_param);
-  static int get_index_name_prefix(
-      const schema::ObTableSchema &index_schema,
-      ObString &prefix);
   static int check_ivf_lob_inrow_threshold(
     const int64_t tenant_id,
     const ObString &database_name,
@@ -532,6 +529,23 @@ public:
       const ObTableSchema &data_table_schema,
       ObSchemaGetterGuard &schema_guard,
       bool &has_vec_index);
+  static int check_vector_index_column_id_match(
+      const ObTableSchema &data_table_schema,
+      const ObTableSchema &index_table_schema,
+      const int64_t col_id,
+      bool &is_match);
+  static int check_vector_index_match(
+      const ObTableSchema &data_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      uint64_t vec_index_tid,
+      sql::ObRawExpr *vector_expr,
+      const uint64_t table_id,
+      bool &is_match);
+  static int check_has_multi_valid_vector_index(
+      const ObTableSchema &data_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      const int64_t col_id,
+      bool &has_multi_index);
   static int check_column_has_vector_index(
       const ObTableSchema &data_table_schema,
       ObSchemaGetterGuard &schema_guard,
@@ -546,19 +560,18 @@ public:
       ObSchemaGetterGuard &schema_guard,
       const schema::ObTableSchema &table_schema,
       bool &is_all_deleted);
-  static int check_vector_index_by_column_name(
+  static int check_vector_index_by_index_prefix(
       ObSchemaGetterGuard &schema_guard,
       const schema::ObTableSchema &table_schema,
-      const ObString &index_column_name,
+      const ObString &index_prefix,
       bool &is_valid);
   static int get_vector_index_column_name(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
       ObIArray<ObString> &col_names);
-  static bool is_match_index_column_name(
-      const schema::ObTableSchema &table_schema,
+  static bool is_match_index_prefix(
       const schema::ObTableSchema &index_schema,
-      const ObString &index_column_name);
+      const ObString &index_prefix);
   static int get_vector_index_column_id(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
@@ -603,6 +616,12 @@ public:
       const int64_t base_col_id,
       const ObColumnSchemaV2 *column_schema,
       uint64_t &tid);
+  static int get_matched_vector_index_tid(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &data_table_schema,
+      const int64_t col_id,
+      const ObItemType expr_type,
+      uint64_t &tid);
   static int get_vector_index_tid(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
@@ -619,10 +638,10 @@ public:
     uint64_t &cid_rowkey_tid,
     uint64_t &rowkey_cid_tid,
     uint64_t &extra_tid);
-  static int get_latest_avaliable_index_tids_for_hnsw(
+  static int get_index_tids_for_hnsw_by_prefix(
     share::schema::ObSchemaGetterGuard *schema_guard,
     const ObTableSchema &data_table_schema,
-    const int64_t col_id,
+    const uint64_t index_tid,
     uint64_t &inc_tid,
     uint64_t &vbitmap_tid,
     uint64_t &snapshot_tid,
@@ -650,12 +669,6 @@ public:
   static int check_index_table_has_hybrid_vec_column(
       const ObTableSchema &index_table_schema,
       bool &res);
-  static int get_vector_index_tids(
-      share::schema::ObSchemaGetterGuard *schema_guard,
-      const ObTableSchema &data_table_schema,
-      const ObIndexType index_type,
-      const int64_t col_id,
-      ObIArray<IvfIndexTableInfo> &tids);
   static int get_vec_dis_type_from_dis_algorithm(
       ObVectorIndexDistAlgorithm dis_Algorithm,
       int64_t &vec_dis_type);
@@ -672,6 +685,11 @@ public:
       int64_t data_table_id,
       ObVectorIndexType index_type,
       ObVectorIndexParam &param);
+  static int get_vector_index_param(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &index_schema,
+      ObVectorIndexParam &param,
+      bool &param_filled);
   static int get_vector_index_type(
       sql::ObRawExpr *&raw_expr,
       const ObVectorIndexParam &param,
@@ -727,6 +745,21 @@ public:
       ObTableSchema &new_index_schema,
       const ObColumnSchemaV2 *old_column_ptr,
       const ObColumnSchemaV2 *&new_column_ptr);
+  static int get_new_column_name_from_arg(
+      const obrpc::ObCreateIndexArg &create_index_arg,
+      const ObColumnSchemaV2 &col_schema,
+      ObString &new_column_name);
+  static int construct_new_column_schema_from_arg(
+      const obrpc::ObCreateIndexArg &create_index_arg,
+      const ObColumnSchemaV2 *old_column_ptr,
+      ObColumnSchemaV2 &new_column,
+      uint64_t &available_col_id);
+  static int reconstruct_new_vec_index_schema_in_rebuild(
+      rootserver::ObDDLSQLTransaction &trans,
+      rootserver::ObDDLService &ddl_service,
+      const obrpc::ObCreateIndexArg &create_index_arg,
+      const ObTableSchema &data_table_schema,
+      ObTableSchema &new_index_schema);
   static int reconstruct_ivf_index_schema_in_rebuild(
       rootserver::ObDDLSQLTransaction &trans,
       rootserver::ObDDLService &ddl_service,

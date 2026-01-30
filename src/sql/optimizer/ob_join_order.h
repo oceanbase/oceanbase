@@ -1543,6 +1543,7 @@ struct MergeKeyInfoHelper
         inner_paths_(),
         table_opt_info_(NULL),
         est_method_(EST_INVALID),
+        vec_index_id_(OB_INVALID_ID),
         vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
         vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN)
       {}
@@ -1571,6 +1572,7 @@ struct MergeKeyInfoHelper
       ObSEArray<ObExecParamRawExpr *, 2> exec_params_;
       // record basic index and selectivity info for all match exprs
       ObSEArray<MatchExprInfo, 4> match_expr_infos_;
+      uint64_t vec_index_id_;
       ObVecIndexType vec_index_type_;
       ObVecIdxAdaTryPath vec_idx_try_path_;
     };
@@ -1663,6 +1665,10 @@ struct MergeKeyInfoHelper
                                            const ObTableSchema *table_schema,
                                            const ObTableSchema *multivalue_idx_schema,
                                            bool &found_matched_index);
+    int check_vector_index_count_by_expr(const ObDMLStmt &stmt,
+                                         ObSqlSchemaGuard *schema_guard,
+                                         const uint64_t table_id,
+                                         const uint64_t ref_table_id);
     int get_vector_index_tid_from_expr(ObSqlSchemaGuard *schema_guard,
                                       ObRawExpr *vector_expr,
                                       const uint64_t table_id,
@@ -1883,6 +1889,7 @@ struct MergeKeyInfoHelper
     int process_basic_vec_info_for_index_merge_node(const ObDMLStmt *stmt,
                                                   const uint64_t table_id,
                                                   const uint64_t ref_table_id,
+                                                  const PathHelper &helper,
                                                   IndexMergePath* index_merge_path,
                                                   ObIndexMergeNode* root_node);
     int check_need_domain_id_scan(const uint64_t table_id,
@@ -3120,13 +3127,6 @@ struct MergeKeyInfoHelper
                                 const uint64_t ref_table_id,
                                 const bool has_aggr,
                                 ObIArray<uint64_t> &valid_index_ids);
-    int check_vec_hint_index_id(const ObDMLStmt &stmt,
-                                ObSqlSchemaGuard *schema_guard,
-                                const uint64_t table_id,
-                                const uint64_t ref_table_id,
-                                const uint64_t hint_index_id,
-                                const bool has_aggr,
-                                bool &is_valid);
     bool invalid_index_for_vec_pre_filter(const ObTableSchema *index_hint_table_schema) const;
     int find_match_expr_info(const ObIArray<MatchExprInfo> &match_expr_infos,
                             ObRawExpr *match_expr,
@@ -3337,6 +3337,7 @@ struct MergeKeyInfoHelper
     int extract_scan_match_expr_candidates(const ObIArray<ObRawExpr *> &filters,
                                            ObIArray<ObMatchFunRawExpr *> &scan_match_exprs,
                                            ObIArray<ObRawExpr *> &scan_match_filters);
+    int get_valid_vec_hint_index_list(const uint64_t table_id, const uint64_t ref_table_id, PathHelper &helper, ObIArray<uint64_t> &valid_index_ids);
     int get_valid_hint_index_list(const ObDMLStmt &stmt,
                                   const ObIArray<uint64_t> &hint_index_ids,
                                   const bool is_link_table,

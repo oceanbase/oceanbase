@@ -1016,6 +1016,9 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>UNION_MERGE { return UNION_MERGE_HINT; }
 <hint>INDEX_MERGE { return INDEX_MERGE_HINT; }
 <hint>NO_INDEX_MERGE { return NO_INDEX_MERGE_HINT; }
+<hint>PRE_FILTER { return PRE_FILTER; }
+<hint>POST_FILTER { return POST_FILTER; }
+<hint>VECTOR_INDEX { return VECTOR_INDEX_HINT; }
 <hint>USE_DAS { return USE_DAS_HINT; }
 <hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
 <hint>INDEX_SS { return INDEX_SS_HINT; }

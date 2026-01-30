@@ -8210,6 +8210,8 @@ int ObDDLResolver::resolve_vec_index_constraint(
   const ObColumnSchemaV2 *column_schema = NULL;
   bool is_column_has_vector_index = false;
   ObIndexType index_type = INDEX_TYPE_MAX;
+  uint64_t tenant_id = table_schema.get_tenant_id();
+  uint64_t tenant_data_version = 0;
   if (!table_schema.is_valid() || column_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argumnet", K(ret), K(table_schema), K(column_name));
@@ -8232,10 +8234,22 @@ int ObDDLResolver::resolve_vec_index_constraint(
                                                                       is_column_has_vector_index,
                                                                       index_type))) {
     LOG_WARN("resolve vec index constraint fail", K(ret), K(index_keyname_value));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
   } else if (is_column_has_vector_index) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("create vector index on column has vector index is not supported", K(ret), K(column_name));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on column has vector index is");
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    const bool is_create_semantic_index = ob_is_varchar_type(column_schema->get_data_type(), column_schema->get_collation_type());
+    if (!tenant_config.is_valid()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tenant_config has not been loaded", KR(ret));
+    } else if (tenant_data_version < DATA_VERSION_4_5_1_0 || !is_create_semantic_index || !tenant_config->_enable_multiple_semantic_indexes_on_column) {
+      // only support create multi semantic index for now.
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("create vector index on column has vector index is not supported", K(ret), K(column_name));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on column has vector index is");
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (table_schema.is_mysql_tmp_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("mysql temp table not support vector index", KR(ret));

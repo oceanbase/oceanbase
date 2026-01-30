@@ -122,36 +122,9 @@ int ObExprEmbeddedVec::cg_expr(
   ObDatum *user_key_datum = NULL;
   ObDatum *sync_mode_datum = NULL;
   ObDatum *dim_datum = NULL;
-  if (raw_ctx.arg_cnt_ == 1) {
+  if (raw_ctx.arg_cnt_ == 1 || raw_ctx.arg_cnt_ == 6) {
     if (OB_FAIL(raw_ctx.args_[0]->eval(eval_ctx, data_datum))) {
       LOG_WARN("failed to eval data parameter", K(ret));
-    } else {
-      ObString chunk_data = data_datum->get_string();
-      if (OB_FAIL(pack_embedded_res(raw_ctx, eval_ctx, expr_datum, chunk_data))) {
-        LOG_WARN("fail to pack embedded res", K(ret));
-      } else {
-        LOG_DEBUG("generated inrow LOB chunk when ai embedding: ", K(chunk_data));
-      }
-    }
-  } else if (raw_ctx.arg_cnt_ == 6) {
-    if (OB_FAIL(raw_ctx.args_[0]->eval(eval_ctx, data_datum))) {
-      LOG_WARN("failed to eval data parameter", K(ret));
-    } else if (OB_FAIL(raw_ctx.args_[1]->eval(eval_ctx, model_datum))) {
-      LOG_WARN("failed to eval model parameter", K(ret));
-    } else if (OB_FAIL(raw_ctx.args_[2]->eval(eval_ctx, url_datum))) {
-      LOG_WARN("failed to eval url parameter", K(ret));
-    } else if (OB_FAIL(raw_ctx.args_[3]->eval(eval_ctx, user_key_datum))) {
-      LOG_WARN("failed to eval user_key parameter", K(ret));
-    } else if (OB_FAIL(raw_ctx.args_[4]->eval(eval_ctx, sync_mode_datum))) {
-      LOG_WARN("failed to eval sync_mode parameter", K(ret));
-    } else if (OB_FAIL(raw_ctx.args_[5]->eval(eval_ctx, dim_datum))) {
-      LOG_WARN("failed to eval dim parameter", K(ret));
-    } else if (OB_ISNULL(data_datum) || OB_ISNULL(model_datum) || OB_ISNULL(url_datum) || OB_ISNULL(user_key_datum) || OB_ISNULL(sync_mode_datum) || OB_ISNULL(dim_datum)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null datum", K(ret));
-    } else if (data_datum->is_null() || model_datum->is_null() || url_datum->is_null() || user_key_datum->is_null() || sync_mode_datum->is_null() || dim_datum->is_null()) {
-      // If any parameter is null, return null
-      expr_datum.set_null();
     } else {
       ObString chunk_data = data_datum->get_string();
       if (OB_FAIL(pack_embedded_res(raw_ctx, eval_ctx, expr_datum, chunk_data))) {

@@ -49,6 +49,13 @@ enum ObPlanCachePolicy
   OB_USE_PLAN_CACHE_DEFAULT,//use plan cache
 };
 
+enum VecFilterType
+{
+  PRE_FILTER = 0,
+  POST_FILTER,
+  ADAPTIVE
+};
+
 enum class ObPxNodePolicy
 {
   INVALID,
@@ -1211,7 +1218,8 @@ class ObIndexHint : public ObOptHint
 public:
   ObIndexHint(ObItemType hint_type)
     : ObOptHint(hint_type),
-      index_prefix_(-1)
+      index_prefix_(-1),
+      filter_type_(VecFilterType::ADAPTIVE)
   {
     set_hint_class(HINT_ACCESS_PATH);
   }
@@ -1228,6 +1236,8 @@ public:
   const ObString &get_index_name() const { return index_name_; }
   int64_t &get_index_prefix() { return index_prefix_; }
   const int64_t &get_index_prefix() const { return index_prefix_; }
+  VecFilterType &get_filter_type() { return filter_type_; }
+  const VecFilterType &get_filter_type() const { return filter_type_; }
   bool is_use_index_hint()  const { return T_NO_INDEX_HINT != get_hint_type(); }
   bool use_skip_scan()  const { return T_INDEX_SS_HINT == get_hint_type() ||
                                        T_INDEX_SS_ASC_HINT == get_hint_type() ||
@@ -1258,6 +1268,7 @@ private:
   ObTableInHint table_;
   common::ObString index_name_;
   int64_t index_prefix_;
+  VecFilterType filter_type_;
 };
 
 class ObIndexMergeHint : public ObOptHint

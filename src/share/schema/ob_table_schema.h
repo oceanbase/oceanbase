@@ -1272,6 +1272,7 @@ public:
   inline bool is_vec_ivfpq_rowkey_cid_index() const;
   inline bool is_vec_rowkey_vid_type() const;
   inline bool is_vec_vid_rowkey_type() const;
+  inline bool is_vec_shared_table_type() const;
   inline bool is_vec_delta_buffer_type() const;
   inline bool is_hybrid_vec_index_log_type() const;
   inline bool is_hybrid_vec_index_embedded_type() const;
@@ -2790,6 +2791,11 @@ inline bool ObSimpleTableSchemaV2::is_vec_rowkey_vid_type() const
 inline bool ObSimpleTableSchemaV2::is_vec_vid_rowkey_type() const
 {
   return share::schema::is_vec_vid_rowkey_type(index_type_);
+}
+
+inline bool ObSimpleTableSchemaV2::is_vec_shared_table_type() const
+{
+  return is_vec_rowkey_vid_type() || is_vec_vid_rowkey_type();
 }
 
 inline bool ObSimpleTableSchemaV2::is_vec_delta_buffer_type() const

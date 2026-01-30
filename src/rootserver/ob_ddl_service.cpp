@@ -22099,12 +22099,17 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
   } else {
     ObTableSchema new_table_schema;
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+    static const int64_t DEFAULT_MAP_HASH_SIZE = 64;
+    int64_t hash_capacity = common::hash::cal_next_prime(DEFAULT_MAP_HASH_SIZE);
+    common::hash::ObHashMap<ObString, common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM>> generate_column_name_map;
     if (OB_FAIL(orig_table_schema.get_simple_index_infos(simple_index_infos))) {
       LOG_WARN("get simple_index_infos failed", K(ret));
     } else if (OB_FAIL(new_table_schema.assign(hidden_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret));
     } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("failed to check if oralce compat mode", K(ret));
+    } else if (OB_FAIL(generate_column_name_map.create(hash_capacity, "OfflineDDL", "OfflineDDL", dst_tenant_id))) {
+      LOG_WARN("failed to create generate column name map", K(ret));
     }
     lib::Worker::CompatMode compat_mode = (is_oracle_mode ?
     lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
@@ -22246,7 +22251,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
 
           if (OB_FAIL(ret)) {
           } else if ((new_index_schema.is_vec_index() && !new_index_schema.is_vec_spiv_index()) && OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_aux_columns(
-            schema_guard, orig_table_schema, *index_table_schema, new_table_schema, new_index_schema, allocator, ddl_operator, trans, domain_index_columns, domain_store_columns))) {
+            schema_guard, orig_table_schema, *index_table_schema, new_table_schema, new_index_schema, allocator, ddl_operator, trans, generate_column_name_map, domain_index_columns, domain_store_columns))) {
             LOG_WARN("failed to generate vec index aux columns", K(ret));
           } else if ((new_index_schema.is_fts_index() || new_index_schema.is_multivalue_index()) && OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_mtv_index_aux_columns(
               orig_table_schema, *index_table_schema, new_table_schema, new_index_schema, allocator, ddl_operator, trans, domain_index_columns, domain_store_columns))) {

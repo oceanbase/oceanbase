@@ -2170,6 +2170,26 @@ int ObPluginVectorIndexUtils::get_vector_index_name_prefix(const ObTableSchema &
   return ret;
 }
 
+int ObPluginVectorIndexUtils::get_domain_table_schema(share::schema::ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const ObTableSchema *&domain_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObString domain_table_name;
+  if (OB_FAIL(get_vector_index_prefix(index_schema, domain_table_name))) {
+    LOG_WARN("fail to get vector index prefix", K(ret), K(index_schema));
+  } else if (OB_FAIL(schema_guard.get_table_schema(
+      index_schema.get_tenant_id(),
+      index_schema.get_database_id(),
+      domain_table_name,
+      true,
+      domain_table_schema,
+      index_schema.is_user_hidden_table(),
+      false
+  ))) {
+    LOG_WARN("fail to get domain table schema", K(ret), K(domain_table_name));
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexUtils::erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key, bool *fully_cleared)
 {
   int ret = OB_SUCCESS;

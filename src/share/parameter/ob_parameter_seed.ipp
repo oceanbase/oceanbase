@@ -2362,6 +2362,9 @@ DEF_INT(model_max_retries, OB_TENANT_PARAMETER, "2", "[1,)",
 DEF_BOOL(_enable_semantic_index, OB_TENANT_PARAMETER, "False",
          "Specifies whether the tenant's semantic index is enabled. Value: True: turned on; False: turned off.",
          ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_multiple_semantic_indexes_on_column, OB_TENANT_PARAMETER, "False",
+         "Whether to allow creating multiple semantic indexes on the same column.",
+         ObParameterAttr(Section::AI, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,

@@ -75,6 +75,7 @@ public:
   static int get_vector_index_prefix_inner(const ObTableSchema &index_schema, const ObString index_name, ObString &prefix);
   static int get_vector_index_prefix(const ObTableSchema &index_schema, ObString &prefix);
   static int get_vector_index_name_prefix(const ObTableSchema &index_schema, ObString &prefix);
+  static int get_domain_table_schema(share::schema::ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const ObTableSchema *&domain_table_schema);
   static int get_prefix(const ObString &src, const ObString &item, ObString &dst);
   static int get_suffix(const ObString &src, const ObString &item, ObString &dst);
   static void get_key_prefix_scn(const ObString &key_prefix, int64_t &scn);

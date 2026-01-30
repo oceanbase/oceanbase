@@ -1512,6 +1512,8 @@ int ObIndexBuilder::do_create_local_index(
       int64_t new_fetched_snapshot = 0;
 
       if (OB_FAIL(ret)) {
+      } else if (share::schema::is_vec_index(my_arg.index_type_) && OB_FAIL(ObVecIndexBuilderUtil::generate_column_name_for_arg(allocator, new_table_schema, my_arg))) {
+        LOG_WARN("failed to generate column name for create index arg", K(ret));
       } else if (need_rowkey_doc && (share::schema::is_fts_or_multivalue_index(my_arg.index_type_) || share::schema::is_vec_spiv_index(my_arg.index_type_))) {
         if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_aux_index_schema_exist(new_table_schema,
                                                                             my_arg,
@@ -1647,8 +1649,12 @@ int ObIndexBuilder::do_create_local_index(
       } else if (create_index_on_empty_table_opt) {
         res.index_table_id_ = index_schema.get_table_id();
         res.schema_version_ = index_schema.get_schema_version();
+      } else if (OB_FAIL(tmp_arg.assign(create_index_arg))) {
+        LOG_WARN("fail to assign arg", K(ret));
+      } else if (OB_FAIL(tmp_arg.generated_column_names_.assign(my_arg.generated_column_names_))) {
+        LOG_WARN("fail to assign generated column names", K(ret));
       } else if (OB_FAIL(submit_build_index_task(trans,
-                                                 create_index_arg,
+                                                 tmp_arg,
                                                  &new_table_schema,
                                                  nullptr/*inc_data_tablet_ids*/,
                                                  nullptr/*del_data_tablet_ids*/,

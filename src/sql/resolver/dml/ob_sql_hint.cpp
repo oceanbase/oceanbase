@@ -1884,7 +1884,7 @@ const LogTableHint *ObLogPlanHint::get_log_table_hint(uint64_t table_id) const
 const LogTableHint* ObLogPlanHint::get_index_hint(uint64_t table_id) const
 {
   const LogTableHint *log_table_hint = get_log_table_hint(table_id);
-  return NULL != log_table_hint && !log_table_hint->index_hints_.empty() ? log_table_hint : NULL;
+  return NULL != log_table_hint && (!log_table_hint->index_hints_.empty() || !log_table_hint->vec_index_hints_.empty()) ? log_table_hint : NULL;
 }
 
 int64_t ObLogPlanHint::get_parallel(uint64_t table_id) const
@@ -2714,7 +2714,57 @@ int LogTableHint::assign(const LogTableHint &other)
     LOG_WARN("failed to assign index merge list", K(ret));
   } else if (OB_FAIL(index_merge_hints_.assign(other.index_merge_hints_))) {
     LOG_WARN("failed to assign index merge hints", K(ret));
+  } else if (OB_FAIL(vec_index_list_.assign(other.vec_index_list_))) {
+    LOG_WARN("failed to assign vector index list", K(ret));
+  } else if (OB_FAIL(vec_index_hints_.assign(other.vec_index_hints_))) {
+    LOG_WARN("failed to assign vector index hints", K(ret));
   }
+  return ret;
+}
+
+int LogTableHint::check_vec_hint_index_id(const ObDMLStmt &stmt,
+                                          ObSqlSchemaGuard &schema_guard,
+                                          const uint64_t hint_index_id,
+                                          bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *vector_expr = NULL;
+  const ObTableSchema *table_schema = NULL;
+  is_valid = false;
+  if (!stmt.has_vec_approx()
+      || OB_ISNULL(vector_expr = stmt.get_first_vector_expr())) {
+    // do nothing, not vec index
+  } else if (OB_ISNULL(table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected log index hint", K(ret), K(this));
+  } else {
+    bool has_aggr = false;
+    const uint64_t table_id = table_->table_id_;
+    const uint64_t ref_table_id = table_->ref_id_;
+    if (stmt.is_select_stmt()) {
+      const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(&stmt);
+      has_aggr = select_stmt->get_aggr_item_size() > 0;
+    }
+    if (has_aggr) {
+      is_valid = false;
+    } else if (OB_FAIL(schema_guard.get_table_schema(ref_table_id, table_schema))) {
+      LOG_WARN("failed to get main table schema", K(ret));
+    } else if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard.get_schema_guard())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(ObVectorIndexUtil::check_vector_index_match(
+        *table_schema,
+        *schema_guard.get_schema_guard(),
+        hint_index_id,
+        vector_expr,
+        table_id,
+        is_valid
+      ))) {
+      LOG_WARN("failed to check vector index match", K(ret));
+    }
+  }
+  LOG_DEBUG("check_valid_vec_hint_index_ids is valid",
+    K(ret), K(is_valid), K(hint_index_id));
   return ret;
 }
 
@@ -2762,6 +2812,7 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
       uint64_t index_id = -1 == i ? table_->ref_id_ : tids[i];
       ObString index_name;
       bool is_primary_key = false;
+      bool is_vec_index_valid = true;
       if (-1 == i) {
         is_primary_key = true;
         index_name = ObIndexHint::PRIMARY_KEY;
@@ -2771,6 +2822,11 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
       } else if (index_schema->is_built_in_fts_index() || (index_schema->is_vec_index() && !stmt.has_vec_approx())) {
         // just ignore fts && vector index
+      } else if (stmt.has_vec_approx() && index_schema->is_vec_index()
+          && OB_FAIL(check_vec_hint_index_id(stmt, schema_guard, index_id, is_vec_index_valid))) {
+        LOG_WARN("failed to check vector index hint valid", K(ret));
+      } else if (!is_vec_index_valid) {
+        // skip invalid vector index.
       } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
         LOG_WARN("fail to get index name", K(index_name), K(ret));
       }
@@ -2783,6 +2839,7 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
         int64_t index_ss_hint_pos = OB_INVALID_INDEX;
         int64_t index_ss_asc_hint_pos = OB_INVALID_INDEX;
         int64_t index_ss_desc_hint_pos = OB_INVALID_INDEX;
+        int64_t vec_index_hint_pos = OB_INVALID_INDEX;
         const uint64_t N = index_hints_.count();
         const ObIndexHint *index_hint = NULL;
         for (int64_t hint_i = 0; OB_SUCC(ret) && hint_i < N; ++hint_i) {
@@ -2794,6 +2851,10 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
             index_hint_pos = hint_i;
           } else if (0 != index_hint->get_index_name().case_compare(index_name)) {
             /* do nothing */
+          } else if (T_VECTOR_INDEX_HINT == index_hint->get_hint_type()) {
+            if (OB_NOT_NULL(index_schema) && index_schema->is_vec_index() && stmt.has_vec_approx()) {
+              vec_index_hint_pos = hint_i;
+            }
           } else if (T_NO_INDEX_HINT == index_hint->get_hint_type()) {
             no_index_hint_pos = hint_i;
           } else if (index_hint->use_skip_scan()) {
@@ -2833,6 +2894,12 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
           }
         }
         if (OB_FAIL(ret)) {
+        } else if (OB_INVALID_INDEX != vec_index_hint_pos) {
+          if (OB_FAIL(vec_index_list_.push_back(index_id))) {
+            LOG_WARN("fail to push back", K(ret), K(index_id));
+          } else if (OB_FAIL(vec_index_hints_.push_back(index_hints_.at(vec_index_hint_pos)))) {
+            LOG_WARN("fail to push back", K(ret), K(vec_index_hint_pos));
+          }
         } else if (OB_INVALID_INDEX != no_index_hint_pos
                    && (OB_INVALID_INDEX != index_ss_hint_pos
                        || OB_INVALID_INDEX != index_hint_pos)) {

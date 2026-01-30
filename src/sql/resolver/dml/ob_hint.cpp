@@ -1545,6 +1545,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PUSH_SUBQ:         return is_enable_hint ? "PUSH_SUBQ" : "NO_PUSH_SUBQ";
     case T_DISABLE_TRIGGER_HINT: return "DISABLE_TRIGGER";
     case T_TABLE_LOCK_MODE_HINT: return "TABLE_LOCK_MODE";
+    case T_VECTOR_INDEX_HINT: return "VECTOR_INDEX";
     default:                    return NULL;
   }
 }
@@ -2548,6 +2549,16 @@ int ObIndexHint::print_hint_desc(PlanText &plan_text) const
     /* do nothing */
   } else if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_.length(), index_name_.ptr()))) {
     LOG_WARN("fail to print index name", K(ret));
+  } else if (T_VECTOR_INDEX_HINT == hint_type_) {
+    if (filter_type_ == VecFilterType::PRE_FILTER) {
+      if (OB_FAIL(BUF_PRINTF(" PRE_FILTER"))) {
+        LOG_WARN("fail to print index filter type", K(ret));
+      }
+    } else if (filter_type_ == VecFilterType::POST_FILTER) {
+      if (OB_FAIL(BUF_PRINTF(" POST_FILTER"))) {
+        LOG_WARN("fail to print index filter type", K(ret));
+      }
+    }
   } else if ((T_INDEX_HINT != hint_type_ && T_INDEX_ASC_HINT != hint_type_ && T_INDEX_DESC_HINT != hint_type_)
              || index_prefix_ < 0) {
     //do nothing

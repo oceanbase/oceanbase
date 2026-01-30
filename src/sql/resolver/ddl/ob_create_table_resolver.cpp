@@ -3274,12 +3274,26 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
             if (OB_FAIL(ret)) {
             } else if (is_vec_index) {
               vec_index_col_id = column_schema->get_column_id();
-              if (ObVectorIndexUtil::has_multi_index_on_same_column(vec_index_col_ids_, vec_index_col_id)) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("more than one vector index on same column is not supported", K(ret), K(vec_index_col_id), K(vec_index_col_ids_));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one vector index on same column is");
+              uint64_t tenant_data_version = 0;
+              if (OB_ISNULL(session_info_)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null", K(ret));
+              } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+                LOG_WARN("get tenant data version failed", K(ret));
               } else if (OB_FAIL(set_vec_column_name(column_schema->get_column_name()))) {
                 LOG_WARN("fail to set vec column name", K(ret));
+              } else if (ObVectorIndexUtil::has_multi_index_on_same_column(vec_index_col_ids_, vec_index_col_id)) {
+                ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+                const bool is_create_semantic_index = ob_is_varchar_type(column_schema->get_data_type(), column_schema->get_collation_type());
+                if (!tenant_config.is_valid()) {
+                  ret = OB_EAGAIN;
+                  LOG_WARN("tenant_config has not been loaded", KR(ret));
+                } else if (tenant_data_version < DATA_VERSION_4_5_1_0 || !is_create_semantic_index || !tenant_config->_enable_multiple_semantic_indexes_on_column) {
+                  // only support create multi semantic index for now.
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("more than one vector index on same column is not supported", K(ret), K(vec_index_col_id), K(vec_index_col_ids_));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one vector index on same column is");
+                }
               }
             }
             if (OB_SUCC(ret)) {

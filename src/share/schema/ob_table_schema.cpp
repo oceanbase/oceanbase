@@ -9165,7 +9165,7 @@ int64_t ObTableSchema::get_index_count() const
       is_vec_rowkey_vid_exist = true;
     } else if (share::schema::is_vec_vid_rowkey_type(index_type)) {
       is_vec_vid_rowkey_exist = true;
-    } else if (share::schema::is_vec_delta_buffer_type(index_type)) {
+    } else if (share::schema::is_vec_delta_buffer_type(index_type) || share::schema::is_hybrid_vec_index_log_type(index_type)) {
       ++vec_delta_buffer_count;
     } else if (share::schema::is_vec_index_id_type(index_type)) {
       ++vec_index_id_count;
@@ -9193,6 +9193,8 @@ int64_t ObTableSchema::get_index_count() const
       ++vec_ivf_pq_code_count;
     } else if (share::schema::is_vec_ivfpq_rowkey_cid_index(index_type)) {
       ++vec_ivf_pq_rowkey_cid_count;
+    } else if (share::schema::is_hybrid_vec_index_embedded_type(index_type)) {
+      // not check embedded table count in semantic index.
     } else if (ObIndexType::INDEX_TYPE_IS_NOT != index_type) {
       ++index_count;
     }
@@ -9200,10 +9202,8 @@ int64_t ObTableSchema::get_index_count() const
   // Taking OB_MIN can ensure that the final index number is not greater than OB_MAX_INDEX_PER_TABLE.
   // but cannot ensure aux table numbers does not exceed OB_MAX_AUX_TABLE_PER_MAIN_TABLE.
   // Therefore, this function often appears with the OB_MAX_AUX_TABLE_PER_MAIN_TABLE limit.
-  index_count += (is_rowkey_doc_id_exist && is_doc_id_rowkey_exist) ?
-                  OB_MIN(fts_index_aux_count, fts_doc_word_aux_count) +  multivalue_index_aux_count : 0;
-  index_count += (is_vec_rowkey_vid_exist && is_vec_vid_rowkey_exist) ?
-                  OB_MIN(vec_delta_buffer_count, OB_MIN(vec_index_id_count, vec_index_snapshot_data_count)) : 0;
+  index_count += OB_MIN(fts_index_aux_count, fts_doc_word_aux_count) +  multivalue_index_aux_count;
+  index_count += OB_MIN(vec_delta_buffer_count, OB_MIN(vec_index_id_count, vec_index_snapshot_data_count));
   // ivf vector
   index_count += (OB_MIN(vec_ivfflat_rowkey_cid_count, OB_MIN(vec_ivfflat_centroid_count, vec_ivfflat_cid_vector_count)));
   index_count += (OB_MIN(vec_ivfsq8_meta_count,
