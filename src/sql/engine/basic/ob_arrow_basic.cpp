@@ -174,6 +174,7 @@ arrow::Result<int64_t> ObArrowFile::Read(int64_t nbytes, void *out)
   ObExternalReadInfo read_info(position_, out, nbytes, io_timeout_ms);
   if (OB_FAIL(read_from_cache(position_, nbytes, out, is_hit_cache))) {
     LOG_WARN("failed to read from cache", K(ret));
+    throw ObErrorCodeException(ret);
   } else if (is_hit_cache) {
     position_ += nbytes;
     ret_code = nbytes;
@@ -210,6 +211,7 @@ arrow::Result<int64_t> ObArrowFile::ReadAt(int64_t position, int64_t nbytes, voi
   ObExternalReadInfo read_info(position, out, nbytes, io_timeout_ms);
   if (OB_FAIL(read_from_cache(position, nbytes, out, is_hit_cache))) {
     LOG_WARN("failed to read from cache", K(ret));
+    throw ObErrorCodeException(ret);
   } else if (is_hit_cache) {
     position_ += nbytes;
     ret_code = nbytes;
@@ -316,9 +318,11 @@ arrow::Status ObParquetOutputStream::Write(const void* data, int64_t nbytes)
     const char *location = nullptr;
     if (OB_FAIL(ObArrowUtil::get_location(file_location_, location))) {
       LOG_WARN("failed to get location string", K(ret), K_(file_location));
+      status = arrow::Status(arrow::StatusCode::IOError, "get location failed");
     } else if (OB_ISNULL(location)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid location string", K(ret));
+      status = arrow::Status(arrow::StatusCode::Invalid, "invalid location string");
     } else {
       int64_t write_size = 0;
       int64_t begin_ts = ObTimeUtility::current_time();
