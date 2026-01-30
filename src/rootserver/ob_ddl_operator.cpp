@@ -39,6 +39,7 @@
 #include "share/ob_scheduled_manage_dynamic_partition.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
+#include "share/ob_lob_check_job_scheduler.h"                    // ObLobCheckJobScheduler
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -11947,6 +11948,8 @@ int ObDDLOperator::init_tenant_scheduled_job(
       false/*schedule_at_once*/,
       trans))) {
     LOG_WARN("create scheduled trigger dump_data_dict job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObLobCheckJobScheduler::create_lob_check_job(sys_variable, tenant_id, trans))) {
+    LOG_WARN("create scheduled lob check job failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::create_jobs_for_tenant_creation(
                      sys_variable,
                      tenant_id,

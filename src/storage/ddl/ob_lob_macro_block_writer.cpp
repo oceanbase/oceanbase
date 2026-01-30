@@ -142,33 +142,50 @@ int ObLobMacroBlockWriter::write(const ObColumnSchemaItem &column_schema, ObIAll
     ObLobMetaWriteResult lob_meta_write_result;
     bool first_get_next = true;
     ++total_lob_cell_count_;
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(THIS_WORKER.check_status())) {
-        LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(meta_write_iter_.get_next_row(lob_meta_write_result))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next lob meta write resutl failed", K(ret));
-        } else {
-          ret = OB_SUCCESS;
-          if (first_get_next) {
-            ++inrow_lob_cell_count_;
-          }
-          break;
-        }
-      } else if (FALSE_IT(first_get_next = false)) {
-      } else if (OB_FAIL(transform_lob_meta_row(lob_meta_write_result))) {
-        LOG_WARN("transform lob meta row failed", K(ret), K(lob_meta_write_result));
-      } else if (OB_FAIL(prepare_macro_block_writer())) {
-        LOG_WARN("prepare macro bock writer failed", K(ret));
-      } else if (OB_FAIL(macro_block_writer_->append_row(lob_meta_row_))) {
-        LOG_WARN("macro block writer append row failed", K(ret), K(lob_meta_row_));
+    if (OB_FAIL(ret)) {
+    } else {
+      ret = OB_E(EventTable::EN_LOB_META_DML_FAILED, lob_storage_param.inrow_threshold_) OB_SUCCESS;
+      if (OB_FAIL(ret) && param_.tablet_id_.is_user_tablet()) {
+        LOG_ERROR("due to error injection, lob meta not being inserted into the auxiliary table", K(ret), K(param_));
+        ret = OB_SUCCESS;
+        inrow_lob_cell_count_++;
       } else {
-        LOG_DEBUG("lob writer append row", K(lob_meta_row_));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(meta_write_iter_.check_write_length())) {
-        LOG_WARN("check_write_length fail", K(ret), K(meta_write_iter_));
+        bool skip_length_check = false;
+        while (OB_SUCC(ret)) {
+          ret = first_get_next ? OB_SUCCESS : (OB_E(EventTable::EN_LOB_META_DML_FAILED, lob_storage_param.inrow_threshold_ + 1) OB_SUCCESS);
+          if (OB_FAIL(ret) && param_.tablet_id_.is_user_tablet()) {
+            LOG_ERROR("due to error injection, make err len meta data", K(ret), K(param_));
+            ret = OB_SUCCESS;
+            skip_length_check = true;
+            break;
+          } else if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("check status failed", K(ret));
+          } else if (OB_FAIL(meta_write_iter_.get_next_row(lob_meta_write_result))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("get next lob meta write resutl failed", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+              if (first_get_next) {
+                ++inrow_lob_cell_count_;
+              }
+              break;
+            }
+          } else if (FALSE_IT(first_get_next = false)) {
+          } else if (OB_FAIL(transform_lob_meta_row(lob_meta_write_result))) {
+            LOG_WARN("transform lob meta row failed", K(ret), K(lob_meta_write_result));
+          } else if (OB_FAIL(prepare_macro_block_writer())) {
+            LOG_WARN("prepare macro bock writer failed", K(ret));
+          } else if (OB_FAIL(macro_block_writer_->append_row(lob_meta_row_))) {
+            LOG_WARN("macro block writer append row failed", K(ret), K(lob_meta_row_));
+          } else {
+            LOG_DEBUG("lob writer append row", K(lob_meta_row_));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (!skip_length_check && OB_FAIL(meta_write_iter_.check_write_length())) {
+            LOG_WARN("check_write_length fail", K(ret), K(meta_write_iter_));
+          }
+        }
       }
     }
   }

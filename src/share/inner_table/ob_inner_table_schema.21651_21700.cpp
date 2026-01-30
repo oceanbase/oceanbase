@@ -1861,6 +1861,108 @@ int ObInnerTableSchema::dba_tables_schema(ObTableSchema &table_schema)
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_lob_check_tasks_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_LOB_CHECK_TASKS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_LOB_CHECK_TASKS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       case a.ls_id         when -1 then "TENANT"         else "LS" end as TASK_SCOPE,       a.ls_id as LS_ID,       case a.table_id         when 3 then "__all_table"         else b.table_name end as TABLE_NAME,       a.table_id as TABLE_ID,       a.tablet_id as TABLET_ID,       a.task_id as TASK_ID,       usec_to_time(a.task_start_time) as START_TIME,       usec_to_time(a.task_update_time) as END_TIME,       case a.trigger_type         when 0 then "PERIODIC"         when 1 then "USER"         else "INVALID" END AS TRIGGER_TYPE,       case a.status         when 0 then "PREPARED"         when 1 then "RUNNING"         when 2 then "PENDING"         when 3 then "CANCELED"         when 4 then "FINISHED"         when 15 then "TRIGGERING"         when 16 then "SUSPENDING"         when 17 then "CANCELING"         when 18 then "CLEANING"         else "INVALID" END AS STATUS,       case a.task_type         when 2 then a.ttl_del_cnt         else 0 END AS MISS_CNT,       case a.task_type         when 2 then a.max_version_del_cnt         else 0 END AS MISMATCH_LEN_CNT,       case a.task_type         when 2 then a.scan_cnt         else 0 END AS ORPHAN_CNT,       case a.task_type         when 3 then a.scan_cnt         else 0 END AS CORRECT_CNT,       substr(a.ret_code, 1, instr(a.ret_code, '|') - 1) as RET_CODE,       case a.task_type         when 2 then "LOB_CHECK"         when 3 then "LOB_REPAIR"         else "INVALID" END AS TASK_TYPE,       a.scan_index as SCAN_INDEX       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_table b on           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()           and b.table_mode >> 12 & 15 in (0,1)           and b.index_attributes_set & 16 = 0       WHERE a.task_type in (2, 3) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_lob_check_tasks_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_CDB_OB_LOB_CHECK_TASKS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_LOB_CHECK_TASKS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       a.tenant_id as TENANT_ID,       case a.ls_id         when -1 then "TENANT"         else "LS" end as TASK_SCOPE,       a.ls_id as LS_ID,       case a.table_id         when 3 then "__all_table"         else b.table_name end as TABLE_NAME,       a.table_id as TABLE_ID,       a.tablet_id as TABLET_ID,       a.task_id as TASK_ID,       usec_to_time(a.task_start_time) as START_TIME,       usec_to_time(a.task_update_time) as END_TIME,       case a.trigger_type         when 0 then "PERIODIC"         when 1 then "USER"         else "INVALID" END AS TRIGGER_TYPE,       case a.status         when 0 then "PREPARED"         when 1 then "RUNNING"         when 2 then "PENDING"         when 3 then "CANCELED"         when 4 then "FINISHED"         when 15 then "TRIGGERING"         when 16 then "SUSPENDING"         when 17 then "CANCELING"         when 18 then "CLEANING"         else "INVALID" END AS STATUS,       case a.task_type         when 2 then a.ttl_del_cnt         else 0 END AS MISS_CNT,       case a.task_type         when 2 then a.max_version_del_cnt         else 0 END AS MISMATCH_LEN_CNT,       case a.task_type         when 2 then a.scan_cnt         else 0 END AS ORPHAN_CNT,       case a.task_type         when 3 then a.scan_cnt         else 0 END AS CORRECT_CNT,       substr(a.ret_code, 1, instr(a.ret_code, '|') - 1) as RET_CODE,       case a.task_type         when 2 then "LOB_CHECK"         when 3 then "LOB_REPAIR"         else "INVALID" END AS TASK_TYPE,       a.scan_index as SCAN_INDEX       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on           a.table_id = b.table_id and a.tenant_id = b.tenant_id           and b.table_mode >> 12 & 15 in (0,1)           and b.index_attributes_set & 16 = 0       WHERE a.task_type in (2, 3) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

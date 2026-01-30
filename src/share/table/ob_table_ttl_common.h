@@ -22,6 +22,7 @@ namespace oceanbase
 {
 namespace table
 {
+using namespace share;
 
 class ObTTLTaskParam
 {
@@ -38,7 +39,8 @@ public:
     is_redis_ttl_(false),
     has_cell_ttl_(false),
     redis_model_(ObRedisDataModel::MODEL_MAX),
-    scan_index_()
+    scan_index_(),
+    is_lob_task_(false)
   {
     MEMSET(scan_index_buf_, 0, sizeof(scan_index_buf_));
   }
@@ -56,7 +58,8 @@ public:
     is_redis_ttl_(other.is_redis_ttl_),
     has_cell_ttl_(other.has_cell_ttl_),
     redis_model_(other.redis_model_),
-    scan_index_()
+    scan_index_(),
+    is_lob_task_(other.is_lob_task_)
   {
     MEMCPY(scan_index_buf_, other.scan_index_buf_, sizeof(scan_index_buf_));
     // If scan_index_ points to other's buffer, point to our own buffer
@@ -82,7 +85,7 @@ public:
       is_redis_ttl_ = other.is_redis_ttl_;
       has_cell_ttl_ = other.has_cell_ttl_;
       redis_model_ = other.redis_model_;
-
+      is_lob_task_ = other.is_lob_task_;
       MEMCPY(scan_index_buf_, other.scan_index_buf_, sizeof(scan_index_buf_));
       // If scan_index_ points to other's buffer, point to our own buffer
       if (other.scan_index_.ptr() == other.scan_index_buf_) {
@@ -96,10 +99,11 @@ public:
 
   bool is_valid() const
   {
-    return tenant_id_ != OB_INVALID_ID &&
-           user_id_ != OB_INVALID_ID &&
-           database_id_ != OB_INVALID_ID &&
-           table_id_ != OB_INVALID_ID;
+    bool is_valid = tenant_id_ != OB_INVALID_ID;
+    if (!is_lob_task_) {
+      is_valid = is_valid && user_id_ != OB_INVALID_ID && database_id_ != OB_INVALID_ID && table_id_ != OB_INVALID_ID;
+    }
+    return is_valid;
   }
 
   bool operator==(const ObTTLTaskParam& param) const
@@ -114,12 +118,13 @@ public:
            is_redis_table_ == param.is_redis_table_ &&
            is_redis_ttl_ == param.is_redis_ttl_ &&
            redis_model_ == param.redis_model_ &&
-           has_cell_ttl_ == param.has_cell_ttl_;
+           has_cell_ttl_ == param.has_cell_ttl_ &&
+           is_lob_task_ == param.is_lob_task_;
   }
 
   TO_STRING_KV(K_(ttl), K_(max_version), K_(is_htable), K_(tenant_id),
                K_(user_id), K_(database_id), K_(table_id), K_(is_redis_table),
-              K_(is_redis_ttl), K_(redis_model), K_(has_cell_ttl));
+              K_(is_redis_ttl), K_(redis_model), K_(has_cell_ttl), K_(is_lob_task));
 public:
   int32_t  ttl_;
   int32_t  max_version_;
@@ -136,6 +141,7 @@ public:
   // for ttl scan index
   char scan_index_buf_[OB_MAX_OBJECT_NAME_LENGTH];
   ObString scan_index_;
+  bool is_lob_task_;
 };
 
 
@@ -151,7 +157,6 @@ public:
 public:
   common::ObIArray<common::ObString> &rowkeys_;
 };
-
 
 class ObTTLTaskInfo final
 {

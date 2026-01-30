@@ -8616,7 +8616,7 @@ def_table_schema(
   ],
 )
 # 578: __all_tiered_metadata_store
-# 579: __wr_sqlstat_v2
+
 def_table_schema(
     owner = 'zhangyiqiang.zyq',
     table_id = 579,
@@ -8701,7 +8701,26 @@ def_table_schema(
         ('latest_active_time', 'timestamp', 'true'),
     ],
 )
-# 580: __all_lob_check_exception_result
+
+def_table_schema(
+  owner = 'wuhuang.wh',
+  table_name = '__all_lob_check_exception_result',
+  table_id = '580',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('table_id', 'int'),
+    ('inconsistency_type', 'int'),
+  ],
+  normal_columns = [
+    ('tablet_ids', 'longtext', 'true'),
+  ],
+)
 # 581: __all_sync_standby_dest
 # 582: __all_sync_standby_status
 # 583: __all_routine_load_job
@@ -17621,13 +17640,17 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
-# 12582: __all_virtual_wr_sqlstat_v2
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12582',
   table_name = '__all_virtual_wr_sqlstat_v2',
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sqlstat_v2']))
-# 12583: __all_virtual_lob_check_exception_result
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12583',
+  table_name = '__all_virtual_lob_check_exception_result',
+  keywords = all_def_keywords['__all_lob_check_exception_result'],
+  in_tenant_space=True))
+
 # 12584: __all_virtual_sync_standby_dest
 # 12585: __all_virtual_sync_standby_status
 
@@ -18274,10 +18297,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15531'
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keywords['__all_virtual_hms_client_pool_stat']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15534', all_def_keywords['__all_virtual_ss_diagnose_info']))
-# 15535: __all_virtual_wr_active_session_history_v2
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15535', all_def_keywords['__all_virtual_wr_active_session_history_v2'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15536', all_def_keywords['__all_virtual_wr_sqlstat_v2'])))
-# 15537: __all_virtual_lob_check_exception_result
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15537', all_def_keywords['__all_virtual_lob_check_exception_result']))
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15538', all_def_keywords['__all_sensitive_rule']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_keywords['__all_sensitive_column']))
@@ -45401,11 +45423,191 @@ FROM
 """.replace("\n", " ")
 )
 
-# LOB Check Task Views
-# 21698: DBA_OB_LOB_CHECK_TASKS
-# 21699: CDB_OB_LOB_CHECK_TASKS
-# 21700: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
-# 21701: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
+def_table_schema(
+  owner = 'wuhuang.wh',
+  table_name      = 'DBA_OB_LOB_CHECK_TASKS',
+  table_id        = '21698',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      case a.ls_id
+        when -1 then "TENANT"
+        else "LS" end as TASK_SCOPE,
+      a.ls_id as LS_ID,
+      case a.table_id
+        when 3 then "__all_table"
+        else b.table_name end as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 15 then "TRIGGERING"
+        when 16 then "SUSPENDING"
+        when 17 then "CANCELING"
+        when 18 then "CLEANING"
+        else "INVALID" END AS STATUS,
+      case a.task_type
+        when 2 then a.ttl_del_cnt
+        else 0 END AS MISS_CNT,
+      case a.task_type
+        when 2 then a.max_version_del_cnt
+        else 0 END AS MISMATCH_LEN_CNT,
+      case a.task_type
+        when 2 then a.scan_cnt
+        else 0 END AS ORPHAN_CNT,
+      case a.task_type
+        when 3 then a.scan_cnt
+        else 0 END AS CORRECT_CNT,
+      substr(a.ret_code, 1, instr(a.ret_code, '|') - 1) as RET_CODE,
+      case a.task_type
+        when 2 then "LOB_CHECK"
+        when 3 then "LOB_REPAIR"
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_table b on
+          a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
+          and b.table_mode >> 12 & 15 in (0,1)
+          and b.index_attributes_set & 16 = 0
+      WHERE a.task_type in (2, 3)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuhuang.wh',
+  table_name      = 'CDB_OB_LOB_CHECK_TASKS',
+  table_id        = '21699',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      case a.ls_id
+        when -1 then "TENANT"
+        else "LS" end as TASK_SCOPE,
+      a.ls_id as LS_ID,
+      case a.table_id
+        when 3 then "__all_table"
+        else b.table_name end as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      a.tablet_id as TABLET_ID,
+      a.task_id as TASK_ID,
+      usec_to_time(a.task_start_time) as START_TIME,
+      usec_to_time(a.task_update_time) as END_TIME,
+      case a.trigger_type
+        when 0 then "PERIODIC"
+        when 1 then "USER"
+        else "INVALID" END AS TRIGGER_TYPE,
+      case a.status
+        when 0 then "PREPARED"
+        when 1 then "RUNNING"
+        when 2 then "PENDING"
+        when 3 then "CANCELED"
+        when 4 then "FINISHED"
+        when 15 then "TRIGGERING"
+        when 16 then "SUSPENDING"
+        when 17 then "CANCELING"
+        when 18 then "CLEANING"
+        else "INVALID" END AS STATUS,
+      case a.task_type
+        when 2 then a.ttl_del_cnt
+        else 0 END AS MISS_CNT,
+      case a.task_type
+        when 2 then a.max_version_del_cnt
+        else 0 END AS MISMATCH_LEN_CNT,
+      case a.task_type
+        when 2 then a.scan_cnt
+        else 0 END AS ORPHAN_CNT,
+      case a.task_type
+        when 3 then a.scan_cnt
+        else 0 END AS CORRECT_CNT,
+      substr(a.ret_code, 1, instr(a.ret_code, '|') - 1) as RET_CODE,
+      case a.task_type
+        when 2 then "LOB_CHECK"
+        when 3 then "LOB_REPAIR"
+        else "INVALID" END AS TASK_TYPE,
+      a.scan_index as SCAN_INDEX
+      FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
+          a.table_id = b.table_id and a.tenant_id = b.tenant_id
+          and b.table_mode >> 12 & 15 in (0,1)
+          and b.index_attributes_set & 16 = 0
+      WHERE a.task_type in (2, 3)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuhuang.wh',
+  table_name      = 'DBA_OB_LOB_CHECK_EXCEPTION_RESULT',
+  table_id        = '21700',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      a.ls_id as LS_ID,
+      a.gmt_create as CREATE_TIME,
+      a.gmt_modified as UPDATE_TIME,
+      case a.table_id
+        when 3 then "__all_table"
+        else b.table_name end as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      case a.inconsistency_type
+        when 0 then "LOB_NOT_FOUND"
+        when 1 then "LOB_LEN_MISMATCH"
+        when 2 then "LOB_ORPHANED"
+        else "INVALID" end as INCONSISTENCY_TYPE,
+      a.tablet_ids as TABLET_IDS
+      FROM oceanbase.__all_virtual_lob_check_exception_result a left outer JOIN oceanbase.__all_table b on
+          a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuhuang.wh',
+  table_name      = 'CDB_OB_LOB_CHECK_EXCEPTION_RESULT',
+  table_id        = '21701',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+      a.tenant_id as TENANT_ID,
+      a.ls_id as LS_ID,
+      a.gmt_create as CREATE_TIME,
+      a.gmt_modified as UPDATE_TIME,
+      case a.table_id
+        when 3 then "__all_table"
+        else b.table_name end as TABLE_NAME,
+      a.table_id as TABLE_ID,
+      case a.inconsistency_type
+        when 0 then "LOB_NOT_FOUND"
+        when 1 then "LOB_LEN_MISMATCH"
+        when 2 then "LOB_ORPHANED"
+        else "INVALID" end as INCONSISTENCY_TYPE,
+      a.tablet_ids as TABLET_IDS
+      FROM oceanbase.__all_virtual_lob_check_exception_result a left outer JOIN oceanbase.__all_table b on
+          a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'lixia.yq',
@@ -80109,10 +80311,107 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# LOB Check Task Views for Oracle
-# 28285: DBA_OB_LOB_CHECK_TASKS
+def_table_schema(
+  owner = 'wuhuang.wh',
+  table_name      = 'DBA_OB_LOB_CHECK_TASKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28285',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      CASE A.ls_id
+        WHEN -1 THEN 'TENANT'
+        ELSE 'LS' END AS TASK_SCOPE,
+      A.ls_id AS LS_ID,
+      CASE A.table_id
+        WHEN 3 THEN '__all_table'
+        ELSE B.table_name END AS TABLE_NAME,
+      A.table_id AS TABLE_ID,
+      A.tablet_id AS TABLET_ID,
+      A.task_id AS TASK_ID,
+      TO_CHAR(A.task_start_time / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIME,
+      TO_CHAR(A.task_update_time / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS END_TIME,
+      CASE A.trigger_type
+        WHEN 0 THEN 'PERIODIC'
+        WHEN 1 THEN 'USER'
+        ELSE 'INVALID' END AS TRIGGER_TYPE,
+      CASE A.status
+        when 0 then 'PREPARED'
+        when 1 then 'RUNNING'
+        when 2 then 'PENDING'
+        when 3 then 'CANCELED'
+        when 4 then 'FINISHED'
+        when 15 then 'TRIGGERING'
+        when 16 then 'SUSPENDING'
+        when 17 then 'CANCELING'
+        when 18 then 'CLEANING'
+        else 'INVALID' END AS STATUS,
+      CASE A.task_type
+        WHEN 2 THEN A.ttl_del_cnt
+        ELSE 0 END AS MISS_CNT,
+      CASE A.task_type
+        WHEN 2 THEN A.max_version_del_cnt
+        ELSE 0 END AS MISMATCH_LEN_CNT,
+      CASE A.task_type
+        WHEN 2 THEN A.scan_cnt
+        ELSE 0 END AS ORPHAN_CNT,
+      CASE A.task_type
+        WHEN 3 THEN A.scan_cnt
+        ELSE 0 END AS CORRECT_CNT,
+      substr(A.ret_code, 1, instr(A.ret_code, '|') - 1) AS RET_CODE,
+      CASE A.task_type
+        WHEN 2 THEN 'LOB_CHECK'
+        WHEN 3 THEN 'LOB_REPAIR'
+        ELSE 'INVALID' END AS TASK_TYPE,
+      A.scan_index AS SCAN_INDEX
+      FROM SYS.ALL_VIRTUAL_KV_TTL_TASK A LEFT OUTER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON
+          A.table_id = B.table_id AND A.tenant_id = B.tenant_id
+      WHERE A.task_type IN (2, 3)
+""".replace("\n", " ")
+)
+
 # 28286: CDB_OB_LOB_CHECK_TASKS
-# 28287: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
+
+def_table_schema(
+  owner = 'wuhuang.wh',
+  table_name      = 'DBA_OB_LOB_CHECK_EXCEPTION_RESULT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28287',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+      A.tenant_id AS TENANT_ID,
+      CASE A.ls_id
+        WHEN -1 THEN 'TENANT'
+        ELSE 'LS' END AS TASK_SCOPE,
+      A.ls_id AS LS_ID,
+      A.gmt_create AS CREATE_TIME,
+      A.gmt_modified AS UPDATE_TIME,
+      CASE A.table_id
+        WHEN 3 THEN '__all_table'
+        ELSE B.table_name END AS TABLE_NAME,
+      A.table_id AS TABLE_ID,
+      CASE A.inconsistency_type
+        WHEN 0 THEN 'LOB_NOT_FOUND'
+        WHEN 1 THEN 'LOB_LEN_MISMATCH'
+        WHEN 2 THEN 'LOB_ORPHANED'
+        ELSE 'INVALID' END AS INCONSISTENCY_TYPE,
+      A.tablet_ids AS TABLET_IDS
+      FROM SYS.ALL_VIRTUAL_LOB_CHECK_EXCEPTION_RESULT A LEFT OUTER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON
+          A.table_id = B.table_id AND A.tenant_id = B.tenant_id
+""".replace("\n", " ")
+)
+
 # 28288: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
 
 def_table_schema(

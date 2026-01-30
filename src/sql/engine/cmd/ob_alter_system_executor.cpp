@@ -3208,6 +3208,7 @@ int ObTableTTLExecutor::execute(ObExecContext& ctx, ObTableTTLStmt& stmt)
     param.ttl_all_ = stmt.is_ttl_all();
     param.transport_ = GCTX.net_frame_->get_req_transport();
     param.type_ = stmt.get_type();
+    param.trigger_type_ = TRIGGER_TYPE::USER_TRIGGER;
     for (int64_t i = 0; (i < stmt.get_tenant_ids().count()) && OB_SUCC(ret); i++) {
       uint64_t tenant_id = stmt.get_tenant_ids().at(i);
       if (OB_FAIL(param.add_ttl_info(tenant_id))) {

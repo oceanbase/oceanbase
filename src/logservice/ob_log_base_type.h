@@ -184,7 +184,7 @@ enum ObLogBaseType
   // for obkv table async query session id service
   TABLE_SESS_ID_LOG_BASE_TYPE = 58,
     // for backup validate service
-    BACKUP_VALIDATE_SERVICE_LOG_BASE_TYPE = 59,
+  BACKUP_VALIDATE_SERVICE_LOG_BASE_TYPE = 59,
   // for vector index scheduler
   VEC_INDEX_SERVICE_LOG_BASE_TYPE = 60,
   // for random partition

@@ -720,7 +720,7 @@ int ObTableTTLDag::init(const ObTTLTaskParam &param, ObTTLTaskInfo &info)
   } else if (OB_UNLIKELY(!info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid task info", KR(ret), K(param));
-  } else if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(info.tenant_id_, info.table_id_, compat_mode_))) {
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(info.tenant_id_, compat_mode_))) {
     LOG_WARN("fail to get compat mode", KR(ret), K(info.tenant_id_), K(info.table_id_));
   } else {
     param_ = param;

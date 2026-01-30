@@ -1294,13 +1294,13 @@ int ObLS::register_user_service()
     REGISTER_TO_LOGSERVICE(VEC_INDEX_SERVICE_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
   }
 
-  if (ls_id.is_user_ls()) {
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
-        LOG_WARN("fail to init tablet ttl manager", KR(ret));
-      } else {
-        REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
-        // reuse ttl timer
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
+      LOG_WARN("fail to init tablet ttl manager", KR(ret));
+    } else {
+      REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+      // reuse ttl timer
+      if (ls_id.is_user_ls()) {
         REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
       }
     }
@@ -1488,9 +1488,9 @@ void ObLS::unregister_user_service_()
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
     UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
-    UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
-    tablet_ttl_mgr_.destroy();
   }
+  UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
+  tablet_ttl_mgr_.destroy();
 }
 
 void ObLS::unregister_from_service_()

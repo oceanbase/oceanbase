@@ -101,8 +101,11 @@ public:
 
   int reset();
   int open(ObLobAccessParam &param, ObPersistentLobApator* adaptor, ObIAllocator *scan_allocator);
+  int open(ObTabletID &main_tablet_id, ObTabletID &lob_piece_tablet_id);
   int rescan(ObLobAccessParam &param);
+  int rescan(ObNewRange &range);
   int get_next_row(ObLobMetaInfo &row);
+  ObTableScanParam &get_scan_param() { return scan_param_; }
 
   const ObLobAccessCtx* get_access_ctx() const { return access_ctx_; }
 

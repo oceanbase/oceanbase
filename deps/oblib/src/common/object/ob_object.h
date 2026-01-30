@@ -598,6 +598,11 @@ struct ObLobId
   bool operator !=(const ObLobId &other) const;
   bool operator <(const ObLobId &other) const;
   bool operator >(const ObLobId &other) const;
+  OB_INLINE void assign(const ObLobId &other)
+  {
+    tablet_id_ = other.tablet_id_;
+    lob_id_ = other.lob_id_;
+  }
   TO_STRING_KV(K_(tablet_id), K_(lob_id));
   void reset();
   inline bool is_valid() const {return tablet_id_ != 0 && lob_id_ != 0;}

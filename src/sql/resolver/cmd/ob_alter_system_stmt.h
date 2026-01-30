@@ -1373,7 +1373,7 @@ public:
   {
     int ret = common::OB_SUCCESS;
 
-    if (type < 0 || type >= obrpc::ObTTLRequestArg::TTL_MOVE_TYPE) {
+    if (type < 0 || type >= obrpc::ObTTLRequestArg::TTL_INVALID_TYPE) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid args", K(type));
     } else {

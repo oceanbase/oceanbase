@@ -2450,9 +2450,27 @@ int ObLobManager::prepare_seq_no(ObLobAccessParam& param, ObLobDiskLocatorBuilde
   return ret;
 }
 
+int ObLobManager::get_table_param(const ObTableParam *&table_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lob_ctx_.lob_meta_mngr_->get_table_param(table_param))) {
+    LOG_WARN("get table param fail", K(ret), K(table_param));
+  }
+  return ret;
+}
+
+int ObLobManager::get_table_dml_param(const ObTableDMLParam *&table_dml_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lob_ctx_.lob_meta_mngr_->get_table_dml_param(table_dml_param))) {
+    LOG_WARN("get table dml param fail", K(ret), K(table_dml_param));
+  }
+  return ret;
+}
+
 int ObLobManager::scan_lob_meta(ObLobAccessParam& param, ObLobMetaIterator *&iter)
 {
-  return meta_manager_.scan(param, iter);;
+  return meta_manager_.scan(param, iter);
 }
 
 int ObLobManager::delete_lob_meta(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter)

@@ -43,7 +43,7 @@ public:
   ~ObTenantCompactionTTLScheduler() = default;
 public:
   virtual common::ObTTLType get_ttl_type() override { return common::ObTTLType::COMPACTION_TTL; }
-  virtual bool check_tenant_config_enabled() override
+  virtual bool enable_scheduler() override
   {
     return ObCompactionTTLUtil::is_enable_compaction_ttl(tenant_id_);
   }

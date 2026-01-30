@@ -14,6 +14,8 @@
 
 #include "observer/table/ttl/ob_tenant_ttl_manager.h"
 #include "share/ob_max_id_fetcher.h"
+#include "share/lob/lob_consistency_check/ob_lob_consistency_util.h"
+#include "share/lob/lob_consistency_check/ob_lob_consistency_scheduler.h"
 #include "share/table/ob_ttl_util.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "rootserver/compaction_ttl/ob_tenant_compaction_ttl_scheduler.h"
@@ -41,6 +43,7 @@ void ObTTLTaskScheduler::clear_ttl_history_task_record()
     } else if (!ObTTLUtil::check_can_process_tenant_tasks(tenant_id_)) {
       // do nothinig
     } else {
+      // Step 1: Clean TTL history records (original logic)
       sql.reuse();
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
       if (!tenant_config.is_valid()) {
@@ -112,14 +115,14 @@ int ObTTLTaskScheduler::reload_tenant_task()
 
       ObTTLStatusFieldArray filters;
       ObTTLStatusArray ttl_task_arr;
+      rowkey_allocator_.reuse();
       if (OB_FAIL(filters.push_back(table_id_field)) ||
           OB_FAIL(filters.push_back(partition_id_field)) ||
           OB_FAIL(filters.push_back(tenant_id_field) ||
           OB_FAIL(filters.push_back(ttl_task_type_field)))) {
         LOG_WARN("fail to push back field into array", KR(ret));
-      } else if (OB_FAIL(ObTTLUtil::read_ttl_tasks(tenant_id_,
-                                                   share::OB_ALL_KV_TTL_TASK_TNAME,
-                                                   *sql_proxy_, filters, ttl_task_arr))) {
+      } else if (OB_FAIL(ObTTLUtil::read_ttl_tasks(tenant_id_, share::OB_ALL_KV_TTL_TASK_TNAME, *sql_proxy_,
+                                                    filters, ttl_task_arr, false, &rowkey_allocator_))) {
         LOG_WARN("fail to read ttl tasks status", KR(ret));
       } else if (ttl_task_arr.empty()) {
         tenant_task_.reset();
@@ -163,14 +166,11 @@ int ObTTLTaskScheduler::calc_next_task_state(ObTTLTaskType user_cmd_type,
                                              ObTTLTaskStatus &next_state)
 {
   int ret = OB_SUCCESS;
-  if (curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_SUSPEND &&
-      user_cmd_type == ObTTLTaskType::OB_TTL_RESUME) {
+  if (curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_SUSPEND && user_cmd_type == ObTTLTaskType::OB_TTL_RESUME) {
     next_state = ObTTLTaskStatus::OB_RS_TTL_TASK_CREATE;
-  } else if (curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_CREATE &&
-      user_cmd_type == ObTTLTaskType::OB_TTL_SUSPEND) {
+  } else if (curr_state == ObTTLTaskStatus::OB_RS_TTL_TASK_CREATE && user_cmd_type == ObTTLTaskType::OB_TTL_SUSPEND) {
     next_state = ObTTLTaskStatus::OB_RS_TTL_TASK_SUSPEND;
-  } else if (curr_state != ObTTLTaskStatus::OB_RS_TTL_TASK_CANCEL &&
-      user_cmd_type == ObTTLTaskType::OB_TTL_CANCEL) {
+  } else if (curr_state != ObTTLTaskStatus::OB_RS_TTL_TASK_CANCEL && user_cmd_type == ObTTLTaskType::OB_TTL_CANCEL) {
     next_state = ObTTLTaskStatus::OB_RS_TTL_TASK_CANCEL;
   } else {
     ret = OB_TTL_CMD_NOT_ALLOWED;
@@ -182,7 +182,7 @@ int ObTTLTaskScheduler::calc_next_task_state(ObTTLTaskType user_cmd_type,
   return ret;
 }
 
-int ObTTLTaskScheduler::add_ttl_task(ObTTLTaskType task_type, TRIGGER_TYPE trigger_type)
+int ObTTLTaskScheduler::add_ttl_task(ObTTLTaskType task_type, TRIGGER_TYPE trigger_type, ObString table_with_tablet)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -218,11 +218,21 @@ int ObTTLTaskScheduler::add_ttl_task(ObTTLTaskType task_type, TRIGGER_TYPE trigg
       }
     } else {
       // not task or task finished already, only accept trigger command
-      if (task_type != ObTTLTaskType::OB_TTL_TRIGGER) {
-        ret = OB_TTL_NO_TASK_RUNNING;
-        LOG_INFO("not ttl task running currently, only trigger command is supported",
-          KR(ret), K(task_type), K(curr_state));
-      } else if (OB_FAIL(add_ttl_task_internal(trigger_type))) {
+      if (task_type != ObTTLTaskType::OB_TTL_TRIGGER && task_type != ObTTLTaskType::OB_LOB_CHECK_TRIGGER &&
+          task_type != ObTTLTaskType::OB_LOB_REPAIR_TRIGGER) {
+        if (ObTTLUtil::is_ttl_cmd(task_type)) {
+          ret = OB_TTL_NO_TASK_RUNNING;
+          LOG_WARN("not ttl task running currently, only trigger command is supported",
+            KR(ret), K(task_type), K(curr_state));
+        } else {
+          ObString err_msg = ObLobConsistencyUtil::is_lob_check_cmd(task_type)
+                                  ? "have no running lob check task currently"
+                                  : "have no running lob repair task currently";
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+          LOG_WARN(err_msg.ptr(), KR(ret), K(task_type), K(curr_state));
+        }
+      } else if (OB_FAIL(add_ttl_task_internal(trigger_type, table_with_tablet))) {
         LOG_WARN("fail to add ttl task", KR(ret), K_(tenant_id));
       }
     }
@@ -232,14 +242,14 @@ int ObTTLTaskScheduler::add_ttl_task(ObTTLTaskType task_type, TRIGGER_TYPE trigg
 }
 
 
-int ObTTLTaskScheduler::add_ttl_task_internal(TRIGGER_TYPE trigger_type)
+int ObTTLTaskScheduler::add_ttl_task_internal(TRIGGER_TYPE trigger_type, ObString table_with_tablet)
 {
   int ret = OB_SUCCESS;
   bool is_active_time = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
-  } else if (!check_tenant_config_enabled()) {
+  } else if (!enable_scheduler()) {
     ret = OB_TTL_NOT_ENABLE;
     LOG_USER_ERROR(OB_TTL_NOT_ENABLE);
     LOG_WARN("ttl is not enable currently", KR(ret), K_(tenant_id));
@@ -259,8 +269,9 @@ int ObTTLTaskScheduler::add_ttl_task_internal(TRIGGER_TYPE trigger_type)
     tenant_task_.ttl_status_.tablet_id_ = get_tenant_task_tablet_id();
     tenant_task_.is_finished_ = false;
     tenant_task_.ttl_status_.task_type_ = get_ttl_type();
-
-    if (OB_FAIL(insert_tenant_task(tenant_task_.ttl_status_))) {
+    if (OB_FAIL(ob_write_string(rowkey_allocator_, table_with_tablet, tenant_task_.ttl_status_.row_key_))) {
+      LOG_WARN("fail to write rowkey", KR(ret));
+    } else if (OB_FAIL(insert_tenant_task(tenant_task_.ttl_status_))) {
       LOG_WARN("fail to insert ttl task into __all_ttl_task_status.", KR(ret));
       tenant_task_.reset();
     }
@@ -345,7 +356,6 @@ int ObTTLTaskScheduler::try_add_periodic_task()
   int ret = OB_SUCCESS;
   TRIGGER_TYPE trigger_type = TRIGGER_TYPE::PERIODIC_TRIGGER;
   bool is_active_time = false;
-  const bool enable_ttl = check_tenant_config_enabled();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ttl tenant task mgr not init", KR(ret));
@@ -355,7 +365,7 @@ int ObTTLTaskScheduler::try_add_periodic_task()
   } else if (need_skip_run()) {
     ret = OB_EAGAIN;
     FLOG_INFO("exit timer task once cuz leader switch", KR(ret), K_(is_leader), K_(need_do_for_switch));
-  } else if (!enable_ttl) {
+  } else if (!enable_scheduler()) {
     // do nothing
   } else if (OB_FAIL(in_active_time(is_active_time))) {
     LOG_WARN("fail to check is in active time", KR(ret));
@@ -570,7 +580,7 @@ void ObTTLTaskScheduler::runTimerTask()
   int ret = OB_SUCCESS;
   ObCurTraceId::init(GCONF.self_addr_);
 
-  if (!check_tenant_config_enabled()) {
+  if (!enable_scheduler()) {
     // do nothing
     LOG_DEBUG("ttl is disable", K_(tenant_id), TTL_TYPE_STR);
   } else if (IS_NOT_INIT) {
@@ -607,7 +617,7 @@ int ObTenantTTLManager::handle_user_ttl(const obrpc::ObTTLRequestArg& arg)
     LOG_WARN("not init", KR(ret));
   } else if (tenant_id_ == OB_SYS_TENANT_ID) {
     // do nothing
-  } else if (!enable_ttl) {
+  } else if (!enable_ttl && ObTTLUtil::is_ttl_cmd(arg.cmd_code_)) {
     ret = OB_TTL_NOT_ENABLE;
     LOG_USER_ERROR(OB_TTL_NOT_ENABLE);
     LOG_WARN("ttl is not enable currently", KR(ret), K_(tenant_id));
@@ -682,10 +692,15 @@ int ObTTLTaskScheduler::move_tenant_task_to_history_table(uint64_t tenant_id, ui
 int ObTTLTaskScheduler::handle_user_ttl(const obrpc::ObTTLRequestArg& arg)
 {
   int ret = OB_SUCCESS;
-
-  if (check_tenant_config_enabled()) {
-    const ObTTLTaskType user_ttl_req_type = static_cast<ObTTLTaskType>(arg.cmd_code_);
-    if (OB_FAIL(add_ttl_task(user_ttl_req_type, TRIGGER_TYPE::USER_TRIGGER))) {
+  if (!ObTTLUtil::is_ttl_cmd(arg.cmd_code_)) {
+  } else if (!enable_scheduler()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl is not enable currently");
+    LOG_WARN("ttl is not enable currently", KR(ret), K_(tenant_id));
+  } else {
+    ObTTLTaskType user_ttl_req_type = static_cast<ObTTLTaskType>(arg.cmd_code_);
+    TRIGGER_TYPE trigger_type = arg.trigger_type_ == 1 ? USER_TRIGGER : PERIODIC_TRIGGER;
+    if (OB_FAIL(add_ttl_task(user_ttl_req_type, trigger_type, arg.table_with_tablet_))) {
       LOG_WARN("fail to add ttl task", KR(ret), K_(tenant_id), K(user_ttl_req_type));
     }
   }
@@ -832,6 +847,10 @@ int ObTTLAllTaskScheduler::init(const uint64_t tenant_id, ObMySQLProxy &sql_prox
     LOG_WARN("fail to alloc and init ttl task scheduler", K(ret), K(tenant_id));
   } else if (OB_FAIL(alloc_and_init_scheduler<ObTTLHRowkeyTaskScheduler>(tenant_id, sql_proxy))) {
     LOG_WARN("fail to alloc and init hbase rowkey ttl task scheduler", K(ret), K(tenant_id));
+  } else if (OB_FAIL(alloc_and_init_scheduler<ObLobCheckScheduler>(tenant_id, sql_proxy))) {
+    LOG_WARN("fail to alloc and init lob check task scheduler", K(ret), K(tenant_id));
+  } else if (OB_FAIL(alloc_and_init_scheduler<ObLobRepairScheduler>(tenant_id, sql_proxy))) {
+    LOG_WARN("fail to alloc and init lob repair task scheduler", K(ret), K(tenant_id));
   } else if (OB_FAIL(alloc_and_init_scheduler<ObTenantCompactionTTLScheduler>(tenant_id, sql_proxy))) {
     LOG_WARN("fail to alloc and init ttl task scheduler", K(ret), K(tenant_id));
   } else {
@@ -930,8 +949,8 @@ int ObTTLAllTaskScheduler::handle_user_ttl(const obrpc::ObTTLRequestArg& arg)
     if (OB_ISNULL(task_scheduler)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpcted null task scheduler", K(ret));
-    } else if (!task_scheduler->check_tenant_config_enabled()
-        && ObTTLType::HBASE_ROWKEY != task_scheduler->get_ttl_type()) {
+    } else if (!task_scheduler->enable_scheduler() && (ObTTLType::NORMAL == task_scheduler->get_ttl_type()
+               || ObTTLType::COMPACTION_TTL == task_scheduler->get_ttl_type())) {
       ++failed_cnt;
     } else if (OB_FAIL(task_scheduler->handle_user_ttl(arg))) {
       if (OB_TTL_NO_TASK_RUNNING == ret) {
@@ -942,9 +961,8 @@ int ObTTLAllTaskScheduler::handle_user_ttl(const obrpc::ObTTLRequestArg& arg)
       }
     }
   }
-  if (OB_SUCC(ret)
-      && user_ttl_req_type != ObTTLTaskType::OB_TTL_TRIGGER
-      && failed_cnt >= task_schedulers_.count() - 1) { // ObTTLHRowkeyTaskScheduler is not included
+
+  if (OB_SUCC(ret) && user_ttl_req_type != ObTTLTaskType::OB_TTL_TRIGGER && ObTTLUtil::is_ttl_cmd(user_ttl_req_type) && failed_cnt >= 2) {
     ret = OB_TTL_NO_TASK_RUNNING;
     LOG_USER_ERROR(OB_TTL_NO_TASK_RUNNING);
     LOG_WARN("no ttl task running currently, only trigger command is supported", KR(ret), K(user_ttl_req_type), K(failed_cnt));

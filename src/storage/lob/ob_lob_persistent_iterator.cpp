@@ -473,9 +473,22 @@ int ObLobPersistInsertIter::get_next_row(blocksstable::ObDatumRow *&row)
   } else if (OB_FAIL(param_->update_handle_data_size(nullptr/*old_info*/, &result_.info_/*new_info*/))) {
     LOG_WARN("inc_handle_data_size fail", K(ret));
   } else {
-    ObPersistentLobApator::set_lob_meta_row(new_row_, result_.info_);
-    row = &new_row_;
-    LOG_TRACE("insert one lob meta row", K(new_row_), K(param_->dml_base_param_->spec_seq_no_));
+    if (OB_NOT_NULL(param_) && param_->used_seq_cnt_ > 1) {
+      ret = OB_E(EventTable::EN_LOB_META_DML_FAILED, param_->get_inrow_threshold() + 1) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        if (OB_NOT_NULL(param_) && param_->tablet_id_.is_user_tablet()) {
+          LOG_ERROR("due to error injection, make err len meta data", KR(ret), K(param_->tablet_id_));
+          ret = OB_ITER_END;
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObPersistentLobApator::set_lob_meta_row(new_row_, result_.info_);
+      row = &new_row_;
+      LOG_TRACE("insert one lob meta row", K(new_row_), K(param_->dml_base_param_->spec_seq_no_));
+    }
   }
   return ret;
 }
@@ -550,10 +563,65 @@ int ObLobSimplePersistInsertIter::get_next_row(blocksstable::ObDatumRow *&row)
       ObPersistentLobApator::set_lob_meta_row(new_row_, info);
       row = &new_row_;
       LOG_TRACE("row", K(info));
+      if (lob_meta_list_.count() > 1 && pos_ == lob_meta_list_.count()) {
+        ret = OB_E(EventTable::EN_LOB_META_DML_FAILED, param_->get_inrow_threshold() + 1) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          if (OB_NOT_NULL(param_) && param_->tablet_id_.is_user_tablet()) {
+            LOG_ERROR("due to error injection, make err len meta data", KR(ret), K(param_->tablet_id_));
+            ret = OB_ITER_END;
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
     }
   }
   return ret;
 }
 
+int ObLobMetaIterator::open(ObTabletID &main_tablet_id, ObTabletID &lob_piece_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObAccessService *oas = MTL(ObAccessService*);
+  main_tablet_id_ = main_tablet_id;
+  lob_meta_tablet_id_ = scan_param_.tablet_id_;
+  lob_piece_tablet_id_ = lob_piece_tablet_id;
+  scan_param_.scan_allocator_ = &scan_allocator_;
+  if (OB_NOT_NULL(adaptor_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("adapter is not null", K(ret));
+  } else if (OB_FAIL(MTL(ObLobManager *)->get_table_param(scan_param_.table_param_))) {
+    LOG_WARN("fail to get table param", K(ret));
+  } else if (OB_FAIL(oas->table_scan(scan_param_, row_iter_))) {
+    LOG_WARN("do table scan fail", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObLobMetaIterator::rescan(ObNewRange &range) {
+  int ret = OB_SUCCESS;
+  ObAccessService *oas = MTL(ObAccessService*);
+
+  if (!main_tablet_id_.is_valid() || !lob_meta_tablet_id_.is_valid() || !lob_piece_tablet_id_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet_id is invalid", K(ret), K(main_tablet_id_), K(lob_meta_tablet_id_), K(lob_piece_tablet_id_));
+  } else if (OB_ISNULL(oas)) {
+    ret = OB_ERR_INTERVAL_INVALID;
+    LOG_ERROR("access service is null", K(ret));
+  } else {
+    // 清空旧的 key_ranges
+    scan_param_.key_ranges_.reuse();
+    if (OB_FAIL(scan_param_.key_ranges_.push_back(range))) {
+      LOG_WARN("push key range fail", K(ret), K(range));
+    } else if (OB_FAIL(oas->reuse_scan_iter(false/*tablet id same*/, row_iter_))) {
+      LOG_WARN("reuse scan iter fail", K(ret), KPC(this));
+    } else if (OB_FAIL(oas->table_rescan(scan_param_, row_iter_))) {
+      LOG_WARN("do table rescan fail", K(ret), KPC(this));
+    } else {
+      LOG_DEBUG("rescan lob meta table for lob_id success", KPC(this));
+    }
+  }
+  return ret;
+}
 } // storage
 } // oceanbase

@@ -13442,6 +13442,7 @@ int ObTTLRequestArg::assign(const ObTTLRequestArg &other)
   task_id_ = other.task_id_;
   tenant_id_ = other.tenant_id_;
   trigger_type_ = other.trigger_type_;
+  table_with_tablet_ = other.table_with_tablet_;
 
   return ret;
 }

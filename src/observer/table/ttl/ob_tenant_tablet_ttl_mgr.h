@@ -23,6 +23,8 @@
 #include "lib/container/ob_rbtree.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "share/vector_index/ob_plugin_vector_index_scheduler.h"
+#include "share/table/ob_table_config_util.h"
+#include "share/lob/lob_consistency_check/ob_lob_task_info.h"
 
 namespace oceanbase
 {
@@ -45,6 +47,7 @@ public :
                    need_refresh_(true),
                    lock_(common::ObLatchIds::OB_TTL_TASK_CTX_LOCK),
                    in_queue_(false),
+                   lob_task_info_(),
                    need_update_start_time_(true) {}
   bool is_valid()
   {
@@ -70,26 +73,36 @@ public:
   bool                    need_refresh_; // should refresh task from task table
   common::ObSpinLock      lock_; // lock for update
   bool                    in_queue_; // whether in dag queue or not
+  share::ObLobTaskInfo    lob_task_info_;
   bool                    need_update_start_time_; // whether need update task start time
 };
 
 class ObTabletTTLScheduler;
+class ObTableTTLDeleteTask;
+class ObTableTTLDag;
 class OBTTLTimerPeriodicTask : public common::ObTimerTask {
 public:
-  OBTTLTimerPeriodicTask(ObTabletTTLScheduler &tablet_ttl_mgr)
-  : tablet_ttl_mgr_(tablet_ttl_mgr)
+  OBTTLTimerPeriodicTask()
   {
+    tablet_ttl_schedulers_.set_attr(ObMemAttr(MTL_ID(), "TabletTTLSchArr"));
     disable_timeout_check();
   }
   virtual ~OBTTLTimerPeriodicTask() {}
   virtual void runTimerTask() override;
+  int add_tablet_ttl_scheduler(ObTabletTTLScheduler *tablet_ttl_scheduler) { return tablet_ttl_schedulers_.push_back(tablet_ttl_scheduler); }
+  ObSEArray<ObTabletTTLScheduler *, 4> &get_tablet_ttl_schedulers() { return tablet_ttl_schedulers_; }
+
 private:
   static const int64_t TTL_TIME_TASKER_THRESHOLD = 30 * 1000 * 1000; // 30s
-  ObTabletTTLScheduler &tablet_ttl_mgr_;
+  ObSEArray<ObTabletTTLScheduler *, 4> tablet_ttl_schedulers_;
 };
 
 class ObTabletTTLScheduler
 {
+public:
+  static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
+  static const int64_t TTL_NORMAL_TIME_THRESHOLD = 3*1000*1000; // 3s
+
 public:
   friend ObTTLTaskCtx;
   ObTabletTTLScheduler()
@@ -98,13 +111,8 @@ public:
     lock_(common::ObLatchIds::OB_TABLET_TTL_SCHEDULER_LOCK),
     schema_service_(NULL),
     sql_proxy_(NULL),
-    is_timer_start_(false),
-    periodic_delay_(TTL_PERIODIC_DELAY),
-    periodic_task_(*this),
     ls_(nullptr),
-    tg_id_(-1),
     local_schema_version_(OB_INVALID_VERSION),
-    has_start_(false),
     is_leader_(true),
     dag_ref_cnt_(0),
     need_do_for_switch_(true)
@@ -127,9 +135,6 @@ public:
   int switch_to_follower_gracefully();
   void switch_to_follower_forcedly();
   void inner_switch_to_follower();
-
-  int start();
-  void wait();
   void stop();
   void destroy();
 
@@ -147,20 +152,21 @@ public:
   virtual int safe_to_destroy(bool &is_safe);
   int sync_all_dirty_task(common::ObIArray<ObTabletID>& dirty_tasks);
   void run_task();
+  virtual bool enable_scheduler() { return ObTTLUtil::is_enable_ttl(tenant_id_); }
+  virtual bool enable_dag_task() { return ObKVFeatureModeUitl::is_ttl_enable(); }
+  common::ObMySQLProxy *get_sql_proxy() { return sql_proxy_; }
+  virtual common::ObString get_row_key() { return local_tenant_task_.row_key_; }
 
   TO_STRING_KV(K_(tenant_id),
                K_(is_inited),
-               K_(is_timer_start),
-               K_(periodic_delay),
-               K_(tg_id),
                K_(local_schema_version),
-               K_(has_start),
                K_(is_leader),
                K_(dag_ref_cnt),
                K_(need_do_for_switch));
 
 public:
   virtual int try_schedule_task(ObTTLTaskCtx* ctx);
+  virtual bool need_cancel_task(const int ret);
   virtual int report_task_status(ObTTLTaskInfo& task_info,
                                  table::ObTTLTaskParam& task_para,
                                  bool& is_stop,
@@ -169,15 +175,22 @@ public:
   virtual int64_t get_tenant_task_tablet_id() { return common::ObTTLUtil::TTL_TENNAT_TASK_TABLET_ID; }
 
   virtual int do_after_leader_switch() { return OB_SUCCESS; }
+  virtual int generate_dag_task(table::ObTTLTaskInfo& task_info, table::ObTTLTaskParam& task_para);
+
+  // LOB 一致性检查相关
 
   virtual int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table)
   {
     return ObTTLUtil::check_is_deleting_ttl_table(table_schema, is_ttl_table);
   }
+  virtual int construct_task_record_filter(const ObTTLTaskInfo& task_info, ObTTLStatusFieldArray& filter);
+  virtual int get_ctx_by_tablet(ObTabletID tablet_id, ObTTLTaskCtx*& ctx);
+  virtual int set_ctx_by_tablet(ObTabletID tablet_id, ObTTLTaskCtx* ctx);
+  virtual ObTTLType get_task_type() { return local_tenant_task_.task_type_; }
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;
-  static ObTTLType get_ttl_type() { return ObTTLType::NORMAL; }
+  virtual common::ObTTLType get_ttl_type() { return ObTTLType::NORMAL; }
   struct ObTTLTenantInfo
   {
   public:
@@ -193,7 +206,8 @@ private:
                         rsp_time_(OB_INVALID_ID),
                         state_(common::ObTTLTaskStatus::OB_TTL_TASK_INVALID),
                         is_reused_(false),
-                        task_type_(ObTTLType::NORMAL)
+                        task_type_(ObTTLType::NORMAL),
+                        row_key_()
     {}
     ~ObTTLTenantInfo()
     {
@@ -221,7 +235,8 @@ private:
                  K_(rsp_time),
                  K_(state),
                  K_(is_reused),
-                 K_(task_type));
+                 K_(task_type),
+                 K_(row_key));
 
   public:
       TabletTaskMap                     tablet_task_map_;
@@ -237,6 +252,7 @@ private:
       common::ObTTLTaskStatus           state_;
       bool                              is_reused_; // all delete task is finished (or canceled)
       ObTTLType                         task_type_;
+      common::ObString                  row_key_;
   };
 
 protected:
@@ -253,14 +269,9 @@ protected:
   void mark_tenant_need_check();
   template <typename TTLTaskT, typename TTLDagT, typename TTLParamT>
   int generate_ttl_dag(table::ObTTLTaskInfo &task_info, TTLParamT &para);
-  static int construct_task_record_filter(const uint64_t& task_id,
-                                          const uint64_t& table_id,
-                                          ObTabletID& tablet_id,
-                                          ObTTLStatusFieldArray& filter);
-  common::ObMySQLProxy *get_sql_proxy() { return sql_proxy_; }
   int sync_sys_table_op(ObTTLTaskCtx* ctx, bool force_update, bool &tenant_state_changed);
   int sync_sys_table(common::ObTabletID& tablet_id, bool &tenant_state_changed);
-  int construct_sys_table_record(ObTTLTaskCtx* ctx, common::ObTTLStatus& ttl_record);
+  virtual int construct_sys_table_record(ObTTLTaskCtx* ctx, common::ObTTLStatus& ttl_record);
   bool can_schedule_tenant(const ObTTLTenantInfo &tenant_info);
   bool can_schedule_task(const ObTTLTaskCtx &ttl_task);
   int check_cmd_state_valid(const common::ObTTLTaskStatus current_state,
@@ -273,10 +284,13 @@ protected:
   int refresh_tablet_task(ObTTLTaskCtx &ttl_task, bool refresh_status, bool refresh_retcode = false);
   int check_schema_version();
   OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); }
+  OB_INLINE common::ObSpinLock& get_lock() { return lock_; }
+  virtual int handle_exception_table_op(ObTTLTaskCtx* ctx, common::ObMySQLTransaction &trans);
 protected:
   void mark_ttl_ctx_dirty(ObTTLTenantInfo& tenant_info, ObTTLTaskCtx& ctx);
   int deep_copy_task(ObTTLTaskCtx* ctx, table::ObTTLTaskInfo& task_info, const table::ObTTLTaskParam &task_param, bool with_deep_copy = true);
   int try_schedule_remaining_tasks(const ObTTLTaskCtx *current_ctx);
+  virtual int delete_lob_record(table::ObTTLTaskInfo& task_info, common::ObMySQLTransaction &trans) { return OB_SUCCESS; }
 
 protected:
   ObTTLTenantInfo local_tenant_task_;
@@ -285,22 +299,14 @@ protected:
   common::ObSpinLock lock_;
 protected:
   static const int64_t DEFAULT_TTL_BUCKET_NUM = 100;
-  static const int64_t TTL_PERIODIC_DELAY = 10*1000*1000; //10s
   static const int64_t TBALE_GENERATE_BATCH_SIZE = 200;
-  static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
   static const int64_t DEFAULT_TABLET_PAIR_SIZE = 1024;
   static const int64_t DEFAULT_PARAM_BUCKET_SIZE = 200;
-  static const int64_t TTL_NORMAL_TIME_THRESHOLD = 3*1000*1000; // 3s
   share::schema::ObMultiVersionSchemaService *schema_service_;
   common::ObMySQLProxy *sql_proxy_;
-  bool is_timer_start_;
-  int64_t periodic_delay_;
-  OBTTLTimerPeriodicTask periodic_task_;
   storage::ObLS *ls_;
-  int tg_id_;
   ObArray<share::ObTabletTablePair> tablet_table_pairs_;
   int64_t local_schema_version_;
-  bool has_start_;
   bool is_leader_; // current tenant ttl mgr is in leader ls or not
   volatile int64_t dag_ref_cnt_; // ttl dag ref count for current ls
   // after leader switch, need wait and reset status
@@ -460,7 +466,7 @@ class ObTenantTabletTTLMgr : public logservice::ObIReplaySubHandler,
 {
 public:
   ObTenantTabletTTLMgr();
-  virtual ~ObTenantTabletTTLMgr() = default;
+  virtual ~ObTenantTabletTTLMgr() { destroy(); }
   int init(storage::ObLS *ls);
   int switch_to_leader() override;
   int resume_leader() override;
@@ -492,20 +498,30 @@ public:
   TO_STRING_KV(K_(is_inited),
                K_(tenant_id),
                K_(ls_id),
-               K_(tablet_ttl_schedulers),
+               K_(periodic_task),
                K_(vec_tg_id),
                K_(vector_idx_scheduler));
 private:
   template <typename T>
   int alloc_and_init_tablet_scheduler(storage::ObLS *ls);
+  int alloc_and_init_hrowkey_tablet_scheduler(storage::ObLS *ls);
+protected:
+  static const int64_t TTL_PERIODIC_DELAY = 10*1000*1000; //10s
 private:
   // 新增加成员 ObALLTabletTTLScheduler
   ObArenaAllocator allocator_; // use to alloc ObTTLTaskScheduler
   bool is_inited_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
+  int ttl_tg_id_;
+  bool is_ttl_tg_started_;
+  int hrowkey_tg_id_;
+  bool is_hrowkey_tg_started_;
   int vec_tg_id_;
-  ObSEArray<ObTabletTTLScheduler *, 4> tablet_ttl_schedulers_;
+  OBTTLTimerPeriodicTask periodic_task_;
+  OBTTLTimerPeriodicTask hrowkey_periodic_task_;
+  int64_t periodic_delay_;
+
   share::ObPluginVectorIndexLoadScheduler vector_idx_scheduler_;
 };
 

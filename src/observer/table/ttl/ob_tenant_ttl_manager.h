@@ -50,6 +50,9 @@ public:
   void reset() {
     is_finished_ = true;
     ttl_status_.status_ = OB_TTL_TASK_INVALID;
+    ttl_status_.ret_code_ = common::ObTTLStatus::DEFAULT_RET_CODE;
+    ttl_status_.row_key_.reset();
+    ttl_status_.scan_index_ = ObTTLTaskConstant::TTL_SCAN_INDEX_DEFAULT_VALUE;
   }
 
   OB_INLINE bool is_finished() { return is_finished_; }
@@ -71,54 +74,45 @@ class ObTTLTaskScheduler : public common::ObTimerTask
 public:
   ObTTLTaskScheduler()
   : del_ten_arr_(), sql_proxy_(nullptr), is_inited_(false), periodic_launched_(false),
-    need_reload_(true), mutex_(common::ObLatchIds::OB_TTL_TASK_SCHEDULER_LOCK), is_leader_(true), need_do_for_switch_(true)
+    need_reload_(true), mutex_(common::ObLatchIds::OB_TTL_TASK_SCHEDULER_LOCK), is_leader_(true),
+    need_do_for_switch_(true), rowkey_allocator_(ObMemAttr(MTL_ID(), "TTLTntRKAlloc"))
   {}
   virtual ~ObTTLTaskScheduler() {}
 
   int init(const uint64_t tenant_id, common::ObMySQLProxy &sql_proxy);
 
-  int add_ttl_task(ObTTLTaskType task_type, TRIGGER_TYPE trigger_type);
+  int add_ttl_task(ObTTLTaskType task_type, TRIGGER_TYPE trigger_type, ObString table_with_tablet = ObString());
 
   void reset_local_tenant_task();
 
   // reload latest tenant task from system table
   int reload_tenant_task();
-
-  void runTimerTask() override;
-
   void set_need_reload(bool need_reload) { ATOMIC_STORE(&need_reload_, need_reload); }
+  int check_all_tablet_task();
   void pause();
   void resume();
 public:
+  virtual void runTimerTask() override;
   virtual int try_add_periodic_task();
+  virtual bool enable_scheduler() { return ObTTLUtil::is_enable_ttl(tenant_id_); }
   virtual uint64_t get_tenant_task_table_id() { return common::ObTTLUtil::TTL_TENNAT_TASK_TABLE_ID; }
   virtual uint64_t get_tenant_task_tablet_id() { return common::ObTTLUtil::TTL_TENNAT_TASK_TABLET_ID; }
   virtual common::ObTTLType get_ttl_type() { return common::ObTTLType::NORMAL; }
   virtual int handle_user_ttl(const obrpc::ObTTLRequestArg& arg);
   virtual int check_task_need_move(bool &need_move);
-  virtual bool check_tenant_config_enabled()
-  {
-    return ObTTLUtil::is_enable_ttl(tenant_id_);
-  }
 private:
   virtual int in_active_time(bool& is_active_time);
 
   virtual int insert_tenant_task(ObTTLStatus& ttl_task);
-
-  virtual int update_task_status(uint64_t task_id,
-                                 int64_t rs_new_status,
-                                 common::ObISQLClient& proxy);
   virtual int fetch_ttl_task_id(uint64_t tenant_id, int64_t &new_task_id);
 
-  int calc_next_task_state(ObTTLTaskType user_cmd_type,
+  virtual int calc_next_task_state(ObTTLTaskType user_cmd_type,
                            ObTTLTaskStatus curr_state,
                            ObTTLTaskStatus &next_state);
 
   ObTTLTaskStatus next_status(int64_t curr);
 
-  int add_ttl_task_internal(TRIGGER_TYPE trigger_type);
-
-  int check_all_tablet_task();
+  int add_ttl_task_internal(TRIGGER_TYPE trigger_type, ObString table_with_tablet = ObString());
   int check_one_tablet_task(common::ObISQLClient &sql_client,
                             const uint64_t table_id,
                             const ObTabletID tablet_id,
@@ -128,9 +122,15 @@ private:
 private:
   virtual int check_all_table_finished(bool &all_finished);
   int check_tablet_table_finished(common::ObIArray<share::ObTabletTablePair> &pairs, bool &all_finished);
-  int move_all_task_to_history_table();
   OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); }
-  void clear_ttl_history_task_record();
+
+protected:
+  virtual int update_task_status(uint64_t task_id,
+                                int64_t rs_new_status,
+                                common::ObISQLClient& proxy);
+  virtual int move_all_task_to_history_table();
+private:
+  virtual void clear_ttl_history_task_record();
 protected:
   static const int64_t TBALE_CHECK_BATCH_SIZE = 200;
   static const int64_t TBALET_CHECK_BATCH_SIZE = 1024;
@@ -152,6 +152,7 @@ protected:
   bool is_leader_; // current ttl manager in ls leader or not
   const int64_t OB_TTL_TASK_RETRY_INTERVAL = 15*1000*1000; // 15s
   bool need_do_for_switch_; // need wait follower finish after switch leader
+  ObArenaAllocator rowkey_allocator_;
 };
 
 class ObTTLAllTaskScheduler : public common::ObTimerTask

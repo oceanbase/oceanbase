@@ -305,6 +305,7 @@ ob_set_subtarget(ob_share common
   ob_dynamic_partition_manager.cpp
   ob_scheduled_manage_dynamic_partition.cpp
   ob_batch_selector.cpp
+  ob_lob_check_job_scheduler.cpp
   ob_timezone_importer.cpp
   ob_srs_importer.cpp
   ob_compute_property.cpp
@@ -863,6 +864,9 @@ ob_set_subtarget(ob_share semistruct
 
 ob_set_subtarget(ob_share lob
   lob/ob_lob_ext_info_log_allocator.cpp
+  lob/lob_consistency_check/ob_lob_check_task.cpp
+  lob/lob_consistency_check/ob_lob_consistency_util.cpp
+  lob/lob_consistency_check/ob_lob_consistency_scheduler.cpp
 )
 
 if (NOT OB_BUILD_STANDALONE)

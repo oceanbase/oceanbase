@@ -1,0 +1,35 @@
+#package_name:DBMS_LOB_MANAGER
+#author: wuhuang.wh
+
+CREATE OR REPLACE PACKAGE "DBMS_LOB_MANAGER" IS
+
+  PROCEDURE CHECK_LOB(
+    table_ids IN VARCHAR2 := NULL
+  );
+
+  PROCEDURE CANCEL_JOB(
+    task_type IN VARCHAR2
+  );
+
+  PROCEDURE SUSPEND_JOB(
+    task_type IN VARCHAR2
+  );
+
+  PROCEDURE RESUME_JOB(
+    task_type IN VARCHAR2
+  );
+
+  PROCEDURE REPAIR_LOB(
+    table_id IN NUMBER DEFAULT NULL,
+    tablet_ids IN VARCHAR2 DEFAULT NULL
+  );
+
+  PROCEDURE CHECK_LOB_INNER;
+
+  PROCEDURE RESCHEDULE_JOB(
+    start_date IN TIMESTAMP WITH TIME ZONE,
+    repeat_interval IN VARCHAR2
+  );
+
+END;
+//
