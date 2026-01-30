@@ -1211,7 +1211,7 @@ void ObTenantTabletStatMgr::refresh_dynamic_table_options()
             stream_node->dynamic_table_option_ = tmp_options;
             update_schema_cnt++;
           }
-          if (ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME == tmp_options.mode_) {
+          if (ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME == stream_node->dynamic_table_option_.mode_) {
             cur_extreme_table_cnt++;
           }
           // prevent hunging schema memory too long

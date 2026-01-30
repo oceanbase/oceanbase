@@ -1704,7 +1704,7 @@ void ObTenantTabletScheduler::errsim_schedule_adaptive(
   #undef SCHEDULE_META_MEDIUM_ERRSIM
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI)) {
+  } else if (OB_FAIL(EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI) && ObAdaptiveMergePolicy::AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI ==event) {
     reason = ObAdaptiveMergePolicy::NONE;
     LOG_INFO("ERRSIM EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI: disable meta merge after mini", K(ret), K(ls_id), K(tablet_id));
   }

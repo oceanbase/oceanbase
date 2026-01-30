@@ -718,6 +718,7 @@ int ObPartitionMergePolicy::check_need_gc_tx_data(
       }
     }
   }
+
   return ret;
 }
 
