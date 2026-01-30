@@ -176,11 +176,12 @@ int ObLogWindowFunction::get_plan_item_info(PlanText &plan_text,
         PRINT_BOUND(lower, win_expr->get_lower());
       }
     }
-    // streaming
-    if (OB_FAIL(ret) || !use_streaming_) {
+    // streaming only print in extended mode
+    if (OB_FAIL(ret) || !use_streaming_ || (plan_text.type_ != EXPLAIN_EXTENDED && plan_text.type_ != EXPLAIN_EXTENDED_NOADDR)) {
     } else if (OB_FAIL(BUF_PRINTF("\n      streaming=true"))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     }
+
     END_BUF_PRINT(plan_item.special_predicates_,
                   plan_item.special_predicates_len_);
   }
