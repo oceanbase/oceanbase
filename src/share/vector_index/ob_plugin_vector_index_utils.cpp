@@ -633,6 +633,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
               LOG_WARN("failed to set index identity", K(ret));
             } else {
               adapter = new_adapter;
+              FLOG_INFO("[VEC_INDEX][ADAPTOR] create adaptor success", K(ls_id), K(target_scn), KPC(adapter),
+                        K(lbt()));
             }
           }
         } else {
@@ -645,6 +647,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
       } else if (OB_FAIL(iter_table_rescan(snapshot_scan_param, table_scan_iter))) {
         LOG_WARN("failed to rescan", K(ret));
       } else {
+        ObCostGuard cost_guard; // for timeout log
   
         ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         ObHNSWDeserializeCallback::CbParam param;
@@ -688,6 +691,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
             LOG_INFO("memdata sync snapshot index complement no data", K(index_count), K(ls_id), K(index_type), KPC(new_adapter));
           } else { // index_count > 0
             new_adapter->set_snap_data_has_complete();
+            new_adapter->log_deseri_snap_without_lock(index_type, target_prefix, key_prefix, cost_guard.cost_time_ms());
             LOG_INFO("memdata sync snapshot index complement data", K(index_count), K(ls_id), K(index_type), KPC(new_adapter));
           }
         }

@@ -1241,6 +1241,9 @@ int ObVecIndexAsyncTask::do_work()
         LOG_WARN("failed to init adpt.", K(ret));
       } else if (OB_FAIL(new_adapter->set_index_identity(adpt_guard.get_adatper()->get_index_identity()))) {
         LOG_WARN("failed to set index identity", K(ret));
+      } else {
+        FLOG_INFO("[VEC_INDEX][ADAPTOR] clone adaptor success for rebuild", KP(new_adapter), "create_type",
+                  new_adapter->get_create_type(), KP(old_adapter_), K(lbt()));
       }
     }
   }

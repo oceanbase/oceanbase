@@ -52,6 +52,7 @@ int ObVectorIndexRefresher::init(sql::ObExecContext &ctx,
 int ObVectorIndexRefresher::refresh() {
   int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(refresh_ctx_));
+  FLOG_INFO("[VEC_INDEX][REFRESH] start to refresh index", KPC(refresh_ctx_));
   if (OB_SUCC(ret)) {
     const ObVectorRefreshMethod refresh_type = refresh_ctx_->refresh_method_;
     if (ObVectorRefreshMethod::REBUILD_COMPLETE == refresh_type) {
@@ -282,6 +283,7 @@ int ObVectorIndexRefresher::lock_domain_table_for_refresh() {
         break;
       }
     }
+    FLOG_INFO("[VEC_INDEX][REFRESH] lock domain table for refresh", K(ret), K(retries), K(tenant_id), K(domain_tb_id));
   }
   return ret;
 }
@@ -300,7 +302,8 @@ int ObVectorIndexRefresher::do_refresh() {
   ObTimeoutCtx timeout_ctx;
   const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT =
       ObDDLUtil::calc_inner_sql_execute_timeout();
-  
+  int64_t start_time_us = common::ObTimeUtility::fast_current_time();
+
   ObArray<uint64_t> col_ids;
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -356,10 +359,11 @@ int ObVectorIndexRefresher::do_refresh() {
       // Return OB_EAGAIN for dbms_vector.refresh_index_inner to do inner retry.
       // For dbms_vector.refresh_index, the error code will return to user.
       ret = OB_EAGAIN;
-      LOG_WARN("delta buffer table or index id table is not available", K(ret), K(domain_table_schema->get_index_status()), 
+      LOG_WARN("[VEC_INDEX][REFRESH] delta buffer table or index id table is not available", K(ret), K(domain_table_schema->get_index_status()), 
               K(index_id_tb_schema->get_index_status()));
     } else {
       ret = OB_ERR_INDEX_UNAVAILABLE;
+      LOG_WARN("[VEC_INDEX][REFRESH] delta buffer table or index id table is not available", K(ret), K(domain_table_schema->get_index_status()), KPC(domain_table_schema));
     }
   } else if (OB_FAIL(schema_guard.get_database_schema(
                  tenant_id, domain_table_schema->get_database_id(),
@@ -373,7 +377,7 @@ int ObVectorIndexRefresher::do_refresh() {
                          domain_table_schema->is_in_recyclebin() ||
                          index_id_tb_schema->is_in_recyclebin())) {
     // do nothing
-    LOG_DEBUG("table or db in recyclebin");
+    LOG_INFO("[VEC_INDEX][REFRESH] table or db in recyclebin", KPC(db_schema), KPC(domain_table_schema), KPC(index_id_tb_schema));
   } else if (OB_FAIL(get_table_row_count(
                  db_schema->get_database_name_str(),
                  domain_table_schema->get_table_name_str(), refresh_ctx_->scn_,
@@ -382,6 +386,7 @@ int ObVectorIndexRefresher::do_refresh() {
              K(domain_table_schema->get_table_name_str()));
   } else if (domain_table_row_cnt < refresh_ctx_->refresh_threshold_) {
     // refreshing is not triggered.
+    FLOG_INFO("[VEC_INDEX][REFRESH] refreshing is not triggered", K(domain_table_row_cnt), K(refresh_ctx_->refresh_threshold_));
   } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
     LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret));
   } 
@@ -454,6 +459,8 @@ int ObVectorIndexRefresher::do_refresh() {
                        tenant_id, insert_sel_sql.ptr(), affected_rows))) {
           LOG_WARN("fail to execute insert into select sql", KR(ret),
                    K(tenant_id), K(insert_sel_sql));
+        } else {
+          FLOG_INFO("[VEC_INDEX][REFRESH] execute insert into select sql success", K(affected_rows), K(insert_sel_sql));
         }
       }
     }
@@ -476,6 +483,8 @@ int ObVectorIndexRefresher::do_refresh() {
                        tenant_id, delete_sql.ptr(), affected_rows))) {
           LOG_WARN("fail to execute insert into select sql", KR(ret),
                    K(tenant_id), K(delete_sql));
+        } else {
+          FLOG_INFO("[VEC_INDEX][REFRESH] execute delete sql success", K(affected_rows), K(delete_sql));
         }
       }
     }
@@ -541,6 +550,8 @@ int ObVectorIndexRefresher::do_refresh() {
       }
     }
   }
+  int64_t cost_ms = (common::ObTimeUtility::fast_current_time() - start_time_us) / 1000;
+  FLOG_INFO("[VEC_INDEX][REFRESH] refresh index cost", K(ret), K(cost_ms), KPC(refresh_ctx_));
   return ret;
 }
 
@@ -560,6 +571,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   bool rebuild_index_online = false;
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
   dbms_scheduler::ObDBMSSchedJobInfo job_info;
+  int64_t start_time_us = common::ObTimeUtility::fast_current_time();
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("refresh_ctx is null", K(ret));
@@ -603,7 +615,9 @@ int ObVectorIndexRefresher::do_rebuild() {
     ret = OB_ERR_INDEX_UNAVAILABLE;
     if (INDEX_STATUS_UNAVAILABLE == domain_table_schema->get_index_status()) {
       ret = OB_EAGAIN;
-      LOG_WARN("domain table is not available now", K(ret), K(domain_table_schema->get_index_status()));
+      LOG_WARN("[VEC_INDEX][REBUILD] domain table is not available now", K(ret), K(domain_table_schema->get_index_status()));
+    } else {
+      LOG_WARN("[VEC_INDEX][REBUILD] domain table is not available now", K(ret), K(domain_table_schema->get_index_status()), KPC(domain_table_schema));
     }
   }
   if (OB_FAIL(ret)) {
@@ -657,7 +671,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     } else {
       refresh_ctx_->tmp_repeat_interval_ = job_info.get_repeat_interval();
       refresh_ctx_->database_id_ = domain_table_schema->get_database_id();
-      LOG_WARN("get last repeat interval and database_id", K(ret), K(*refresh_ctx_));
+      LOG_INFO("[VEC_INDEX][REBUILD] get last repeat interval and database_id", K(ret), K(*refresh_ctx_));
     }
   }
 
@@ -674,7 +688,7 @@ int ObVectorIndexRefresher::do_rebuild() {
                          (OB_NOT_NULL(index_id_tb_schema) && index_id_tb_schema->is_in_recyclebin()))) {
     // do nothing
     triggered = false;
-    LOG_DEBUG("table or db in recyclebin");
+    LOG_INFO("[VEC_INDEX][REBUILD] table or db in recyclebin", KPC(db_schema), KPC(domain_table_schema), KPC(index_id_tb_schema));
   } else if (OB_UNLIKELY(0 == refresh_ctx_->delta_rate_threshold_)) {
     // do nothing
   } else if (!domain_table_schema->is_vec_hnsw_index()) {
@@ -698,7 +712,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   } else if (0 != base_table_row_cnt && (index_id_table_row_cnt + domain_table_row_cnt) * 1.0 / base_table_row_cnt < refresh_ctx_->delta_rate_threshold_) {
     // rebuilding is not triggered.
     triggered = false;
-    LOG_WARN("no need to start rebuild", K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt), K(refresh_ctx_->delta_rate_threshold_));
+    FLOG_INFO("[VEC_INDEX][REBUILD] no need to start rebuild", K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt), K(refresh_ctx_->delta_rate_threshold_));
   } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
     LOG_WARN("fail to lock domain for rebuild", KR(ret));
   } 
@@ -714,6 +728,8 @@ int ObVectorIndexRefresher::do_rebuild() {
     LOG_WARN("fail to check the rebuild index different", K(ret), K(idx_parameters));
   } else if (!triggered && rebuild_index_online) {
     triggered = true;
+  } else {
+    LOG_INFO("[VEC_INDEX][REBUILD] no need to rebuild index", K(triggered), K(rebuild_index_online), KPC(refresh_ctx_), K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt));
   }
 
   if (OB_SUCC(ret) && triggered) {
@@ -766,6 +782,8 @@ int ObVectorIndexRefresher::do_rebuild() {
     }
     }
   }
+  int64_t cost_ms = (common::ObTimeUtility::fast_current_time() - start_time_us) / 1000;
+  FLOG_INFO("[VEC_INDEX][REBUILD] rebuild index cost", K(ret), K(cost_ms), K(triggered), KPC(refresh_ctx_));
   return ret;
 }
 

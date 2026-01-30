@@ -2162,6 +2162,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
       } else if (index_table_schema->get_index_type() == INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL) {  
         if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
           // skip unavaliable index table
+          LOG_INFO("[VEC_INDEX][HNSW_PLAN] skip unavaliable index table", K(ret), K(index_table_schema->get_schema_version()), K(simple_index_infos.at(i).table_id_));
         } else {
           bool has_same_col_id = false;
           for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
@@ -2213,6 +2214,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
           // skip if index_table_schema is not 4, 5 index table
         } else if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
           // skip unavaliable index table
+          LOG_INFO("[VEC_INDEX][HNSW_PLAN] skip unavaliable index table", K(ret), K(index_table_schema->get_schema_version()), K(simple_index_infos.at(i).table_id_));
         } else {  
           ObString index_prefix;
           if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
@@ -2246,7 +2248,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_hnsw(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("failed to get latest avaliable index tids for hnsw", K(ret), K(inc_tid_heap.count()));
     } else {
-      LOG_DEBUG("get latest avaliable index tids for hnsw", K(inc_tid), K(vbitmap_tid), K(snapshot_tid));
+      FLOG_INFO("[VEC_INDEX][HNSW_PLAN] get latest avaliable index tids for hnsw", K(inc_tid), K(vbitmap_tid), K(snapshot_tid));
     }
   }
 
@@ -2298,6 +2300,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_ivf(
       } else if (is_centroid_index_table_with_type(type, index_table_schema->get_index_type())) {
         if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
           // skip unavaliable index table
+          LOG_INFO("[VEC_INDEX][IVF_PLAN] skip unavaliable index table", K(ret), K(index_table_schema->get_schema_version()), K(simple_index_infos.at(i).table_id_));
         } else {
           bool has_same_col_id = false;
           for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count(); j++) {
@@ -2366,6 +2369,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_ivf(
           // skip if index_table_schema not match when ivf pq
         } else if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
           // skip unavaliable index table
+          LOG_INFO("[VEC_INDEX][IVF_PLAN] skip unavaliable index table", K(ret), K(index_table_schema->get_schema_version()), K(simple_index_infos.at(i).table_id_));
         } else {
           ObString index_prefix;
           if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
@@ -2437,7 +2441,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_ivf(
       LOG_WARN("failed to get latest avaliable index tids for ivf", K(ret), K(type),
                K(centroid_tid), K(cid_rowkey_tid), K(rowkey_cid_tid), K(extra_tid));
     } else {
-      LOG_DEBUG("get latest avaliable index tids for ivf",
+      LOG_INFO("[VEC_INDEX][IVF_PLAN] get latest avaliable index tids for ivf",
                 K(type), K(centroid_tid), K(cid_rowkey_tid), K(rowkey_cid_tid), K(extra_tid));
     }
   }

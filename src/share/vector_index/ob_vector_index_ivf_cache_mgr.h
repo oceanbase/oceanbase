@@ -117,7 +117,7 @@ public:
         tenant_id_(tenant_id),
         key_(IvfCacheType::IVF_CACHE_MAX),
         sub_mem_ctx_(nullptr),
-        rwlock_(),
+        rwlock_(common::ObLatchIds::VECTOR_IVF_CACHE_LOCK),
         status_(IvfCacheStatus::IVF_CACHE_IDLE)
   {}
   virtual ~ObIvfICache();

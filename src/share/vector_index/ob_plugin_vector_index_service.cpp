@@ -305,6 +305,10 @@ int ObPluginVectorIndexMgr::create_partial_adapter(ObTabletID idx_tablet_id,
       if (OB_FAIL(set_partial_adapter_(idx_tablet_id, tmp_vec_idx_adpt))) {
         LOG_WARN("set vector index adapter faild", K(idx_tablet_id), KR(ret));
       } // other thread set already, need get again ?
+      else {
+        FLOG_INFO("[VEC_INDEX][ADAPTOR] create partial adaptor success",
+            KP(tmp_vec_idx_adpt), K(idx_tablet_id), K(data_tablet_id), K(type), K(index_table_id), K(lbt()));
+      }
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(tmp_vec_idx_adpt)) {
       tmp_vec_idx_adpt->~ObPluginVectorIndexAdaptor();
@@ -1171,19 +1175,51 @@ void ObPluginVectorIndexService::wait()
 void ObPluginVectorIndexMgr::dump_all_inst()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   RLockGuard lock_guard(adapter_map_rwlock_);
+  char adaptor_info_str_[ObVectorIndexInfo::OB_VECTOR_INDEX_SYNC_INFO_SIZE];
   FOREACH(iter, partial_index_adpt_map_) {
     const ObTabletID &tablet_id = iter->first;
     ObPluginVectorIndexAdaptor *adapter = iter->second;
     ObVectorIndexParam *hnsw_param = (adapter == nullptr)? nullptr : (ObVectorIndexParam *)(adapter->get_algo_data());
-    LOG_INFO("dump partial index adapter", K(ls_id_), K(tablet_id), KP(adapter), KPC(adapter), KPC(hnsw_param));
+    if (OB_NOT_NULL(adapter)) {
+      memset(adaptor_info_str_, 0, ObVectorIndexInfo::OB_VECTOR_INDEX_SYNC_INFO_SIZE);
+      int64_t pos = 0;
+      if (OB_TMP_FAIL(adapter->print_adapter_info(adaptor_info_str_, ObVectorIndexInfo::OB_VECTOR_INDEX_SYNC_INFO_SIZE, pos))) {
+        LOG_WARN("[VEC_INDEX][DUMP] failed to print adapter info", K(tmp_ret));
+      }
+      LOG_INFO("[VEC_INDEX][DUMP] dump partial index adapter", K(ls_id_), K(tablet_id), KPC(hnsw_param), KP(adapter), KPC(adapter), K(adaptor_info_str_));
+      adapter->reset_dump_info();
+    } else {
+      LOG_WARN("[VEC_INDEX][DUMP] dump partial index adapter is null", K(ls_id_), K(tablet_id));
+    }
   }
   FOREACH(iter, complete_index_adpt_map_) {
     const ObTabletID &tablet_id = iter->first;
     ObPluginVectorIndexAdaptor *adapter = iter->second;
     ObVectorIndexParam *hnsw_param = (adapter == nullptr)? nullptr : (ObVectorIndexParam *)(adapter->get_algo_data());
-    LOG_INFO("dump complete index adapter", K(ls_id_), K(tablet_id), KP(adapter), KPC(adapter), KPC(hnsw_param));
+    if (OB_NOT_NULL(adapter)) {
+      if (tablet_id == adapter->get_inc_tablet_id() ||
+          (tablet_id != adapter->get_vbitmap_tablet_id() && tablet_id != adapter->get_snap_tablet_id())) {
+        memset(adaptor_info_str_, 0, ObVectorIndexInfo::OB_VECTOR_INDEX_SYNC_INFO_SIZE);
+        int64_t pos = 0;
+        if (OB_TMP_FAIL(adapter->print_adapter_info(adaptor_info_str_,
+                                                    ObVectorIndexInfo::OB_VECTOR_INDEX_SYNC_INFO_SIZE, pos))) {
+          LOG_WARN("[VEC_INDEX][DUMP] failed to print adapter info", K(tmp_ret));
+        }
+      }
+      if (tablet_id == adapter->get_inc_tablet_id()) {
+        LOG_INFO("[VEC_INDEX][DUMP] dump complete index adapter inc_tablet_id", K(ls_id_), K(tablet_id), KPC(hnsw_param), KP(adapter), KPC(adapter), K(adaptor_info_str_));
+        adapter->reset_dump_info();
+      } else if (tablet_id != adapter->get_vbitmap_tablet_id() && tablet_id != adapter->get_snap_tablet_id()) {
+        LOG_WARN("[VEC_INDEX][DUMP] dump complete index adapter not inc/vbitmap/snap_tablet_id", K(ls_id_), K(tablet_id), KPC(hnsw_param), KP(adapter), KPC(adapter), K(adaptor_info_str_));
+        adapter->reset_dump_info();
+      }
+    } else {
+      LOG_WARN("[VEC_INDEX][DUMP] dump complete index adapter is null", K(ls_id_), K(tablet_id));
+    }
   }
+  UNUSED(ret);
 }
 
 int ObPluginVectorIndexMgr::get_cache_tablet_ids(ObLSID &ls_id, ObIArray<ObLSTabletPair> &cache_tablet_ids)
@@ -1326,6 +1362,11 @@ int ObPluginVectorIndexMgr::replace_with_complete_adapter(ObVectorIndexAdapterCa
           LOG_WARN("fail to release partial index adapter", K(new_adapter->get_snap_tablet_id()), KR(ret));
         }
       }
+      if (OB_SUCC(ret) && OB_NOT_NULL(new_adapter)) {
+        FLOG_INFO("[VEC_INDEX][ADAPTOR] create complete adaptor success", KP(new_adapter),
+          K(new_adapter->get_inc_tablet_id()), K(new_adapter->get_vbitmap_tablet_id()),
+          K(new_adapter->get_snap_tablet_id()), K(lbt()));
+      }
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(new_adapter) && set_success == false) {
@@ -1428,6 +1469,7 @@ int ObPluginVectorIndexMgr::replace_with_full_partial_adapter(ObVectorIndexAcqui
       } else if (OB_FAIL(adapter_guard.set_adapter(new_adapter))) {
         LOG_WARN("failed to set adapter", K(ctx), KR(ret));
       } else {
+        FLOG_INFO("[VEC_INDEX][ADAPTOR] create full partial adaptor success", KP(new_adapter), K(ctx), K(lbt()));
         bool set_success = false;
         // release because they are removed from hashmap
         ObPluginVectorIndexAdaptor *inc_adapter = old_inc_adapter_guard.get_adatper();

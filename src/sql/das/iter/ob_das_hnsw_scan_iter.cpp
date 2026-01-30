@@ -630,8 +630,9 @@ int ObDASHNSWScanIter::check_iter_filter_need_retry()
             OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY : OB_SUCCESS;
     }
   }
-
-  LOG_TRACE("switch path check iter filter need retry:", K(ret), K(adaptive_ctx_), K(iter_selectivity), K(output_row_cnt));
+  if (OB_FAIL(ret)) {
+    LOG_INFO("[VEC_INDEX][ADAPTIVE] switch path check iter filter need retry", K(ret), K(delta_buf_tablet_id_), K(adaptive_ctx_), K(iter_selectivity), K(output_row_cnt));
+  }
   return ret;
 }
 
@@ -648,7 +649,9 @@ int ObDASHNSWScanIter::check_pre_filter_need_retry()
   } else if (pre_selectivity > ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY) {
     ret = OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY;
   }
-  LOG_TRACE("switch path check pre filter need retry:", K(ret), K(adaptive_ctx_), K(pre_selectivity));
+  if (OB_FAIL(ret)) {
+    LOG_INFO("[VEC_INDEX][ADAPTIVE] switch path check pre filter need retry", K(ret), K(delta_buf_tablet_id_), K(adaptive_ctx_), K(pre_selectivity));
+  }
   return ret;
 }
 

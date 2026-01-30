@@ -389,7 +389,54 @@ LATCH_DEF(STORAGE_CACHE_POLICY_TASK_LOCK, 354, "storage cache policy task lock",
 LATCH_DEF(UNIQUE_CHECKING_CONTEXT_LOCK, 355, "unique checking context lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TABLET_SPLIT_CONTEXT_LOCK, 356, "tablet split context lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 357, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OCI_LOAD_LIB_LOCK, 357, "oci load lib lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OCI_ENV_LOCK, 358, "oci env lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(PRIVATE_BLOCK_GC_LOCK, 359, "private block gc lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DBLINK_KEEPER_LOCK, 360, "dblink keeper lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(ISQL_CONNECTION_DBLINK_LOCK, 361, "isql connection dblink lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_CLIENT_LOCK, 362, "table load client lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_COORDINATOR_STATUS_LOCK, 363, "table load coordinator status lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_COORDINATOR_RW_LOCK, 364, "table load read write lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_STORE_STATUS_LOCK, 365, "table load store status lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_STORE_RW_LOCK, 366, "table load read write lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_TRANS_LOCK, 367, "table load trans lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_RESOURCE_SERVICE_LOCK, 368, "table load resource service lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(JAVA_ENV_LOCK, 369, "java env lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(JAVA_HELPER_LOCK, 370, "java helper lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MERGE_FROZEN_LOCK, 371, "merge frozen lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TENANT_TABLET_SCHEDUAL_LOCK, 372, "tenant tablet schedual lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLET_EMPTY_SHELL_HANDLER_LOCK, 373, "tablet empty shell handler lock", LATCH_FIFO, 2000, 0, true) 
+LATCH_DEF(TABLET_GC_WAIT_LOCK, 374, "tablet gc wait lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TEST_LATCH_LOCK, 375, "test latch lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TENANT_MUTIL_ALLOCATOR_LOCK, 376, "tenant mutil allocator lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DEFAULT_RWLOCK, 377, "default latch", LATCH_FIFO, 2000, 0, true)// only use in  ObRWLockWR
+
+LATCH_DEF(EXT_DISK_CACHE_LOCK, 378, "external table disk cache lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(FD_SIMULATOR_LOCK, 379, "fd simulator lock", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(SS_ATOMIC_FILE_LOCK, 380, "atomic procotol file lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DTL_INTERM_RESULT_INFO_LOCK, 381, "dtl interm result info lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MAX_ID_CACHE_LOCK, 382, "max id cache lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(JAVA_CACHED_CLASS_LOCK, 383, "java cached class lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(JAVA_EXECUTOR_CLASS_LOCK, 384, "java executor class lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DAS_ID_CACHE_LOCK, 385, "DAS ID cache lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(UUID_TIME_LOCK, 386, "UUID time lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(CONNECT_RESOURCE_MGR_LOCK, 387, "connect resource manager lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_DIAG_LOCK, 388, "ob diag lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TRANSPORT_SERVICE_TASK_LOCK, 389, "transport status task lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(STANDBY_ACK_STATUS_LOCK, 390, "standby ack status lock", LATCH_FIFO, 2000, 0, true)
+
+// vector index
+LATCH_DEF(VECTOR_MEM_DATA, 391, "vector mem data lock", LATCH_READ_PREFER, 200, 0, true)
+LATCH_DEF(VECTOR_BITMAP_LOCK, 392, "vector bitmap lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(VECTOR_RELOAD_LOCK, 393, "vector reload lock", LATCH_FIFO, 200, 0, true)
+LATCH_DEF(VECTOR_QUERY_LOCK, 394, "vector query lock", LATCH_FIFO, 1000, 0, true)
+LATCH_DEF(VECTOR_ADAPTER_MAP_LOCK, 395, "vector adapter map lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(VECTOR_SYNC_SWITCH_LOCK, 396, "vector sync switch lock", LATCH_FIFO, 500, 0, true)
+LATCH_DEF(VECTOR_IVF_CACHE_LOCK, 397, "vector ivf cache lock", LATCH_READ_PREFER, 1000, 0, true)
+
+
+LATCH_DEF(LATCH_END, 398, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

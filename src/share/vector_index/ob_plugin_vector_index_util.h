@@ -162,6 +162,58 @@ public:
                                           int64_t& memory_limit);
 };
 
+// RAII class for measuring function call latency
+// Uses OB_TSC_TIMESTAMP.fast_current_time() for optimal performance (rdtsc CPU instruction)
+class ObPluginVectorIndexAdaptor;
+class ObCostGuard
+{
+public:
+  // Default slow query threshold: 100ms = 100000us
+  static const int64_t KNN_SEARCH_SLOW_THRESHOLD_US = 100 * 1000;
+  explicit OB_INLINE ObCostGuard(int64_t threshold_us = KNN_SEARCH_SLOW_THRESHOLD_US)
+      : is_knn_serch_(false),
+        start_ts_(OB_TSC_TIMESTAMP.fast_current_time()),
+        func_name_(nullptr),
+        adaptor_(nullptr),
+        threshold_us_(threshold_us),
+        ef_search_(0),
+        limit_(0)
+  {}
+  OB_INLINE ObCostGuard(const ObPluginVectorIndexAdaptor* adaptor, const char *func_name, int64_t ef_search, int64_t limit)
+      : is_knn_serch_(true),
+        start_ts_(OB_TSC_TIMESTAMP.fast_current_time()),
+        func_name_(func_name),
+        adaptor_(adaptor),
+        threshold_us_(KNN_SEARCH_SLOW_THRESHOLD_US),
+        ef_search_(ef_search),
+        limit_(limit)
+  {}
+
+  OB_INLINE ~ObCostGuard()
+  {
+    if (OB_LIKELY(is_knn_serch_)) {
+      const int64_t cost_us = OB_TSC_TIMESTAMP.fast_current_time() - start_ts_;
+      if (OB_UNLIKELY(cost_us > threshold_us_)) {
+        OB_LOG_RET(WARN, OB_SUCCESS, "[VEC_INDEX][KNN_SEARCH] function cost too long", KP_(adaptor), K_(func_name), "cost_ms", cost_us / 1000, K_(limit), K_(ef_search));
+      }
+    }
+  }
+  OB_INLINE int64_t cost_time_ms()
+  {
+    const int64_t cost_us = OB_TSC_TIMESTAMP.fast_current_time() - start_ts_;
+    return cost_us / 1000;
+  }
+
+private:
+  bool is_knn_serch_;
+  int64_t start_ts_;
+  const char *func_name_;
+  const ObPluginVectorIndexAdaptor* adaptor_;
+  int64_t threshold_us_;
+  int64_t ef_search_;
+  int64_t limit_;
+};
+
 };
 };
 

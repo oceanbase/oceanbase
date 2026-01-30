@@ -75,7 +75,7 @@ int ObVectorRefreshIndexExecutor::execute_refresh_inner(
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(in_recycle_bin)) {
     // do nothing
-    LOG_DEBUG("delta buffer table is in recyclebin, do nothing");
+    LOG_INFO("[VEC_INDEX][REFRESH] delta buffer table is in recyclebin, do nothing");
   } else if (OB_FAIL(do_refresh_with_retry())) {
     LOG_WARN("fail to do refresh", KR(ret));
   }
@@ -962,6 +962,7 @@ int ObVectorRefreshIndexExecutor::do_refresh() {
 
   ObVectorRefreshIdxTransaction trans;
   ObVectorIndexRefresher refresher;
+  int64_t start_time_us = common::ObTimeUtility::fast_current_time();
   CK(OB_NOT_NULL(ctx_));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(trans.start(ctx_->get_my_session(), ctx_->get_sql_proxy()))) {
@@ -983,6 +984,8 @@ int ObVectorRefreshIndexExecutor::do_refresh() {
     ret = OB_OP_NOT_ALLOW;
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Calling dbms_vector.refresh when other refresh/rebuild tasks may be running is");
   }
+  int64_t cost_ms = (common::ObTimeUtility::fast_current_time() - start_time_us) / 1000;
+  FLOG_INFO("[VEC_INDEX][REFRESH] refresh index cost", K(ret), K(cost_ms), K(refresh_ctx));
   return ret;
 }
 
@@ -997,6 +1000,7 @@ int ObVectorRefreshIndexExecutor::do_refresh_with_retry()
   refresh_ctx.refresh_method_ = refresh_method_;
   refresh_ctx.refresh_threshold_ = refresh_threshold_;
   int retry_cnt = 0;
+  int64_t start_time_us = common::ObTimeUtility::fast_current_time();
 
   CK(OB_NOT_NULL(ctx_));
   while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
@@ -1029,6 +1033,8 @@ int ObVectorRefreshIndexExecutor::do_refresh_with_retry()
       break;
     }
   }
+  int64_t cost_ms = (common::ObTimeUtility::fast_current_time() - start_time_us) / 1000;
+  FLOG_INFO("[VEC_INDEX][REFRESH] refresh index with retry cost", K(ret), K(cost_ms), K(retry_cnt), K(refresh_ctx));
   return ret;
 }
 
@@ -1232,6 +1238,7 @@ int ObVectorRefreshIndexExecutor::do_rebuild() {
   ObVectorRefreshIdxTransaction trans;
   ObVectorIndexRefresher refresher;
   CK(OB_NOT_NULL(ctx_));
+  int64_t start_time_us = common::ObTimeUtility::fast_current_time();
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(trans.start(ctx_->get_my_session(), ctx_->get_sql_proxy()))) {
     LOG_WARN("fail to start trans", KR(ret));
@@ -1254,6 +1261,8 @@ int ObVectorRefreshIndexExecutor::do_rebuild() {
     ret = OB_OP_NOT_ALLOW;
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Calling dbms_vector.refresh when other refresh/rebuild tasks may be running is");
   }
+  int64_t cost_ms = (common::ObTimeUtility::fast_current_time() - start_time_us) / 1000;
+  FLOG_INFO("[VEC_INDEX][REBUILD] rebuild index cost", K(ret), K(cost_ms), K(refresh_ctx));
   return ret;
 }
 
@@ -1272,6 +1281,7 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
   refresh_ctx.idx_parallel_creation_ = idx_parallel_creation_;
   refresh_ctx.delta_rate_threshold_ = delta_rate_threshold_;
   int retry_cnt = 0;
+  int64_t start_time_us = common::ObTimeUtility::fast_current_time();
 
   CK(OB_NOT_NULL(ctx_));
   while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
@@ -1306,6 +1316,8 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
       break;
     }
   }
+  int64_t cost_ms = (common::ObTimeUtility::fast_current_time() - start_time_us) / 1000;
+  FLOG_INFO("[VEC_INDEX][REBUILD] rebuild index with retry cost", K(ret), K(cost_ms), K(refresh_ctx));
   return ret;
 }
 

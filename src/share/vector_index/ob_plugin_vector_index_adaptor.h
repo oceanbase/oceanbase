@@ -396,8 +396,8 @@ struct ObVectorIndexMemData
       vid_array_(nullptr),
       vec_array_(nullptr),
       extra_info_buf_(nullptr),
-      mem_data_rwlock_(),
-      bitmap_rwlock_(),
+      mem_data_rwlock_(ObLatchIds::VECTOR_MEM_DATA),
+      bitmap_rwlock_(ObLatchIds::VECTOR_BITMAP_LOCK),
       scn_(),
       ref_cnt_(0),
       vid_bound_(),
@@ -409,7 +409,9 @@ struct ObVectorIndexMemData
       can_skip_(NOT_INITED) {}
 
 public:
-  TO_STRING_KV(K(has_complete_), K_(is_init), K_(scn), K_(ref_cnt), K(vid_bound_.max_vid_), K(vid_bound_.min_vid_), KP_(index), KPC_(bitmap), KP_(mem_ctx));
+  TO_STRING_KV(KP(this), K_(has_complete), K_(is_init), K_(has_build_sq), K_(scn), K_(ref_cnt), K(vid_bound_.max_vid_),
+               K(vid_bound_.min_vid_), KP_(index), KPC_(bitmap), KP_(mem_ctx), K_(last_dml_scn), K_(last_read_scn),
+               K_(can_skip));
   void free_resource(ObIAllocator *allocator_);
   bool is_inited() const { return is_init_; }
   void set_inited() { is_init_ = true; }
@@ -457,6 +459,61 @@ public:
   SCN last_dml_scn_;
   SCN last_read_scn_;
   ObCanSkip3rdAnd4thVecIndex can_skip_;
+};
+
+struct ObVecIndexLoadInfo {
+  uint64_t insert_vids_cnt_;
+  uint64_t delete_vids_cnt_;
+  TO_STRING_KV(K_(insert_vids_cnt), K_(delete_vids_cnt));
+};
+
+typedef ObSEArray<ObVecIndexLoadInfo, 2> ObVecIndexLoadInfos;  // insert vids cnt, delete vids cnt
+struct ObVectorIndexDumpInfo {
+  ObVectorIndexDumpInfo()
+  {
+    incr_complete_info_.set_attr(ObMemAttr(MTL_ID(), "VecDumpInfo"));
+    vbitmap_table_load_info_.set_attr(ObMemAttr(MTL_ID(), "VecDumpInfo"));
+    snap_table_load_info_.set_attr(ObMemAttr(MTL_ID(), "VecDumpInfo"));
+  }
+  ~ObVectorIndexDumpInfo() { reset(); }
+
+  OB_INLINE void reset()
+  {
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    incr_complete_info_.reset();
+    vbitmap_table_load_info_.reset();
+    snap_table_load_info_.reset();
+  }
+  OB_INLINE void record_incr_complete(uint64_t insert_vids_cnt = 0, uint64_t delete_vids_cnt = 0)
+  {
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    incr_complete_info_.push_back({insert_vids_cnt, delete_vids_cnt});
+  }
+  OB_INLINE void record_vbitmap_table_load(uint64_t insert_vids_cnt = 0, uint64_t delete_vids_cnt = 0)
+  {
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    vbitmap_table_load_info_.push_back({insert_vids_cnt, delete_vids_cnt});
+  }
+
+  OB_INLINE void record_snap_table_load(uint64_t insert_vids_cnt = 0, uint64_t delete_vids_cnt = 0)
+  {
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    snap_table_load_info_.push_back({insert_vids_cnt, delete_vids_cnt});
+  }
+
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t pos = 0;
+    common::ObSpinLockGuard guard(dump_info_lock_);
+    J_OBJ_START();
+    J_KV(K_(incr_complete_info), K_(vbitmap_table_load_info), K_(snap_table_load_info));
+    J_OBJ_END();
+    return pos;
+  }
+  mutable common::ObSpinLock dump_info_lock_;
+  ObVecIndexLoadInfos incr_complete_info_;
+  ObVecIndexLoadInfos vbitmap_table_load_info_;
+  ObVecIndexLoadInfos snap_table_load_info_;
 };
 
 struct ObVectorIndexFollowerSyncStatic
@@ -771,15 +828,20 @@ public:
   bool check_index_bitmap_is_delta_bitmap_subset();
   void set_index_statistics_updated(bool value) { index_statistics_updated_ = value; }
 
-  TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
-              KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),
+  void log_deseri_snap_without_lock(ObVectorIndexAlgorithmType index_type, const ObString &target_prefix,
+                                    const ObString &key_prefix, int64_t cost_ms);
+  int print_adapter_info(char *buf, int64_t buf_len, int64_t &pos) const;
+  void reset_dump_info() { dump_info_.reset(); }
+
+  TO_STRING_KV(KP(this), K_(create_type), K_(type), KP_(algo_data),
+              KPC_(incr_data), KPC_(snap_data), KPC_(vbitmap_data), K_(tenant_id),
               K_(data_tablet_id),K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id),
               K_(inc_tablet_id), K_(vbitmap_tablet_id), K_(snapshot_tablet_id), 
               K_(data_table_id), K_(rowkey_vid_table_id), K_(vid_rowkey_table_id),
               K_(inc_table_id),  K_(vbitmap_table_id), K_(snapshot_table_id), 
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics), 
-              K_(mem_check_cnt), K_(is_mem_limited));
+              K_(mem_check_cnt), K_(is_mem_limited), K_(dump_info));
 
 private:
   void *get_incr_index();
@@ -797,7 +859,8 @@ private:
                            uint64_t *vids,
                            ObVecExtraInfoObj *extra_objs,
                            int64_t extra_column_count,
-                           ObVidBound vid_bound);
+                           ObVidBound vid_bound,
+                           bool& has_written);
   int write_into_index_mem(int64_t dim, SCN read_scn, ObArray<uint64_t> &i_vids, ObArray<uint64_t> &d_vids);
   int generate_snapshot_valid_bitmap(ObVectorQueryAdaptorResultContext *ctx,
                                      common::ObNewRowIterator *row_iter,
@@ -858,6 +921,9 @@ private:
 
   // statistics for judging whether need sync follower
   ObVectorIndexFollowerSyncStatic follower_sync_statistics_;
+  // static for information bettween tow dump
+  ObVectorIndexDumpInfo dump_info_;
+
   bool is_in_opt_task_;
   bool need_be_optimized_;
   int64_t extra_info_column_count_;
