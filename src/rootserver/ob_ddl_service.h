@@ -1961,6 +1961,13 @@ int check_will_be_having_domain_index_operation(
   int check_modify_column_when_upgrade(
       const share::schema::ObColumnSchemaV2 &new_column,
       const share::schema::ObColumnSchemaV2 &orig_column);
+  int alter_dependent_prefix_index_column(
+    const ObTableSchema &table_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    const ObIArray<ObTableSchema> *global_idx_schema_array,
+    ObSchemaGetterGuard &schema_guard,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans);
   int alter_shadow_column_for_index(
     const ObArray<ObTableSchema> &idx_schema_array,
     const AlterColumnSchema *alter_column_schema,

@@ -10606,6 +10606,63 @@ int ObDDLService::check_modify_column_when_upgrade(
   }
   return ret;
 }
+
+int ObDDLService::alter_dependent_prefix_index_column(
+    const ObTableSchema &table_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    const ObIArray<ObTableSchema> *global_idx_schema_array,
+    ObSchemaGetterGuard &schema_guard,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t column_id = new_column_schema.get_column_id();
+  const ObColumnSchemaV2 *orig_column_schema = table_schema.get_column_schema(column_id);
+  if (OB_ISNULL(orig_column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("orig column not found", K(ret), K(column_id));
+  } else if (orig_column_schema->has_generated_column_deps() && orig_column_schema->is_nullable() != new_column_schema.is_nullable()) {
+    ObArray<const ObColumnSchemaV2 *> prefix_columns;
+    for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
+        OB_SUCC(ret) && iter != table_schema.column_end(); iter++) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret));
+      } else if (column->is_prefix_column() && column->has_cascaded_column_id(column_id)) {
+        if (OB_FAIL(prefix_columns.push_back(column))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < prefix_columns.count(); i++) {
+      const ObColumnSchemaV2 *prefix_column = prefix_columns.at(i);
+      ObColumnSchemaV2 new_prefix_column;
+      if (OB_ISNULL(prefix_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column", K(ret), K(i), K(prefix_columns), K(table_schema));
+      } else if (OB_FAIL(new_prefix_column.assign(*prefix_column))) {
+        LOG_WARN("failed to assign", K(ret), KPC(prefix_column));
+      } else if (new_column_schema.is_nullable()) {
+        new_prefix_column.set_nullable(true);
+        new_prefix_column.drop_not_null_cst();
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ddl_operator.update_single_column(trans, table_schema, table_schema, new_prefix_column, false/*need_del_stats*/))) {
+        LOG_WARN("schema service update aux column failed", K(ret), K(table_schema), K(new_prefix_column));
+      } else if (OB_FAIL(alter_table_update_index_and_view_column(table_schema,
+                                                                  new_prefix_column,
+                                                                  schema_guard,
+                                                                  ddl_operator,
+                                                                  trans,
+                                                                  global_idx_schema_array))) {
+        LOG_WARN("failed to update index column", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::alter_shadow_column_for_index(
     const ObArray<ObTableSchema> &idx_schema_array,
     const AlterColumnSchema *alter_column_schema,
@@ -12177,6 +12234,9 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                  new_column_schema,
                                  need_del_stats))) {
                 RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
+              } else if (OB_FAIL(alter_dependent_prefix_index_column(origin_table_schema, new_column_schema,
+                      global_idx_schema_array, schema_guard, ddl_operator, trans))) {
+                LOG_WARN("failed to alter dependent prefix index column", K(ret));
               } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans))) {
                 RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
               } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
