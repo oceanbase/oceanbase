@@ -171,6 +171,7 @@ extern const int64_t USECS_PER_MIN;
 #define QUICK_PARSE_YYYYMMDD_LENGTH 8
 #define QUICK_PARSE_YYYY_MM_DD_LENGTH 10
 #define QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_LENGTH 19
+#define QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_SSSSSS_LENGTH 26
 extern const bool INNER_IS_LEAP_YEAR[10000];
 #define IS_LEAP_YEAR(y) ((y >= 0 && y < 10000) ? INNER_IS_LEAP_YEAR[y] : (y == 0 ? 0 : ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0)))
 extern const int32_t DAYS_UNTIL_MON[2][12 + 1];
@@ -1408,7 +1409,8 @@ OB_INLINE void ObTimeConverter::string_to_obtime_quick(const char *ptr_date,
     ObTimeConverter::string_to_obtime_quick_19<false>(ptr_date, length,
       ob_time, datetime_valid, string_match_format, last_first_8digits);
     last_quick_parser_type = ObTimeConverter::QuickParserType::QuickParserTime19;
-  } else if (length > QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_LENGTH) {
+  } else if (length > QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_LENGTH
+          && length <= QUICK_PARSE_YYYY_MM_DD_hh_mm_ss_SSSSSS_LENGTH) {
     if (last_quick_parser_type != ObTimeConverter::QuickParserType::QuickParserTime26) {
       ob_time = ObTime(ob_time.mode_); // reset ob_time
       last_first_8digits = INT64_MAX;
