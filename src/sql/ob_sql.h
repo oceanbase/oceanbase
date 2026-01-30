@@ -195,7 +195,8 @@ public:
                          ObSqlCtx &context,
                          ObResultSet &result,
                          ParamStore &params,
-                         PlanCacheMode mode);
+                         PlanCacheMode mode,
+                         ObPlanCacheCtx &pc_ctx);
 
   int handle_pl_prepare(const ObString &sql,
                         ObSPIService::PLPrepareCtx &pl_prepare_ctx,
@@ -208,7 +209,17 @@ public:
                         ObResultSet &result,
                         ObSqlCtx &context,
                         bool is_prepare_protocol,
-                        bool is_dynamic_sql);
+                        bool is_dynamic_sql,
+                        bool try_paramlize = false);
+
+  int inner_handle_pl_execute(const ObString &sql,
+                             ObSQLSessionInfo &session_info,
+                             ParamStore &params,
+                             ObResultSet &result,
+                             ObSqlCtx &context,
+                             bool is_prepare_protocol,
+                             bool is_dynamic_sql,
+                             ObPlanCacheCtx &pc_ctx);
   static int construct_parameterized_params(const ParamStore &params,
                                             ObPlanCacheCtx &phy_ctx);
 

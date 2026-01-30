@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_PLAN_CACHE_OB_I_LIB_CACHE_CONTEXT_
 
 #include "sql/plan_cache/ob_lib_cache_register.h"
+#include "sql/plan_cache/ob_lib_cache_miss_diag.h"
 #include<algorithm>
 
 namespace oceanbase
@@ -29,7 +30,11 @@ struct ObILibCacheCtx
 {
 public:
   ObILibCacheCtx()
-    : key_(NULL), need_destroy_node_(false), lock_timeout_(LIBCACHE_DEFAULT_LOCK_TIMEOUT)
+    : key_(NULL), need_destroy_node_(false), lock_timeout_(LIBCACHE_DEFAULT_LOCK_TIMEOUT), recorder_(NULL)
+  {
+  }
+  ObILibCacheCtx(common::ObIAllocator *allocator)
+    : key_(NULL), need_destroy_node_(false), lock_timeout_(LIBCACHE_DEFAULT_LOCK_TIMEOUT), recorder_(allocator)
   {
   }
   virtual ~ObILibCacheCtx() {}
@@ -40,6 +45,7 @@ public:
   ObILibCacheKey *key_;
   bool need_destroy_node_; // Indicate whether the cache node corresponding to key_ in lib cache is invalid
   int64_t lock_timeout_;
+  ObLibCacheMissEventRecorder recorder_;
 };
 
 } // namespace common

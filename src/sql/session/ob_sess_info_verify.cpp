@@ -248,14 +248,15 @@ int ObSessInfoVerify::fetch_verify_session_info(sql::ObSQLSessionInfo &sess,
   ObSessInfoEncoder* encoder = NULL;
   char *buf = NULL;
   int64_t size = 0;
-  int32_t sess_size[SESSION_SYNC_MAX_TYPE];
+  int64_t sess_size[SESSION_SYNC_MAX_TYPE];
   for (int64_t i=0; OB_SUCC(ret) && i < SESSION_SYNC_MAX_TYPE; i++) {
     oceanbase::sql::SessionSyncInfoType info_type = (oceanbase::sql::SessionSyncInfoType)(i);
     sess_size[i] = 0;
     if (OB_FAIL(sess.get_sess_encoder(info_type, encoder))) {
       LOG_WARN("failed to get session encoder", K(ret));
+    } else if (OB_FAIL(encoder->get_fetch_sess_info_size(sess, sess_size[i]))) {
+      LOG_WARN("fail to get fetch sess info size", K(ret));
     } else {
-      sess_size[i] = encoder->get_fetch_sess_info_size(sess);
       LOG_TRACE("sess info size", K(sess_size[i]), K(info_type));
       size += ObProtoTransUtil::get_serialize_size(sess_size[i]);
     }

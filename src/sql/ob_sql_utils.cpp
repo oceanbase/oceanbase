@@ -31,9 +31,12 @@
 #endif
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
+#include "sql/resolver/ob_resolver_utils.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
+#include "sql/plan_cache/ob_sql_parameterization.h"
+#include "sql/parser/ob_parser.h"
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
@@ -4924,7 +4927,7 @@ int64_t ObSqlFatalErrExtraInfoGuard::to_string(char *buf, const int64_t buf_len)
       dep_tables = &(query_ctx->global_dependency_tables_);
     }
     if (OB_NOT_NULL(exec_ctx_->get_my_session())) {
-      sys_var_values = exec_ctx_->get_my_session()->get_sys_var_in_pc_str();
+      OZ (exec_ctx_->get_my_session()->get_sys_var_in_pc_str(sys_var_values));
       OZ (exec_ctx_->get_my_session()->get_collation_connection(collation_connection));
     }
   }
@@ -7054,6 +7057,137 @@ int ObSQLUtils::match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &s
     }
   }
 
+  return ret;
+}
+
+int ObSQLUtils::parameterize_pl_sql(const ObString &raw_sql,
+  ParamStore &pl_params,
+  ObIAllocator &allocator,
+  const ObSQLSessionInfo &session,
+  ObString &parameterized_sql,
+  ObFastParserResult &fp_result,
+  bool param_byorder)
+{
+  int ret = OB_SUCCESS;
+
+  FPContext fp_ctx(session.get_charsets4parser());
+  fp_ctx.sql_mode_ = session.get_sql_mode();
+  fp_result.question_mark_ctx_.by_order_ = param_byorder;
+
+  if (OB_UNLIKELY(raw_sql.empty())) {
+    ret = OB_ERR_EMPTY_QUERY;
+    LOG_WARN("query is empty", K(ret));
+    LOG_USER_ERROR(OB_ERR_EMPTY_QUERY);
+  } else if (OB_FAIL(ObSqlParameterization::fast_parser(allocator, fp_ctx, raw_sql, fp_result))) {
+    LOG_WARN("fast parser failed, use original sql", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, fp_result.pc_key_.name_, parameterized_sql))) {
+    LOG_WARN("failed to write parameterized sql", K(ret));
+  } else if (OB_FAIL(construct_mixed_param_store(fp_result, pl_params, allocator, session, param_byorder))) {
+    LOG_WARN("failed to construct mixed params, use original sql", K(ret));
+  }
+
+  return ret;
+}
+
+int ObSQLUtils::construct_mixed_param_store(const ObFastParserResult &fp_result,
+  ParamStore &pl_params,
+  ObIAllocator &allocator,
+  const ObSQLSessionInfo &session,
+  bool param_byorder)
+{
+  int ret = OB_SUCCESS;
+  ParamStore original_pl_params((ObWrapperAllocator(allocator)));
+  if (OB_FAIL(original_pl_params.reserve(pl_params.count()))) {
+    LOG_WARN("failed to reserve original pl params", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < pl_params.count(); ++i) {
+    if (OB_FAIL(original_pl_params.push_back(pl_params.at(i)))) {
+      LOG_WARN("failed to copy pl param", K(ret), K(i));
+    }
+  }
+
+  ObCollationType conn_collation = CS_TYPE_INVALID;
+  ObCollationType nchar_collation = CS_TYPE_INVALID;
+  ObCollationType server_collation = CS_TYPE_INVALID;
+  ObCompatType compat_type = COMPAT_MYSQL57;
+  bool enable_decimal_int = false;
+  bool enable_mysql_compatible_dates = false;
+  ObString literal_prefix;
+  const bool is_paramlize = false;
+
+  if (OB_SUCC(ret)) {
+    conn_collation = static_cast<ObCollationType>(session.get_local_collation_connection());
+    nchar_collation = session.get_nls_collation_nation();
+    if (OB_FAIL(session.get_collation_server(server_collation))) {
+      LOG_WARN("fail to get server collation", K(ret));
+    } else if (OB_FAIL(session.get_compatibility_control(compat_type))) {
+      LOG_WARN("fail to get compat type", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(&session, enable_decimal_int))) {
+      LOG_WARN("fail to check enable decimal int", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session, false, enable_mysql_compatible_dates))) {
+      LOG_WARN("fail to check enable mysql compatible dates", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && fp_result.raw_params_.count() > 0) {
+    pl_params.reset();
+    if (OB_FAIL(pl_params.reserve(fp_result.raw_params_.count()))) {
+      LOG_WARN("failed to reserve param store", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < fp_result.raw_params_.count(); ++i) {
+    const ObPCParam *pc_param = fp_result.raw_params_.at(i);
+    if (OB_ISNULL(pc_param) || OB_ISNULL(pc_param->node_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid pc param", K(ret), K(i), KP(pc_param));
+    } else {
+      ParseNode *node = pc_param->node_;
+      if (T_QUESTIONMARK == node->type_) {
+        int idx = node->value_;
+        if (node->value_ >= 0 && node->value_ < original_pl_params.count()) {
+          node->value_ = i;
+          if (OB_FAIL(pl_params.push_back(original_pl_params.at(idx)))) {
+            LOG_WARN("failed to push pl param", K(ret), K(node->value_), K(i), K(idx));
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid pl param index", K(ret), K(node->value_), K(original_pl_params.count()), K(i));
+        }
+      } else {
+        ObObjParam obj_param;
+        if (lib::is_oracle_mode() &&
+            (T_NUMBER == node->type_ ||
+             T_INT == node->type_ ||
+             T_FLOAT == node->type_ ||
+             T_DOUBLE == node->type_ ) &&
+            OB_FAIL(ObResolverUtils::rm_space_for_neg_num(node, allocator))) {
+          LOG_WARN("fail to remove space for neg num", K(ret));
+        } else if (OB_FAIL(ObResolverUtils::resolve_const(node,
+            stmt::T_NONE,
+            allocator,
+            conn_collation,
+            nchar_collation,
+            session.get_timezone_info(),
+            obj_param,
+            is_paramlize,
+            literal_prefix,
+            session.get_actual_nls_length_semantics(),
+            server_collation,
+            NULL,
+            session.get_sql_mode(),
+            enable_decimal_int,
+            compat_type,
+            enable_mysql_compatible_dates,
+            session.get_min_const_integer_precision(),
+            true))) {
+          LOG_WARN("failed to resolve const and fallback convert", K(ret), K(i), K(node->type_));
+        } else if (OB_FAIL(pl_params.push_back(obj_param))) {
+          LOG_WARN("failed to push constant param", K(ret), K(i));
+        }
+      }
+    }
+  }
   return ret;
 }
 

@@ -353,7 +353,7 @@ int ObPCVSet::create_new_pcv(ObPlanCacheValue *&new_pcv)
   if (nullptr == (buff = allocator_.alloc(sizeof(ObPlanCacheValue)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObPlanCacheValue", K(ret));
-  } else if (nullptr == (new_pcv = new(buff)ObPlanCacheValue())) {
+  } else if (nullptr == (new_pcv = new(buff)ObPlanCacheValue(get_next_pcv_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to construct ObPlanCacheValue", K(ret));
   } else {

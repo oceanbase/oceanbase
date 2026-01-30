@@ -2519,7 +2519,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
                    && OB_FAIL(add_alias_from_dot_notation(sel_expr, select_item))) {  // deal dot notation without alias
           LOG_WARN("fail to resolve alias in dot notation", K(ret));
         } else {
-          if (params_.is_prepare_protocol_
+          if ((params_.is_prepare_protocol_ && !params_.is_from_pl_)
               || (!session_info_->get_local_ob_enable_plan_cache()
                   && !session_info_->force_enable_plan_tracing())
               || 0 == node.children_[i]->is_val_paramed_item_idx_) {

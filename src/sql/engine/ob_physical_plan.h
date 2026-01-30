@@ -825,6 +825,11 @@ private:
   uint64_t optimizer_features_enable_version_;
   bool route_to_column_replica_;
   bool is_gtt_temp_table_v2_;
+public:
+  ObLibCacheMissReason create_reason_;
+  uint64_t cache_node_id_; // indicate this plan belong to which Cache Node
+  uint64_t pcv_id_; // indicate this plan belong to which Plan Cache Value
+  uint64_t plan_set_id_; // indicate this plan belong to which Plan Set
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

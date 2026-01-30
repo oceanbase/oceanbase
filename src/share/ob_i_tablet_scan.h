@@ -582,6 +582,9 @@ ObVTableScanParam() :
     if (OB_UNLIKELY(range_array_pos_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {
       range_array_pos_.destroy();
     }
+    if (OB_UNLIKELY(vt_pd_colums_ids_.get_capacity() > OB_PREALLOCATED_COL_ID_NUM)) {
+      vt_pd_colums_ids_.destroy();
+    }
     destroy_schema_guard();
   }
   ObObjectID tenant_id_;
@@ -650,6 +653,7 @@ ObVTableScanParam() :
   const sql::ExprFixedArray *ext_mapping_column_exprs_;
   const common::ObFixedArray<uint64_t, ObIAllocator> *ext_mapping_column_ids_;
   share::ObLakeTableFormat lake_table_format_;
+  ObColumnIdArray vt_pd_colums_ids_; // pushdown column(s)
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()

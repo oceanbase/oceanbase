@@ -382,6 +382,10 @@ int ObDASScanOp::init_scan_param()
   if (FAILEDx(scan_param_.column_ids_.assign(scan_ctdef_->access_column_ids_))) {
     LOG_WARN("init column ids failed", K(ret));
   }
+  if (OB_SUCC(ret) && !scan_ctdef_->pd_expr_spec_.vt_pd_col_ids_.empty()
+    && OB_FAIL(scan_param_.vt_pd_colums_ids_.assign(scan_ctdef_->pd_expr_spec_.vt_pd_col_ids_))) {
+    LOG_WARN("init column ids failed", K(ret));
+  }
   //external table scan params
   if (OB_SUCC(ret) && scan_ctdef_->is_external_table_) {
     scan_param_.partition_infos_ = &(scan_ctdef_->partition_infos_);

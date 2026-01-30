@@ -145,7 +145,11 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     px_worker_share_plan_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
     optimizer_features_enable_version_(0),
-    is_gtt_temp_table_v2_(false)
+    is_gtt_temp_table_v2_(false),
+    create_reason_(),
+    cache_node_id_(common::OB_INVALID_ID),
+    pcv_id_(common::OB_INVALID_ID),
+    plan_set_id_(common::OB_INVALID_ID)
 {
 }
 

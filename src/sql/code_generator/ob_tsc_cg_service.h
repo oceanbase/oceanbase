@@ -357,6 +357,8 @@ private:
   int generate_match_ctdef(const ObLogTableScan &op,
                                  ObTableScanCtDef &tsc_ctdef,
                                  ObDASBaseCtDef *&root_ctdef);
+  int extract_vt_pushdown_filters_column_ids(const ObIArray<ObRawExpr *> &pushdown_filters,
+                                             UIntFixedArray &column_ids);
 private:
   ObStaticEngineCG &cg_;
 };

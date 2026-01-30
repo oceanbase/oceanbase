@@ -98,7 +98,8 @@ class ObILibCacheNode
 friend class ObLCNodeFactory;
 public:
   ObILibCacheNode(ObPlanCache *lib_cache, lib::MemoryContext &mem_context)
-    : mem_context_(mem_context),
+    : id_(OB_INVALID_ID),
+      mem_context_(mem_context),
       allocator_(mem_context->get_safe_arena_allocator()),
       rwlock_(common::ObLatchIds::OB_ILIB_CACHE_NODE_LOCK),
       ref_count_(0),
@@ -194,7 +195,8 @@ protected:
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
   virtual int before_cache_evicted();
-
+public:
+  uint64_t id_;
 protected:
   lib::MemoryContext mem_context_;
   // Note: all memory allocations in ObILibCacheNode can only use allocator_, when the ObILibCacheNode

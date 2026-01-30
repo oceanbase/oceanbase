@@ -200,6 +200,7 @@ int ObDistPlans::add_plan(ObPhysicalPlan &plan,
 bool ObDistPlans::is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &pc_ctx) const
 {
   bool can_use = true;
+  MATCH_GUARD(plan.get_plan_id(), pc_ctx);
   if (pc_ctx.try_get_plan_) {
     if (pc_ctx.compare_plan_->get_plan_hash_value() != plan.get_plan_hash_value()) {
       can_use = false;
@@ -208,6 +209,9 @@ bool ObDistPlans::is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &
     if (!plan.is_active_status()) {
       can_use = false;
       pc_ctx.has_inactive_plan_ = true;
+      RECORD_CACHE_MISS(FORCE_HARD_PARSE, pc_ctx,
+                            "The execution time is far greater than the plan generation time.",
+                            K(plan.stat_.adaptive_pc_info_));
     } else {
       pc_ctx.has_inactive_plan_ = false;
     }

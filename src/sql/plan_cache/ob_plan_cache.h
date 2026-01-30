@@ -456,7 +456,7 @@ private:
                          ObILibCacheObject *cache_obj);
   bool calc_evict_num(int64_t &plan_cache_evict_num);
 
-  bool is_reach_memory_limit() { return get_mem_hold() > get_mem_limit(); }
+  bool is_reach_memory_limit() { return get_mem_used() > get_mem_limit(); }
   int construct_plan_cache_key(ObPlanCacheCtx &plan_ctx, ObLibCacheNameSpace ns);
   static int construct_plan_cache_key(ObSQLSessionInfo &session,
                                       ObLibCacheNameSpace ns,

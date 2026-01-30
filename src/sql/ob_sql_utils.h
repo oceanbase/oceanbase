@@ -43,6 +43,7 @@ class ObHDFSStorageInfo;
 }
 namespace sql
 {
+struct ObFastParserResult;
 class RowDesc;
 class ObSQLSessionInfo;
 class ObRawExpr;
@@ -832,6 +833,18 @@ public:
 
   static int match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &session, bool is_ps_mode,
                             const DependenyTableStore &dependency_table_store);
+  static int parameterize_pl_sql(const ObString &raw_sql,
+    ParamStore &pl_params,
+    ObIAllocator &allocator,
+    const ObSQLSessionInfo &session,
+    ObString &parameterized_sql,
+    ObFastParserResult &fp_result,
+    bool param_byorder);
+  static int construct_mixed_param_store(const ObFastParserResult &fp_result,
+    ParamStore &pl_params,
+    ObIAllocator &allocator,
+    const ObSQLSessionInfo &session,
+    bool param_byorder);
 
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);

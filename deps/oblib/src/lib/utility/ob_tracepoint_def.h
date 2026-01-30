@@ -599,6 +599,8 @@ GLOBAL_ERRSIM_POINT_DEF(1199, EN_DISABLE_ENCODESORTKEY_OPT, "Used for disable en
 GLOBAL_ERRSIM_POINT_DEF(1200, EN_ENABLE_NEWSORT_FORCE, "");
 GLOBAL_ERRSIM_POINT_DEF(1201, EN_DISABLE_NEWSORT_FIXED_KEY_OPT, "Used to control whether to turn off the newsort fixed key opt when use encode sortkey");
 
+GLOBAL_ERRSIM_POINT_DEF(1210, EN_OB_PLAN_CACHE_POST_ADDITION_CHECK, "Used to control whether to turn off the post-addition cache hit verification in plan cache");
+
 // Transaction // 2001 - 2100
 // Transaction free route
 GLOBAL_ERRSIM_POINT_DEF(2001, EN_TX_FREE_ROUTE_UPDATE_STATE_ERROR, "");

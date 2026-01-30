@@ -2954,26 +2954,10 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           val.set_uint64(static_cast<uint64_t>(node->value_));
         }
         val.set_scale(0);
-        int16_t formalized_prec = static_cast<int16_t>(node->str_len_);
-        // for constant integers, reset precision to 4/8/16/20
-        if (!is_from_pl && lib::is_mysql_mode() && enable_decimal_int_type
-            && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
-          int16_t node_prec = static_cast<int16_t>(node->str_len_);
-          if (fmt_int_or_ch_decint) {
-            if (node_prec <= 4) {
-              formalized_prec = 4;
-            } else if (node_prec <= 8) {
-              formalized_prec = 8;
-            } else if (node_prec <= 16) {
-              formalized_prec = 16;
-            } else {
-              formalized_prec = 20;
-            }
-            formalized_prec = MAX(min_const_integer_precision, formalized_prec);
-          } else {
-            formalized_prec = 20;
-          }
-        }
+        int16_t formalized_prec = is_from_pl ? static_cast<int16_t>(node->str_len_) :
+                                      calc_decint_precision_for_int_type(node->str_len_,
+                                      enable_decimal_int_type, stmt_type,
+                                      fmt_int_or_ch_decint, min_const_integer_precision);
         val.set_precision(formalized_prec);
         val.set_length(static_cast<int16_t>(node->str_len_));
         val.set_param_meta(val.get_meta());
@@ -2993,51 +2977,28 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       int tmp_ret = OB_E(EventTable::EN_ENABLE_ORA_DECINT_CONST) OB_SUCCESS;
 
       if (enable_decimal_int_type && !is_from_pl && OB_SUCC(tmp_ret)) {
-        // 如果开启decimal int类型，T_NUMBER解析成decimal int
-        int32_t val_len = 0;
-        ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,
-                                val_len, decint);
-        len = static_cast<int16_t>(val_len);
-        // in oracle mode
-        // +.12e-3 will parse as decimal, with scale = 5, precision = 2
-        // in this case, ObNumber is used.
-        use_decimalint_as_result = (precision <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
-                                    && scale <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
-                                    && scale >= 0
-                                    && precision >= scale);
-        if (lib::is_oracle_mode()
-            && (ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type)
-                || precision > OB_MAX_NUMBER_PRECISION || !fmt_int_or_ch_decint)) {
-          use_decimalint_as_result = false;
-        }
+        ret = use_decimalint(node, val, allocator, decint, len, precision, scale,
+                              stmt_type, fmt_int_or_ch_decint, use_decimalint_as_result);
       }
-      if (use_decimalint_as_result) {
-        // do nothing, result type is decimal int
-      } else if (NULL != tmp_string.find('e') || NULL != tmp_string.find('E')) {
-        ret = nmb.from_sci(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
-        len = static_cast<int16_t>(node->str_len_);
-        if (lib::is_oracle_mode()) {
-          literal_prefix.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
-        }
-      } else {
-        ret = nmb.from(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
-        len = static_cast<int16_t>(node->str_len_);
-      }
-      if (OB_FAIL(ret)) {
-        if (OB_INTEGER_PRECISION_OVERFLOW == ret) {
-          LOG_WARN("integer presision overflow", K(ret));
-        } else if (OB_NUMERIC_OVERFLOW == ret) {
-          LOG_WARN("numeric overflow");
+      if (!use_decimalint_as_result) {
+        if (NULL != tmp_string.find('e') || NULL != tmp_string.find('E')) {
+          ret = nmb.from_sci(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
+          len = static_cast<int16_t>(node->str_len_);
+          if (lib::is_oracle_mode()) {
+            literal_prefix.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
+          }
         } else {
-          LOG_WARN("unexpected error", K(ret));
+          ret = nmb.from(node->str_value_, static_cast<int32_t>(node->str_len_), allocator, &precision, &scale);
+          len = static_cast<int16_t>(node->str_len_);
         }
-      } else {
-        if (use_decimalint_as_result) {
-          val.set_decimal_int(len, scale, decint);
-          val.set_precision(precision);
-          val.set_scale(scale);
-          val.set_length(len);
-          LOG_DEBUG("finish parse decimal int from str", K(literal_prefix), K(precision), K(scale));
+        if (OB_FAIL(ret)) {
+          if (OB_INTEGER_PRECISION_OVERFLOW == ret) {
+            LOG_WARN("integer presision overflow", K(ret));
+          } else if (OB_NUMERIC_OVERFLOW == ret) {
+            LOG_WARN("numeric overflow");
+          } else {
+            LOG_WARN("unexpected error", K(ret));
+          }
         } else {
           if (lib::is_oracle_mode()) {
             precision = PRECISION_UNKNOWN_YET;
@@ -3047,11 +3008,11 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           val.set_precision(precision);
           val.set_scale(scale);
           val.set_length(len);
+          val.set_param_meta(val.get_meta());
           LOG_DEBUG("finish parse number from str", K(literal_prefix), K(nmb), K(precision),
                     K(scale));
         }
       }
-      val.set_param_meta(val.get_meta());
       break;
     }
     case T_NUMBER_FLOAT: {
@@ -11053,29 +11014,10 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {
       /* nothing */
-    } else if (ob_is_numeric_type(obj_param.get_type())) {
-      // -0 is also counted as negative
-      bool is_neg = false, is_zero = false;
-      if (must_be_positive_idx.has_member(param_idx)) {
-        if (obj_param.is_boolean()) {
-          // boolean will skip this check
-        } else if (lib::is_oracle_mode()) {
-          if (OB_FAIL(is_negative_ora_nmb(obj_param, is_neg, is_zero))) {
-            LOG_WARN("check oracle negative number failed", K(ret));
-          } else if (is_neg || (is_zero && '-' == raw_param->str_value_[0])) {
-            ret = OB_ERR_UNEXPECTED;
-            pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
-            LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
-          }
-        } else if (lib::is_mysql_mode()) {
-          if (obj_param.is_integer_type() &&
-              (obj_param.get_int() < 0 || (0 == obj_param.get_int() && '-' == raw_param->str_value_[0]))) {
-            ret = OB_ERR_UNEXPECTED;
-            pc_ctx.should_add_plan_ = false;
-            LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
-          }
-        }
-      }
+    } else if (OB_FAIL(ObResolverUtils::check_must_be_positive(pc_ctx, pc_ctx.allocator_, stmt_type, raw_param, param_idx,
+                                                                     phy_ctx_params, must_be_positive_idx,
+                                                                     obj_param))) {
+      SQL_PC_LOG(WARN, "fail to check must be positive", K(ret));
     }
     is_param = true;
     LOG_DEBUG("is_param", K(param_idx), K(obj_param), K(raw_param->type_), K(raw_param->value_),
@@ -11096,6 +11038,179 @@ int ObResolverUtils::is_negative_ora_nmb(const ObObjParam &obj_param, bool &is_n
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected obj type", K(obj_param));
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_must_be_positive(ObPlanCacheCtx &pc_ctx,
+                                            ObIAllocator &allocator,
+                                            const stmt::StmtType stmt_type,
+                                            const ParseNode *node,
+                                            const int64_t param_idx,
+                                            const ParamStore &phy_ctx_params,
+                                            const ObBitSet<> &must_be_positive_idx,
+                                            ObObjParam &obj_param)
+{
+  int ret = OB_SUCCESS;
+  // Check if parameter must be positive for numeric types
+  if (ob_is_numeric_type(obj_param.get_type())) {
+    // -0 is also counted as negative
+    bool is_neg = false, is_zero = false;
+    if (must_be_positive_idx.has_member(param_idx)) {
+      if (obj_param.is_boolean()) {
+        // boolean will skip this check
+      } else if (lib::is_oracle_mode()) {
+        if (OB_FAIL(is_negative_ora_nmb(obj_param, is_neg, is_zero))) {
+          LOG_WARN("check oracle negative number failed", K(ret));
+        } else if (is_neg || (is_zero && '-' == node->str_value_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
+          LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
+        }
+      } else if (lib::is_mysql_mode()) {
+        if (obj_param.is_integer_type() &&
+            (obj_param.get_int() < 0 || (0 == obj_param.get_int() && '-' == node->str_value_[0]))) {
+          ret = OB_ERR_UNEXPECTED;
+          pc_ctx.should_add_plan_ = false;
+          LOG_TRACE("param must be positive", K(ret), K(param_idx), K(obj_param));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// recheck T_QUESTIONMARK node and check parameter for Decimal Int
+int ObResolverUtils::recheck_parameter_for_pl(ObPlanCacheCtx &pc_ctx,
+                                                ObIAllocator &allocator,
+                                                const stmt::StmtType stmt_type,
+                                                const ParseNode *node,
+                                                const int64_t param_idx,
+                                                const ParamStore &phy_ctx_params,
+                                                const bool fmt_int_or_ch_decint,
+                                                ObObjParam &obj_param,
+                                                int8_t min_const_integer_precision,
+                                                bool enable_decimal_int_type)
+{
+  int ret = OB_SUCCESS;
+  if (T_QUESTIONMARK == node->type_) {
+    int64_t idx = node->value_;
+    if (OB_SUCC(ret) && (idx < 0 || idx >= phy_ctx_params.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid idx", K(ret), K(idx), K(phy_ctx_params.count()));
+    } else {
+      obj_param.set_is_boolean(phy_ctx_params.at(idx).is_boolean());
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    // guarantee use fmt_int_or_ch_decint (from fmt_int_or_ch_decint_idx)
+    // to set decimal int or number
+    int16_t precision = PRECISION_UNKNOWN_YET;
+    int16_t scale = SCALE_UNKNOWN_YET;
+    switch (node->type_) {
+      case T_UINT64:
+      case T_INT: {
+        int16_t formalized_prec = calc_decint_precision_for_int_type(node->str_len_,
+          enable_decimal_int_type, stmt_type,
+          fmt_int_or_ch_decint, min_const_integer_precision);
+        obj_param.set_precision(formalized_prec);
+        break;
+      }
+      case T_NUMBER: {
+        number::ObNumber nmb;
+        ObDecimalInt *decint = nullptr;
+        int16_t len = 0;
+        ObString tmp_string(static_cast<int32_t>(node->str_len_), node->str_value_);
+        bool use_decimalint_as_result = false;
+        int tmp_ret = OB_E(EventTable::EN_ENABLE_ORA_DECINT_CONST) OB_SUCCESS;
+        if (enable_decimal_int_type && OB_SUCC(tmp_ret)
+            && OB_FAIL(use_decimalint(node, obj_param, allocator,
+                        decint, len, precision, scale,
+                        stmt_type, fmt_int_or_ch_decint, use_decimalint_as_result))) {
+          LOG_WARN("fail to use decimalint", K(ret));
+        }
+        break;
+      }
+      default:
+        /* do nothing */
+        break;
+    }
+  }
+  return ret;
+}
+// T_UINT64 & T_INT
+int16_t ObResolverUtils::calc_decint_precision_for_int_type(int64_t strlen,
+                                              bool enable_decimal_int_type,
+                                              const stmt::StmtType stmt_type,
+                                              bool fmt_int_or_ch_decint,
+                                              int8_t min_const_integer_precision)
+{
+  int16_t formalized_prec = static_cast<int16_t>(strlen);
+  // for constant integers, reset precision to 4/8/16/20
+  if (lib::is_mysql_mode() && enable_decimal_int_type
+      && !(ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type))) {
+    int16_t node_prec = static_cast<int16_t>(strlen);
+    if (fmt_int_or_ch_decint) {
+      if (node_prec <= 4) {
+        formalized_prec = 4;
+      } else if (node_prec <= 8) {
+        formalized_prec = 8;
+      } else if (node_prec <= 16) {
+        formalized_prec = 16;
+      } else {
+        formalized_prec = 20;
+      }
+      formalized_prec = MAX(min_const_integer_precision, formalized_prec);
+    } else {
+      formalized_prec = 20;
+    }
+  }
+  return formalized_prec;
+}
+
+int ObResolverUtils::use_decimalint(const ParseNode *node, ObObjParam &val,
+                                      ObIAllocator &allocator,
+                                      ObDecimalInt *&decint, int16_t &len,
+                                      int16_t &precision, int16_t &scale,
+                                      const stmt::StmtType stmt_type,
+                                      bool fmt_int_or_ch_decint,
+                                      bool &use_decimalint_as_result)
+{
+  int ret = OB_SUCCESS;
+  // 如果开启decimal int类型，T_NUMBER解析成decimal int
+  int32_t val_len = 0;
+  ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,
+                          val_len, decint);
+  len = static_cast<int16_t>(val_len);
+  // in oracle mode
+  // +.12e-3 will parse as decimal, with scale = 5, precision = 2
+  // in this case, ObNumber is used.
+  use_decimalint_as_result = (precision <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
+                              && scale <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
+                              && scale >= 0
+                              && precision >= scale);
+  if (lib::is_oracle_mode()
+      && (ObStmt::is_ddl_stmt(stmt_type, true) || ObStmt::is_show_stmt(stmt_type)
+          || precision > OB_MAX_NUMBER_PRECISION || !fmt_int_or_ch_decint)) {
+    use_decimalint_as_result = false;
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_INTEGER_PRECISION_OVERFLOW == ret) {
+      LOG_WARN("integer presision overflow", K(ret));
+    } else if (OB_NUMERIC_OVERFLOW == ret) {
+      LOG_WARN("numeric overflow");
+    } else {
+      LOG_WARN("unexpected error", K(ret));
+    }
+  } else if (use_decimalint_as_result) {
+    val.set_decimal_int(len, scale, decint);
+    val.set_precision(precision);
+    val.set_scale(scale);
+    val.set_length(len);
+    val.set_param_meta(val.get_meta());
+    LOG_DEBUG("finish parse decimal int from str", K(precision), K(scale));
   }
   return ret;
 }

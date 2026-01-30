@@ -241,6 +241,7 @@ typedef struct _ObQuestionMarkCtx
   bool by_ordinal_;
   bool by_name_;
   bool by_defined_name_;
+  bool by_order_; // only oracle mode may set this flag to true, so default is false
 } ObQuestionMarkCtx;
 
 

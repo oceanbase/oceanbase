@@ -24,6 +24,35 @@ namespace observer
 class ObGVSql : public ObAllPlanCacheBase
 {
 public:
+  struct ReuseableBuffer {
+    ReuseableBuffer(): inner_allocator_(), buff_(NULL), len_(0) {}
+    void reset()
+    {
+      if (OB_NOT_NULL(buff_)) {
+        inner_allocator_.free(buff_);
+        buff_ = NULL;
+      }
+      inner_allocator_.reset();
+    }
+    char *alloc(int64_t &len)
+    {
+      if (len > len_) {
+        if (buff_ != NULL) {
+          inner_allocator_.free(buff_);
+          buff_ = NULL;
+        }
+        buff_ = static_cast<char *>(inner_allocator_.alloc(len));
+        len_ = buff_ == NULL ? 0 : len;
+      } else {
+        len = len_;
+      }
+      return buff_;
+    }
+    ObMalloc inner_allocator_;
+    char *buff_;
+    int64_t len_;
+  };
+public:
   ObGVSql();
   virtual ~ObGVSql();
   void reset();
@@ -37,6 +66,7 @@ private:
   common::ObSEArray<uint64_t, 1024> plan_id_array_;
   int64_t plan_id_array_idx_;
   sql::ObPlanCache *plan_cache_;
+  ReuseableBuffer tmp_buff_;
   DISALLOW_COPY_AND_ASSIGN(ObGVSql);
 };
 

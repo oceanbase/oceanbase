@@ -387,7 +387,8 @@ struct ObResolverParams
        is_returning_(false),
        is_in_view_(false),
        is_htable_(false),
-       disable_shared_expr_(false)
+       disable_shared_expr_(false),
+       is_from_pl_(false)
   {}
   int assign(const ObResolverParams &other);
   bool is_force_trace_log() { return force_trace_log_; }
@@ -466,6 +467,7 @@ public:
   bool is_in_view_;
   bool is_htable_;
   bool disable_shared_expr_;
+  bool is_from_pl_;
 };
 struct FunctionInfo {
   char name_[OB_MAX_FUNC_EXPR_LENGTH];

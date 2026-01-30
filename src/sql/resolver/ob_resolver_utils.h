@@ -957,6 +957,35 @@ public:
                             ObObjParam &obj_param,
                             bool &is_param,
                             const bool enable_decimal_int);
+  static int check_must_be_positive(ObPlanCacheCtx &pc_ctx,
+                              ObIAllocator &allocator,
+                              const stmt::StmtType stmt_type,
+                              const ParseNode *node,
+                              const int64_t param_idx,
+                              const ParamStore &phy_ctx_params,
+                              const ObBitSet<> &must_be_positive_idx,
+                              ObObjParam &obj_param);
+  static int16_t calc_decint_precision_for_int_type(int64_t strlen,
+                                              bool enable_decimal_int_type,
+                                              const stmt::StmtType stmt_type,
+                                              bool fmt_int_or_ch_decint,
+                                              int8_t min_const_integer_precision);
+  static int use_decimalint(const ParseNode *node, ObObjParam &val,
+                               ObIAllocator &allocator, ObDecimalInt *&decint,
+                              int16_t &len, int16_t &precision, int16_t &scale,
+                              const stmt::StmtType stmt_type,
+                              bool fmt_int_or_ch_decint,
+                              bool &use_decimalint_as_result);
+  static int recheck_parameter_for_pl(ObPlanCacheCtx &pc_ctx,
+                            ObIAllocator &allocator,
+                            const stmt::StmtType stmt_type,
+                            const ParseNode *pc_param,
+                            const int64_t param_idx,
+                            const ParamStore &phy_ctx_params,
+                            const bool fmt_int_or_ch_decint,
+                            ObObjParam &obj_param,
+                            int8_t min_const_integer_precision,
+                            bool enable_decimal_int_type);
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
   static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
   static int check_not_supported_tenant_name(const common::ObString &tenant_name);
@@ -993,6 +1022,8 @@ public:
                                                               const ObColumnSchemaV2 &column,
                                                               uint64_t table_id,
                                                               bool &need);
+  static int rm_space_for_neg_num(ParseNode *param_node, ObIAllocator &allocator);
+
   static int collect_trigger_ref_column(ObSQLSessionInfo &session_info,
                                         share::schema::ObSchemaGetterGuard &schema_guard,
                                         const ObTriggerInfo &trigger_info,
@@ -1030,7 +1061,6 @@ private:
   static int check_partition_range_value_result_type(const share::schema::ObPartitionFuncType part_type,
                                                      const ObColumnRefRawExpr &part_column_expr,
                                                      ObRawExpr &part_value_expr);
-  static int rm_space_for_neg_num(ParseNode *param_node, ObIAllocator &allocator);
   static int handle_varchar_charset(ObCharsetType charset_type,
                                     ObIAllocator &allocator,
                                     ParseNode *&node);

@@ -940,6 +940,12 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
                   *scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to check lob column pushdown", K(ret));
       }
+    } else if (is_virtual_table(op.get_ref_table_id())
+      && !is_oracle_mapping_real_virtual_table(op.get_ref_table_id())) {
+      if (OB_FAIL(extract_vt_pushdown_filters_column_ids(scan_pushdown_filters,
+                                                         scan_ctdef.pd_expr_spec_.vt_pd_col_ids_))) {
+        LOG_WARN("failed to extract virtual table pushdown filters column ids", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret) && !lookup_pushdown_filters.empty()) {
@@ -6096,6 +6102,45 @@ int ObTscCgService::generate_match_ctdef(const ObLogTableScan &op,
       }
       root_ctdef = aux_lookup_ctdef;
     }
+  }
+  return ret;
+}
+
+int ObTscCgService::extract_vt_pushdown_filters_column_ids(const ObIArray<ObRawExpr *> &pushdown_filters,
+                                                           UIntFixedArray &column_ids)
+{
+  int ret = OB_SUCCESS;
+  ObColumnIdArray col_ids;
+  for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_filters.count(); ++i) {
+    ObSEArray<ObRawExpr *, 4> column_exprs;
+    const ObRawExpr *raw_expr = pushdown_filters.at(i);
+    if (OB_ISNULL(raw_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("raw expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs_and_rowscn(raw_expr, column_exprs))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else if (0 < column_exprs.count()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+        ObRawExpr *sub_raw_expr = column_exprs.at(i);
+        ObExpr *sub_expr = nullptr;
+        if (T_ORA_ROWSCN == sub_raw_expr->get_expr_type()) {
+          if (OB_FAIL(add_var_to_array_no_dup(col_ids, common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
+            LOG_WARN("failed to push back column id", K(ret));
+          }
+        } else {
+          ObColumnRefRawExpr *ref_expr = static_cast<ObColumnRefRawExpr*>(sub_raw_expr);
+          if (OB_FAIL(add_var_to_array_no_dup(col_ids, ref_expr->get_column_id()))) {
+            LOG_WARN("failed to push back column id", K(ret));
+          }
+        }
+      }
+    } else {
+      // constant expressions
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(column_ids.assign(col_ids))) {
+    LOG_WARN("failed to assign", K(ret));
   }
   return ret;
 }

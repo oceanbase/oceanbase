@@ -74,6 +74,7 @@ int ObPlanSet::match_params_info(const ParamStore *params,
                                  int64_t outline_param_idx,
                                  bool &is_same)
 {
+  MATCH_GUARD(id_, pc_ctx);
   int ret = OB_SUCCESS;
   is_same = true;
   ObExecContext &exec_ctx = pc_ctx.exec_ctx_;
@@ -81,16 +82,21 @@ int ObPlanSet::match_params_info(const ParamStore *params,
   bool is_sql = is_sql_planset();
   if (false == is_match_outline_param(outline_param_idx)) {
     is_same = false;
+    RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx, "outline param not match", K(outline_param_idx));
   } else if (OB_ISNULL(params)) {
     is_same = true;
   } else if (params->count() > params_info_.count()) {
     is_same = false;
+    RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                      "params count not equal",
+                      K(params->count()), K(params_info_.count()));
   } else {
     //匹配原始的参数
     int64_t N = params->count();
     LOG_TRACE("params info", K(params_info_), K(*params), K(this));
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < N; ++i) {
-      if (OB_FAIL(match_param_info(params_info_.at(i),
+      if (OB_FAIL(match_param_info(pc_ctx,
+                                   params_info_.at(i),
                                    params->at(i),
                                    is_same,
                                    is_sql))) {
@@ -133,8 +139,12 @@ int ObPlanSet::match_params_info(const ParamStore *params,
                 related_user_var_names_.at(i), tmp_meta))) {
             LOG_WARN("failed to get user variable meta", K(ret),
               K(related_user_var_names_.at(i)), K(i));
-          } else {
-            is_same = (related_user_sess_var_metas_.at(i) == tmp_meta);
+          } else if (related_user_sess_var_metas_.at(i) != tmp_meta) {
+            is_same = false;
+            RECORD_CACHE_MISS(USER_VARIABLE_NOT_MATCH, pc_ctx,
+                              "user variable not match",
+                              K(i), K(related_user_sess_var_metas_.at(i)), K(tmp_meta));
+
           }
         }
       }
@@ -148,7 +158,12 @@ int ObPlanSet::match_params_info(const ParamStore *params,
     }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(pc_ctx.sql_ctx_.session_info_) && is_same) {
-      is_same = (is_cli_return_rowid_ == pc_ctx.sql_ctx_.session_info_->is_client_return_rowid());
+      if (is_cli_return_rowid_ != pc_ctx.sql_ctx_.session_info_->is_client_return_rowid()) {
+        is_same = false;
+        RECORD_CACHE_MISS(CAP_FLAGS_NOT_MATCH, pc_ctx,
+                          "OB_CLIENT_RETURN_HIDDEN_ROWID flag not match",
+                          K(is_cli_return_rowid_), K(pc_ctx.sql_ctx_.session_info_->is_client_return_rowid()));
+      }
     }
 
     //pre calculate
@@ -178,6 +193,8 @@ int ObPlanSet::match_params_info(const ParamStore *params,
                                                              exec_ctx))) {
             LOG_WARN("failed to pre calculate expression", K(ret));
           } else if (!is_same) {
+            RECORD_CACHE_MISS(PRE_CALC_CONSTR_NOT_MATCH, pc_ctx,
+                              "Pre-calc constraint not match", KPC(pre_calc_con));
             break;
           }
         }
@@ -190,20 +207,31 @@ int ObPlanSet::match_params_info(const ParamStore *params,
                                          params->at(i),
                                          is_same))) {
         LOG_WARN("failed to match param bool value", K(ret), K(params_info_), K(*params));
+      } else if (!is_same) {
+        RECORD_CACHE_MISS(BOOL_PARAM_VALUE_NOT_MATCH, pc_ctx,
+                          "Bool param constraint not match",
+                          K(i), K(params_info_.at(i)), K(params->at(i)));
       }
     } //for end
 
     // check const constraint
     if (OB_SUCC(ret) && is_same) {
-      OC( (match_constraint)(*params, is_same) );
+      OC( (match_constraint)(pc_ctx, *params, is_same) );
     }
 
     for (int i = 0; OB_SUCC(ret) && is_same && i < params_constraint_.count(); ++i) {
-      OZ((params_constraint_.at(i)->match(*params, NULL, is_same)));
+      if (OB_FAIL(params_constraint_.at(i)->match(*params, NULL, is_same))) {
+        LOG_WARN("failed to match param constraint", K(ret), KPC(params_constraint_.at(i)), K(*params));
+      } else if (!is_same) {
+        RECORD_CACHE_MISS(PARAM_CONSTR_NOT_MATCH, pc_ctx,
+                          "param constraint not match",
+                          K(i), KPC(params_constraint_.at(i)),
+                          K(params->at(params_constraint_.at(i)->param_idx_)));
+      }
     }
 
     if (OB_SUCC(ret) && is_same) {
-      if (OB_FAIL(match_multi_stmt_info(*params, multi_stmt_rowkey_pos_, is_same))) {
+      if (OB_FAIL(match_multi_stmt_info(pc_ctx, *params, multi_stmt_rowkey_pos_, is_same))) {
         LOG_WARN("failed to match multi stmt info", K(ret));
       } else if (!is_same) {
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
@@ -236,7 +264,8 @@ int ObPlanSet::copy_param_flag_from_param_info(ParamStore *params)
 }
 
 //匹配参数类型信息
-int ObPlanSet::match_param_info(const ObParamInfo &param_info,
+int ObPlanSet::match_param_info(ObPlanCacheCtx &pc_ctx,
+                                const ObParamInfo &param_info,
                                 const ObObjParam &param,
                                 bool &is_same,
                                 bool is_sql_planset) const
@@ -266,18 +295,35 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
     if (param.get_collation_type() != param_info.col_type_
         && !(param.get_param_meta().is_ext() || param.is_user_defined_sql_type() || param.is_collection_sql_type())) {
       is_same = false;
+      RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "Collation not match",
+                        K(param), K(param_info));
     } else if (param.get_param_meta().get_type() != param_info.type_) {
       is_same = false;
+      RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "Param type not match",
+                        K(param.get_param_meta().get_type()), K(param_info.type_));
     } else if (ob_is_enumset_inner_tc(param.get_param_meta().get_type())) { // since enunset_inner type param will mock expr use current param, can not resue plan
       is_same = false;
+      RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "Enunset_inner type param will mock expr use current param, can not share plan",
+                        K(param.get_param_meta().get_type()));
     } else if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
       if (param_info.is_oracle_null_value_) {
         is_same = false;
+        RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "Null value in oracle mode can not share plan with other value",
+                        K(param));
       } else {
         uint64_t udt_id_param = param.get_accuracy().get_accuracy();
         uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32
                              | static_cast<uint32_t>(param_info.col_type_);
-        is_same = (udt_id_info == udt_id_param) ? true : false;
+        if (udt_id_info != udt_id_param) {
+          is_same = false;
+          RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "UDT info not match",
+                        K(udt_id_param), K(udt_id_info));
+        }
       }
     } else if (param.is_ext_sql_array()) {
       ObDataType data_type;
@@ -289,12 +335,21 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
         is_same = param_info.ext_real_type_ == ObDecimalIntType
                   && data_type.get_scale() == param_info.scale_
                   && match_decint_precision(param_info, data_type.get_precision());
+        if (!is_same) {
+          RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "SQL array type info not match",
+                        K(param_info.ext_real_type_), K(param_info.scale_), K(param_info.precision_),
+                        K(data_type.get_obj_type()), K(data_type.get_scale()), K(data_type.get_precision()));
+        }
       } else if (data_type.get_scale() == param_info.scale_ &&
                  data_type.get_obj_type() == param_info.ext_real_type_) {
         is_same = true;
       } else {
         is_same = false;
         LOG_TRACE("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
+        RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "SQL array type info not match",
+                        K(param_info), K(data_type));
       }
       LOG_DEBUG("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
     } else if (param.get_param_meta().is_ext()) {
@@ -304,16 +359,30 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
         uint64_t udt_id_param = param.get_accuracy().get_accuracy();
         uint64_t udt_id_info = static_cast<uint64_t>(param_info.ext_real_type_) << 32
                              | static_cast<uint32_t>(param_info.col_type_);
-        is_same = (udt_id_info == udt_id_param) ? true : false;
+        if (udt_id_info != udt_id_param) {
+          is_same = false;
+          RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "SQL array of extend type not match",
+                        K(udt_id_param), K(udt_id_info), K(param_info.precision_));
+        }
       }
       LOG_DEBUG("ext match param info", K(param.get_accuracy()), K(param_info), K(is_same), K(ret));
     } else if (param_info.is_oracle_null_value_ && !param.is_null()) {
       is_same = false;
+      RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "Null value can not share plan with Non-null param",
+                        K(param_info.is_oracle_null_value_), K(param));
     } else if (ObSQLUtils::is_oracle_null_with_normal_type(param)
                &&!param_info.is_oracle_null_value_) { //Typed nulls can only match plans with the same type of nulls.
       is_same = false;
+      RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "Null value can not share plan with Non-null param",
+                        K(param_info.is_oracle_null_value_), K(param));
     } else if (param_info.flag_.is_boolean_ != param.is_boolean()) { //bool type not match int type
       is_same = false;
+      RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "Bool type can not share plan with int type",
+                        K(param_info.flag_.is_boolean_), K(param));
     } else {
       // number params in point and st_point can ignore scale check to share plancache
       // please refrer to ObSqlParameterization::is_ignore_scale_check
@@ -321,6 +390,11 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
                 ? true
                 : (param.get_scale() == param_info.scale_);
       is_same = is_same && match_decint_precision(param_info, param.get_precision());
+      if (!is_same) {
+        RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
+                        "Precision of decimal not match",
+                        K(param_info), K(param));
+      }
     }
   }
   return ret;
@@ -347,7 +421,7 @@ int ObPlanSet::match_param_bool_value(const ObParamInfo &param_info,
   return ret;
 }
 
-int ObPlanSet::match_multi_stmt_info(const ParamStore &params,
+int ObPlanSet::match_multi_stmt_info(ObPlanCacheCtx &pc_ctx, const ParamStore &params,
                                      const ObIArray<int64_t> &multi_stmt_rowkey_pos,
                                      bool &is_match)
 {
@@ -400,6 +474,9 @@ int ObPlanSet::match_multi_stmt_info(const ParamStore &params,
             if (OB_HASH_EXIST == ret) {
               ret = OB_SUCCESS;
               is_match = false;
+              RECORD_CACHE_MISS(MULTI_STMT_INFO_NOT_MATCH, pc_ctx,
+                                "batched multi-stmt does not have the same rowkey",
+                                K(stmt_count), K(i), K(hash_key));
               if (REACH_TIME_INTERVAL(10000000)) {
                 LOG_INFO("batched multi-stmt does not have the same rowkey", K(i),
                     K(hash_key));
@@ -478,6 +555,11 @@ int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
     }
     if (OB_SUCC(ret)) {
       is_matched = (priv_info.has_privilege_ == has_priv);
+      if (!is_matched) {
+        RECORD_CACHE_MISS(PRIVILEGE_CONSTR_NOT_MATCH, pc_ctx,
+                          "privilege constraint not match",
+                          K(i), K(has_priv), K(priv_info.has_privilege_));
+      }
     }
   }
   return ret;
@@ -549,7 +631,7 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
                                          OB_MALLOC_BIG_BLOCK_SIZE,
                                          ObWrapperAllocator, false> &infos,
                                  int64_t outline_param_idx,
-                                 const ObPlanCacheCtx &pc_ctx,
+                                 ObPlanCacheCtx &pc_ctx,
                                  const bool need_match_cons,
                                  bool &is_same)
 {
@@ -622,7 +704,7 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
       CK( OB_NOT_NULL(pc_ctx.exec_ctx_.get_physical_plan_ctx()) );
       if (OB_SUCC(ret)) {
         const ParamStore &params = pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
-        if (OB_FAIL(match_constraint(params, is_same))) {
+        if (OB_FAIL(match_constraint(pc_ctx, params, is_same))) {
           LOG_WARN("failed to match constraint");
         } else if (need_match_cons && OB_FAIL(match_cons(pc_ctx, is_same))) {
           LOG_WARN("failed to match cons");
@@ -671,6 +753,7 @@ bool ObPlanSet::can_delay_init_datum_store()
 
 void ObPlanSet::reset()
 {
+  id_ = OB_INVALID_ID;
   ObDLinkBase<ObPlanSet>::reset();
   plan_cache_value_ = NULL;
   params_info_.reset();
@@ -1054,7 +1137,7 @@ int ObPlanSet::match_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched)
 //    满足则命中plan_set，否则不命中;
 // 2. 否则，检查所有可能的常量约束，如果某一个约束被满足，那么需要生成新的计划，也即不命中，否则命中
 // 3. 检查要求相等的参数约束是否被满足
-int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
+int ObPlanSet::match_constraint(ObPlanCacheCtx &pc_ctx, const ParamStore &params, bool &is_matched)
 {
   int ret = OB_SUCCESS;
   is_matched = true;
@@ -1081,6 +1164,9 @@ int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
                    0 != const_param.compare(params.at(param_idx))) {
           LOG_TRACE("not matched const param", K(const_param), K(params.at(param_idx)));
           is_matched = false;
+          RECORD_CACHE_MISS(CONST_PRARM_CONSTR_NOT_MATCH, pc_ctx,
+                            "Const param constraint not match",
+                            K(const_param), K(param_idx), K(params.at(param_idx)));
         } else {
           // do nothing
         }
@@ -1104,6 +1190,10 @@ int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
                param1.can_compare(param2) &&
                param1.get_collation_type() == param2.get_collation_type()) {
       is_matched = (0 == param1.compare(param2));
+      if (!is_matched) {
+        RECORD_CACHE_MISS(CONST_PRARM_CONSTR_NOT_MATCH, pc_ctx,
+                          "Const param constraint not match", K(param1), K(param2));
+      }
     } else if (all_equal_param_constraints_.at(i).use_abs_cmp_) {
       /*
        * for plan like: select ? from t1 group by grouping sets (c1, ?);
@@ -1115,17 +1205,40 @@ int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
        */
       if (param1.is_number() && param2.is_number()) {
         is_matched = (0 == param1.get_number().abs_compare(param2.get_number()));
+        if (!is_matched) {
+          RECORD_CACHE_MISS(CONST_PRARM_CONSTR_NOT_MATCH, pc_ctx,
+                            "Const param constraint not match",
+                            K(param1.get_number()), K(param2.get_number()));
+        }
       } else if (param1.is_double() && param2.is_double()) {
         is_matched = (0 == param1.get_double() + param2.get_double()) ||
                      (param1.get_double() == param2.get_double());
+        if (!is_matched) {
+          RECORD_CACHE_MISS(CONST_PRARM_CONSTR_NOT_MATCH, pc_ctx,
+                            "Const param constraint not match",
+                            K(param1.get_double()), K(param2.get_double()));
+        }
       } else if (param1.is_float() && param2.is_float()) {
         is_matched = (0 == param1.get_float() + param2.get_float()) ||
                      (param1.get_float() == param2.get_float());
+        if (!is_matched) {
+          RECORD_CACHE_MISS(CONST_PRARM_CONSTR_NOT_MATCH, pc_ctx,
+                            "Const param constraint not match",
+                            K(param1.get_float()), K(param2.get_float()));
+        }
       } else if (param1.is_decimal_int() && param2.is_decimal_int()) {
         is_matched = wide::abs_equal(param1, param2);
+        if (!is_matched) {
+          RECORD_CACHE_MISS(CONST_PRARM_CONSTR_NOT_MATCH, pc_ctx,
+                            "Const param constraint not match", K(param1), K(param2));
+        }
       } else if (param1.can_compare(param2) &&
                  param1.get_collation_type() == param2.get_collation_type()) {
         is_matched = (0 == param1.compare(param2));
+        if (!is_matched) {
+          RECORD_CACHE_MISS(CONST_PRARM_CONSTR_NOT_MATCH, pc_ctx,
+                            "Const param constraint not match", K(param1), K(param2));
+        }
       }
     }
     if (OB_SUCC(ret) && !is_matched) {
@@ -1267,6 +1380,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
                            int64_t outline_param_idx)
 {
   int ret = OB_SUCCESS;
+  plan.plan_set_id_ = id_;
   ObSqlCtx &sql_ctx = pc_ctx.sql_ctx_;
   //DASTableLocList table_locs(pc_ctx.exec_ctx_.get_allocator());
   ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
@@ -1444,6 +1558,7 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
 
 int ObSqlPlanSet::select_plan(ObPlanCacheCtx &pc_ctx, ObPlanCacheObject *&cache_obj)
 {
+  MATCH_GUARD(id_, pc_ctx)
   int ret = OB_SUCCESS;
   ObPhysicalPlan *plan = NULL;
   if (OB_ISNULL(plan_cache_value_)) {
@@ -1932,7 +2047,9 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
   if (OB_ISNULL(local_plan)) {
     LOG_DEBUG("local plan is null");
     get_next = true;
+    RECORD_CACHE_MISS(LOCAL_PLAN_NOT_EXISTS, pc_ctx, "Not exists local plan", K(local_plan));
   } else {
+    MATCH_GUARD(local_plan->get_plan_id(), pc_ctx);
     pc_ctx.exist_local_plan_ = true;
     if (FALSE_IT(plan = local_plan)) {
     } else if (OB_FAIL(get_plan_type(plan->get_table_locations(),
@@ -1941,6 +2058,7 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
       LOG_WARN("fail to get plan type", K(ret));
     } else if (OB_PHY_PLAN_LOCAL != real_type) {
       LOG_DEBUG("not local plan", K(real_type));
+      RECORD_CACHE_MISS(LOCATION_CONSTR_NOT_MATCH, pc_ctx, "Location constraint not match", K(real_type));
       plan = NULL;
       get_next = true;
     } else if (GCONF._enable_adaptive_auto_dop && plan->get_is_use_auto_dop() && is_single_table_
@@ -1954,6 +2072,7 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
       } else if (OB_FAIL(auto_dop_map.get_refactored(0, dop))) {
         LOG_WARN("failed to get refactored", K(ret));
       } else if (dop > 1) {
+        RECORD_CACHE_MISS(LOCAL_PLAN_DOP_NOT_MATCH, pc_ctx, "Dop > 1, local plan not match", K(dop));
         plan = NULL;
         get_next = true;
       }
@@ -1973,12 +2092,14 @@ int ObSqlPlanSet::try_get_remote_plan(ObPlanCacheCtx &pc_ctx,
                                       ObPhysicalPlan *&plan,
                                       bool &get_next)
 {
+  MATCH_GUARD(id_, pc_ctx);
   int ret = OB_SUCCESS;
   plan = NULL;
   get_next = false;
   ObPhyPlanType real_type = OB_PHY_PLAN_UNINITIALIZED;
   if (OB_ISNULL(remote_plan_)) {
     LOG_DEBUG("remote plan is null");
+    RECORD_CACHE_MISS(REMOTE_PLAN_NOT_EXISTS, pc_ctx, "There is no remote plan", K(remote_plan_));
     get_next = true;
   } else if (OB_FAIL(get_plan_type(remote_plan_->get_table_locations(),
                                   remote_plan_->has_uncertain_local_operator(),
@@ -1987,6 +2108,8 @@ int ObSqlPlanSet::try_get_remote_plan(ObPlanCacheCtx &pc_ctx,
     LOG_WARN("fail to get plan type", K(ret));
   } else if (OB_PHY_PLAN_REMOTE != real_type) {
     LOG_DEBUG("remote type is not match", K(real_type));
+    RECORD_CACHE_MISS(LOCATION_CONSTR_NOT_MATCH, pc_ctx, "Location constraint not match with remote plan",
+                      K(real_type));
     plan = NULL;
     get_next = true;
   } else {
@@ -2008,6 +2131,7 @@ int ObSqlPlanSet::try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
   if (OB_FAIL(dist_plans_.get_plan(pc_ctx, plan))) {
     LOG_TRACE("failed to get dist plan", K(ret));
   } else if (plan != NULL) {
+    MATCH_GUARD(plan->get_plan_id(), pc_ctx);
     LOG_TRACE("succeed to get dist plan", K(*plan));
     if (GCONF._enable_adaptive_auto_dop && plan->get_is_use_auto_dop() && is_single_table_
         && !is_contain_inner_table_ && !plan->stat_.is_inner_) {
@@ -2020,6 +2144,7 @@ int ObSqlPlanSet::try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
       } else if (OB_FAIL(auto_dop_map.get_refactored(0, dop))) {
         LOG_WARN("failed to get refactored", K(ret));
       } else if (is_single_part && !pc_ctx.exist_local_plan_ && dop <= 1) {
+        RECORD_CACHE_MISS(DIST_PLAN_DOP_NOT_MATCH, pc_ctx, "Distributed plan dop not match", K(dop));
         plan = NULL;
         exec_ctx.set_force_gen_local_plan();
       }

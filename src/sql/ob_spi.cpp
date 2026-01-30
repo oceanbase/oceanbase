@@ -7456,7 +7456,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     *spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     false /* is_prepare_protocol */,
-                                                    false /* is_dynamic_sql*/), K(sql), K(ps_sql), K(exec_params));
+                                                    false /* is_dynamic_sql*/,
+                                                    true /* try_paramlize */), K(sql), K(ps_sql), K(exec_params));
           } else {
             spi_result.get_result_set()->set_stmt_type(static_cast<stmt::StmtType>(type));
 #ifdef ERRSIM
@@ -7468,7 +7469,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     *spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     true /* is_prepare_protocol */,
-                                                    is_dynamic_sql /* is_dynamic_sql */), K(sql), K(ps_sql), K(exec_params));
+                                                    is_dynamic_sql /* is_dynamic_sql */,
+                                                    true /* try_paramlize */), K(sql), K(ps_sql), K(exec_params));
           }
         }
       }

@@ -38,7 +38,9 @@ ObGvSqlAudit::ObGvSqlAudit() :
     tenant_id_array_idx_(-1),
     with_tenant_ctx_(nullptr),
     is_sys_tenant_(false),
-    enable_sql_audit_query_sql_(false)
+    enable_sql_audit_query_sql_(false),
+    enable_filter_pushdown_(false),
+    cur_record_(nullptr)
 {
 }
 
@@ -70,6 +72,8 @@ void ObGvSqlAudit::reset()
   ipstr_.reset();
   is_sys_tenant_ = false;
   enable_sql_audit_query_sql_ = false;
+  enable_filter_pushdown_ = false;
+  cur_record_ = nullptr;
 }
 
 int ObGvSqlAudit::inner_open()
@@ -96,6 +100,7 @@ int ObGvSqlAudit::inner_open()
     SERVER_LOG(WARN, "fail to get tenant config", K(ret));
   } else {
     enable_sql_audit_query_sql_ = tenant_config->_enable_sql_audit_query_sql;
+    enable_filter_pushdown_ = !is_use_index_ && tenant_config->_enable_sql_audit_filter_pushdown;
   }
 
   SERVER_LOG(DEBUG, "tenant ids", K(effective_tenant_id_), K(tenant_id_array_));
@@ -172,6 +177,21 @@ int ObGvSqlAudit::check_ip_and_port(bool &is_valid)
 
   return ret;
 }
+
+int ObGvSqlAudit::fill_full_columns(common::ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cur_record_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "is null", K(ret));
+  } else if (OB_FAIL(fill_cells(*cur_record_))) {
+    SERVER_LOG(WARN, "failed to fill cells", K(ret));
+  } else {
+    row = &cur_row_;
+  }
+  return ret;
+}
+
 int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -291,6 +311,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
   }
 
   if (OB_SUCC(ret)) {
+    cur_record_ = NULL;
     void *rec = NULL;
     if (ref_.is_not_null()) {
       cur_mysql_req_mgr_->revert(&ref_);
@@ -308,9 +329,9 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
 
     if (OB_SUCC(ret)) {
       if (NULL != rec) {
-        ObMySQLRequestRecord *record = static_cast<ObMySQLRequestRecord*> (rec);
+        cur_record_ = static_cast<ObMySQLRequestRecord*> (rec);
 
-        if (OB_FAIL(fill_cells(*record))) {
+        if (OB_FAIL(fill_cells(*cur_record_))) {
           SERVER_LOG(WARN, "failed to fill cells", K(ret));
         } else {
           //finish fetch one row
@@ -566,20 +587,19 @@ bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
   return is_contain;
 }
 
-
 int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
 {
   int ret = OB_SUCCESS;
-  const int64_t col_count = output_column_ids_.count();
   ObObj *cells = cur_row_.cells_;
   const bool is_perf_event_closed = record.data_.is_perf_event_closed_;
 
-  if (OB_ISNULL(cells) || OB_ISNULL(allocator_)) {
+  if (OB_ISNULL(cells) || OB_ISNULL(allocator_) || OB_ISNULL(fill_column_ids_)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(cells));
   } else {
+    const int64_t col_count = fill_column_ids_->count();
     for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < col_count; cell_idx++) {
-      uint64_t col_id = output_column_ids_.at(cell_idx);
+      uint64_t col_id = fill_column_ids_->at(cell_idx);
       if (is_perf_event_closed && is_perf_event_dep_field(col_id)) {
         cells[cell_idx].set_null();
       } else {
@@ -996,6 +1016,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         } break;
         case SCHED_INFO: {
           //
+          cells[cell_idx].set_null();
           cells[cell_idx].set_default_collation_type();
         } break;
         case PS_CLIENT_STMT_ID: {
@@ -1030,6 +1051,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           break;
         }
         case OB_TRACE_INFO: {
+          cells[cell_idx].set_null();
           cells[cell_idx].set_default_collation_type();
         } break;
         case PLAN_HASH: {

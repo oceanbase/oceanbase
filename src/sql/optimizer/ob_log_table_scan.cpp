@@ -1007,8 +1007,8 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
   int ret = OB_SUCCESS;
   const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
   const auto &flags = get_filter_before_index_flags();
-  if (get_contains_fake_cte() ||
-      is_virtual_table(get_ref_table_id())) {
+  if (get_contains_fake_cte()
+    || is_oracle_mapping_real_virtual_table(get_ref_table_id())) {
     //all filters can not push down to storage
     if (OB_FAIL(nonpushdown_filters.assign(filters))) {
       LOG_WARN("store non-pushdown filters failed", K(ret));
@@ -1155,6 +1155,13 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(ext_enable_late_materialization)) {
         *ext_enable_late_materialization = !need_dup_filter;
+      }
+    }
+    if (OB_SUCC(ret) && is_virtual_table(get_ref_table_id())
+      && !is_oracle_mapping_real_virtual_table(get_ref_table_id())) {
+      nonpushdown_filters.reset();
+      if (OB_FAIL(nonpushdown_filters.assign(filters))) {
+        LOG_WARN("store non-pushdown filters failed", K(ret));
       }
     }
   }

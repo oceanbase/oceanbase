@@ -41,7 +41,9 @@ ObVirtualSqlPlanMonitor::ObVirtualSqlPlanMonitor() :
     rt_node_idx_(0),
     rt_start_idx_(INT64_MAX),
     rt_end_idx_(INT64_MIN),
-    fetch_profile_(false)
+    fetch_profile_(false),
+    enable_filter_pushdown_(false),
+    cur_monitor_node_(nullptr)
 {
   server_ip_[0] = '\0';
   trace_id_[0] = '\0';
@@ -79,6 +81,9 @@ void ObVirtualSqlPlanMonitor::reset()
   rt_nodes_.reset();
   rt_node_idx_ = 0;
   profile_allocator_.reset();
+  fetch_profile_ = false;
+  enable_filter_pushdown_ = false;
+  cur_monitor_node_ = nullptr;
 }
 
 int ObVirtualSqlPlanMonitor::inner_open()
@@ -105,7 +110,11 @@ int ObVirtualSqlPlanMonitor::inner_open()
     } else if (OB_FAIL(set_ip(addr_))) {
       SERVER_LOG(WARN, "failed to set server ip addr", K(ret));
     } else {
-      // do nothing
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        enable_filter_pushdown_ =
+            !is_use_index_ && tenant_config->_enable_sql_audit_filter_pushdown;
+      }
     }
   }
   return ret;
@@ -170,9 +179,22 @@ int ObVirtualSqlPlanMonitor::check_ip_and_port(bool &is_valid)
   return ret;
 }
 
+int ObVirtualSqlPlanMonitor::fill_full_columns(common::ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cur_monitor_node_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "is null", K(ret));
+  } else if (OB_FAIL(convert_node_to_row(*cur_monitor_node_, row))) {
+    SERVER_LOG(WARN, "failed to fill cells", K(ret));
+  }
+  return ret;
+}
+
 int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  cur_monitor_node_ = nullptr;
   bool is_stack_overflow = false;
 
   if (NULL == allocator_) {
@@ -231,8 +253,8 @@ int ObVirtualSqlPlanMonitor::inner_get_next_row(common::ObNewRow *&row)
 
     if (OB_SUCC(ret)) {
       if (NULL != rec) {
-        ObMonitorNode *node = static_cast<ObMonitorNode *>(rec);
-        if (OB_FAIL(convert_node_to_row(*node, row))) {
+        cur_monitor_node_ = static_cast<ObMonitorNode *>(rec);
+        if (OB_FAIL(convert_node_to_row(*cur_monitor_node_, row))) {
           LOG_WARN("fail convert node", K(ret));
         }
       } else {
@@ -289,7 +311,8 @@ int ObVirtualSqlPlanMonitor::report_rt_monitor_node(common::ObNewRow *&row)
     } else if (rt_node_idx_ >= rt_end_idx_ || rt_node_idx_ < rt_start_idx_) {
       ret = OB_ITER_END;
       LOG_WARN("rt node iter end", K(ret));
-    } else if (OB_FAIL(convert_node_to_row(rt_nodes_.at(rt_node_idx_), row))) {
+    } else if (FALSE_IT(cur_monitor_node_ = &rt_nodes_.at(rt_node_idx_))) {
+    } else if (OB_FAIL(convert_node_to_row(*cur_monitor_node_, row))) {
       LOG_WARN("fail to convert node to row", K(ret));
     } else if (OB_ISNULL(row)) {
       ret = OB_ERR_UNEXPECTED;
@@ -703,14 +726,13 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
 {
   int ret = OB_SUCCESS;
   ObObj *cells = cur_row_.cells_;
-  if (OB_ISNULL(cells)) {
+  if (OB_ISNULL(cells) || OB_ISNULL(fill_column_ids_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
   }
-  for (int64_t cell_idx = 0;
-       OB_SUCC(ret) && cell_idx < output_column_ids_.count();
-       ++cell_idx) {
-    const uint64_t column_id = output_column_ids_.at(cell_idx);
+  const int64_t col_count = fill_column_ids_->count();
+  for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < col_count; ++cell_idx) {
+    const uint64_t column_id = fill_column_ids_->at(cell_idx);
     switch(column_id) {
       case TENANT_ID: {
         uint64_t tenant_id = node.tenant_id_;

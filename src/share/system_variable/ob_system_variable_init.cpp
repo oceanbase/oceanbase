@@ -30,6 +30,80 @@ static int64_t ObSysVarsIdToArrayIdx[ObSysVarFactory::OB_MAX_SYS_VAR_ID];
 // 如果大于OB_MAX_SYS_VAR_ID表示存在无效的SysVarsId
 static bool HasInvalidSysVar = false;
 
+// Auto-generated ESSENTIAL_SYS_VARS array for inner session initialization
+// These variables are frequently used in session initialization, tenant processing, schema setting and other critical processes
+const ObSysVarClassType ESSENTIAL_SYS_VARS[] = {
+  // compatibility mode related vars - affect SQL parsing and execution behavior
+  SYS_VAR_AUTOCOMMIT,
+  SYS_VAR_CHARACTER_SET_CONNECTION,
+  SYS_VAR_COLLATION_CONNECTION,
+  SYS_VAR_SQL_MODE,
+  SYS_VAR_WAIT_TIMEOUT,
+  SYS_VAR_DEBUG_SYNC,
+  SYS_VAR_LOWER_CASE_TABLE_NAMES,
+  SYS_VAR_OB_LOG_LEVEL,
+  SYS_VAR_OB_READ_CONSISTENCY,
+  SYS_VAR_OB_GLOBAL_DEBUG_SYNC,
+  SYS_VAR_OB_COMPATIBILITY_MODE,
+  SYS_VAR_OB_CHECK_SYS_VARIABLE,
+  SYS_VAR_OB_COMPATIBILITY_VERSION,
+
+  // all system vars with INFLUENCE_PLAN flag - affect execution plan generation
+  SYS_VAR_CHARACTER_SET_RESULTS,        // character_set_results
+  SYS_VAR_TIME_ZONE,        // time_zone
+  SYS_VAR_BINLOG_ROW_IMAGE,        // binlog_row_image
+  SYS_VAR_DIV_PRECISION_INCREMENT,        // div_precision_increment
+  SYS_VAR_EXPLICIT_DEFAULTS_FOR_TIMESTAMP,        // explicit_defaults_for_timestamp
+  SYS_VAR_READ_ONLY,        // read_only
+  SYS_VAR_SQL_AUTO_IS_NULL,        // sql_auto_is_null
+  SYS_VAR_OB_ENABLE_TRANSFORMATION,        // ob_enable_transformation
+  SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT,        // ob_enable_index_direct_select
+  SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN,        // ob_enable_aggregation_pushdown
+  SYS_VAR_OB_BNL_JOIN_CACHE_SIZE,        // ob_bnl_join_cache_size
+  SYS_VAR_OB_ROUTE_POLICY,        // ob_route_policy
+  SYS_VAR_OB_ENABLE_JIT,        // ob_enable_jit
+  SYS_VAR_NLS_DATE_FORMAT,        // nls_date_format
+  SYS_VAR_NLS_TIMESTAMP_FORMAT,        // nls_timestamp_format
+  SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,        // nls_timestamp_tz_format
+  SYS_VAR_NLS_SORT,        // nls_sort
+  SYS_VAR_NLS_COMP,        // nls_comp
+  SYS_VAR_NLS_CHARACTERSET,        // nls_characterset
+  SYS_VAR_NLS_NCHAR_CHARACTERSET,        // nls_nchar_characterset
+  SYS_VAR_NLS_LENGTH_SEMANTICS,        // nls_length_semantics
+  SYS_VAR_NLS_NCHAR_CONV_EXCP,        // nls_nchar_conv_excp
+  SYS_VAR__NLJ_BATCHING_ENABLED,        // _nlj_batching_enabled
+  SYS_VAR__PX_BROADCAST_FUDGE_FACTOR,        // _px_broadcast_fudge_factor
+  SYS_VAR__PX_PARTITION_SCAN_THRESHOLD,        // _px_partition_scan_threshold
+  SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,        // _ob_px_slave_mapping_threshold
+  SYS_VAR__ENABLE_PARALLEL_DML,        // _enable_parallel_dml
+  SYS_VAR__PX_MIN_GRANULES_PER_SLAVE,        // _px_min_granules_per_slave
+  SYS_VAR_SECURE_FILE_PRIV,        // secure_file_priv
+  SYS_VAR__ENABLE_PARALLEL_QUERY,        // _enable_parallel_query
+  SYS_VAR__FORCE_PARALLEL_QUERY_DOP,        // _force_parallel_query_dop
+  SYS_VAR__FORCE_PARALLEL_DML_DOP,        // _force_parallel_dml_dop
+  SYS_VAR__ENABLE_PARALLEL_DDL,        // _enable_parallel_ddl
+  SYS_VAR__FORCE_PARALLEL_DDL_DOP,        // _force_parallel_ddl_dop
+  SYS_VAR__FORCE_ORDER_PRESERVE_SET,        // _force_order_preserve_set
+  SYS_VAR_PARALLEL_DEGREE_POLICY,        // parallel_degree_policy
+  SYS_VAR_PARALLEL_DEGREE_LIMIT,        // parallel_degree_limit
+  SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD,        // parallel_min_scan_time_threshold
+  SYS_VAR_RUNTIME_FILTER_TYPE,        // runtime_filter_type
+  SYS_VAR__ENABLE_RICH_VECTOR_FORMAT,        // _enable_rich_vector_format
+  SYS_VAR_OB_SECURITY_VERSION,        // ob_security_version
+  SYS_VAR_CARDINALITY_ESTIMATION_MODEL,        // cardinality_estimation_model
+  SYS_VAR_QUERY_REWRITE_ENABLED,        // query_rewrite_enabled
+  SYS_VAR_QUERY_REWRITE_INTEGRITY,        // query_rewrite_integrity
+  SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4,        // default_collation_for_utf8mb4
+  SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,        // _enable_old_charset_aggregation
+  SYS_VAR_ENABLE_SQL_PLAN_MONITOR,        // enable_sql_plan_monitor
+  SYS_VAR_OB_TABLE_ACCESS_POLICY,        // ob_table_access_policy
+  SYS_VAR__PUSH_JOIN_PREDICATE,        // _push_join_predicate
+  SYS_VAR_SQL_TRANSPILER,        // sql_transpiler
+};
+
+const int64_t ESSENTIAL_SYS_VARS_COUNT = sizeof(ESSENTIAL_SYS_VARS) / sizeof(ESSENTIAL_SYS_VARS[0]);
+
+
 static struct VarsInit{
   VarsInit(){
     // 保存当前系统变量的最大的id

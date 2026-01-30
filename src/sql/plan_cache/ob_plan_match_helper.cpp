@@ -20,12 +20,13 @@ using namespace oceanbase::share;
 namespace oceanbase {
 namespace sql {
 
-int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
+int ObPlanMatchHelper::match_plan(ObPlanCacheCtx &pc_ctx,
                                   const ObPhysicalPlan *plan,
                                   bool &is_matched,
                                   ObIArray<ObCandiTableLoc> &phy_tbl_infos,
                                   ObIArray<ObTableLocation> &out_tbl_locations) const
 {
+  MATCH_GUARD(plan->get_plan_id(), pc_ctx);
   int ret = OB_SUCCESS;
   bool has_duplicate_table = false;
   bool is_retry_for_dup_table = false;
@@ -71,50 +72,58 @@ int ObPlanMatchHelper::match_plan(const ObPlanCacheCtx &pc_ctx,
         LOG_WARN("failed to compare table types", K(ret), K(base_cons));
       } else if (!is_matched) {
         LOG_DEBUG("table types not match", K(base_cons));
-      } else if (OB_FAIL(check_partition_constraint(pc_ctx, base_cons, phy_tbl_infos, is_matched))) {
-        LOG_WARN("failed to check partition constraint", K(ret));
-      } else if (!is_matched) {
-        LOG_DEBUG("partition constraint not match", K(base_cons));
-      } else if (strict_cons.count() <= 0 && non_strict_cons.count() <= 0) {
-        // do nothing
-      } else if (OB_FAIL(pwj_map.create(8, ObModIds::OB_PLAN_EXECUTE))) {
-        LOG_WARN("create pwj map failed", K(ret));
-      } else if (OB_FAIL(check_inner_constraints(strict_cons, non_strict_cons, phy_tbl_infos,
-                                                pc_ctx, pwj_map, is_matched))) {
-        LOG_WARN("failed to check inner constraints", K(ret));
-      } else {
-        use_pwj_map = true;
+        RECORD_CACHE_MISS(LOCATION_CONSTR_NOT_MATCH, pc_ctx,
+                          "Location constraint not match", K(base_cons), K(phy_tbl_infos));
       }
-
-      if (OB_SUCC(ret) && is_matched && use_pwj_map) {
-        GroupPWJTabletIdMap *exec_group_pwj_map = nullptr;
-        if (OB_FAIL(pc_ctx.exec_ctx_.get_group_pwj_map(exec_group_pwj_map))) {
-          LOG_WARN("failed to get exec group pwj map", K(ret));
-        } else if (OB_FAIL(exec_group_pwj_map->reuse())) {
-          LOG_WARN("failed to reuse pwj map", K(ret));
+      if (is_matched && OB_SUCC(ret)) {
+        if (OB_FAIL(check_partition_constraint(pc_ctx, base_cons, phy_tbl_infos, is_matched))) {
+          LOG_WARN("failed to check partition constraint", K(ret));
+        } else if (!is_matched) {
+          LOG_DEBUG("partition constraint not match", K(base_cons));
+        } else if (strict_cons.count() <= 0 && non_strict_cons.count() <= 0) {
+          // do nothing
+        } else if (OB_FAIL(pwj_map.create(8, ObModIds::OB_PLAN_EXECUTE))) {
+          LOG_WARN("create pwj map failed", K(ret));
+        } else if (OB_FAIL(check_inner_constraints(strict_cons, non_strict_cons, phy_tbl_infos,
+                                                  pc_ctx, pwj_map, is_matched))) {
+          LOG_WARN("failed to check inner constraints", K(ret));
+        } else {
+          use_pwj_map = true;
         }
-        GroupPWJTabletIdInfo group_pwj_tablet_id_info;
-        TabletIdArray &tablet_id_array = group_pwj_tablet_id_info.tablet_id_array_;
-        for (int64_t group_id = 0; OB_SUCC(ret) && group_id < strict_cons.count(); ++group_id) {
-          group_pwj_tablet_id_info.group_id_ = group_id;
-          const ObPlanPwjConstraint &pwj_cons = strict_cons.at(group_id);
-          for (int64_t i = 0; OB_SUCC(ret) && i < pwj_cons.count(); ++i) {
-            const int64_t table_idx = pwj_cons.at(i);
-            uint64_t table_id = base_cons.at(table_idx).key_.table_id_;
-            tablet_id_array.reset();
-            if (!base_cons.at(table_idx).is_multi_part_insert()) {
-              if (OB_FAIL(pwj_map.get_refactored(table_idx, tablet_id_array))) {
-                if (OB_HASH_NOT_EXIST == ret) {
-                  // means this is not a partition wise join table
-                  ret = OB_SUCCESS;
-                } else {
-                  LOG_WARN("failed to get refactored", K(ret));
+        if (OB_SUCC(ret) && is_matched && use_pwj_map) {
+          GroupPWJTabletIdMap *exec_group_pwj_map = nullptr;
+          if (OB_FAIL(pc_ctx.exec_ctx_.get_group_pwj_map(exec_group_pwj_map))) {
+            LOG_WARN("failed to get exec group pwj map", K(ret));
+          } else if (OB_FAIL(exec_group_pwj_map->reuse())) {
+            LOG_WARN("failed to reuse pwj map", K(ret));
+          }
+          GroupPWJTabletIdInfo group_pwj_tablet_id_info;
+          TabletIdArray &tablet_id_array = group_pwj_tablet_id_info.tablet_id_array_;
+          for (int64_t group_id = 0; OB_SUCC(ret) && group_id < strict_cons.count(); ++group_id) {
+            group_pwj_tablet_id_info.group_id_ = group_id;
+            const ObPlanPwjConstraint &pwj_cons = strict_cons.at(group_id);
+            for (int64_t i = 0; OB_SUCC(ret) && i < pwj_cons.count(); ++i) {
+              const int64_t table_idx = pwj_cons.at(i);
+              uint64_t table_id = base_cons.at(table_idx).key_.table_id_;
+              tablet_id_array.reset();
+              if (!base_cons.at(table_idx).is_multi_part_insert()) {
+                if (OB_FAIL(pwj_map.get_refactored(table_idx, tablet_id_array))) {
+                  if (OB_HASH_NOT_EXIST == ret) {
+                    // means this is not a partition wise join table
+                    ret = OB_SUCCESS;
+                  } else {
+                    LOG_WARN("failed to get refactored", K(ret));
+                  }
+                } else if (OB_FAIL(exec_group_pwj_map->set_refactored(table_id, group_pwj_tablet_id_info))) {
+                  LOG_WARN("failed to set refactored", K(ret));
                 }
-              } else if (OB_FAIL(exec_group_pwj_map->set_refactored(table_id, group_pwj_tablet_id_info))) {
-                LOG_WARN("failed to set refactored", K(ret));
               }
             }
           }
+        }
+        if (!is_matched) {
+          RECORD_CACHE_MISS(PWJ_CONSTR_NOT_MATCH, pc_ctx,
+                            "Location constraint not match", K(base_cons), K(phy_tbl_infos));
         }
       }
     }
@@ -236,7 +245,7 @@ int ObPlanMatchHelper::cmp_table_types(
 }
 
 int ObPlanMatchHelper::check_partition_constraint(
-    const ObPlanCacheCtx &pc_ctx,
+    ObPlanCacheCtx &pc_ctx,
     const ObIArray<LocationConstraint> &loc_cons,
     const common::ObIArray<ObCandiTableLoc> &phy_tbl_infos,
     bool &is_match) const
@@ -282,6 +291,8 @@ int ObPlanMatchHelper::check_partition_constraint(
             first_part_id = cur_part_id;
           } else if (cur_part_id != first_part_id) {
             is_match = false;
+            RECORD_CACHE_MISS(PWJ_CONSTR_NOT_MATCH, pc_ctx,
+                              "Location constraint not match", K(cur_part_id), K(first_part_id));
           }
         }
       } else if (loc_cons.at(i).is_subpartition_single()) {
@@ -299,6 +310,9 @@ int ObPlanMatchHelper::check_partition_constraint(
             for (int64_t k = 0; OB_SUCC(ret) && is_match && k < part_ids.count(); ++k) {
               if (part_ids.at(k) == cur_part_id) {
                 is_match = false;
+                RECORD_CACHE_MISS(PWJ_CONSTR_NOT_MATCH, pc_ctx,
+                                  "Location constraint not match",
+                                  K(k), K(part_ids.at(k)), K(cur_part_id));
               }
             }
 
@@ -318,6 +332,7 @@ int ObPlanMatchHelper::check_partition_constraint(
   }
   if (OB_FAIL(ret)) {
     is_match = false;
+    RECORD_CACHE_MISS(LOCATION_CONSTR_NOT_MATCH, pc_ctx, "Some error happened", K(ret));
   }
   return ret;
 }
