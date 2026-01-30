@@ -562,6 +562,9 @@ private:
   void mvcc_undo_(ObMvccWriteResults &res);
 
   void mvcc_undo_(ObMvccWriteResult &res);
+
+  void wakeup_waiters_if_inserted_(ObStoreCtx &ctx, ObMvccWriteResults &results);
+  void wakeup_waiters_if_inserted_(ObStoreCtx &ctx, ObMvccWriteResult &result);
   int check_set_row_with_nop_col_(const ObMemtableSetArg &memtable_set_arg) const;
 
 private:
