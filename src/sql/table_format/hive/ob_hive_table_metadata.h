@@ -135,7 +135,8 @@ public:
                        const Apache::Hadoop::Hive::Table &table,
                        const ObString &properties,
                        const ObString &uri,
-                       const ObString &access_info);
+                       const uint64_t location_object_id,
+                       const ObString &location_object_sub_path);
 
   static int calculate_part_val_from_string(const share::schema::ObTableSchema &table_schema,
                                             const bool &is_part_table,
@@ -174,7 +175,8 @@ private:
   static int setup_external_location(const Apache::Hadoop::Hive::Table &table,
                                      const ObString &location,
                                      const ObString &uri,
-                                     const ObString &access_info,
+                                     const uint64_t location_object_id,
+                                     const ObString &location_object_sub_path,
                                      ObIAllocator &allocator,
                                      share::schema::ObTableSchema &table_schema);
   static int extract_real_location(const ObString &uri,

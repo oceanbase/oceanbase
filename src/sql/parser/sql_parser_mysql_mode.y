@@ -538,7 +538,7 @@ END_P SET_VAR DELIMITER
 %type <node> merge_update_clause merge_insert_clause opt_merge_update_delete
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list opt_distribute_method_list
-%type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string url_spec
+%type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows url_spec
 %type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option opt_on_error opt_to_file opt_reject_limit opt_bad_file
 %type <node> load_set_list load_set_element load_data_with_opt_hint
 %type <node> ret_type opt_agg
@@ -571,7 +571,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
-%type <node> external_file_format_list external_file_format external_properties_list external_properties external_table_partition_option opt_pattern opt_as_alias pattern_expr format_expr url_expr url_table_function_expr location_expr
+%type <node> external_file_format_list external_file_format external_properties_list external_properties external_table_partition_option opt_pattern opt_as_alias pattern_expr format_expr url_expr url_table_function_expr location_expr load_export_location_expr
 %type <node> storage_cache_policy_attribute_list storage_cache_time_policy_attribute_list storage_cache_time_policy_attribute retention_time_unit opt_storage_cache_policy
 %type <node> opt_path_info opt_access_info opt_storage_use_for opt_attribute opt_scope_type
 %type <node> dynamic_sampling_hint add_external_table_partition_actions add_external_table_partition_action
@@ -5392,13 +5392,13 @@ NAME_OB
  *
  *****************************************************************************/
 load_data_stmt:
-load_data_with_opt_hint opt_load_local INFILE infile_string opt_duplicate INTO TABLE
+load_data_with_opt_hint opt_load_local INFILE load_export_location_expr opt_duplicate INTO TABLE
 relation_factor opt_use_partition opt_compression opt_load_charset field_opt line_opt opt_load_ignore_rows
 opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 15,
                            $2,            /* 0. local */
-                           $4,            /* 1. filename */
+                           $4,            /* 1. location_expr */
                            $5,            /* 2. duplicate  */
                            $8,            /* 3. table */
                            $11,           /* 4. charset */
@@ -5503,31 +5503,6 @@ url_table_function_expr
   dup_string($$, result, @2.first_column, @5.last_column);
 }
 ;
-
-infile_string:
-STRING_VALUE
-{
-  if ($1->str_len_ > 0) {
-    char *buf = (char *)parser_alloc(result->malloc_pool_, $1->str_len_ + 1);
-    if (buf != NULL) {
-      memcpy(buf, $1->str_value_, $1->str_len_);
-      buf[$1->str_len_] = '\0';
-      for(int64_t i = 0; i < $1->str_len_; i ++) { //lower string
-        if (buf[i] >= 'A' && buf[i] <= 'Z') {
-          buf[i] = buf[i] - 'A' + 'a';
-        }
-      }
-      if (strstr(buf, "access_id")) { //If infile string contains access_id, then set true
-        result->contain_sensitive_data_ = true;
-      }
-    } else { //it cannot alloc mem, then set true directly.
-      result->contain_sensitive_data_ = true;
-    }
-  }
-  $$ = $1;
-  $$->stmt_loc_.first_column_ = @1.first_column - 1;
-  $$->stmt_loc_.last_column_ = @1.last_column - 1;
-};
 
 load_data_with_opt_hint:
 LOAD DATA {$$ = NULL;}
@@ -8599,6 +8574,25 @@ LOCATION opt_equal_mark STRING_VALUE
   $$->stmt_loc_.last_column_ = @3.last_column - 1;
   $$->str_len_ = $3->str_len_;
   $$->str_value_ = $3->str_value_;
+}
+;
+
+load_export_location_expr:
+STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_LOCATION, 1, $1);
+  $$->stmt_loc_.first_column_ = @1.first_column - 1;
+  $$->stmt_loc_.last_column_ = @1.last_column - 1;
+  $$->str_len_ = $1->str_len_;
+  $$->str_value_ = $1->str_value_;
+}
+| USER_VARIABLE opt_sub_path
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOCATION_OBJECT, 2, $1, $2);
+  $$->stmt_loc_.first_column_ = @1.first_column - 1;
+  $$->stmt_loc_.last_column_ = @1.last_column - 1;
+  $$->str_len_ = $1->str_len_;
+  $$->str_value_ = $1->str_value_;
 }
 ;
 
@@ -12602,11 +12596,11 @@ LIMIT limit_expr OFFSET limit_expr
 ;
 
 into_clause:
-INTO OUTFILE STRING_VALUE file_partition_opt opt_charset field_opt line_opt file_opt
+INTO OUTFILE load_export_location_expr file_partition_opt opt_charset field_opt line_opt file_opt
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_INTO_OUTFILE, 6, $3, $4, $5, $6, $7, $8);
 }
-| INTO OUTFILE STRING_VALUE file_partition_opt FORMAT opt_equal_mark '(' external_file_format_list ')' file_opt
+| INTO OUTFILE load_export_location_expr file_partition_opt FORMAT opt_equal_mark '(' external_file_format_list ')' file_opt
 {
   (void)($6);
   ParseNode *format_list = NULL;

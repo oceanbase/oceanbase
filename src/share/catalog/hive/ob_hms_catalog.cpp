@@ -124,6 +124,8 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
   // hive 表返回表的 location, iceberg 表返回 metadata 的 location
   ObString table_location;
   ObString storage_access_info;
+  uint64_t location_object_id = OB_INVALID_ID;
+  ObString location_object_sub_path;
   Apache::Hadoop::Hive::Table original_table;
 
   if (OB_ISNULL(client_)) {
@@ -159,7 +161,9 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
     if (OB_FAIL(location_schema_provider_->get_access_info_by_path(allocator_,
                                                                    tenant_id_,
                                                                    table_location,
-                                                                   storage_access_info))) {
+                                                                   storage_access_info,
+                                                                   location_object_id,
+                                                                   location_object_sub_path))) {
       LOG_WARN("failed to get storage access info", K(ret));
     }
   }
@@ -187,7 +191,8 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
                                                              original_table,
                                                              properties_,
                                                              uri_,
-                                                             storage_access_info))) {
+                                                             location_object_id,
+                                                             location_object_sub_path))) {
       LOG_WARN("failed to setup table schema in hive table metadata", K(ret));
     } else {
       table_metadata = hive_table_metadata;
@@ -206,8 +211,12 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
                                                     tbl_name,
                                                     case_mode))) {
       LOG_WARN("failed to init iceberg table metadata", K(ret));
-    } else if (OB_FAIL(iceberg_table_metadata->set_access_info(storage_access_info))) {
+    } else if (OB_FAIL(iceberg_table_metadata->set_access_info(storage_access_info))) {                    // used for read iceberg metadata.json
       LOG_WARN("failed to set access info", K(ret));
+    } else if (OB_FALSE_IT(iceberg_table_metadata->set_location_object_id(location_object_id))) {          // used for set ObTableSchema
+      LOG_WARN("failed to set location id", K(ret));
+    } else if (OB_FAIL(iceberg_table_metadata->set_location_object_sub_path(location_object_sub_path))) {  // used for set ObTableSchema
+      LOG_WARN("failed to set sub path", K(ret));
     } else if (OB_FAIL(iceberg_table_metadata->load_by_metadata_location(table_location))) {
       LOG_WARN("failed to load iceberg metadata.json", K(ret));
     } else {

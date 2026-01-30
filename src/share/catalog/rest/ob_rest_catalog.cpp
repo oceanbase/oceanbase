@@ -192,6 +192,8 @@ int ObRestCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
   } else {
     ObString table_location = rsp.metadata_location_;
     ObString storage_access_info;
+    uint64_t location_object_id = OB_INVALID_ID;
+    ObString location_sub_path;
     char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
     if (OB_UNLIKELY(table_location.empty())) {
       ret = OB_ERR_UNEXPECTED;
@@ -221,7 +223,9 @@ int ObRestCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
       if (OB_FAIL(location_schema_provider_->get_access_info_by_path(allocator_,
                                                                      tenant_id_,
                                                                      table_location,
-                                                                     storage_access_info))) {
+                                                                     storage_access_info,
+                                                                     location_object_id,
+                                                                     location_sub_path))) {
         LOG_WARN("failed to get storage access info", K(ret), K(table_location));
       }
     }
@@ -240,6 +244,10 @@ int ObRestCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
       LOG_WARN("failed to init iceberg table metadata", K(ret));
     } else if (OB_FAIL(iceberg_table_metadata->set_access_info(storage_access_info))) {
       LOG_WARN("failed to set access info", K(ret));
+    } else if (OB_FALSE_IT(iceberg_table_metadata->set_location_object_id(location_object_id))) {
+
+    } else if (OB_FAIL(iceberg_table_metadata->set_location_object_sub_path(location_sub_path))) {
+      LOG_WARN("failed to set location object sub path", K(ret));
     } else if (OB_FAIL(iceberg_table_metadata->table_metadata_.assign(rsp.table_metadata_))) {
       LOG_WARN("failed to assign iceberg table metadata", K(ret));
     } else {

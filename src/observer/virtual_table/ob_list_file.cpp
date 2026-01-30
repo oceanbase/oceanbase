@@ -70,16 +70,7 @@ int ObListFile::inner_open()
     }
     OZ (session_->get_regexp_session_vars(regexp_vars));
     ObSqlString full_path;
-    OZ (full_path.append(location_schema->get_location_url_str()));
-    if (OB_SUCC(ret) && full_path.length() > 0
-        && *(full_path.ptr() + full_path.length() - 1) != '/'
-        && !sub_path.empty()
-        && sub_path[0] != '/') {
-      OZ (full_path.append("/"));
-    }
-    if (OB_SUCC(ret) && sub_path != "/") {
-      OZ (full_path.append(sub_path));
-    }
+    OZ (ObExternalTableUtils::concat_external_file_location(location_schema->get_location_url_str(), sub_path, full_path));
     OZ (ObExternalTableUtils::collect_external_file_list(
       nullptr,
       location_schema->get_tenant_id(), -1 /*table id(UNUSED)*/,

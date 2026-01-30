@@ -342,6 +342,17 @@ class ObExternalTableUtils {
                                 ObOdpsScanTask &scan_task);
 
   static bool is_skipped_insert_column(const schema::ObColumnSchemaV2& column);
+  static int concat_external_file_location(const ObString &location,
+                                           const ObString &sub_path,
+                                           ObSqlString &full_path);
+  static int resolve_location_for_load_and_select_into(ObSchemaGetterGuard &schema_guard,
+                                                       const ObSQLSessionInfo &session_info,
+                                                       common::ObIAllocator &allocator,
+                                                       const common::ObString &location_name,
+                                                       const common::ObString &sub_path,
+                                                       common::ObString &full_path,
+                                                       common::ObString *access_info = NULL,
+                                                       bool check_oss_prefix = false);
   static int get_external_file_location(const ObTableSchema &table_schema,
                                         ObSchemaGetterGuard &schema_guard,
                                         ObIAllocator &allocator,

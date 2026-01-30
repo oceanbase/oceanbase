@@ -52,6 +52,18 @@ int ObIcebergTableMetadata::set_access_info(const ObString &access_info)
   return ret;
 }
 
+void ObIcebergTableMetadata::set_location_object_id(int64_t location_object_id)
+{
+  location_object_id_ = location_object_id;
+}
+
+int ObIcebergTableMetadata::set_location_object_sub_path(const ObString &location_object_sub_path)
+{
+  int ret = OB_SUCCESS;
+  OZ (ob_write_string(allocator_, location_object_sub_path, location_object_sub_path_, true));
+  return ret;
+}
+
 int ObIcebergTableMetadata::load_by_table_location(const ObString &table_location)
 {
   int ret = OB_SUCCESS;
@@ -220,8 +232,24 @@ int ObIcebergTableMetadata::do_build_table_schema(std::optional<int32_t> schema_
     } else if (OB_FAIL(
                    iceberg_table_schema->set_external_file_location(table_metadata_.location))) {
       LOG_WARN("failed to set external file location", K(ret));
-    } else if (OB_FAIL(iceberg_table_schema->set_external_file_location_access_info(access_info_))) {
-      LOG_WARN("failed to set external file location access info", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (location_object_id_ != OB_INVALID_ID) {
+      if (OB_FALSE_IT(iceberg_table_schema->set_external_location_id(location_object_id_))) {         // 改为location_id和sub_path
+
+      } else if (OB_FAIL(iceberg_table_schema->set_external_sub_path(location_object_sub_path_))) {
+        LOG_WARN("failed to set external sub path", K(ret));
+      }
+    } else {
+      if (OB_FAIL(iceberg_table_schema->set_external_file_location_access_info(access_info_))) {       // rest catalog支持vended credential, 此时没有location_id和sub_path
+        LOG_WARN("failed to set external file location access info", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else {
       FOREACH_CNT_X(it, current_schema->fields, OB_SUCC(ret))
       {

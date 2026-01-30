@@ -15,6 +15,7 @@
 #include "src/sql/resolver/dml/ob_del_upd_resolver.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include <glob.h>
 #include "share/schema/ob_part_mgr_util.h"
@@ -868,10 +869,10 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
   ObLoadArgument &load_args = load_stmt->get_load_arguments();
   ParseNode *file_name_node = node->children_[ENUM_FILE_NAME];
   if (OB_ISNULL(file_name_node)
-      || OB_UNLIKELY(T_VARCHAR != file_name_node->type_ && T_CHAR != file_name_node->type_)) {
+      || OB_UNLIKELY(T_LOCATION_OBJECT != file_name_node->type_ && T_EXTERNAL_FILE_LOCATION != file_name_node->type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid node", "child", file_name_node);
-  } else {
+  } else if (T_EXTERNAL_FILE_LOCATION == file_name_node->type_) {  // old path
     ObString file_name(file_name_node->str_len_, file_name_node->str_value_);
     ObArray<ObString> file_name_array;
     if (OB_FAIL(split_file_name_by_brace(file_name, file_name_array))) {
@@ -887,6 +888,10 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
       if (OB_FAIL(resolve_multi_files(load_args, file_name, file_name_array))) {
         LOG_WARN("failed to resolve multi files", K(ret), K(file_name_array));
       }
+    }
+  } else {
+    if (OB_FAIL(resolve_location_object(load_stmt, file_name_node))) {  // explicitly use location object
+      LOG_WARN("failed to resolve location object", K(ret));
     }
   }
   return ret;
@@ -997,6 +1002,43 @@ int ObLoadDataResolver::resolve_multi_files(ObLoadArgument &load_args, const ObS
     }
     LOG_INFO("resolve filename result", K(ret), K(load_args.file_name_), K(load_args.load_file_storage_));
   }
+  return ret;
+}
+
+int ObLoadDataResolver::resolve_location_object(ObLoadDataStmt *load_stmt, ParseNode *file_name_node)
+{
+  int ret = OB_SUCCESS;
+  ObLoadArgument &load_args = load_stmt->get_load_arguments();
+
+  if (2 != file_name_node->num_child_ || OB_ISNULL(file_name_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid node", K(file_name_node));
+  } else {
+    ObString location_name(file_name_node->children_[0]->str_len_,
+                           file_name_node->children_[0]->str_value_);
+    ObString sub_path;
+    if (OB_NOT_NULL(file_name_node->children_[1])) {
+      sub_path = ObString(file_name_node->children_[1]->str_len_,
+                          file_name_node->children_[1]->str_value_);
+    }
+
+    share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    ObString access_info;
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(ObExternalTableUtils::resolve_location_for_load_and_select_into(
+                              *schema_guard, *session_info_, *allocator_,
+                              location_name, sub_path, load_args.file_name_,
+                              &access_info, true/*check_oss_prefix*/))) {
+      LOG_WARN("failed to resolve location object", K(ret), K(location_name), K(sub_path));
+    } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), access_info.ptr()))) {
+      LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(access_info));
+    } else if (OB_FAIL(resolve_filename_oss(load_args, load_args.file_name_))) {
+      LOG_WARN("failed to resolve oss file name", K(ret));
+    }
+  }
+
   return ret;
 }
 

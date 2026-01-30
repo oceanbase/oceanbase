@@ -21,6 +21,7 @@ namespace sql
 {
 class ObLoadDataStmt;
 struct ObDataInFileStruct;
+struct ObLoadArgument;
 
 class ObLoadDataResolver : public ObCMDResolver
 {
@@ -73,6 +74,9 @@ private:
   int resolve_filename_oss(ObLoadArgument &load_args, ObString &file_name);
   int resolve_single_file(ObLoadArgument &load_args, const ObString &file_name);
   int resolve_multi_files(ObLoadArgument &load_args, const ObString &file_name, const ObArray<ObString> &file_name_array);
+
+  // resolve using location object explicitly
+  int resolve_location_object(ObLoadDataStmt *load_stmt, ParseNode *file_name_node);
 private:
   enum ParameterEnum {
     ENUM_OPT_LOCAL = 0,

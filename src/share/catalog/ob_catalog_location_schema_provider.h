@@ -24,10 +24,13 @@ class ObCatalogLocationSchemaProvider
 {
 public:
   explicit ObCatalogLocationSchemaProvider(schema::ObSchemaGetterGuard &schema_guard);
+
   int get_access_info_by_path(ObIAllocator &allocator,
                               const uint64_t tenant_id,
                               const common::ObString &access_path,
-                              common::ObString &access_info) const;
+                              common::ObString &access_info,
+                              uint64_t &location_id,
+                              common::ObString &sub_path) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCatalogLocationSchemaProvider);

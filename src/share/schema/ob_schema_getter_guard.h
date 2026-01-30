@@ -1076,6 +1076,11 @@ public:
                                                     const bool is_need_write_priv = false);
   int get_location_schemas_in_tenant(const uint64_t tenant_id,
                                      common::ObIArray<const ObLocationSchema *> &location_schemas);
+  int check_location_access(const ObNameCaseMode &case_mode,
+                            const ObSessionPrivInfo &session_priv,
+                            const common::ObIArray<uint64_t> &enable_role_id_array,
+                            const ObString &location_name,
+                            const bool is_need_write_priv = false);
   int check_location_access(const ObSessionPrivInfo &session_priv,
                             const common::ObIArray<uint64_t> &enable_role_id_array,
                             const ObString &location_name,

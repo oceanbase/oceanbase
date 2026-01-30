@@ -33,7 +33,8 @@ namespace share
 class ObFileSystemCatalog final : public ObIExternalCatalog, ObIExternalTableMetadataOperations
 {
 public:
-  explicit ObFileSystemCatalog(common::ObIAllocator &allocator) : allocator_(allocator) {};
+  explicit ObFileSystemCatalog(common::ObIAllocator &allocator)
+      : allocator_(allocator), location_object_id_(OB_INVALID_ID) {};
 
   int list_namespace_names(common::ObIArray<common::ObString> &ns_names) override;
 
@@ -76,6 +77,8 @@ private:
   ObIAllocator &allocator_;
   ObString warehouse_;
   ObString access_info_;
+  uint64_t location_object_id_;
+  ObString warehouse_sub_path_;
 };
 
 } // namespace share

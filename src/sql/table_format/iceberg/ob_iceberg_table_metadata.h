@@ -31,13 +31,19 @@ class ObIcebergTableMetadata final : public share::ObILakeTableMetadata
 {
 public:
   explicit ObIcebergTableMetadata(ObIAllocator &allocator)
-      : share::ObILakeTableMetadata(allocator), table_metadata_(allocator)
+      : share::ObILakeTableMetadata(allocator),
+        access_info_(),
+        location_object_id_(OB_INVALID_ID),
+        location_object_sub_path_(),
+        table_metadata_(allocator)
   {
   }
   share::ObLakeTableFormat get_format_type() const override;
   int assign(const ObIcebergTableMetadata &other);
   int64_t get_convert_size() const override;
   int set_access_info(const ObString &access_info);
+  void set_location_object_id(int64_t location_object_id);
+  int set_location_object_sub_path(const ObString &location_object_sub_path);
   // used by filesystem catalog only
   int load_by_table_location(const ObString &table_location);
   int load_by_metadata_location(const ObString &metadata_location);
@@ -46,6 +52,8 @@ public:
                                std::optional<int64_t> &snapshot_id) override;
 
   ObString access_info_;
+  int64_t location_object_id_;
+  ObString location_object_sub_path_;
   TableMetadata table_metadata_;
 
 protected:

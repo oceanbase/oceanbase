@@ -25,6 +25,7 @@
 #include "sql/parser/ob_parser_utils.h"
 #include "sql/resolver/mv/ob_major_refresh_mjv_printer.h"
 #include "sql/privilege_check/ob_privilege_check.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 #include "sql/executor/ob_memory_tracker.h"
 namespace oceanbase
@@ -5688,25 +5689,60 @@ int ObSelectResolver::resolve_into_const_node(const ParseNode *node, ObObj &obj)
   if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null", K(ret));
-  } else if (T_CHAR == node->type_ || T_VARCHAR == node->type_) {
-    ObCollationType cs_type = params_.session_info_->get_local_collation_connection();
-    ObString node_str(node->str_len_, node->str_value_);
-    if (lib::is_oracle_mode()) {
-      OZ (ObResolverUtils::escape_char_for_oracle_mode(*allocator_, node_str, cs_type));
+  } else if (T_EXTERNAL_FILE_LOCATION == node->type_) {
+    if (1 != node->num_child_ || OB_ISNULL(node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node", "child", node->children_[0]);
+    } else {
+      const ParseNode *location_node = node->children_[0];
+      if (T_CHAR == location_node->type_ || T_VARCHAR == location_node->type_) {
+        ObCollationType cs_type = params_.session_info_->get_local_collation_connection();
+        ObString node_str(location_node->str_len_, location_node->str_value_);
+        if (lib::is_oracle_mode()) {
+          OZ (ObResolverUtils::escape_char_for_oracle_mode(*allocator_, node_str, cs_type));
+        }
+        if (OB_SUCC(ret)) {
+          obj.set_varchar(node_str);
+          obj.set_collation_type(cs_type);
+        }
+      } else if (T_HEX_STRING == location_node->type_) {
+        ObString node_str(location_node->str_len_, location_node->str_value_);
+        obj.set_varchar(node_str);
+        obj.set_collation_type(CS_TYPE_BINARY);
+      } else if (T_QUESTIONMARK == location_node->type_) {
+        obj.set_unknown(location_node->value_);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("node type must be varchar or ?", K(ret), K(location_node->type_));
+      }
     }
-    if (OB_SUCC(ret)) {
-      obj.set_varchar(node_str);
-      obj.set_collation_type(cs_type);
+  } else if (T_LOCATION_OBJECT == node->type_) {
+    if (2 != node->num_child_ || OB_ISNULL(node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid node", K(ret));
+    } else {
+      const ParseNode *location_node = node->children_[0];
+      const ParseNode *sub_path_node = node->children_[1];
+      ObString location_name(location_node->str_len_, location_node->str_value_);
+      ObString sub_path;
+      if (OB_NOT_NULL(sub_path_node)) {
+        sub_path = ObString(sub_path_node->str_len_, sub_path_node->str_value_);
+      }
+
+      share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+      ObString full_path_str;
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is null", K(ret));
+      } else if (OB_FAIL(ObExternalTableUtils::resolve_location_for_load_and_select_into(
+                                *schema_guard, *session_info_, *allocator_,
+                                location_name, sub_path, full_path_str))) {
+        LOG_WARN("failed to resolve location object", K(ret), K(location_name), K(sub_path));
+      } else {
+        obj.set_varchar(full_path_str);
+        obj.set_collation_type(session_info_->get_local_collation_connection());
+      }
     }
-  } else if (T_HEX_STRING == node->type_) {
-    ObString node_str(node->str_len_, node->str_value_);
-    obj.set_varchar(node_str);
-    obj.set_collation_type(CS_TYPE_BINARY);
-  } else if (T_QUESTIONMARK == node->type_) {
-    obj.set_unknown(node->value_);
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node type must be varchar or ?", K(ret), K(node->type_));
   }
   return ret;
 }
