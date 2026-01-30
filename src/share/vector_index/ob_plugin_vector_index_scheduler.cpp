@@ -1509,13 +1509,7 @@ void ObPluginVectorIndexLoadScheduler::refresh_adapter_rb_flag()
     RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
     FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
       ObPluginVectorIndexAdaptor *adapter = iter->second;
-      if (OB_ISNULL(adapter->get_snap_data_()) || !adapter->get_snap_data_()->is_inited()) {
-        LOG_INFO("snap_data index is empty or not init, won't set rb_flag");
-      } else {
-        ObVectorIndexMemData *snap_memdata = adapter->get_snap_data_();
-        TCWLockGuard lock_guard(snap_memdata->mem_data_rwlock_);
-        snap_memdata->rb_flag_ = true;
-      }
+      adapter->reset_complete();
     }
     LOG_INFO("finish refresh adapter rb flag", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   }

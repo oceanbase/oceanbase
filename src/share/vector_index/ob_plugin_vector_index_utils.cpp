@@ -592,7 +592,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
     if (OB_FAIL(table_scan_iter->get_next_row(row))) {
       if (OB_ITER_END == ret) {
-        adapter->close_snap_data_rb_flag();
+        adapter->set_snap_data_has_complete();
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get next row", K(ret));
@@ -687,7 +687,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
             //}
             LOG_INFO("memdata sync snapshot index complement no data", K(index_count), K(ls_id), K(index_type), KPC(new_adapter));
           } else { // index_count > 0
-            new_adapter->close_snap_data_rb_flag();
+            new_adapter->set_snap_data_has_complete();
             LOG_INFO("memdata sync snapshot index complement data", K(index_count), K(ls_id), K(index_type), KPC(new_adapter));
           }
         }
@@ -753,7 +753,12 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
               : 0;
       ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
       ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), extra_info_column_count, &allocator, &tmp_allocator);
-      if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter,target_scn))) {
+      ada_ctx.set_is_refresh_adaptor(true);
+      bool ls_leader = true;
+      if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id, ls_leader))) {
+        LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id));
+      } else if (FALSE_IT(ada_ctx.set_ls_leader(ls_leader))) {
+      } else if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter,target_scn))) {
         LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
       } else if (OB_FAIL(try_sync_vbitmap_memdata(ls_id, adapter, target_scn, allocator, ada_ctx))) {
         LOG_WARN("failed to sync vbitmap", KR(ret));

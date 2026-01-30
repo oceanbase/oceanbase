@@ -2221,7 +2221,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter_once(
       if (OB_FAIL(ada_ctx->init_bitmaps())) {
         LOG_WARN("failed to init bitmaps", K(ret));
       } else {
-        if (adaptor->get_snap_data_()->rb_flag_) {
+        if (!adaptor->get_snap_data_()->has_complete_) {
           ada_ctx->set_status(PVQ_LACK_SCN);
           ada_ctx->set_flag(PVQP_SECOND);
           cur_state = ObVidAdaLookupStatus::QUERY_SNAPSHOT_TBL;
