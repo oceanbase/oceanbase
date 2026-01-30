@@ -5486,6 +5486,7 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
   uint64_t sqlcode = OB_SUCCESS;
   const ObSqlExpression *errcode_expr = nullptr;
   const ObSqlExpression *errmsg_expr = nullptr;
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
 
   CK (OB_NOT_NULL(ctx), ctx->valid());
   CK (OB_NOT_NULL(ctx->func_));
@@ -5568,7 +5569,14 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
                         static_cast<int32_t>(STRLEN("NULL")), "NULL");
         }
       }
-      OX (error_msg = result.get_string());
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObCharset::charset_convert(tmp_alloc,
+                                                    result.get_string(),
+                                                    result.get_collation_type(),
+                                                    CS_TYPE_UTF8MB4_BIN, // WarningBuffer default collation is utf8mb4_bin
+                                                    error_msg))) {
+        LOG_WARN("failed to convert error message to utf8", K(ret), K(result.get_string()), K(result.get_collation_type()));
+      }
     }
   }
 
