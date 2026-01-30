@@ -42,6 +42,7 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     index_name_(),
     fts_parser_name_(),
     fts_parser_properties_(),
+    fts_index_type_(OB_FTS_INDEX_TYPE_INVALID),
     columns_(allocator),
     col_map_(allocator),
     pk_name_(),
@@ -89,6 +90,7 @@ void ObTableSchemaParam::reset()
   index_name_.reset();
   fts_parser_name_.reset();
   fts_parser_properties_.reset();
+  fts_index_type_ = OB_FTS_INDEX_TYPE_MATCH;
   columns_.reset();
   col_map_.clear();
   pk_name_.reset();
@@ -686,6 +688,7 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(search_idx_included_cids_);
   OB_UNIS_ENCODE(search_idx_included_cid_idxes_);
   OB_UNIS_ENCODE(search_idx_included_extended_type_infos_);
+  OB_UNIS_ENCODE(fts_index_type_);
   return ret;
 }
 
@@ -871,6 +874,7 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
       }
     }
   }
+  OB_UNIS_DECODE(fts_index_type_);
   return ret;
 }
 
@@ -931,6 +935,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(search_idx_included_cids_);
   OB_UNIS_ADD_LEN(search_idx_included_cid_idxes_);
   OB_UNIS_ADD_LEN(search_idx_included_extended_type_infos_);
+  OB_UNIS_ADD_LEN(fts_index_type_);
   return len;
 }
 

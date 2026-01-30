@@ -107,6 +107,7 @@
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/ai_service/ob_ai_service_struct.h"
+#include "share/schema/ob_schema_struct_fts.h"
 
 namespace oceanbase
 {
@@ -2974,7 +2975,8 @@ public:
     ObTableOption(),
     parser_name_(),
     parser_properties_(),
-    index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET)
+    index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET),
+    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID)
   { }
 
   bool is_valid() const;
@@ -2983,12 +2985,14 @@ public:
     ObTableOption::reset();
     parser_name_.reset();
     parser_properties_.reset();
+    fts_index_type_ = share::schema::OB_FTS_INDEX_TYPE_INVALID;
   }
   DECLARE_TO_STRING;
 
   common::ObString parser_name_;
   common::ObString parser_properties_;
   uint64_t index_attributes_set_;//flags, one bit for one attribute
+  share::schema::ObFTSIndexType fts_index_type_;
 };
 
 struct ObCreateIndexArg : public ObIndexArg

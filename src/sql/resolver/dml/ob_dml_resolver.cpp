@@ -6235,7 +6235,7 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         }
         break;
       }
-      case T_HYBRID_SEARCH_EXPRESSION: {
+      case T_HYBRID_SEARCH: {
         if (OB_ISNULL(session_info_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret));
@@ -7659,7 +7659,7 @@ int ObDMLResolver::resolve_hybrid_search_item(const ParseNode &parse_tree, Table
   ParseNode *hs_sql_node = nullptr;
   ParseNode *sub_query_wrapper = nullptr;
 
-  if (T_HYBRID_SEARCH_EXPRESSION != parse_tree.type_ || 3 != parse_tree.num_child_) {
+  if (T_HYBRID_SEARCH != parse_tree.type_ || 3 != parse_tree.num_child_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse_tree type or num child is not correct", K(ret), K(parse_tree.type_), K(parse_tree.num_child_));
   } else if (OB_ISNULL(table_name_node = parse_tree.children_[0])) {

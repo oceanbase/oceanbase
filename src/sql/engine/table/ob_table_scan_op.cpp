@@ -668,7 +668,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     pseudo_column_exprs_(alloc),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
     lake_table_format_(share::ObLakeTableFormat::INVALID),
-    ft_doc_id_expr_idx_(-1)
+    ft_doc_id_expr_idx_(-1),
+    fts_index_type_(share::schema::OB_FTS_INDEX_TYPE_INVALID)
 {
 }
 
@@ -699,7 +700,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     pseudo_column_exprs_,
                     lob_inrow_threshold_,
                     lake_table_format_,
-                    ft_doc_id_expr_idx_);
+                    ft_doc_id_expr_idx_,
+                    fts_index_type_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {

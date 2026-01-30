@@ -16,6 +16,7 @@
 #include "ob_schema_struct.h"
 #include "ob_table_schema.h"
 #include "share/schema/ob_table_param.h"
+#include "share/schema/ob_schema_struct_fts.h"
 
 namespace oceanbase
 {
@@ -155,6 +156,7 @@ private:
   common::ObString index_name_;
   common::ObString fts_parser_name_;
   common::ObString fts_parser_properties_;
+  ObFTSIndexType fts_index_type_;
   //generated storage param from columns_ids_ in ObTableModify, for performance improvement
   Columns columns_;
   ColumnMap col_map_;

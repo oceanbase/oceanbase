@@ -3238,12 +3238,13 @@ DEF_TO_STRING(ObIndexOption)
        K_(store_format),
        K_(enable_macro_block_bloom_filter),
        K_(storage_cache_policy),
-       K_(micro_block_format_version));
+       K_(micro_block_format_version),
+       K_(fts_index_type));
   J_OBJ_END();
   return pos;
 }
 
-OB_SERIALIZE_MEMBER((ObIndexOption, ObTableOption), parser_name_, index_attributes_set_, parser_properties_);
+OB_SERIALIZE_MEMBER((ObIndexOption, ObTableOption), parser_name_, index_attributes_set_, parser_properties_, fts_index_type_);
 
 bool ObIndexArg::is_valid() const
 {

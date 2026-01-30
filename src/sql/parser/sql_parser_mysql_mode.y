@@ -27219,15 +27219,15 @@ HYBRID_SEARCH '(' literal ',' hybrid_search_param ')'
 {
   ParseNode *alias_node = NULL;
   make_name_node(alias_node, result->malloc_pool_, "");
-  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH_EXPRESSION, 3, $3, $5, alias_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH, 3, $3, $5, alias_node);
 }
 | HYBRID_SEARCH '(' literal ',' hybrid_search_param ')' relation_name
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH_EXPRESSION, 3, $3, $5, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH, 3, $3, $5, $7);
 }
 | HYBRID_SEARCH '(' literal ',' hybrid_search_param ')' AS relation_name
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH_EXPRESSION, 3, $3, $5, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_HYBRID_SEARCH, 3, $3, $5, $8);
 }
 ;
 

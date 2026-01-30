@@ -243,7 +243,8 @@ public:
       uint64_t is_new_query_range_           : 1; // whether use new query range
       uint64_t enable_new_false_range_       : 1; // whether use new false range
       uint64_t has_local_dynamic_filter_     : 1; // whether has local dynamic filter
-      uint64_t reserved_                     : 60;
+      uint64_t hybrid_search_monitor_        : 1; // whether hybrid search monitor is enabled
+      uint64_t reserved_                     : 59;
     };
   };
   ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;

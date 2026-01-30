@@ -1489,7 +1489,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRandCanonical                                        /* 890 */
   NULL, // ObExprLoadFile::eval_load_file                             /* 891 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document              /* 892 */
-  NULL, // ObExprSearchIndexInnerType::calc_search_index_inner_type   /* 893 */
+  NULL, // ObExprSearchIndexInnerType::calc_search_index_inner_path   /* 893 */
   NULL, // ObExprSearchIndexInnerValue::calc_search_index_inner_value /* 894 */
   NULL, // ObExprToTypeName::eval_to_type_name,                       /* 895 */
   NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null,            /* 896 */
