@@ -75,7 +75,7 @@ public:
       K(fts_doc_word_task_id_), K(drop_index_task_id_),
       K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
       K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_),
-      K(is_retryable_ddl_));
+      K(is_retryable_ddl_), K(rowkey_doc_schema_version_));
 
 public:
   void set_rowkey_doc_aux_table_id(const uint64_t id) { rowkey_doc_aux_table_id_ = id; }
@@ -172,6 +172,7 @@ private:
 private:
   int verify_children_checksum() const;
   int check_column_checksum(const ColumnChecksumInfo &a, const ColumnChecksumInfo &b) const;
+  int try_release_snapshot(ObMySQLTransaction &trans);
 
 private:
   static const int64_t OB_FTS_INDEX_BUILD_TASK_VERSION = 1;
@@ -211,6 +212,7 @@ private:
   obrpc::ObCreateIndexArg create_index_arg_;
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
   bool is_retryable_ddl_;
+  int64_t rowkey_doc_schema_version_;
 };
 
 } // end namespace rootserver

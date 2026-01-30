@@ -59,7 +59,8 @@ ObFtsIndexBuildTask::ObFtsIndexBuildTask()
     fts_doc_word_aux_is_trans_end_(false),
     create_index_arg_(),
     dependent_task_result_map_(),
-    is_retryable_ddl_(true)
+    is_retryable_ddl_(true),
+    rowkey_doc_schema_version_(0)
 {
 }
 
@@ -141,6 +142,7 @@ int ObFtsIndexBuildTask::init(
     create_index_arg_.parallelism_ = parallelism_;
     if (index_schema->is_rowkey_doc_id()) {
       rowkey_doc_aux_table_id_ = index_table_id_;
+      rowkey_doc_schema_version_ = index_schema->get_schema_version();
     } else if (index_schema->is_fts_index_aux()) {
       domain_index_aux_table_id_ = index_table_id_;
     } else if (index_schema->is_multivalue_index_aux()) {
@@ -457,7 +459,14 @@ int ObFtsIndexBuildTask::prepare()
   } else {
     state_finished = true;
   }
-
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_FTS_INDEX_BUILD_PREPARE_FAILED) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("errsim ddl execute building fts index failed", KR(ret));
+    }
+  }
+#endif
   DEBUG_SYNC(BUILD_FTS_INDEX_PREPARE_STATUS);
 
   if (state_finished || OB_FAIL(ret)) {
@@ -1323,6 +1332,11 @@ int ObFtsIndexBuildTask::serialize_params_to_message(
                                               pos,
                                               is_retryable_ddl))) {
     LOG_WARN("serialize is retryable ddl failed", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf,
+                                               buf_len,
+                                               pos,
+                                               rowkey_doc_schema_version_))) {
+    LOG_WARN("serialize rowkey doc schema version failed", K(ret));
   }
   return ret;
 }
@@ -1456,9 +1470,16 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
                                               pos,
                                               &is_retryable_ddl))) {
     LOG_WARN("fail to deserialize is retryable ddl", K(ret));
-  } else if (!dependent_task_result_map_.created() &&
-             OB_FAIL(dependent_task_result_map_.create(num_fts_child_task,
-                                                       lib::ObLabel("DepTasMap")))) {
+  } else if (pos >= data_len) {
+  } else if (OB_FAIL(serialization::decode_i64(buf,
+                                               data_len,
+                                               pos,
+                                               &rowkey_doc_schema_version_))) {
+    LOG_WARN("fail to deserialize rowkey doc table schema version", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!dependent_task_result_map_.created()
+             && OB_FAIL(dependent_task_result_map_.create(num_fts_child_task, lib::ObLabel("DepTasMap")))) {
     LOG_WARN("create dependent task map failed", K(ret));
   } else {
     if (OB_SUCC(ret) && rowkey_doc_task_id_ > 0) {
@@ -1549,7 +1570,8 @@ int64_t ObFtsIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i8(is_doc_rowkey_succ)
       + serialization::encoded_length_i8(is_domain_aux_succ)
       + serialization::encoded_length_i8(is_fts_doc_word_succ)
-      + serialization::encoded_length_i8(is_retryable_ddl);
+      + serialization::encoded_length_i8(is_retryable_ddl)
+      + serialization::encoded_length_i64(rowkey_doc_schema_version_);
 }
 
 int ObFtsIndexBuildTask::get_task_status(int64_t task_id, uint64_t aux_table_id, bool& is_succ)
@@ -2112,11 +2134,16 @@ int ObFtsIndexBuildTask::cleanup_impl()
             K(ret), K(tenant_id_), K(dic_loader_handle), K(owner_id));
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (snapshot_version_ > 0 && OB_FAIL(try_release_snapshot(trans))) {
+      LOG_WARN("fail to release snapshot",
+          K(ret), K(object_id_), K(rowkey_doc_aux_table_id_), K(snapshot_version_));
+    }
     if (trans.is_started()) {
-      int tmp_ret = trans.end(true/*commit*/);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(tmp_ret));
-        ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
     }
   }
@@ -2296,5 +2323,35 @@ int ObFtsIndexBuildTask::check_schema_and_trans_end(
   return ret;
 }
 
+int ObFtsIndexBuildTask::try_release_snapshot(ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, 2> tablet_ids;
+  SCN snapshot_scn;
+  if (snapshot_version_ > 0) {
+    if (OB_FAIL(ObDDLUtil::get_tablet_ids(tenant_id_, object_id_, target_object_id_, tablet_ids))) {
+      LOG_WARN("fail to get tablet ids", K(ret), K(tenant_id_), K(object_id_), K(target_object_id_));
+    } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version_))) {
+      LOG_WARN("failed to convert scn", K(ret), K(snapshot_version_), K(snapshot_scn));
+    } else if (OB_ISNULL(GCTX.root_service_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
+    } else if (OB_UNLIKELY(!GCTX.root_service_->get_ddl_service().is_inited())) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("not init", KR(ret));
+    } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_snapshot_mgr().batch_release_snapshot_in_trans(
+            trans, SNAPSHOT_FOR_DDL, tenant_id_, rowkey_doc_schema_version_, snapshot_scn, tablet_ids))) {
+      LOG_WARN("batch release snapshot failed", K(ret), K(tablet_ids));
+    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(trans,
+                                                                        tenant_id_,
+                                                                        task_id_,
+                                                                        0 /* snapshot_version */))) {
+      LOG_WARN("update snapshot version 0 failed", K(ret), K(task_id_));
+    } else {
+      snapshot_version_ = 0;
+    }
+  }
+  return ret;
+}
 } // end namespace rootserver
 } // end namespace oceanbase
