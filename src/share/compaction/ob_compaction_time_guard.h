@@ -168,6 +168,8 @@ public:
     SCHEDULE_OTHER_COMPACTION,
     DAG_FINISH,
     PRE_WARM,
+    UPDATE_SHARED_TABLET,   // placeholder for UPDATE_SHARED_TABLET
+    UPDATE_LOCAL_TABLET,    // placeholder for UPDATE_LOCAL_TABLET
     COMPACTION_EVENT_MAX
   };
   virtual int64_t to_string(char *buf, const int64_t buf_len) const override;

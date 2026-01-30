@@ -194,7 +194,7 @@ int ObStorageCacheGlobalPolicy::safely_get_str(const PolicyType &type, const cha
   return ret;
 }
 
-static const char *storage_cache_policy_type_strs[] = {"HOT", "AUTO", "TIME", "NONE"};
+static const char *storage_cache_policy_type_strs[] = {"HOT", "AUTO", "TIME", "NONE", "COLD"};
 
 const char *ObStorageCacheGlobalPolicy::get_str(const PolicyType &type)
 {
@@ -306,7 +306,7 @@ int ObStorageCacheGranularity::safely_get_str(const GranularityType &type, const
   return ret;
 }
 
-static const char *granularity_type_strs[] = {"PARTITION", "ROW"};
+static const char *granularity_type_strs[] = {"PARTITION", "ROW", "BLOCK"};
 
 const char *ObStorageCacheGranularity::get_str(const GranularityType &type)
 {

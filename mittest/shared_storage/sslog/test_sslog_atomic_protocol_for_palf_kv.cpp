@@ -106,7 +106,7 @@ bool is_meta_use_sslog(const sslog::ObSSLogMetaType type, const ObLSID &ls_id)
     case sslog::ObSSLogMetaType::SSLOG_MINOR_SSTABLE:
     case sslog::ObSSLogMetaType::SSLOG_MDS_MINI_SSTABLE:
     case sslog::ObSSLogMetaType::SSLOG_MDS_MINOR_SSTABLE:
-    case sslog::ObSSLogMetaType::SSLOG_DDLKV_MINI_SSTABLE:
+    case sslog::ObSSLogMetaType::SSLOG_FLUSH_MINI_SSTABLE:
     case sslog::ObSSLogMetaType::SSLOG_SPLIT_MINOR_SSTABLE:
     case sslog::ObSSLogMetaType::SSLOG_SPLIT_MDS_MINOR_SSTABLE:
       use_sslog = true;

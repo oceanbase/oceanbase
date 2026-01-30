@@ -50,6 +50,8 @@ struct ObStorageCachePolicyStatus
     HOT = 0,
     AUTO = 1,
     NONE = 2,
+    MACRO_HOT = 3,  // placeholder for MACRO_HOT
+    COLD = 4,       // placeholder for COLD
     MAX_STATUS
   };
   static int safely_get_str(const PolicyStatus &type, const char *&buf);
@@ -76,6 +78,7 @@ struct ObStorageCacheGlobalPolicy
     AUTO_POLICY = 1,
     TIME_POLICY = 2,
     NONE_POLICY = 3,
+    COLD_POLICY = 4,  // placeholder for COLD_POLICY
     MAX_POLICY
   };
   static int safely_get_str(const PolicyType &type, const char *&buf);
@@ -123,6 +126,7 @@ struct ObStorageCacheGranularity
   {
     PARTITION = 0,
     ROW = 1,
+    BLOCK = 2,  // placeholder for BLOCK
     MAX_GRANULARITY
   };
   static int safely_get_str(const GranularityType &type, const char *&buf);
