@@ -533,6 +533,7 @@
 #include "sql/engine/expr/ob_expr_edit_distance.h"
 #include "sql/engine/expr/ob_expr_md5_concat_ws.h"
 #include "sql/engine/expr/ob_expr_collect_file_list.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
 
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
@@ -1370,6 +1371,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprIsNan, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprCollectFileList, EAGER_EVALUATION);
     REG_OP(ObExprVoid, EAGER_EVALUATION);
+    REG_OP(ObExprLoadFile, SHORT_CIRCUIT_EVALUATION);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath, EAGER_EVALUATION);

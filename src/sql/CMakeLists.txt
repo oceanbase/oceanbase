@@ -945,6 +945,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_date_trunc.cpp
   engine/expr/ob_expr_is_nan.cpp
   engine/expr/ob_expr_collect_file_list.cpp
+  engine/expr/ob_expr_ai/ob_expr_load_file.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE

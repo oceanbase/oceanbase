@@ -462,6 +462,10 @@ DEF_INT(_lob_rowsets_max_rows, OB_TENANT_PARAMETER, "65535", "[1, 65535]",
         "max batch size of physical plan with lob data",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_CAP(document_ai_file_max_size, OB_TENANT_PARAMETER, "100MB", "[0MB, 500MB]",
+        "max size of document ai processing file.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_CAP(_tempstore_read_alignment_size, OB_TENANT_PARAMETER, "0KB",  "[0KB,)",
         "Used to control the size of data read by tempstore each time "
         "to align the underlying shared storage",

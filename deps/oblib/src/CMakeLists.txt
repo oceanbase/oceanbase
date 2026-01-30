@@ -261,7 +261,7 @@ target_link_libraries(oblib_base_without_pass
   $<$<STREQUAL:"${ARCHITECTURE}","x86_64">:${DEP_DIR}/lib/libunwind.a>
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a
-  ${DEP_DIR}/lib/libicustubdata.a
+  ${DEP_DIR}/lib/libicudata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
   ${DEP_DIR}/lib/libthrift.a
@@ -306,7 +306,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libroaring.a
   ${DEP_DIR}/lib/libz.a
   ${DEP_DIR}/lib/libicui18n.a
-  ${DEP_DIR}/lib/libicustubdata.a
+  ${DEP_DIR}/lib/libicudata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
   ${DEP_DIR}/lib/libthrift.a

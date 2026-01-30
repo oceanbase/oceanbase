@@ -30,7 +30,7 @@ devdeps-ncurses-static-6.5-62025040314.al8.x86_64.rpm
 devdeps-boost-1.74.0-72024092811.al8.x86_64.rpm
 devdeps-abseil-cpp-20211102.0-62024122014.al8.x86_64.rpm
 devdeps-s2geometry-0.10.0-122024122617.al8.x86_64.rpm
-devdeps-icu-69.1-232024120517.al8.x86_64.rpm
+devdeps-icu-69.1-342025121913.al8.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-312024092814.al8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.x86_64.rpm
 devdeps-protobuf-c-1.5.1-100000052025032810.al8.x86_64.rpm

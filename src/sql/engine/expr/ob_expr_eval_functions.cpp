@@ -488,6 +488,7 @@
 #include "ob_expr_is_nan.h"
 #include "ob_expr_to_days.h"
 #include "ob_expr_md5_concat_ws.h"
+#include "sql/engine/expr/ob_expr_ai/ob_expr_load_file.h"
 
 namespace oceanbase
 {
@@ -1487,7 +1488,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprCollectFileList::collect_file_list,                           /* 888 */
   ObExprVoid::calc_void_expr,                                         /* 889 */
   NULL, // ObExprRandCanonical                                        /* 890 */
-  NULL, // ObExprLoadFile::eval_load_file                             /* 891 */
+  ObExprLoadFile::eval_load_file,                                     /* 891 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document              /* 892 */
   NULL, // ObExprSearchIndexInnerType::calc_search_index_inner_path   /* 893 */
   NULL, // ObExprSearchIndexInnerValue::calc_search_index_inner_value /* 894 */
@@ -2002,7 +2003,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprQuarter::calc_quarter_vector,                                    /* 316 */
   ObExprToDays::calc_to_days_vector,                                     /* 317 */
   NULL, // ObExprRandCanonical::calc_random_expr_canonical_vector        /* 318 */
-  NULL, // ObExprLoadFile::eval_load_file_vector                         /* 319 */
+  ObExprLoadFile::eval_load_file_vector,                                      /* 319 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document_vector          /* 320 */
   NULL, // ObExprToTypeName::eval_to_type_name_vector,                   /* 321 */
   NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null_vector,        /* 322 */

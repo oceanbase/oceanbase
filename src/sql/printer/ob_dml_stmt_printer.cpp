@@ -730,6 +730,23 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
           }
           break;
         }
+        case MulModeTableType::OB_AI_SPLIT_DOCUMENT_TABLE_TYPE : {
+          DATA_PRINTF("AI_SPLIT_DOCUMENT(");
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_item->json_table_def_->doc_exprs_.count(); ++i) {
+            if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_exprs_.at(i), T_FROM_SCOPE))) {
+              LOG_WARN("failed to print expr", K(ret));
+            } else if (i != table_item->json_table_def_->doc_exprs_.count() - 1) {
+              DATA_PRINTF(",");
+            } else {
+              DATA_PRINTF(")");
+            }
+          }
+          if (OB_SUCC(ret) && !table_item->alias_name_.empty()) {
+            DATA_PRINTF(" ");
+            PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
+          }
+          break;
+        }
         default : {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected table function type");

@@ -6222,6 +6222,18 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         }
         break;
       }
+      case T_AI_SPLIT_DOCUMENT_EXPRESSION: {
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret));
+        } else if (lib::is_mysql_mode() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("ai_split_document not support before 4.5.1.0", K(ret), K(GET_MIN_CLUSTER_VERSION()));
+        } else if (OB_FAIL(resolve_ai_split_document_item(*table_node, table_item))) {
+          LOG_WARN("failed to resolve ai split document item", K(ret));
+        }
+        break;
+      }
       case T_UNNEST_EXPRESSION: {
         if (OB_ISNULL(session_info_)) {
           ret = OB_INVALID_ARGUMENT;
@@ -7454,6 +7466,8 @@ int ObDMLResolver::create_unnest_table_item(TableItem *&table_item, ObItemType i
       table_def->table_type_ = MulModeTableType::OB_RB_ITERATE_TABLE_TYPE;
     } else if (item_type == T_UNNEST_EXPRESSION) {
       table_def->table_type_ = MulModeTableType::OB_UNNEST_TABLE_TYPE;
+    } else if (item_type == T_AI_SPLIT_DOCUMENT_EXPRESSION) {
+      table_def->table_type_ = MulModeTableType::OB_AI_SPLIT_DOCUMENT_TABLE_TYPE;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected item_type", K(ret), K(item_type));
@@ -7570,6 +7584,8 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
     col_type = COL_TYPE_RB_ITERATE;
   } else if (table_item->json_table_def_->table_type_ == MulModeTableType::OB_UNNEST_TABLE_TYPE) {
     col_type = COL_TYPE_UNNEST;
+  } else if (table_item->json_table_def_->table_type_ == MulModeTableType::OB_AI_SPLIT_DOCUMENT_TABLE_TYPE) {
+    col_type = COL_TYPE_AI_SPLIT_DOCUMENT;
   }
 
   if (OB_FAIL(ret)) {
@@ -7591,6 +7607,41 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
     data_type.set_collation_level(CS_LEVEL_IMPLICIT);
     data_type.set_uint64();
     data_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type]);
+  } else if (col_type == COL_TYPE_AI_SPLIT_DOCUMENT) {
+    // For ai_split_document, set data type based on column name
+    if (0 == col_name.case_compare("CHUNK_ID") ||
+        0 == col_name.case_compare("CHUNK_OFFSET") ||
+        0 == col_name.case_compare("CHUNK_LENGTH")) {
+      // Integer columns: CHUNK_ID, CHUNK_OFFSET, CHUNK_LENGTH
+      data_type.set_collation_level(CS_LEVEL_IMPLICIT);
+      data_type.set_int();
+      data_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObInt32Type]);
+    } else if (0 == col_name.case_compare("CHUNK_TEXT")) {
+      // Keep the same type as content_expr
+      if (OB_ISNULL(table_item) || OB_ISNULL(table_item->json_table_def_)
+          || table_item->json_table_def_->doc_exprs_.count() < 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid table item or content_exprs for CHUNK_TEXT", K(ret));
+      } else {
+        ObRawExpr *content_expr = table_item->json_table_def_->doc_exprs_[0];
+        const ObRawExprResType &res_type = content_expr->get_result_type();
+        ObCollationType coll_type = res_type.get_collation_type();
+        if (!res_type.is_null() && coll_type != CS_TYPE_UTF8MB4_BIN && coll_type != CS_TYPE_UTF8MB4_GENERAL_CI) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported collation type for CHUNK_TEXT", K(ret), K(coll_type));
+          FORWARD_USER_ERROR(ret, "unsupported collation type for ai_split_document");
+        } else if (OB_ISNULL(content_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("content_expr is null", K(ret));
+        } else {
+          data_type.set_meta_type(res_type.get_obj_meta());
+          data_type.set_accuracy(res_type.get_accuracy());
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected column name for ai_split_document", K(col_name), K(ret));
+    }
   } else if (col_type == COL_TYPE_UNNEST) {
     ObRawExpr *value_expr = table_item->json_table_def_->doc_exprs_[col_id - 1];
     uint16_t subschema_id = value_expr->get_subschema_id();
@@ -7646,6 +7697,85 @@ int ObDMLResolver::unnest_table_add_column(TableItem *&table_item, ColumnItem *&
 
   return ret;
 }
+
+int ObDMLResolver::resolve_ai_split_document_item(const ParseNode &parse_tree, TableItem *&tbl_item)
+{
+  int ret = OB_SUCCESS;
+  TableItem *item = NULL;
+  ColumnItem *col_item = NULL;
+  ParseNode *content_expr_node = NULL;
+  ParseNode *parameters_expr_node = NULL;
+  ParseNode *table_name_node = NULL;
+  ObRawExpr *content_expr = NULL;
+  ObRawExpr *parameters_expr = NULL;
+  ObString table_name;
+
+  if (T_AI_SPLIT_DOCUMENT_EXPRESSION != parse_tree.type_ || 3 != parse_tree.num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table type not support or param num mismatch", K(parse_tree.type_), K(parse_tree.num_child_), K(ret));
+  } else if (OB_ISNULL(content_expr_node = parse_tree.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("content expr node is null", K(ret));
+  } else if (OB_ISNULL(parameters_expr_node = parse_tree.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parameters expr node is null", K(ret));
+  } else {
+    table_name_node = parse_tree.children_[2];
+  }
+
+  // resolve content expression
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(resolve_sql_expr(*(content_expr_node), content_expr))) {
+    LOG_WARN("fail to resolve doc sql expr", K(ret));
+  } else if (OB_ISNULL(content_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("content expr is null", K(ret));
+  } else {
+    OZ (content_expr->deduce_type(session_info_));
+  }
+
+  // resolve parameters expression
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(resolve_sql_expr(*(parameters_expr_node), parameters_expr))) {
+    LOG_WARN("fail to resolve parameters sql expr", K(ret));
+  } else if (OB_ISNULL(parameters_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parameters expr is null", K(ret));
+  } else {
+    OZ (parameters_expr->deduce_type(session_info_));
+  }
+
+  // resolve table name
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(table_name_node)) {
+    table_name = ObString("ai_split_document");
+  } else {
+    table_name.assign_ptr(table_name_node->str_value_, table_name_node->str_len_);
+  }
+
+  // create table item
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(create_unnest_table_item(item, T_AI_SPLIT_DOCUMENT_EXPRESSION, table_name))) {
+    LOG_WARN("failed to create ai split document table item", K(ret));
+  } else if (OB_FAIL(item->json_table_def_->doc_exprs_.push_back(content_expr))) {
+    LOG_WARN("failed to push back content expr", K(ret));
+  } else if (OB_FAIL(item->json_table_def_->doc_exprs_.push_back(parameters_expr))) {
+    LOG_WARN("failed to push back parameters expr", K(ret));
+  } else if (OB_FAIL(unnest_table_add_column(item, col_item, ObString("CHUNK_ID")))) {
+    LOG_WARN("failed to add CHUNK_ID column", K(ret));
+  } else if (OB_FAIL(unnest_table_add_column(item, col_item, ObString("CHUNK_OFFSET")))) {
+    LOG_WARN("failed to add CHUNK_OFFSET column", K(ret));
+  } else if (OB_FAIL(unnest_table_add_column(item, col_item, ObString("CHUNK_LENGTH")))) {
+    LOG_WARN("failed to add CHUNK_LENGTH column", K(ret));
+  } else if (OB_FAIL(unnest_table_add_column(item, col_item, ObString("CHUNK_TEXT")))) {
+    LOG_WARN("failed to add CHUNK_TEXT column", K(ret));
+  } else {
+    tbl_item = item;
+  }
+
+  return ret;
+}
+
 int ObDMLResolver::resolve_hybrid_search_item(const ParseNode &parse_tree, TableItem *&table_item)
 {
   INIT_SUCC(ret);

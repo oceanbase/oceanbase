@@ -121,6 +121,10 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
           } else {
             max_batch_size = compute_max_batch_size(raw_exprs.at(i));
           }
+          // load file expr has its own limit
+          if (T_FUN_SYS_LOAD_FILE == raw_exprs.at(i)->get_expr_type()) {
+            max_batch_size = std::min(max_batch_size, static_cast<int64_t>(ObExprBatchSize::small));
+          }
           batch_size = std::min(batch_size, max_batch_size);
         }
       }
@@ -136,12 +140,16 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
       } else {
         auto expr_cnt = vectorized_exprs.count();
         bool has_large_data = false;
+        bool has_load_file_expr = false;
         for (int i = 0; i < expr_cnt; i++) {
           ObRawExpr *raw_expr = vectorized_exprs.at(i);
           const ObRawExprResType &result_type = raw_expr->get_result_type();
           row_size += reserve_data_consume(result_type.get_type(), result_type.get_precision()) +
                       get_expr_datum_fixed_header_size();
           has_large_data = is_large_data(vectorized_exprs.at(i)->get_data_type());
+          if (!has_load_file_expr && T_FUN_SYS_LOAD_FILE == vectorized_exprs.at(i)->get_expr_type()) {
+            has_load_file_expr = true;
+          }
         }
         batch_size = config_target_maxsize / row_size;
         LOG_TRACE("detect_batch_size", K(row_size), K(batch_size), K(expr_cnt), K(has_large_data), K(lob_rowsets_max_rows));
@@ -152,6 +160,9 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
         batch_size = next_pow2(batch_size);
         if (has_large_data) {
           batch_size = std::min(lob_rowsets_max_rows, batch_size);
+        }
+        if (has_load_file_expr) {
+          batch_size = std::min(static_cast<int64_t>(ObExprBatchSize::small), batch_size);
         }
         // range limit check
         if (batch_size < MIN_ROWSIZE) {
