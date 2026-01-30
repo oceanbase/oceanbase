@@ -454,6 +454,13 @@ public:
       const ObTabletID tablet_id,
       ObIAllocator &allocator,
       ObIArray<float*> &aux_info);
+  int get_ivf_aux_info(
+      const uint64_t table_id,
+      const ObTabletID tablet_id,
+      const int64_t dim,
+      ObIAllocator &allocator,
+      float* &aux_info,
+      int64_t &count);
   int get_ivf_aux_info_from_cache(
       const uint64_t table_id,
       const ObTabletID tablet_id,
@@ -498,7 +505,8 @@ private:
                                 int64_t m);
   int process_centroid_cache(ObIvfCentCache *cent_cache,
                             ObIArray<float*> &aux_info,
-                            ObExprVecIvfCenterIdCache *expr_cache);
+                            ObExprVecIvfCenterIdCache *expr_cache,
+                            ObIAllocator &allocator);
 private:
   static const int64_t BASIC_TIMER_INTERVAL = 30 * 1000 * 1000; // 30s
   static const int64_t VEC_INDEX_LOAD_TIME_TASKER_THRESHOLD = 30 * 1000 * 1000; // 30s

@@ -238,9 +238,8 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
     ObTableID cent_table_id;
     ObTabletID cent_tablet_id;
     ObArray<float *> splited_residual;
-    ObExprVecIvfCenterIdCache *cache = nullptr;
-    ObExprVecIvfCenterIdCache *pq_cache = nullptr;
-    ObVectorIndexUtil::get_ivf_pq_center_id_cache_ctx(expr.expr_ctx_id_, &eval_ctx.exec_ctx_, cache, pq_cache);
+    ObIvfCacheMgrGuard cache_guard;
+    ObIvfCentCache *cent_cache = nullptr;
     if (OB_FAIL(ret) || is_empty_pq_ids) {
     } else if (OB_FAIL(ObVectorIndexUtil::calc_location_ids(
           eval_ctx,
@@ -250,67 +249,144 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
           cent_tablet_id))) {
       LOG_WARN("fail to calc location ids", K(ret), K(cent_table_id), K(cent_tablet_id), KP(calc_centroid_table_id_expr), KP(calc_centroid_part_id_expr));
     } else {
-      ObSEArray<float*, 64> centers;
-      if (OB_FAIL(ObVectorIndexUtil::get_ivf_aux_info(service, cache, cent_table_id, cent_tablet_id, cent_tablet_id, false /* is_pq_cache */, tmp_allocator, centers, 0))) {
-        LOG_WARN("failed to get centers", K(ret));
-      } else if (centers.empty()) {
-        is_empty_pq_ids = true;
-        if (OB_FAIL(generate_empty_pq_ids(vb_buf, pq_m, nbits, pq_cent_tablet_id.id()))) {
-          LOG_WARN("fail to gen empty pq ids", K(ret), K(pq_m), K(pq_cent_tablet_id));
+      float *centers_data = nullptr;
+      int64_t centers_count = 0;
+      int64_t centers_dim = 0;
+      bool is_cache_usable = false;
+      bool has_hgraph = false;
+      if (OB_FAIL(ObVectorIndexUtil::get_ivf_centers_cache(false /*is_vectorized*/, false /*is_pq_centers*/, cache_guard, cent_cache, cent_table_id, cent_tablet_id, is_cache_usable))) {
+        LOG_WARN("failed to get centers cache", K(ret));
+      } else if (!is_cache_usable) {
+        centers_dim = arr->size();
+        if (OB_FAIL(service->get_ivf_aux_info(cent_table_id, cent_tablet_id, centers_dim, tmp_allocator, centers_data, centers_count))) {
+          LOG_WARN("failed to get centers by scanning table", K(ret), K(cent_table_id), K(cent_tablet_id), K(centers_dim));
         }
-      } else if (OB_NOT_NULL(calc_cid_expr)) {
-        if (OB_FAIL(calc_cid_expr->eval(eval_ctx, res))) {
-          LOG_WARN("failed to eval center id", K(ret));
-        } else if (OB_FAIL(ObVectorClusterHelper::get_center_id_from_string(center_id, res->get_string(),
-                          share::ObVectorClusterHelper::IvfParseCentIdFlag::IVF_PARSE_CENTER_ID))) {
-          LOG_WARN("failed to get center id", K(ret));
+      } else if(OB_ISNULL(cent_cache)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("cent cache is null", K(ret));
+      } else if (is_cache_usable && !cent_cache->has_hgraph_index()) {
+        centers_data = cent_cache->get_centroids();
+        if (OB_ISNULL(centers_data)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("centroids is null", K(ret));
         } else {
-          float *center_vec = centers.at(center_id.center_id_ - 1);
-          float *norm_vector = nullptr;
-          if (dis_algo == VIDA_COS) {
-            if (OB_ISNULL(norm_vector = static_cast<float*>(tmp_allocator.alloc(arr->size() * sizeof(float))))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("failed to alloc norm vector", K(ret));
-            } else if (FALSE_IT(MEMSET(norm_vector, 0, arr->size() * sizeof(float)))) {
-            } else if (OB_FAIL(norm_info.normalize_func_(arr->size(), reinterpret_cast<float*>(arr->get_data()), norm_vector, nullptr))) {
-              LOG_WARN("failed to normalize vector", K(ret));
+          centers_count = cent_cache->get_count();
+          centers_dim = cent_cache->get_cent_vec_dim();
+        }
+      } else if (is_cache_usable && cent_cache->has_hgraph_index()) {
+        has_hgraph = true;
+      }
+
+      if (OB_SUCC(ret)) {
+        bool has_centers = (centers_data != nullptr && centers_count > 0) || has_hgraph;
+        if (!has_centers) {
+          is_empty_pq_ids = true;
+          if (OB_FAIL(generate_empty_pq_ids(vb_buf, pq_m, nbits, pq_cent_tablet_id.id()))) {
+            LOG_WARN("fail to gen empty pq ids", K(ret), K(pq_m), K(pq_cent_tablet_id));
+          }
+        } else if (OB_NOT_NULL(calc_cid_expr)) {
+          if (OB_FAIL(calc_cid_expr->eval(eval_ctx, res))) {
+            LOG_WARN("failed to eval center id", K(ret));
+          } else if (OB_FAIL(ObVectorClusterHelper::get_center_id_from_string(center_id, res->get_string(),
+                            share::ObVectorClusterHelper::IvfParseCentIdFlag::IVF_PARSE_CENTER_ID))) {
+            LOG_WARN("failed to get center id", K(ret));
+          } else {
+            float *center_vec = nullptr;
+
+            if (is_cache_usable && has_hgraph) {
+              if (OB_FAIL(cent_cache->read_centroid(center_id.center_id_, center_vec, true /*deep_copy*/, &tmp_allocator))) {
+                LOG_WARN("failed to read centroid from cache", K(ret), K(center_id.center_id_));
+              }
+            } else {
+              center_vec = centers_data + (center_id.center_id_ - 1) * centers_dim;
+            }
+            if (OB_SUCC(ret)) {
+              float *norm_vector = nullptr;
+              if (dis_algo == VIDA_COS) {
+                if (OB_ISNULL(norm_vector = static_cast<float*>(tmp_allocator.alloc(arr->size() * sizeof(float))))) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("failed to alloc norm vector", K(ret));
+                } else if (FALSE_IT(MEMSET(norm_vector, 0, arr->size() * sizeof(float)))) {
+                } else if (OB_FAIL(norm_info.normalize_func_(arr->size(), reinterpret_cast<float*>(arr->get_data()), norm_vector, nullptr))) {
+                  LOG_WARN("failed to normalize vector", K(ret));
+                }
+              }
+              float *data = norm_vector == nullptr ? reinterpret_cast<float*>(arr->get_data()) : norm_vector;
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(tmp_allocator, arr->size(), data, center_vec, residual_vec))) {
+                LOG_WARN("fail to calc residual vector", K(ret), K(arr->size()));
+              } else if (OB_FAIL(splited_residual.reserve(pq_m))) {
+                LOG_WARN("fail to init splited residual array", K(ret), K(pq_m));
+              } else if (OB_FAIL(ObVectorIndexUtil::split_vector(pq_m, arr->size(), residual_vec, splited_residual))) {
+                LOG_WARN("fail to split vector", K(ret), K(pq_m), K(arr->size()), KP(residual_vec));
+              }
             }
           }
-          float *data = norm_vector == nullptr ? reinterpret_cast<float*>(arr->get_data()) : norm_vector;
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(tmp_allocator, arr->size(), data, center_vec, residual_vec))) {
-            LOG_WARN("fail to calc residual vector", K(ret), K(arr->size()));
+        } else if (has_hgraph) {
+          if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector_by_use_hgraph(tmp_allocator,
+                                                                            arr->size(),
+                                                                            reinterpret_cast<float*>(arr->get_data()),
+                                                                            VIDA_COS == dis_algo ? &norm_info : nullptr,
+                                                                            cent_cache,
+                                                                            residual_vec))) {
+            LOG_WARN("failed to calc residual vector by hgraph", K(ret));
+          } else if (OB_FAIL(splited_residual.reserve(pq_m))) {
+            LOG_WARN("fail to init splited residual array", K(ret), K(pq_m));
+          } else if (OB_FAIL(ObVectorIndexUtil::split_vector(pq_m, arr->size(), residual_vec, splited_residual))) {
+            LOG_WARN("fail to split vector", K(ret), K(pq_m), K(arr->size()), KP(residual_vec));
+          }
+        } else {
+          // calc_cid_expr is null, need to find nearest center
+          // Use calc_residual_vector which will use HGraph if available, or fallback to centers array
+          if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(
+              tmp_allocator, arr->size(), centers_data, centers_count, centers_dim, reinterpret_cast<float*>(arr->get_data()),
+              VIDA_COS != dis_algo ? nullptr: &norm_info, residual_vec))) { // cos need norm
+            LOG_WARN("fail to calc residual vector", K(ret), K(dis_algo));
           } else if (OB_FAIL(splited_residual.reserve(pq_m))) {
             LOG_WARN("fail to init splited residual array", K(ret), K(pq_m));
           } else if (OB_FAIL(ObVectorIndexUtil::split_vector(pq_m, arr->size(), residual_vec, splited_residual))) {
             LOG_WARN("fail to split vector", K(ret), K(pq_m), K(arr->size()), KP(residual_vec));
           }
         }
-      } else if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(
-          tmp_allocator, arr->size(), centers, reinterpret_cast<float*>(arr->get_data()),
-          VIDA_COS != dis_algo ? nullptr: &norm_info, residual_vec))) { // cos need norm
-        LOG_WARN("fail to calc residual vector", K(ret), K(dis_algo));
-      } else if (OB_FAIL(splited_residual.reserve(pq_m))) {
-        LOG_WARN("fail to init splited residual array", K(ret), K(pq_m));
-      } else if (OB_FAIL(ObVectorIndexUtil::split_vector(pq_m, arr->size(), residual_vec, splited_residual))) {
-        LOG_WARN("fail to split vector", K(ret), K(pq_m), K(arr->size()), KP(residual_vec));
       }
     }
 
     // 4. calc pq cent id
     if (OB_SUCC(ret) && !is_empty_pq_ids) {
-      ObSEArray<float*, 64> pq_centers;
       int64_t center_size_per_m = 0;
       int64_t pq_dim = arr->size() / pq_m;
-      if (OB_FAIL(ObVectorIndexUtil::get_ivf_aux_info(service, pq_cache, pq_cent_table_id, pq_cent_tablet_id, cent_tablet_id, true /* is_pq_cache */, tmp_allocator, pq_centers, pq_m))) {
-        LOG_WARN("failed to get centers", K(ret));
-      } else if (pq_centers.count() == 0 || pq_centers.count() % pq_m != 0) {
-        ret = OB_INVALID_ARGUMENT;
-        SQL_RESV_LOG(ERROR, "invalid size of pq centers", K(ret), K(pq_centers.count()), K(pq_m));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
-          "size of pq centers, should be greater than zero and able to devide m exactly");
+      float *pq_centroids_data = nullptr;
+      int64_t pq_centroids_count = 0;
+      int64_t pq_centroids_dim = 0;
+      ObIvfCacheMgrGuard pq_cache_guard;
+      ObIvfCentCache *pq_cent_cache = nullptr;
+      bool is_pq_cache_usable = false;
+      if (OB_FAIL(ObVectorIndexUtil::get_ivf_centers_cache(false /*is_vectorized*/, true /*is_pq_centers*/, pq_cache_guard, pq_cent_cache, pq_cent_table_id, cent_tablet_id, is_pq_cache_usable))) {
+        LOG_WARN("failed to get pq centers cache", K(ret));
+      } else if (!is_pq_cache_usable) {
+        pq_centroids_dim = pq_dim;
+        if (OB_FAIL(service->get_ivf_aux_info(pq_cent_table_id, pq_cent_tablet_id, pq_dim, tmp_allocator, pq_centroids_data, pq_centroids_count))) {
+          LOG_WARN("failed to get pq centers by scanning table", K(ret), K(pq_cent_table_id), K(pq_cent_tablet_id), K(pq_dim));
+        }
       } else {
-        center_size_per_m = pq_centers.count() / pq_m;
+        pq_centroids_data = pq_cent_cache->get_centroids();
+        if (OB_ISNULL(pq_centroids_data)) {
+          ret = OB_ERR_NULL_VALUE;
+          LOG_WARN("centroids is null", K(ret));
+        } else {
+          pq_centroids_count = pq_cent_cache->get_count();
+          pq_centroids_dim = pq_cent_cache->get_cent_vec_dim();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (pq_centroids_count == 0 || pq_centroids_count % pq_m != 0) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(ERROR, "invalid size of pq centers", K(ret), K(pq_centroids_count), K(pq_m));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+            "size of pq centers, should be greater than zero and able to devide m exactly");
+        } else {
+          center_size_per_m = pq_centroids_count / pq_m;
+        }
       }
       ObVectorClusterHelper helper;
       int64_t pq_center_idx = 0;
@@ -323,15 +399,19 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
       // row_i = pq_centers[m_id - 1][center_id - 1] since m_id and center_id start from 1
       PQEncoderGeneric encoder((uint8_t*)(vb_buf + buf_pos), nbits);
       for (int i = 0; OB_SUCC(ret) && i < pq_m; ++i) {
+        int l_idx = i * center_size_per_m;
+        int r_idx = (i + 1) * center_size_per_m;
         if (OB_FAIL(helper.get_nearest_probe_centers(
             splited_residual.at(i),
             pq_dim,
-            pq_centers,
+            pq_centroids_data,
+            pq_centroids_count,
+            pq_centroids_dim,
             1/*nprobe*/,
             tmp_allocator,
             nullptr, // no need normlize, Reference faiss
-            i * center_size_per_m,
-            (i + 1) * center_size_per_m))) {
+            l_idx,
+            r_idx))) {
           LOG_WARN("failed to get nearest center", K(ret));
         } else if (OB_FAIL(helper.get_pq_center_idx(0/*idx*/, center_size_per_m, pq_center_idx))) {
           LOG_WARN("failed to get center idx", K(ret));

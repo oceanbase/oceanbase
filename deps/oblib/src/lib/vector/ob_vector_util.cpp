@@ -91,7 +91,7 @@ int create_index(obvsag::VectorIndexPtr& index_handler, int index_type,
                  int max_degree, int ef_construction, int ef_search,
                  void* allocator, int extra_info_size /*= 0*/,
                  int16_t refine_type /*= 0*/, int16_t bq_bits_query /*= 32*/,
-                 bool bq_use_fht /*= false*/)
+                 bool bq_use_fht /*= false*/, bool store_raw_vector /*= false*/)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -111,7 +111,8 @@ int create_index(obvsag::VectorIndexPtr& index_handler, int index_type,
                                    extra_info_size,
                                    refine_type,
                                    bq_bits_query,
-                                   bq_use_fht);
+                                   bq_use_fht,
+                                   store_raw_vector);
 #endif
 }
 
@@ -218,6 +219,17 @@ int cal_distance_by_id(obvsag::VectorIndexPtr index_handler,
     return ret;
 #else
     return obvsag::cal_distance_by_id(index_handler, len, dims, vals, ids, count, distances);
+#endif
+}
+
+int get_raw_vector_by_ids(obvsag::VectorIndexPtr &index_handler, const int64_t *ids, int64_t count, float *&vectors,
+                          void *allocator, int64_t dim)
+{
+  INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+  return ret;
+#else
+  return obvsag::get_raw_vector_by_ids(index_handler, ids, count, vectors, allocator, dim);
 #endif
 }
 

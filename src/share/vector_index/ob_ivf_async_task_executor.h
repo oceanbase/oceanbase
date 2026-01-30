@@ -36,15 +36,17 @@ private:
   struct ObIvfAuxKey final
   {
   public:
-    ObIvfAuxKey() : data_table_id_(OB_INVALID_ID), base_col_id_(OB_INVALID_ID) {}
-    ObIvfAuxKey(const uint64_t &data_table_id, const uint64_t base_col_id)
-        : data_table_id_(data_table_id), base_col_id_(base_col_id)
+    ObIvfAuxKey() : data_table_id_(OB_INVALID_ID), base_col_id_(OB_INVALID_ID), index_prefix_() {}
+    ObIvfAuxKey(const uint64_t &data_table_id, const uint64_t base_col_id, const ObString &index_prefix)
+        : data_table_id_(data_table_id), base_col_id_(base_col_id), index_prefix_(index_prefix)
     {}
     ~ObIvfAuxKey() = default;
     uint64_t hash() const
     {
-      return murmurhash(&data_table_id_, sizeof(data_table_id_), 0)
-             + murmurhash(&base_col_id_, sizeof(base_col_id_), 0);
+      uint64_t hash_val = murmurhash(&data_table_id_, sizeof(data_table_id_), 0)
+                          + murmurhash(&base_col_id_, sizeof(base_col_id_), 0);
+      hash_val = murmurhash(index_prefix_.ptr(), index_prefix_.length(), hash_val);
+      return hash_val;
     }
     int hash(uint64_t &hash_val) const
     {
@@ -53,17 +55,20 @@ private:
     }
     bool is_valid() const
     {
-      return data_table_id_ != OB_INVALID_ID && base_col_id_ != OB_INVALID_ID;
+      return data_table_id_ != OB_INVALID_ID && base_col_id_ != OB_INVALID_ID && !index_prefix_.empty();
     }
     bool operator==(const ObIvfAuxKey &other) const
     {
-      return data_table_id_ == other.data_table_id_ && base_col_id_ == other.base_col_id_;
+      return data_table_id_ == other.data_table_id_
+             && base_col_id_ == other.base_col_id_
+             && index_prefix_ == other.index_prefix_;
     }
-    TO_STRING_KV(K_(data_table_id), K_(base_col_id));
+    TO_STRING_KV(K_(data_table_id), K_(base_col_id), K_(index_prefix));
 
   public:
     uint64_t data_table_id_;
     uint64_t base_col_id_;
+    ObString index_prefix_;
   };
 
   using ObIvfAuxTableInfoMap =

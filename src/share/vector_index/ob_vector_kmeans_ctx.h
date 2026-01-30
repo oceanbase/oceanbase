@@ -19,6 +19,7 @@
 #include "share/vector_type/ob_vector_l2_distance.h"
 #include "share/vector_type/ob_vector_common_util.h"
 #include "share/allocator/ob_tenant_vector_allocator.h"
+#include "ob_plugin_vector_index_adaptor.h"
 
 namespace oceanbase {
 namespace storage
@@ -47,6 +48,7 @@ public:
       dist_algo_(VIDA_MAX),
       ivf_build_mem_ctx_(ivf_build_mem_ctx),
       norm_info_(nullptr),
+      is_pq_stage_(false),
       lock_(common::ObLatchIds::OB_KMEANS_CTX_LOCK),
       sample_vectors_()
   {}
@@ -63,7 +65,8 @@ public:
     const int64_t dim,
     ObVectorIndexDistAlgorithm dist_algo,
     ObVectorNormalizeInfo *norm_info,
-    const int64_t pq_m);
+    const int64_t pq_m,
+    bool is_pq_stage = false);
   int try_normalize(int64_t dim, float *data, float *norm_vector) const;
   int try_normalize_samples() const;
   int append_sample_vector(float* vector);
@@ -78,6 +81,7 @@ public:
                K(dist_algo_),
                K(sample_dim_),
                KP(norm_info_),
+               K(is_pq_stage_),
                K(sample_vectors_.count()));
 
 public:
@@ -92,6 +96,7 @@ public:
   ObVectorIndexDistAlgorithm dist_algo_; // TODO(@jingshui): use ObVecDisType ?
   ObIvfMemContext &ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
   ObVectorNormalizeInfo *norm_info_;
+  bool is_pq_stage_; // true for PQ quantization stage, false for IVF clustering stage
   lib::ObMutex lock_; // for sample_vectors_
   ObSEArray<float*, 64> sample_vectors_;
 };
@@ -117,7 +122,8 @@ public:
       max_distance_tasks_(0),
       max_assign_tasks_(0),
       enable_parallel_(false),
-      kmeans_monitor_(nullptr)
+      kmeans_monitor_(nullptr),
+      enable_hgraph_(false)
   {}
   virtual ~ObKmeansAlgo() {
     ObKmeansAlgo::destroy();
@@ -153,6 +159,10 @@ public:
   void set_stop() { ATOMIC_STORE(&force_stop_, true); }
   bool check_stop();
 
+  // HGraph related functions
+  void set_enable_hgraph(bool enable) { enable_hgraph_ = enable; }
+  bool is_hgraph_enabled() const { return enable_hgraph_; }
+
 protected:
   int inner_build(const ObIArray<float*> &input_vectors);
   int quick_centers(const ObIArray<float*> &input_vectors); // use samples as finally centers
@@ -182,6 +192,7 @@ protected:
   int64_t max_assign_tasks_; // Maximum number of assignment tasks
   bool enable_parallel_; // Whether to enable parallel computation
   ObKmeansMonitor *kmeans_monitor_;
+  bool enable_hgraph_; // control whether to enable HGraph acceleration
 };
 
 class ObElkanKmeansAlgo : public ObKmeansAlgo
@@ -189,7 +200,9 @@ class ObElkanKmeansAlgo : public ObKmeansAlgo
 public:
   ObElkanKmeansAlgo(ObIvfMemContext &ivf_build_mem_ctx)
     : ObKmeansAlgo(ivf_build_mem_ctx),
-      assign_lock_(common::ObLatchIds::OB_ELKAN_KMEANS_ALGO_ASSIGN_LOCK)
+      assign_lock_(common::ObLatchIds::OB_ELKAN_KMEANS_ALGO_ASSIGN_LOCK),
+      hgraph_allocator_(ivf_build_mem_ctx.get_all_vsag_use_mem()),
+      hgraph_index_(nullptr)
   {}
   virtual ~ObElkanKmeansAlgo() {
     destroy();
@@ -214,8 +227,18 @@ protected:
   static const int64_t N_ITER = 25; // for max iterations
   common::ObSpinLock assign_lock_; // Lock to protect vector assignment operations
 
+private:
+  ObVsagMemContext hgraph_allocator_; // allocator for HGraph (create)
+  common::obvsag::VectorIndexPtr hgraph_index_; // HGraph index for fast center lookup during k-means
+
 public:
   int add_vector_to_center_safe(int64_t center_idx, int64_t dim, float* vector, int32_t* data_cnt_in_cluster);
+
+  // HGraph related functions
+  int build_hgraph_for_centers();
+  int do_build_hgraph_for_centers(const ObVectorIndexParam &param);
+  int find_nearest_center_with_hgraph(const float* vector, int64_t &nearest_center_idx, float &distance);
+  bool is_hgraph_available() const { return enable_hgraph_ && nullptr != hgraph_index_; }
 };
 
 class ObKmeansExecutor

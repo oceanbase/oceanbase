@@ -14,6 +14,7 @@
 
 #include "ob_vector_index_ivf_cache_mgr.h"
 #include "share/vector_index/ob_plugin_vector_index_util.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -270,6 +271,7 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
           STAT_PRINT(",\"cent_vec_dim\":%d", cache->cent_vec_dim_);
           STAT_PRINT(",\"count\":%d", cache->count_);
           STAT_PRINT(",\"nlist\":%d", cache->nlist_);
+          STAT_PRINT(",\"organization\":\"%s\"", cache->has_hgraph_index() ? "hgraph" : "array");
           STAT_PRINT("}");
           break;
         }
@@ -359,13 +361,27 @@ int ObIvfICache::inner_init(ObIvfMemContext *parent_mem_ctx, uint64_t* all_vsag_
 
 void ObIvfCentCache::reuse()
 {
-  MEMSET(centroids_, 0, sizeof(float) * capacity_ * cent_vec_dim_);
+  // when hgraph is built, centroids_ is not null, so we need to reallocate it
+  if (OB_NOT_NULL(centroids_)) {
+    MEMSET(centroids_, 0, sizeof(float) * capacity_ * cent_vec_dim_);
+  } else if (capacity_ > 0 && cent_vec_dim_ > 0 && OB_NOT_NULL(sub_mem_ctx_)) {
+    int64_t alloc_size = sizeof(float) * capacity_ * cent_vec_dim_;
+    centroids_ = static_cast<float *>(sub_mem_ctx_->Allocate(alloc_size));
+    if (OB_NOT_NULL(centroids_)) {
+      MEMSET(centroids_, 0, alloc_size);
+    } else {
+      int ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to reallocate centroids_ in reuse", K(ret), K(capacity_), K(cent_vec_dim_));
+    }
+  }
   count_ = 0;
+  cleanup_hgraph_index();
   ObIvfICache::reuse();
 }
 
 ObIvfCentCache::~ObIvfCentCache()
 {
+  cleanup_hgraph_index();
   if (OB_NOT_NULL(centroids_) && OB_NOT_NULL(sub_mem_ctx_)) {
     sub_mem_ctx_->Deallocate(centroids_);
     centroids_ = nullptr;
@@ -382,6 +398,8 @@ int ObIvfCentCache::init(ObIvfMemContext *parent_mem_ctx, const IvfCacheKey &key
   if (OB_FAIL(ObIvfICache::inner_init(parent_mem_ctx, all_vsag_use_mem))) {
     LOG_WARN("fail to do ObIvfICache inner init", K(ret));
   } else {
+    hgraph_mem_ctx_ = nullptr;
+    hgraph_index_ = nullptr;
     switch (key.type_) {
       case IvfCacheType::IVF_CENTROID_CACHE: {
         if (OB_ISNULL(centroids_ = static_cast<float *>(
@@ -487,6 +505,21 @@ int ObIvfCentCache::inner_read_centroid(int64_t centroid_idx, float *&centroid_v
   } else if (centroid_idx >= get_capacity()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("centroid idx is out of range", K(ret), K(centroid_idx));
+  } else if (centroids_ == nullptr) {
+    if (OB_ISNULL(hgraph_index_)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("centroid buffer released before hgraph built", K(ret), K(centroid_idx));
+    } else {
+      // When reading from hgraph, we must use deep copy because the vectors pointer
+      // returned by get_raw_vector_by_ids points to memory owned by a temporary DatasetPtr
+      // that will be destroyed after the function returns. So allocator is always required.
+      if (OB_ISNULL(allocator)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("allocator is required when reading from hgraph", K(ret), K(centroid_idx));
+      } else if (OB_FAIL(get_raw_vector_from_hgraph(centroid_idx, centroid_vec, allocator))) {
+        LOG_WARN("invalid centroid without cache buffer", K(ret), K(centroid_idx));
+      }
+    }
   } else if (OB_ISNULL(centroids_ + centroid_idx)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null centroid", K(ret), K(centroid_idx));
@@ -494,7 +527,7 @@ int ObIvfCentCache::inner_read_centroid(int64_t centroid_idx, float *&centroid_v
     if (OB_ISNULL(allocator)) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("invalid null allocator", K(ret));
-    } else if (OB_ISNULL(centroid_vec = static_cast<float *>(allocator->alloc(cent_vec_dim_)))) {
+    } else if (OB_ISNULL(centroid_vec = static_cast<float *>(allocator->alloc(cent_vec_dim_ * sizeof(float))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ret), K(cent_vec_dim_));
     } else {
@@ -522,6 +555,67 @@ int ObIvfCentCache::read_centroid(int64_t centroid_idx, float *&centroid_vec,
   return inner_read_centroid(centroid_idx - 1, centroid_vec, deep_copy, allocator);
 }
 
+float* ObIvfCentCache::get_centroids()
+{
+  return centroids_;
+}
+
+int ObIvfCentCache::get_centroids(ObIAllocator *allocator, float **vectors)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(vectors)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("vectors pointer is null", K(ret));
+  } else {
+    *vectors = nullptr;
+    if (OB_NOT_NULL(centroids_)) {
+      *vectors = centroids_;
+    } else if (OB_ISNULL(hgraph_index_)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("hgraph index not built yet when getting centroids", K(ret));
+    } else if (count_ <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid centroid count when getting centroids", K(ret), K(count_));
+    } else {
+      int64_t *ids = nullptr;
+      if (OB_ISNULL(sub_mem_ctx_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("sub mem ctx is null when building ids", K(ret), K(count_));
+      } else if (OB_ISNULL(ids = static_cast<int64_t *>(
+                               sub_mem_ctx_->Allocate(sizeof(int64_t) * count_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc temp ids for centroids", K(ret), K(count_));
+      } else {
+        for (int64_t i = 0; i < count_; ++i) {
+          ids[i] = i + 1; // build uses 1-based ids
+        }
+        float *raw_vectors = nullptr;
+        if (OB_ISNULL(allocator)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("allocator is required for get_raw_vector_by_ids", K(ret), KP(allocator));
+        } else if (OB_FAIL(obvectorutil::get_raw_vector_by_ids(hgraph_index_, ids, count_, raw_vectors,
+                                                         allocator, cent_vec_dim_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get raw vectors by ids from hgraph", K(ret), K(count_));
+        } else if (OB_ISNULL(raw_vectors)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("raw vectors from hgraph are null", K(ret), K(count_));
+        } else {
+          *vectors = raw_vectors;
+        }
+
+        // Release temporary memory
+        if (OB_NOT_NULL(ids) && OB_NOT_NULL(sub_mem_ctx_)) {
+          sub_mem_ctx_->Deallocate(ids);
+          ids = nullptr;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int64_t ObIvfCentCache::get_expect_memory_used(
     const IvfCacheKey &key,
     const ObVectorIndexParam &param)
@@ -530,6 +624,27 @@ int64_t ObIvfCentCache::get_expect_memory_used(
   switch (key.type_) {
     case IvfCacheType::IVF_CENTROID_CACHE: {
       usage = sizeof(float) * param.nlist_ * param.dim_;
+      if (param.nlist_ >= ObVecIdxExtraInfo::IVF_CENTERS_HGRAPH_THRESHOLD) {
+        int64_t hgraph_mem = 0;
+        ObVectorIndexParam hgraph_param = param;
+        hgraph_param.type_ = VIAT_HGRAPH;
+        hgraph_param.lib_ = VIAL_VSAG;
+        hgraph_param.m_ = 16;
+        hgraph_param.ef_construction_ = 200;
+        hgraph_param.ef_search_ = 64;
+        hgraph_param.extra_info_actual_size_ = 0;
+        hgraph_param.refine_type_ = 0;
+        hgraph_param.bq_bits_query_ = 32;
+        hgraph_param.bq_use_fht_ = false;
+        int ret = ObVectorIndexUtil::estimate_hgraph_memory_for_ivf_centers(hgraph_param, hgraph_mem);
+        if (OB_FAIL(ret)) {
+          // fallback: estimate hgraph memory by conservative method
+          hgraph_mem = hgraph_param.nlist_ * (param.dim_ * sizeof(float) + 200);
+          LOG_WARN("failed to estimate hgraph memory, fallback to conservative estimate",
+                   K(ret), K(hgraph_param.nlist_), K(hgraph_param.dim_), K(hgraph_mem));
+        }
+        usage = hgraph_mem;
+      }
       break;
     }
     case IvfCacheType::IVF_PQ_CENTROID_CACHE: {
@@ -547,6 +662,208 @@ int64_t ObIvfCentCache::get_expect_memory_used(
     }
   }
   return usage;
+}
+
+int ObIvfCentCache::get_raw_vector_from_hgraph(int64_t centroid_idx, float *&centroid_vec,
+                                                ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  centroid_vec = nullptr;
+  if (OB_ISNULL(hgraph_index_)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("hgraph index not built yet", K(ret), K(centroid_idx));
+  } else {
+    int64_t vids[1];
+    vids[0] = centroid_idx + 1;
+    float *vectors = nullptr;
+    if (OB_ISNULL(allocator)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("allocator is required for get_raw_vector_from_hgraph", K(ret), K(centroid_idx));
+    } else if (OB_FAIL(obvectorutil::get_raw_vector_by_ids(hgraph_index_, vids, 1, vectors,
+                                                             allocator, cent_vec_dim_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get raw vector by id from hgraph", K(ret), K(centroid_idx));
+    } else if (OB_ISNULL(vectors)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("raw vector from hgraph is null", K(ret), K(centroid_idx));
+    } else {
+      centroid_vec = vectors;
+    }
+  }
+  return ret;
+}
+
+int ObIvfCentCache::build_hgraph_index(const ObVectorIndexParam &param,
+                                       bool use_default_params)
+{
+  int ret = OB_SUCCESS;
+  ObVectorIndexParam hgraph_param = param;
+  if (OB_ISNULL(hgraph_mem_ctx_)) {
+    void *buf = nullptr;
+    if (OB_ISNULL(sub_mem_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sub mem ctx is null for hgraph mem ctx init", K(ret));
+    } else if (OB_ISNULL(buf = sub_mem_ctx_->Allocate(sizeof(ObVsagMemContext)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc hgraph mem ctx buf", K(ret));
+    } else {
+      hgraph_mem_ctx_ = new(buf) ObVsagMemContext(sub_mem_ctx_->get_all_vsag_use_mem());
+      if (OB_FAIL(hgraph_mem_ctx_->init(sub_mem_ctx_->get_mem_context(), sub_mem_ctx_->get_all_vsag_use_mem(), MTL_ID(), "IvfHgraph"))) {
+        LOG_WARN("fail to init hgraph mem ctx", K(ret));
+        hgraph_mem_ctx_->~ObVsagMemContext();
+        sub_mem_ctx_->Deallocate(buf);
+        hgraph_mem_ctx_ = nullptr;
+      }
+    }
+  }
+  if (use_default_params) {
+    hgraph_param.type_ = VIAT_HGRAPH;
+    hgraph_param.lib_ = VIAL_VSAG;
+    hgraph_param.m_ = 16;
+    hgraph_param.ef_construction_ = 200;
+    hgraph_param.ef_search_ = 64;
+    hgraph_param.extra_info_actual_size_ = 0;
+    hgraph_param.refine_type_ = 0;
+    hgraph_param.bq_bits_query_ = 32;
+    hgraph_param.bq_use_fht_ = false;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (hgraph_param.dim_ <= 0 || hgraph_param.m_ <= 0 || hgraph_param.ef_construction_ <= 0 || hgraph_param.ef_search_ <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid hgraph param", K(ret), K(hgraph_param.dim_), K(hgraph_param.m_), K(hgraph_param.ef_construction_), K(hgraph_param.ef_search_));
+  } else if (OB_ISNULL(sub_mem_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sub mem ctx is null for hgraph build", K(ret));
+  } else if (OB_ISNULL(hgraph_mem_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hgraph mem ctx is null for hgraph build", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(centroids_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("centroids not available for hgraph build", K(ret));
+  } else if (count_ <= 0 || cent_vec_dim_ <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid centers meta for hgraph build", K(ret), K(count_), K(cent_vec_dim_));
+  } else {
+    const char* metric = VEC_INDEX_ALGTH[hgraph_param.dist_algorithm_];
+    bool store_raw_vector = (hgraph_param.dist_algorithm_ == ObVectorIndexDistAlgorithm::VIDA_COS);
+    lib::ObLightBacktraceGuard light_backtrace_guard(false);
+    if (OB_FAIL(obvectorutil::create_index(
+            hgraph_index_,
+            hgraph_param.type_,
+            "float32",
+            metric,
+            hgraph_param.dim_,
+            hgraph_param.m_,
+            hgraph_param.ef_construction_,
+            hgraph_param.ef_search_,
+            hgraph_mem_ctx_,
+            hgraph_param.extra_info_actual_size_,
+            hgraph_param.refine_type_,
+            hgraph_param.bq_bits_query_,
+            hgraph_param.bq_use_fht_,
+            store_raw_vector))) {
+      LOG_WARN("fail to create hgraph index", K(ret), K(cent_vec_dim_), K(count_));
+    } else {
+      int64_t* temp_centers_ids = static_cast<int64_t*>(
+          sub_mem_ctx_->Allocate(sizeof(int64_t) * count_));
+      if (OB_ISNULL(temp_centers_ids)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc centers ids", K(ret), K(count_));
+      } else {
+        for (int64_t i = 0; i < count_; ++i) {
+          temp_centers_ids[i] = i + 1;
+        }
+        if (OB_FAIL(obvectorutil::build_index(
+                hgraph_index_,
+                centroids_,
+                temp_centers_ids,
+                hgraph_param.dim_,
+                count_,
+                nullptr))) {
+          LOG_WARN("fail to build hgraph index", K(ret), K(count_), K(cent_vec_dim_));
+        }
+      }
+
+      if (OB_NOT_NULL(temp_centers_ids)) {
+        sub_mem_ctx_->Deallocate(temp_centers_ids);
+        temp_centers_ids = nullptr;
+      }
+    }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(hgraph_index_)) {
+      obvectorutil::delete_index(hgraph_index_);
+      hgraph_index_ = nullptr;
+    }
+  }
+  return ret;
+}
+
+uint64_t ObIvfCentCache::get_actual_memory_used()
+{
+  uint64_t used = sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->used();
+  if (OB_NOT_NULL(hgraph_mem_ctx_)) {
+    used += hgraph_mem_ctx_->used();
+  }
+  return used;
+}
+
+uint64_t ObIvfCentCache::get_memory_hold()
+{
+  uint64_t hold = sub_mem_ctx_ == nullptr ? 0 : sub_mem_ctx_->hold();
+  if (OB_NOT_NULL(hgraph_mem_ctx_)) {
+    hold += hgraph_mem_ctx_->hold();
+  }
+  return hold;
+}
+
+void ObIvfCentCache::cleanup_hgraph_index()
+{
+  if (OB_NOT_NULL(hgraph_index_)) {
+    obvectorutil::delete_index(hgraph_index_);
+    hgraph_index_ = nullptr;
+  }
+  if (OB_NOT_NULL(hgraph_mem_ctx_)) {
+    hgraph_mem_ctx_->~ObVsagMemContext();
+    if (OB_NOT_NULL(sub_mem_ctx_)) {
+      sub_mem_ctx_->Deallocate(hgraph_mem_ctx_);
+    }
+    hgraph_mem_ctx_ = nullptr;
+  }
+}
+
+
+int ObIvfCentCache::release_centroids()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(hgraph_index_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hgraph not built, cannot release centroids", K(ret));
+  } else if (OB_ISNULL(sub_mem_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sub mem ctx is null when releasing centroids", K(ret));
+  } else if (OB_NOT_NULL(centroids_)) {
+    sub_mem_ctx_->Deallocate(centroids_);
+    centroids_ = nullptr;
+  }
+  return ret;
+}
+
+int ObIvfCentCache::build_hgraph_and_release_centers(const ObVectorIndexParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(hgraph_index_)) {
+    if (OB_FAIL(build_hgraph_index(param, true /*use_default_params*/))) {
+      LOG_WARN("fail to build hgraph", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(release_centroids())) {
+    LOG_WARN("fail to release centroids after hgraph build", K(ret));
+  }
+  return ret;
 }
 
 ///////////////////////

@@ -21,6 +21,7 @@
 #include "share/ob_vec_index_builder_util.h"
 #include "sql/das/iter/ob_das_vec_scan_utils.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
+#include "deps/oblib/src/lib/vector/ob_vector_util.h"
 
 namespace oceanbase
 {
@@ -166,6 +167,40 @@ int ObDASIvfBaseScanIter::do_aux_table_scan(bool &first_scan,
   return ret;
 }
 
+// Reset memory context and clean up associated resources
+void ObDASIvfBaseScanIter::reset_memory_context()
+{
+  // Clean up HGraph iterative search context and reset memory context
+  if (OB_NOT_NULL(hgraph_iter_ctx_)) {
+    obvectorutil::delete_iter_ctx(hgraph_iter_ctx_);
+    hgraph_iter_ctx_ = nullptr;
+  }
+  // Clean up HGraph iterative search context and reset memory context before mem_context_ reset
+  if (OB_NOT_NULL(hgraph_vsag_alloc_)) {
+    hgraph_vsag_alloc_->~ObVsagSearchAlloc();
+    hgraph_vsag_alloc_ = nullptr;
+  }
+  if (nullptr != mem_context_) {
+    mem_context_->reset_remain_one_page();
+  }
+
+  // Reset HGraph state for next iteration
+  hgraph_has_next_center_ = true;
+  has_used_hgraph_ = false;
+}
+
+// Unified interface for checking if there are more centers available
+bool ObDASIvfBaseScanIter::has_next_center()
+{
+  bool has_next = false;
+  if (has_used_hgraph_) {
+    has_next = hgraph_has_next_center_;
+  } else {
+    has_next = iterative_filter_ctx_.has_next_center();
+  }
+  return has_next;
+}
+
 int ObDASIvfBaseScanIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
@@ -195,9 +230,8 @@ int ObDASIvfBaseScanIter::inner_reuse()
     saved_rowkeys_itr_->~ObVectorQueryRowkeyIterator();
     saved_rowkeys_itr_ = nullptr;
   }
-  if (nullptr != mem_context_) {
-    mem_context_->reset_remain_one_page();
-  }
+  // Reset memory context and clean up associated resources
+  reset_memory_context();
 
   vec_op_alloc_.reset();
   saved_rowkeys_.reset();
@@ -205,6 +239,22 @@ int ObDASIvfBaseScanIter::inner_reuse()
   center_cache_guard_.reset();
   iterative_filter_ctx_.reuse();
   // adaptive_ctx_.reset();
+  return ret;
+}
+
+int ObDASIvfBaseScanIter::init_hgraph_search_alloc()
+{
+  int ret = OB_SUCCESS;
+  // Create VSAG allocator if not exists (same lifecycle as hgraph_iter_ctx_)
+  if (OB_ISNULL(hgraph_vsag_alloc_)) {
+    void *alloc_buf = mem_context_->get_arena_allocator().alloc(sizeof(ObVsagSearchAlloc));
+    if (OB_ISNULL(alloc_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for hgraph vsag allocator", K(ret));
+    } else {
+      hgraph_vsag_alloc_ = new(alloc_buf) ObVsagSearchAlloc(MTL_ID());
+    }
+  }
   return ret;
 }
 
@@ -410,8 +460,9 @@ int ObDASIvfBaseScanIter::inner_release()
 
   saved_rowkeys_.reset();
   pre_fileter_rowkeys_.reset();
-  if (nullptr != mem_context_)  {
-    mem_context_->reset_remain_one_page();
+  // Reset memory context and clean up associated resources
+  reset_memory_context();
+  if (nullptr != mem_context_) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;
   }
@@ -534,9 +585,8 @@ int ObDASIvfBaseScanIter::process_ivf_scan(bool is_vectorized)
       LOG_WARN("failed to gen rowkeys itr", K(saved_rowkeys_));
     }
   }
-  if (nullptr != mem_context_) {
-    mem_context_->reset_remain_one_page();
-  }
+
+  reset_memory_context();
 
   return ret;
 }
@@ -991,13 +1041,35 @@ int ObDASIvfBaseScanIter::try_write_centroid_cache(
     }
 
     if (OB_SUCC(ret)) {
-      if (cent_cache.get_count() > 0) {
-        cent_cache.set_completed();
-        LOG_DEBUG("success to write centroid table cache", K(centroid_tablet_id_), K(cent_cache.get_count()));
+    if (cent_cache.get_count() > 0) {
+      if (cent_cache.get_count() >= ObVecIdxExtraInfo::IVF_CENTERS_HGRAPH_THRESHOLD) {
+        ObVectorIndexParam hgraph_param = vec_index_param_;
+        if (hgraph_param.dim_ <= 0) {
+          hgraph_param.dim_ = dim_;
+        }
+        if (dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT && need_norm_) {
+          hgraph_param.dist_algorithm_ = ObVectorIndexDistAlgorithm::VIDA_COS;
+        } else if (dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT) {
+          hgraph_param.dist_algorithm_ = ObVectorIndexDistAlgorithm::VIDA_IP;
+        } else if (dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN ||
+                   dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED) {
+          hgraph_param.dist_algorithm_ = ObVectorIndexDistAlgorithm::VIDA_L2;
+        }
+        if (OB_FAIL(cent_cache.build_hgraph_and_release_centers(hgraph_param))) {
+          LOG_WARN("failed to build hgraph when writing centroid cache", K(ret), K(centroid_tablet_id_));
+          cent_cache.reuse();
+        } else {
+          cent_cache.set_completed();
+          LOG_INFO("success to write centroid table cache with hgraph", K(centroid_tablet_id_));
+        }
       } else {
-        cent_cache.reuse();
-        LOG_DEBUG("Empty centroid table, no need to set cache", K(centroid_tablet_id_));
+        cent_cache.set_completed();
+        LOG_DEBUG("success to write centroid table cache", K(centroid_tablet_id_));
       }
+    } else {
+      cent_cache.reuse();
+      LOG_DEBUG("Empty centroid table, no need to set cache", K(centroid_tablet_id_));
+    }
     }
   }
 
@@ -1060,15 +1132,13 @@ template <typename T>
 int ObDASIvfBaseScanIter::generate_nearest_cid_heap(
     bool is_vectorized,
     T &nearest_cid_heap,
-    bool save_center_vec /*= false*/)
+    bool save_center_vec /*= false*/,
+    ObIvfCentCache *cent_cache /*= nullptr*/,
+    bool is_cache_usable /*= false*/)
 {
   int ret = OB_SUCCESS;
-  ObIvfCentCache *cent_cache = nullptr;
-  bool is_cache_usable = false;
 
-  if (OB_FAIL(get_centers_cache(is_vectorized, false/*is_pq_centers*/, center_cache_guard_, cent_cache, is_cache_usable))) {
-    LOG_WARN("fail to get centers cache", K(ret), K(is_vectorized), KPC(cent_cache));
-  } else if (is_cache_usable) {
+  if (is_cache_usable && OB_NOT_NULL(cent_cache)) {
     if (OB_FAIL(gen_near_cid_heap_from_cache(*cent_cache, nearest_cid_heap, save_center_vec))) {
       LOG_WARN("fail to gen near cid heap from cache", K(ret), K(center_cache_guard_));
     }
@@ -1588,6 +1658,7 @@ int ObDASIvfBaseScanIter::do_table_post_filter(bool is_vectorized, ObIVFRowkeyDi
   return ret;
 }
 
+
 /*************************** implement ObDASIvfScanIter ****************************/
 int ObDASIvfScanIter::inner_init(ObDASIterParam &param)
 {
@@ -1620,26 +1691,175 @@ int ObDASIvfScanIter::inner_release()
   return ObDASIvfBaseScanIter::inner_release();
 }
 
+// HGraph-based iterative filtering implementations
+int ObDASIvfScanIter::get_next_probe_centers_ids_by_hgraph(bool is_vectorized, int64_t next_nprobe)
+{
+  int ret = OB_SUCCESS;
+  ObIvfCacheMgrGuard cache_guard;
+  ObIvfCentCache *cent_cache = nullptr;
+  bool is_cache_usable = false;
+
+  if (OB_FAIL(get_centers_cache(is_vectorized, false /*is_pq_centers*/, cache_guard, cent_cache, is_cache_usable))) {
+    LOG_WARN("fail to get centers cache", K(ret));
+  } else if (is_cache_usable && OB_NOT_NULL(cent_cache) && cent_cache->has_hgraph_index()) {
+    if (OB_FAIL(get_nearest_probe_center_ids_with_hgraph(
+        is_vectorized, cent_cache, false, !vec_aux_ctdef_->is_post_filter(), next_nprobe))) {
+      LOG_WARN("HGraph iterative search failed", K(ret), K(next_nprobe));
+    }
+  } else {
+    // If HGraph was used before but now unavailable, this is an error
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("HGraph was used in initial scan but now unavailable for iterative filtering", K(ret),
+        K(is_cache_usable), K(OB_NOT_NULL(cent_cache)), K(cent_cache ? cent_cache->has_hgraph_index() : false));
+  }
+
+  return ret;
+}
+
+int ObDASIvfScanIter::get_next_center_ids(bool is_vectorized, int64_t next_nprobe)
+{
+  int ret = OB_SUCCESS;
+  if (has_used_hgraph_) {
+    if (OB_FAIL(get_next_probe_centers_ids_by_hgraph(is_vectorized, next_nprobe))) {
+      LOG_WARN("failed to get next probe centers ids by hgraph", K(ret), K(is_vectorized), K(next_nprobe));
+    }
+  } else {
+    if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_center_ids(next_nprobe, near_cid_))) {
+      LOG_WARN("failed to get next nearest probe center ids", K(ret), K(next_nprobe));
+    }
+  }
+  return ret;
+}
+
+int ObDASIvfScanIter::get_nearest_probe_center_ids_with_hgraph(bool is_vectorized, ObIvfCentCache *hgraph_cache,
+                                                               bool need_vectors, bool need_distances, int64_t incremental_nprobes)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(hgraph_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hgraph cache is null", K(ret));
+  } else {
+    common::obvsag::VectorIndexPtr hgraph_index = hgraph_cache->get_hgraph_index();
+    if (OB_ISNULL(hgraph_index)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hgraph index is null", K(ret));
+    } else {
+      const float* distances = nullptr;
+      const int64_t* result_ids = nullptr;
+      int64_t result_size = 0;
+      float* search_vec = reinterpret_cast<float*>(const_cast<char*>(real_search_vec_.ptr()));
+      const char* extra_info = nullptr;
+      int64_t centers_total = hgraph_cache->get_count();
+      int64_t ef_search = 64;
+      // Check if need to initialize HGraph state (incremental_nprobes == -1 means initial search)
+      bool need_init = (incremental_nprobes == -1);
+      int64_t search_count = need_init ? nprobes_ : incremental_nprobes;
+      // Create VSAG allocator if not exists (same lifecycle as hgraph_iter_ctx_)
+      if (OB_FAIL(init_hgraph_search_alloc())) {
+        LOG_WARN("failed to init hgraph search alloc", K(ret));
+      } else if (OB_FAIL(obvectorutil::knn_search(hgraph_index,
+                                           search_vec,
+                                           dim_,
+                                           search_count,  // Request incremental count
+                                           distances,
+                                           result_ids,
+                                           extra_info,
+                                           result_size,
+                                           ef_search,
+                                           nullptr,
+                                           false,
+                                           false,
+                                           1.0f,
+                                           hgraph_vsag_alloc_,
+                                           false,
+                                           hgraph_iter_ctx_,        // Always pass iter context, let HGraph manage it
+                                           false))) {               // is_last_search, keep searching
+        LOG_WARN("failed to search with hgraph index", K(ret), K(search_count), K(ef_search));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(result_ids)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hgraph search result is null", K(ret));
+      } else if (result_size == 0) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("hgraph search result is empty", K(ret));
+      } else {
+        near_cid_.reset();
+        int64_t new_center_cnt = 0;
+        for (int64_t i = 0; i < result_size && OB_SUCC(ret); ++i) {
+          int64_t center_idx = result_ids[i];
+          if (center_idx >= 1 && center_idx <= centers_total) {
+            ObCenterId center_id;
+            center_id.center_id_ = center_idx;
+            center_id.tablet_id_ = centroid_tablet_id_.id();
+
+            if (OB_FAIL(near_cid_.push_back(center_id))) {
+              LOG_WARN("failed to push center id", K(ret), K(center_id));
+            } else {
+              new_center_cnt++;
+              // Mark in near_cid_dist_ for check_cid_exist (if needed)
+              if (need_distances && center_idx < near_cid_dist_.count()) {
+                near_cid_dist_.get_data()[center_idx] = true;
+              }
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid center index from hgraph", K(ret), K(center_idx), K(centers_total));
+          }
+        }
+
+        LOG_DEBUG("HGraph IVF Flat search completed", K(result_size), K(new_center_cnt),
+                 K(incremental_nprobes), K(search_count));
+
+        // Mark that HGraph has reached the end if returned fewer centers than requested
+        if (!need_init && new_center_cnt < search_count) {
+          hgraph_has_next_center_ = false;
+          LOG_INFO("HGraph reached end of centers", K(new_center_cnt), K(search_count));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDASIvfScanIter::get_nearest_probe_center_ids(bool is_vectorized)
 {
   int ret = OB_SUCCESS;
-  share::ObVectorCenterClusterHelper<float, ObCenterId> nearest_cid_heap(
+
+  // decide which search strategy to use based on cache type
+  bool need_vectors = false;
+  bool need_distances = !vec_aux_ctdef_->is_post_filter();
+  ObIvfCacheMgrGuard cache_guard;
+  ObIvfCentCache *cent_cache = nullptr;
+  bool is_cache_usable = false;
+  if (OB_FAIL(get_centers_cache(is_vectorized, false /*is_pq_centers*/, cache_guard, cent_cache, is_cache_usable))) {
+    LOG_WARN("fail to get centers cache", K(ret));
+  } else if (is_cache_usable && OB_NOT_NULL(cent_cache) && cent_cache->has_hgraph_index()) {
+    has_used_hgraph_ = true;  // Record that HGraph was used in initial scan
+    if (OB_FAIL(get_nearest_probe_center_ids_with_hgraph(is_vectorized, cent_cache, need_vectors, need_distances))) {
+      LOG_WARN("HGraph search failed for IVF scan", K(ret));
+    }
+  } else {
+    share::ObVectorCenterClusterHelper<float, ObCenterId> nearest_cid_heap(
       mem_context_->get_arena_allocator(), reinterpret_cast<const float *>(real_search_vec_.ptr()),
       dis_type_, dim_, nprobes_, 0.0, (is_pre_filter() || is_iter_filter()), &iterative_filter_ctx_.allocator_);
-  if (OB_FAIL(generate_nearest_cid_heap(is_vectorized, nearest_cid_heap))) {
-    LOG_WARN("failed to generate nearest cid heap", K(ret), K(nprobes_), K(dim_), K(real_search_vec_));
-  }
-  if (OB_SUCC(ret)) {
-    if (nearest_cid_heap.get_center_count() == 0) {
-      ret = OB_ENTRY_NOT_EXIST;
-    } else if (nearest_cid_heap.is_save_all_center()) {
-      if (OB_FAIL(nearest_cid_heap.get_all_centroids(iterative_filter_ctx_.centroids_))) {
-        LOG_WARN("init_centroids fail", K(ret));
-      } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_center_ids(nprobes_, near_cid_))) {
-        LOG_WARN("failed to get top n", K(ret), K(iterative_filter_ctx_));
+    if (OB_FAIL(generate_nearest_cid_heap(is_vectorized, nearest_cid_heap, false, cent_cache, is_cache_usable))) {
+      LOG_WARN("failed to generate nearest cid heap", K(ret), K(nprobes_), K(dim_), K(real_search_vec_));
+    }
+    if (OB_SUCC(ret)) {
+      if (nearest_cid_heap.get_center_count() == 0) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else if (nearest_cid_heap.is_save_all_center()) {
+        if (OB_FAIL(nearest_cid_heap.get_all_centroids(iterative_filter_ctx_.centroids_))) {
+          LOG_WARN("init_centroids fail", K(ret));
+        } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_center_ids(nprobes_, near_cid_))) {
+          LOG_WARN("failed to get top n", K(ret), K(iterative_filter_ctx_));
+        }
+      } else if (OB_FAIL(nearest_cid_heap.get_nearest_probe_center_ids(near_cid_))) {
+        LOG_WARN("failed to get top n", K(ret));
       }
-    } else if (OB_FAIL(nearest_cid_heap.get_nearest_probe_center_ids(near_cid_))) {
-      LOG_WARN("failed to get top n", K(ret));
     }
   }
   return ret;
@@ -1985,12 +2205,12 @@ int ObDASIvfScanIter::do_ivf_scan_post(bool is_vectorized, T *search_vec)
               K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
         } else if (can_retry_ && OB_FAIL(check_iter_filter_need_retry())) {
           LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
-        } else if (! iterative_filter_ctx_.has_next_center()) {
+        } else if (! has_next_center()) {
           iter_end = true;
-        } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_center_ids(next_nprobe, near_cid_))) {
-          LOG_WARN("get next centers from iterative_filter_ctx fail", K(ret), K(iterative_filter_ctx_),
-              K(next_nprobe), K(limit_k), K(left_search), K(iter_cnt), K(nprobes_));
-        } else if (0 == near_cid_.count()) {
+        } else if (OB_FAIL(get_next_center_ids(is_vectorized, next_nprobe))) {
+          LOG_WARN("get next centers failed", K(ret), K(has_used_hgraph_), K(next_nprobe));
+        } else if (near_cid_.count() == 0) {
+          // Common check: if no centers found after getting next batch, end iteration
           iter_end = true;
           LOG_TRACE("there are no centers left to access", K(ret), K(iterative_filter_ctx_));
         } else if (OB_FAIL(nearest_rowkey_heap.set_nprobe(new_heap_size))) {
@@ -2245,12 +2465,12 @@ int ObDASIvfScanIter::do_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorize
               iter_end = true;
               LOG_INFO("reach max scan vectors, stop iterative filter", K(no_new_near_rowkeys), K(nearest_rowkey_heap.count()),
                 K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
-            } else if (! iterative_filter_ctx_.has_next_center()) {
+            } else if (! has_next_center()) {
               iter_end = true;
-            } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_center_ids(next_nprobe, near_cid_))) {
-              LOG_WARN("get next centers from iterative_filter_ctx fail", K(ret), K(iterative_filter_ctx_),
-                  K(next_nprobe), K(limit_k), K(left_search), K(iter_cnt), K(nprobes_));
-            } else if (0 == near_cid_.count()) {
+            } else if (OB_FAIL(get_next_center_ids(is_vectorized, next_nprobe))) {
+              LOG_WARN("get next centers failed", K(ret), K(has_used_hgraph_), K(next_nprobe));
+            } else if (near_cid_.count() == 0) {
+              // Common check: if no centers found after getting next batch, end iteration
               iter_end = true;
               LOG_TRACE("there are no centers left to access", K(ret), K(iterative_filter_ctx_));
             }
@@ -2839,7 +3059,10 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
     obj_ptr = (ObObj*)mem_context_->get_arena_allocator().alloc(sizeof(ObObj) * rowkey_cnt);
     if (OB_ISNULL(sim_table) || OB_ISNULL(obj_ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc residual buf", K(ret), K(ksub), K(m_));
+      LOG_WARN("failed to alloc memory for precompute table", K(ret), K(ksub), K(m_), K(rowkey_cnt),
+               "sim_table_size", sizeof(float) * (ksub * m_) * 2,
+               "obj_ptr_size", sizeof(ObObj) * rowkey_cnt,
+               KP(sim_table), KP(obj_ptr));
     } else {
       filter_main_rowkey.assign(obj_ptr, rowkey_cnt);
       sim_table_2 = sim_table + (ksub * m_);
@@ -2984,6 +3207,165 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
   return ret;
 }
 
+// HGraph-based iterative filtering implementations
+int ObDASIvfPQScanIter::get_next_probe_centers_by_hgraph(bool is_vectorized, int64_t next_nprobe)
+{
+  int ret = OB_SUCCESS;
+  ObIvfCacheMgrGuard cache_guard;
+  ObIvfCentCache *cent_cache = nullptr;
+  bool is_cache_usable = false;
+
+  if (OB_FAIL(get_centers_cache(is_vectorized, false /*is_pq_centers*/, cache_guard, cent_cache, is_cache_usable))) {
+    LOG_WARN("fail to get centers cache", K(ret));
+  } else if (is_cache_usable && OB_NOT_NULL(cent_cache) && cent_cache->has_hgraph_index()) {
+    if (OB_FAIL(get_nearest_probe_centers_with_hgraph(
+        is_vectorized, cent_cache, true, true, next_nprobe))) {
+      LOG_WARN("HGraph PQ iterative search failed", K(ret), K(next_nprobe));
+    }
+  } else {
+    // If HGraph was used before but now unavailable, this is an error
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("HGraph was used in initial scan but now unavailable for iterative filtering", K(ret),
+        K(is_cache_usable), K(OB_NOT_NULL(cent_cache)), K(cent_cache ? cent_cache->has_hgraph_index() : false));
+  }
+
+  return ret;
+}
+
+int ObDASIvfPQScanIter::get_next_centers(bool is_vectorized, int64_t next_nprobe)
+{
+  int ret = OB_SUCCESS;
+  if (has_used_hgraph_) {
+    if (OB_FAIL(get_next_probe_centers_by_hgraph(is_vectorized, next_nprobe))) {
+      LOG_WARN("failed to get next probe centers by hgraph", K(ret), K(is_vectorized), K(next_nprobe));
+    }
+  } else {
+    if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_centers_vec_dist(next_nprobe, near_cid_vec_, near_cid_vec_dis_))) {
+      LOG_WARN("failed to get next nearest probe centers vec dist", K(ret), K(next_nprobe));
+    }
+  }
+  return ret;
+}
+
+int ObDASIvfPQScanIter::get_nearest_probe_centers_with_hgraph(
+    bool is_vectorized,
+    ObIvfCentCache *hgraph_cache,
+    bool need_vectors,
+    bool need_distances,
+    int64_t incremental_nprobes)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(hgraph_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hgraph cache is null", K(ret));
+  } else {
+    common::obvsag::VectorIndexPtr hgraph_index = hgraph_cache->get_hgraph_index();
+    if (OB_ISNULL(hgraph_index)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hgraph index is null", K(ret));
+    } else {
+      // use OceanBase's VSAG interface to search
+      const float* distances = nullptr;
+      const int64_t* result_ids = nullptr;
+      int64_t result_size = 0;
+      float* search_vec = reinterpret_cast<float*>(const_cast<char*>(real_search_vec_.ptr()));
+      const char* extra_info = nullptr;
+      int64_t centers_total = hgraph_cache->get_count();
+      int64_t ef_search = 64;
+      // Check if need to initialize HGraph state (incremental_nprobes == -1 means initial search)
+      bool need_init = (incremental_nprobes == -1);
+      int64_t search_count = need_init ? nprobes_ : incremental_nprobes;
+      // Create VSAG allocator if not exists (same lifecycle as hgraph_iter_ctx_)
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(init_hgraph_search_alloc())) {
+        LOG_WARN("failed to init hgraph search alloc", K(ret));
+      } else if (OB_FAIL(obvectorutil::knn_search(hgraph_index,
+                                            search_vec,
+                                            dim_,
+                                            search_count,
+                                            distances,
+                                            result_ids,
+                                            extra_info,
+                                            result_size,
+                                            ef_search,
+                                            nullptr,
+                                            false,
+                                            false,
+                                            1.0f,
+                                            hgraph_vsag_alloc_,      // Use persistent allocator with same lifecycle as iter_ctx
+                                            false,
+                                            hgraph_iter_ctx_,        // Always pass iter context, let HGraph manage it
+                                            false))) {               // is_last_search, keep searching
+        LOG_WARN("failed to search with hgraph index", K(ret), K(search_count), K(ef_search));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(result_ids)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hgraph search result is null", K(ret));
+      } else if (result_size == 0) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("hgraph search result is empty", K(ret));
+      } else {
+        near_cid_vec_.reset();
+        near_cid_vec_dis_.reset();
+        int64_t new_center_cnt = 0;
+        for (int64_t i = 0; i < result_size && OB_SUCC(ret); ++i) {
+          int64_t center_idx = result_ids[i];
+          if (center_idx >= 1 && center_idx <= centers_total) {
+            ObCenterId center_id;
+            center_id.center_id_ = center_idx;
+            center_id.tablet_id_ = centroid_tablet_id_.id();
+            if (need_vectors) {
+              float* center_vec = nullptr;
+              if (OB_FAIL(hgraph_cache->read_centroid(center_idx, center_vec, true /*deep_copy*/, &persist_alloc_))) {
+                LOG_WARN("failed to read centroid for hgraph center vector", K(ret), K(center_idx));
+              } else if (OB_ISNULL(center_vec)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("read centroid returned null pointer", K(ret), K(center_idx));
+              } else {
+                IvfCidVecPair cid_vec_pair(center_id, center_vec);
+                if (OB_FAIL(near_cid_vec_.push_back(cid_vec_pair))) {
+                  LOG_WARN("failed to push cid vec pair", K(ret));
+                }
+              }
+            }
+            // save distance
+            if (OB_SUCC(ret) && need_distances && OB_NOT_NULL(distances)) {
+              float final_distance = distances[i];
+              if (dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT && need_norm_) {
+                final_distance = 1.0f - distances[i];
+              } else if (dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::DOT) {
+                final_distance = 1.0f - distances[i];
+              }
+              if (OB_FAIL(near_cid_vec_dis_.push_back(final_distance))) {
+                LOG_WARN("failed to push distance", K(ret));
+              }
+            }
+
+            if (OB_SUCC(ret)) {
+              new_center_cnt++;
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid center index from hgraph", K(ret), K(center_idx), K(centers_total));
+          }
+        }
+
+        LOG_DEBUG("HGraph IVF PQ search completed", K(result_size), K(new_center_cnt),
+                 K(incremental_nprobes), K(search_count));
+
+        // Mark that HGraph has reached the end if returned fewer centers than requested
+        if (!need_init && new_center_cnt < search_count) {
+          hgraph_has_next_center_ = false;
+          LOG_INFO("HGraph reached end of centers", K(new_center_cnt), K(search_count));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDASIvfPQScanIter::get_nearest_probe_centers(bool is_vectorized)
 {
   int ret = OB_SUCCESS;
@@ -2993,23 +3375,36 @@ int ObDASIvfPQScanIter::get_nearest_probe_centers(bool is_vectorized)
   if (dis_type_ == oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN) {
     cur_dis_type = oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN_SQUARED;
   }
-  share::ObVectorCenterClusterHelper<float, ObCenterId> nearest_cid_heap(
+  // decide which search strategy to use based on cache type
+  ObIvfCacheMgrGuard cache_guard;
+  ObIvfCentCache *cent_cache = nullptr;
+  bool is_cache_usable = false;
+  if (OB_FAIL(get_centers_cache(is_vectorized, false /*is_pq_centers*/, cache_guard, cent_cache, is_cache_usable))) {
+    LOG_WARN("failed to get centers cache", K(ret));
+  } else if (is_cache_usable && OB_NOT_NULL(cent_cache) && cent_cache->has_hgraph_index()) {
+    has_used_hgraph_ = true;  // Record that HGraph was used in initial scan
+    if (OB_FAIL(get_nearest_probe_centers_with_hgraph(is_vectorized, cent_cache, true/*need_vectors*/, true/*need_distances*/))) {
+      LOG_WARN("HGraph search failed for PQ scan", K(ret));
+    }
+  } else {
+    share::ObVectorCenterClusterHelper<float, ObCenterId> nearest_cid_heap(
       mem_context_->get_arena_allocator(), reinterpret_cast<const float *>(real_search_vec_.ptr()),
       cur_dis_type, dim_, nprobes_, 0.0, (is_pre_filter() || is_iter_filter()), &iterative_filter_ctx_.allocator_);
-  if (OB_FAIL(generate_nearest_cid_heap(is_vectorized, nearest_cid_heap, true/*save_center_vec*/))) {
-    LOG_WARN("failed to generate nearest cid heap", K(ret), K(nprobes_), K(dim_), K(real_search_vec_));
-  } else {
-    if (nearest_cid_heap.get_center_count() == 0) {
-      ret = OB_ENTRY_NOT_EXIST;
-    } else if (nearest_cid_heap.is_save_all_center()) {
-      if (OB_FAIL(nearest_cid_heap.get_all_centroids(iterative_filter_ctx_.centroids_))) {
-        LOG_WARN("init_centroids fail", K(ret));
-      } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_centers_vec_dist(nprobes_, near_cid_vec_, near_cid_vec_dis_))) {
-        LOG_WARN("failed to get top n", K(ret), K(iterative_filter_ctx_));
-      }
-    } else { // whatever pre or post, go here
-      if (OB_FAIL(nearest_cid_heap.get_nearest_probe_centers_vec_dist(near_cid_vec_, near_cid_vec_dis_))) {
-        LOG_WARN("failed to get top n", K(ret));
+    if (OB_FAIL(generate_nearest_cid_heap(is_vectorized, nearest_cid_heap, true/*save_center_vec*/, cent_cache, is_cache_usable))) {
+      LOG_WARN("failed to generate nearest cid heap", K(ret), K(nprobes_), K(dim_), K(real_search_vec_));
+    } else {
+      if (nearest_cid_heap.get_center_count() == 0) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else if (nearest_cid_heap.is_save_all_center()) {
+        if (OB_FAIL(nearest_cid_heap.get_all_centroids(iterative_filter_ctx_.centroids_))) {
+          LOG_WARN("init_centroids fail", K(ret));
+        } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_centers_vec_dist(nprobes_, near_cid_vec_, near_cid_vec_dis_))) {
+          LOG_WARN("failed to get top n", K(ret), K(iterative_filter_ctx_));
+        }
+      } else { // whatever pre or post, go here
+        if (OB_FAIL(nearest_cid_heap.get_nearest_probe_centers_vec_dist(near_cid_vec_, near_cid_vec_dis_))) {
+          LOG_WARN("failed to get top n", K(ret));
+        }
       }
     }
   }
@@ -3319,16 +3714,16 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
               K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
         } else if (can_retry_ && OB_FAIL(check_iter_filter_need_retry())) {
           LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
-        } else if (! iterative_filter_ctx_.has_next_center()) {
+        } else if (! has_next_center()) {
           iter_end = true;
-        } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_centers_vec_dist(next_nprobe, near_cid_vec_, near_cid_vec_dis_))) {
-          LOG_WARN("get next centers from iterative_filter_ctx fail", K(ret), K(iterative_filter_ctx_),
-              K(next_nprobe), K(limit_k), K(left_search), K(iter_cnt), K(nprobes_));
+        } else if (OB_FAIL(get_next_centers(is_vectorized, next_nprobe))) {
+          LOG_WARN("get next centers failed", K(ret), K(has_used_hgraph_), K(next_nprobe));
         } else if (near_cid_vec_.count() != near_cid_vec_dis_.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("near_cid_vec count is not equal to near_cid_vec_dis count", K(ret),
               "near_cid_vec_count", near_cid_vec_.count(), "near_cid_vec_dis_count", near_cid_vec_dis_.count());
-        } else if (0 == near_cid_vec_dis_.count()) {
+        } else if (near_cid_vec_dis_.count() == 0) {
+          // Common check: if no centers found after getting next batch, end iteration
           iter_end = true;
           LOG_TRACE("there are no centers left to access", K(ret), K(iterative_filter_ctx_));
         } else if (OB_FAIL(nearest_rowkey_heap.set_nprobe(new_heap_size))) {
@@ -3723,15 +4118,16 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
               iter_end = true;
               LOG_INFO("reach max scan vectors, stop iterative filter", K(no_new_near_rowkeys), K(nearest_rowkey_heap.count()),
                 K(start_idx), K(limit_k), K(left_search), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
-            } else if (! iterative_filter_ctx_.has_next_center()) {
-            } else if (OB_FAIL(iterative_filter_ctx_.get_next_nearest_probe_centers_vec_dist(next_nprobe, near_cid_vec_, near_cid_vec_dis_))) {
-              LOG_WARN("get next centers from iterative_filter_ctx fail", K(ret), K(iterative_filter_ctx_),
-                  K(next_nprobe), K(limit_k), K(left_search), K(iter_cnt), K(nprobes_));
+            } else if (! has_next_center()) {
+              iter_end = true;
+            } else if (OB_FAIL(get_next_centers(is_vectorized, next_nprobe))) {
+              LOG_WARN("get next centers failed", K(ret), K(has_used_hgraph_), K(next_nprobe));
             } else if (near_cid_vec_.count() != near_cid_vec_dis_.count()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("near_cid_vec count is not equal to near_cid_vec_dis count", K(ret),
-                  "near_cid_vec_count", near_cid_vec_.count(), "near_cid_vec_dis_count", near_cid_vec_dis_.count());
-            } else if (0 == near_cid_vec_dis_.count()) {
+                "near_cid_vec_count", near_cid_vec_.count(), "near_cid_vec_dis_count", near_cid_vec_dis_.count());
+            } else if (near_cid_vec_dis_.count() == 0) {
+              // Common check: if no centers found after getting next batch, end iteration
               iter_end = true;
               LOG_TRACE("there are no centers left to access", K(ret), K(iterative_filter_ctx_));
             }
@@ -3939,10 +4335,18 @@ int ObDASIvfPQScanIter::try_write_pq_precompute_table_cache(
           ObArenaAllocator tmp_allocator;
           int64_t ksub = 1L << nbits_;
           int64_t sub_dim = dim_ / m_;
-          float *ivf_centers = ivf_cent_cache->get_centroids();
+          float *ivf_centers = nullptr;
           float *pq_center = pq_cent_cache->get_centroids(); // m * ksub * sub_dim
           float *precompute_table = cent_cache.get_centroids();
           float *r_norms = (float*)tmp_allocator.alloc(sizeof(float) * m_ * ksub);
+          if (ivf_cent_cache->has_hgraph_index()) {
+            if (OB_FAIL(ivf_cent_cache->get_centroids(&tmp_allocator, &ivf_centers))) {
+              LOG_WARN("fail to get ivf centers", K(ret));
+            }
+          } else {
+            ivf_centers = ivf_cent_cache->get_centroids();
+          }
+
           if (OB_ISNULL(r_norms)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to alloc norms", K(ret), K(m_), K(ksub));

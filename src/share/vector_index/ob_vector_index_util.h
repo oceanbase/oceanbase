@@ -28,6 +28,9 @@ namespace oceanbase
 namespace share
 {
 
+class ObIvfCentCache;
+class ObIvfCacheMgrGuard;
+
 enum VecColType {
   IVF_CENTER_ID_COL = 0,
   IVF_CENTER_VECTOR_COL,
@@ -280,6 +283,8 @@ static constexpr double DEFAULT_SINDI_SELECTIVITY_RATE = 0.1;
 static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY = 1000000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_IDX = 300000;
+static constexpr uint64_t IVF_CENTERS_HGRAPH_THRESHOLD = 5000;  // minimum centers count to build hgraph index
+static constexpr uint64_t IVF_BUILD_HGRAPH_THRESHOLD = 3000;
 static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
 static const uint64_t MAX_IVF_BRUTE_FORCE_SIZE = 10000;
 
@@ -779,7 +784,9 @@ public:
   static int calc_residual_vector(
       ObIAllocator &alloc,
       int dim,
-      ObIArray<float *> &centers,
+      float *centers_data,
+      int64_t centers_count,
+      int64_t centers_dim,
       float *vector,
       ObVectorNormalizeInfo *norm_info,
       float *&residual);
@@ -796,6 +803,14 @@ public:
     const float *center_vec,
     float *residual
   );
+  static int calc_residual_vector_by_use_hgraph(
+    ObIAllocator &allocator,
+    int dim,
+    const float *vector,
+    ObVectorNormalizeInfo *norm_info,
+    share::ObIvfCentCache *cent_cache,
+    float *&residual_vec
+  );
   static int calc_location_ids(sql::ObEvalCtx &eval_ctx,
                                sql::ObExpr *table_id_expr,
                                sql::ObExpr *part_id_expr,
@@ -804,12 +819,14 @@ public:
   static int eval_ivf_centers_common(ObIAllocator &allocator,
                                     const sql::ObExpr &expr,
                                     sql::ObEvalCtx &eval_ctx,
-                                    ObIArray<float*> &centers,
                                     ObTableID &table_id,
                                     ObTabletID &tablet_id,
                                     ObVectorIndexDistAlgorithm &dis_algo,
                                     bool &contain_null,
                                     ObIArrayType *&arr);
+  static int get_nearest_center_with_hgraph(const float *vector,
+                                            share::ObIvfCentCache *hgraph_cache,
+                                            int64_t &center_idx);
   static int estimate_hnsw_memory(
       uint64_t num_vectors,
       const ObVectorIndexParam &param,
@@ -841,7 +858,13 @@ public:
                                     common::ObIAllocator &allocator,
                                     ObIArray<float*> &centers,
                                     int64_t m = 0); // Number of PQ subspaces, 0 means using default value
-
+  static int get_ivf_centers_cache(bool is_vectorized,
+                                    bool is_pq_centers,
+                                    share::ObIvfCacheMgrGuard &cache_guard,
+                                    share::ObIvfCentCache *&cent_cache,
+                                    const ObTableID &table_id,
+                                    const ObTabletID &centroid_tablet_id,
+                                    bool &is_cache_usable);
   static int split_vector(ObIAllocator &alloc, int pq_m, int dim, float *vector, ObIArray<float *> &splited_arrs);
   static int split_vector(int pq_m, int dim, float *vector, ObIArray<float *> &splited_arrs);
   static int set_extra_info_actual_size_param(ObIAllocator *allocator, const ObString &old_param, int64_t actual_size,
@@ -894,6 +917,10 @@ public:
       ObSchemaGetterGuard &schema_guard,
       const schema::ObTableSchema &table_schema,
       const schema::ObTableSchema &index_schema);
+
+  static int estimate_hgraph_memory_for_ivf_centers(
+      const ObVectorIndexParam &param,
+      int64_t &estimated_memory);
   static int alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
                                          const ObColumnSchemaV2 &new_column_schema,
                                          ObColumnSchemaV2 &new_aux_column_schema);

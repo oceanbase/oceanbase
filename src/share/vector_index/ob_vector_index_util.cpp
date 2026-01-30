@@ -22,7 +22,10 @@
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "share/vector_index/ob_vector_index_ivf_cache_mgr.h"
+#include "share/vector_type/ob_vector_common_util.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
+#include "observer/ob_server_struct.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 #include "lib/file/ob_string_util.h"
 #include "sql/engine/expr/ob_array_cast.h"
@@ -5972,44 +5975,104 @@ if (OB_ISNULL(residual)) {
 return ret;
 }
 
+int ObVectorIndexUtil::calc_residual_vector_by_use_hgraph(
+  ObIAllocator &allocator,
+  int dim,
+  const float *vector,
+  ObVectorNormalizeInfo *norm_info,
+  ObIvfCentCache *cent_cache,
+  float *&residual_vec)
+{
+  int ret = OB_SUCCESS;
+  residual_vec = nullptr;
+  int64_t center_idx = 0;
+  float *center_vec = nullptr;
+  float *norm_vector = nullptr;
+
+  if (OB_ISNULL(vector) || dim <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments", K(ret), KP(vector), K(dim));
+  } else if (OB_ISNULL(cent_cache)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cent_cache is null", K(ret));
+  } else if (!cent_cache->has_hgraph_index()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("HGraph index not available", K(ret));
+  } else {
+    // Normalize vector if norm_info is provided (for cosine distance)
+    if (OB_NOT_NULL(norm_info)) {
+      if (OB_ISNULL(norm_vector = static_cast<float*>(allocator.alloc(dim * sizeof(float))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc norm vector", K(ret));
+      } else if (FALSE_IT(MEMSET(norm_vector, 0, dim * sizeof(float)))) {
+      } else if (OB_FAIL(norm_info->normalize_func_(dim, const_cast<float*>(vector), norm_vector, nullptr))) {
+        LOG_WARN("failed to normalize vector", K(ret));
+      }
+    }
+
+    float *data = norm_vector == nullptr ? const_cast<float*>(vector) : norm_vector;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObVectorIndexUtil::get_nearest_center_with_hgraph(data, cent_cache, center_idx))) {
+      LOG_WARN("failed to get nearest center with hgraph", K(ret));
+    } else if (OB_FAIL(cent_cache->read_centroid(center_idx, center_vec, true /*deep_copy*/, &allocator))) {
+      LOG_WARN("failed to read centroid from cache", K(ret), K(center_idx));
+    } else if (OB_FAIL(calc_residual_vector(allocator, dim, data, center_vec, residual_vec))) {
+      LOG_WARN("fail to calc residual vector", K(ret), K(dim));
+    }
+  }
+
+  return ret;
+}
+
 int ObVectorIndexUtil::calc_residual_vector(
     ObIAllocator &alloc,
     int dim,
-    ObIArray<float *> &centers,
+    float *centers_data,
+    int64_t centers_count,
+    int64_t centers_dim,
     float *vector,
     ObVectorNormalizeInfo *norm_info,
     float *&residual)
 {
   int ret = OB_SUCCESS;
   ObVectorClusterHelper helper;
-  int64_t center_idx = 1;
   float *center_vec = nullptr;
 
-  if (OB_FAIL(helper.get_nearest_probe_centers(
+  if (OB_ISNULL(centers_data) || centers_count <= 0 || centers_dim <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(centers_data), K(centers_count), K(centers_dim));
+  } else if (OB_FAIL(helper.get_nearest_probe_centers(
       vector,
       dim,
-      centers,
+      centers_data,
+      centers_count,
+      centers_dim,
       1/*nprobe*/,
       alloc,
       norm_info))) {
     LOG_WARN("failed to get nearest center", K(ret));
-  } else if (OB_FAIL(helper.get_center_vector(0/*idx*/, centers, center_vec))) {
-    LOG_WARN("failed to get center idx", K(ret));
   } else {
-    float *norm_vector = nullptr;
-    if (OB_NOT_NULL(norm_info)) {
-      if (OB_ISNULL(norm_vector = static_cast<float*>(alloc.alloc(dim * sizeof(float))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc norm vector", K(ret));
-      } else if (FALSE_IT(MEMSET(norm_vector, 0, dim * sizeof(float)))) {
-      } else if (OB_FAIL(norm_info->normalize_func_(dim, vector, norm_vector, nullptr))) {
-        LOG_WARN("failed to normalize vector", K(ret));
+    int64_t center_idx = 0;
+    if (OB_FAIL(helper.get_center_idx(0/*idx*/, center_idx))) {
+      LOG_WARN("failed to get center idx", K(ret));
+    } else {
+      center_vec = centers_data + (center_idx - 1) * centers_dim;
+
+      float *norm_vector = nullptr;
+      if (OB_NOT_NULL(norm_info)) {
+        if (OB_ISNULL(norm_vector = static_cast<float*>(alloc.alloc(dim * sizeof(float))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc norm vector", K(ret));
+        } else if (FALSE_IT(MEMSET(norm_vector, 0, dim * sizeof(float)))) {
+        } else if (OB_FAIL(norm_info->normalize_func_(dim, vector, norm_vector, nullptr))) {
+          LOG_WARN("failed to normalize vector", K(ret));
+        }
       }
-    }
-    float *data = norm_vector == nullptr ? vector : norm_vector;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(calc_residual_vector(alloc, dim, data, center_vec, residual))) {
-      LOG_WARN("fail to calc residual vector", K(ret), K(dim));
+      float *data = norm_vector == nullptr ? vector : norm_vector;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(calc_residual_vector(alloc, dim, data, center_vec, residual))) {
+        LOG_WARN("fail to calc residual vector", K(ret), K(dim));
+      }
     }
   }
   return ret;
@@ -6042,7 +6105,6 @@ int ObVectorIndexUtil::calc_location_ids(sql::ObEvalCtx &eval_ctx,
 int ObVectorIndexUtil::eval_ivf_centers_common(ObIAllocator &allocator,
                                               const sql::ObExpr &expr,
                                               sql::ObEvalCtx &eval_ctx,
-                                              ObIArray<float*> &centers,
                                               ObTableID &table_id,
                                               ObTabletID &tablet_id,
                                               ObVectorIndexDistAlgorithm &dis_algo,
@@ -6082,16 +6144,139 @@ int ObVectorIndexUtil::eval_ivf_centers_common(ObIAllocator &allocator,
     } else if (VIDA_MAX <= dis_algo) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected distance algo", K(ret), K(dis_algo));
-    } else {
-      ObPluginVectorIndexService *service = MTL(ObPluginVectorIndexService*);
-      ObExprVecIvfCenterIdCache *cache = get_ivf_center_id_cache_ctx(expr.expr_ctx_id_, &eval_ctx.exec_ctx_);
-      if (OB_FAIL(get_ivf_aux_info(service, cache, table_id, tablet_id, tablet_id, false /* is_pq_cache */, allocator, centers, 0))) {
-        LOG_WARN("failed to get ivf aux info", K(ret));
-      }
     }
   }
   return ret;
 }
+
+int ObVectorIndexUtil::get_ivf_centers_cache(bool is_vectorized,
+                                        bool is_pq_centers,
+                                        ObIvfCacheMgrGuard &cache_guard,
+                                        ObIvfCentCache *&cent_cache,
+                                        const ObTableID &table_id,
+                                        const ObTabletID &centroid_tablet_id,
+                                        bool &is_cache_usable)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+  ObIvfCacheMgr *cache_mgr = nullptr;
+  share::ObLSID ls_id;
+  bool location_cache_hit = false;
+  is_cache_usable = false;
+  cent_cache = nullptr;
+
+  // Get ls_id from centroid_tablet_id
+  // Use expire_renew_time = 0 to prefer cache for better performance
+  if (OB_FAIL(GCTX.location_service_->get(MTL_ID(), centroid_tablet_id, 0, location_cache_hit, ls_id))) {
+    // Mapping not exist, mark as not usable and return success to allow fallback to table scan
+    if (ret == OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST) {
+      LOG_DEBUG("Tablet to LS mapping not exist, will use table scan", K(table_id), K(centroid_tablet_id));
+      is_cache_usable = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("Failed to get ls_id by centroid_tablet_id", K(ret), K(table_id), K(centroid_tablet_id));
+    }
+  } else if (OB_FAIL(vec_index_service->acquire_ivf_cache_mgr_guard(ls_id, centroid_tablet_id, cache_guard))) {
+    // Cache manager not exist, mark as not usable and return success (will use table scan)
+    if (ret == OB_HASH_NOT_EXIST) {
+      LOG_DEBUG("Cache manager not exist, will use table scan", K(ls_id), K(table_id), K(centroid_tablet_id));
+      is_cache_usable = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ObPluginVectorIndexAdapter",
+        K(ret), K(ls_id), K(table_id), K(centroid_tablet_id));
+    }
+  } else if (OB_ISNULL(cache_mgr = cache_guard.get_ivf_cache_mgr())) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null cache mgr", K(ret));
+  } else if (OB_FAIL(cache_mgr->get_cache_node(
+    is_pq_centers ? IvfCacheType::IVF_PQ_CENTROID_CACHE : IvfCacheType::IVF_CENTROID_CACHE, cent_cache))) {
+    // Cache node not exist (OB_HASH_NOT_EXIST), mark as not usable and return success (will use table scan)
+    if (ret == OB_HASH_NOT_EXIST) {
+      LOG_DEBUG("Cache node not exist, will use table scan", K(is_pq_centers), K(table_id), K(centroid_tablet_id));
+      is_cache_usable = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get cache node", K(ret), K(is_pq_centers), K(table_id), K(centroid_tablet_id));
+    }
+  } else if (!cent_cache->is_completed()) {
+    // Cache is not completed, mark as not usable (no write operation)
+    LOG_DEBUG("Cache is not completed yet", K(table_id), K(centroid_tablet_id));
+    is_cache_usable = false;
+  } else {
+    is_cache_usable = true;
+  }
+  return ret;
+}
+
+
+int ObVectorIndexUtil::get_nearest_center_with_hgraph(
+  const float *vector,
+  ObIvfCentCache *hgraph_cache,
+  int64_t &center_idx)
+{
+  int ret = OB_SUCCESS;
+  ObVsagSearchAlloc temp_allocator(MTL_ID());
+  center_idx = 0;
+  int64_t dim = 0;
+
+  if (OB_ISNULL(vector)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments for HGraph search", K(ret), KP(vector));
+  } else if (OB_ISNULL(hgraph_cache)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("hgraph_cache is null", K(ret));
+  } else if ((dim = hgraph_cache->get_cent_vec_dim()) <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid dimension from cache", K(ret), K(dim));
+  } else if (!hgraph_cache->has_hgraph_index()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("HGraph index not built yet", K(ret));
+  } else {
+    common::obvsag::VectorIndexPtr hgraph_index = hgraph_cache->get_hgraph_index();
+    if (OB_ISNULL(hgraph_index)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("HGraph index is null", K(ret));
+    } else {
+      const float* distances = nullptr;
+      const int64_t* result_ids = nullptr;
+      int64_t result_size = 0;
+      const char* extra_info = nullptr;
+      int ef_search = 64; // Increase ef_search to avoid VisitedList capacity issues
+
+      if (OB_FAIL(obvectorutil::knn_search(
+          hgraph_index,
+          const_cast<float*>(vector),
+          dim,
+          1,
+          distances,
+          result_ids,
+          extra_info,
+          result_size,
+          ef_search,
+          nullptr, // invalid filter
+          false,   // reverse_filter
+          false,   // use_extra_info_filter
+          1.0f,    // valid_ratio
+          &temp_allocator,
+          false))) { // need_extra_info
+        LOG_WARN("HGraph knn search failed", K(ret));
+      } else if (result_size <= 0 || OB_ISNULL(result_ids)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Invalid HGraph search result", K(ret), K(result_size), KP(result_ids));
+      } else if (result_ids[0] < 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("HGraph result out of range", K(ret), K(result_ids[0]));
+      } else {
+        center_idx = result_ids[0]; // 1-based index
+        LOG_DEBUG("Successfully found nearest center with HGraph", K(center_idx));
+      }
+    }
+  }
+
+  return ret;
+}
+
 
 int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
                                             const ObVectorIndexParam &param,
@@ -6171,9 +6356,32 @@ int ObVectorIndexUtil::estimate_ivf_memory(uint64_t num_vectors,
   int ret = OB_SUCCESS;
   int64_t nlist = MIN(num_vectors, param.nlist_);
   uint64_t sample_cnt = MIN(num_vectors, param.sample_per_nlist_ * nlist);
-  if (param.type_ == VIAT_IVF_SQ8 || param.type_ == VIAT_IVF_FLAT) {
+  const bool enable_hgraph = nlist >= ObVecIdxExtraInfo::IVF_CENTERS_HGRAPH_THRESHOLD;
+  int64_t hgraph_mem = 0;
+  if (enable_hgraph) {
+    ObVectorIndexParam hgraph_param = param;
+    hgraph_param.nlist_ = nlist;
+    hgraph_param.type_ = VIAT_HGRAPH;
+    hgraph_param.lib_ = VIAL_VSAG;
+    hgraph_param.m_ = 16;
+    hgraph_param.ef_construction_ = 200;
+    hgraph_param.ef_search_ = 64;
+    hgraph_param.extra_info_actual_size_ = 0;
+    hgraph_param.refine_type_ = 0;
+    hgraph_param.bq_bits_query_ = 32;
+    hgraph_param.bq_use_fht_ = false;
+    if (OB_FAIL(estimate_hgraph_memory_for_ivf_centers(hgraph_param, hgraph_mem))) {
+      LOG_WARN("failed to estimate hgraph memory", K(ret), K(hgraph_param));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (param.type_ == VIAT_IVF_SQ8 || param.type_ == VIAT_IVF_FLAT) {
     buff_mem = sizeof(float) * nlist * param.dim_;
     construct_mem = 1000 + 2 * nlist * (nlist + 1) + 8 * nlist * param.dim_ + 4 * sample_cnt * (param.dim_ + 2);
+    if (enable_hgraph && hgraph_mem > 0 ) {
+      construct_mem = construct_mem - 2 * nlist * (nlist + 1) + hgraph_mem;
+      buff_mem = hgraph_mem;
+    }
   } else if (param.type_ == VIAT_IVF_PQ) {
     uint64_t ksub = MIN(num_vectors, 1L << param.nbits_);
     uint64_t pq_sample_count = MAX(ksub * param.sample_per_nlist_, nlist * param.sample_per_nlist_);
@@ -6186,10 +6394,16 @@ int ObVectorIndexUtil::estimate_ivf_memory(uint64_t num_vectors,
       LOG_WARN("failed to estimate ivf pq kmeans memory", K(ret));
     } else {
       pq_construct += pq_kmeans_mem;
+      if (enable_hgraph && hgraph_mem > 0) {
+        ivf_construct = ivf_construct - 2 * nlist * (nlist + 1) + hgraph_mem;
+      }
       construct_mem = MAX(ivf_construct, pq_construct);
       buff_mem = sizeof(float) * param.dim_ * (ksub + nlist);
       if (param.dist_algorithm_ == VIDA_L2) {
         buff_mem += sizeof(float) * nlist * ksub * param.m_;
+      }
+      if (enable_hgraph && hgraph_mem > 0) {
+        buff_mem = buff_mem - sizeof(float) * nlist  * param.dim_ + hgraph_mem;
       }
     }
   } else {
@@ -6297,19 +6511,22 @@ int ObVectorIndexUtil::get_ivf_aux_info(share::ObPluginVectorIndexService *servi
     }
 
     if (!cache_hit && OB_SUCC(ret)) {
-      if (OB_NOT_NULL(cache)) {
-        cache->reuse();
-      }
       if (OB_FAIL(service->get_ivf_aux_info_from_cache(table_id, tablet_id, cache_type, allocator, centers, cache, cache_tablet_id, m))) {
         if (OB_CACHE_NOT_HIT == ret) {
           ret = OB_SUCCESS;
-          LOG_DEBUG("System cache miss, will try original logic", K(table_id), K(tablet_id), "cache_type", cache_type);
+          LOG_WARN("Ivf center id system cache miss, will try original logic", K(table_id), K(tablet_id), "cache_type", cache_type);
         } else {
-          LOG_DEBUG("Failed to get ivf aux info from system cache", K(ret), K(table_id), K(tablet_id), "cache_type", cache_type);
+          LOG_WARN("Failed to get ivf aux info from ivf center id system cache", K(ret), K(table_id), K(tablet_id), "cache_type", cache_type);
         }
       } else {
         cache_hit = true;
         LOG_DEBUG("System cache hit, centers loaded and expression cache updated", K(table_id), K(tablet_id), K(centers.count()), "cache_type", cache_type);
+        if (OB_NOT_NULL(cache)) {
+          cache->reuse();
+          if (OB_FAIL(cache->update_cache(table_id, tablet_id, centers))) {
+            LOG_WARN("failed to update ivf center id expression cache by ivf center id system cache", K(ret));
+          }
+        }
       }
     }
 
@@ -6323,7 +6540,7 @@ int ObVectorIndexUtil::get_ivf_aux_info(share::ObPluginVectorIndexService *servi
         if (OB_FAIL(service->get_ivf_aux_info(table_id, tablet_id, cache->get_allocator(), centers))) {
           LOG_WARN("failed to get centers", K(ret));
         } else if (OB_FAIL(cache->update_cache(table_id, tablet_id, centers))) {
-          LOG_WARN("failed to update ivf center id cache", K(ret));
+          LOG_WARN("failed to update ivf center id expression cache", K(ret));
         }
       }
     }
@@ -6652,6 +6869,57 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
   if (OB_SUCC(ret)) {
     LOG_INFO("estimate vector index memory used.", K(estimate_memory), K(index_schema.get_table_name_str()), K(row_count), K(param));
   }
+  return ret;
+}
+
+int ObVectorIndexUtil::estimate_hgraph_memory_for_ivf_centers(
+    const ObVectorIndexParam &param,
+    int64_t &estimated_memory)
+{
+  int ret = OB_SUCCESS;
+  estimated_memory = 0;
+
+  if (OB_UNLIKELY(param.nlist_ <= 0
+      || param.dim_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for hgraph memory estimation",
+        K(ret), K(param.nlist_), K(param.dim_));
+  } else {
+    common::obvsag::VectorIndexPtr tmp_index = nullptr;
+    const char *metric = "l2";
+    if (param.dist_algorithm_ < 0 || param.dist_algorithm_ >= ObVectorIndexDistAlgorithm::VIDA_MAX) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid distance algorithm", K(ret), K(param.dist_algorithm_));
+    } else {
+      metric = VEC_INDEX_ALGTH[param.dist_algorithm_];
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+    } else if (OB_TMP_FAIL(obvectorutil::create_index(
+        tmp_index,
+        VIAT_HGRAPH,
+        "float32",
+        metric,
+        param.dim_,
+        param.m_,
+        param.ef_construction_,
+        param.ef_search_,
+        nullptr,
+        param.extra_info_actual_size_,
+        param.refine_type_,
+        param.bq_bits_query_,
+        param.bq_use_fht_))) {
+      estimated_memory = param.nlist_ * (param.dim_ * sizeof(float) + 200);
+      LOG_INFO("HGraph creation failed, using conservative memory estimate",
+          K(tmp_ret), K(param.nlist_), K(param.dim_), K(estimated_memory));
+    } else {
+      estimated_memory = obvectorutil::estimate_memory(tmp_index, param.nlist_, true/*is_build*/);
+      LOG_INFO("HGraph memory estimated using VSAG interface",
+          K(param.nlist_), K(param.dim_), K(estimated_memory));
+      obvectorutil::delete_index(tmp_index);
+    }
+  }
+
   return ret;
 }
 

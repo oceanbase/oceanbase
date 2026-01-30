@@ -24,6 +24,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/worker.h"
+#include "lib/allocator/ob_allocator.h"
 
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
 
@@ -182,6 +183,7 @@ public:
                         const int64_t *ids, int64_t count, const float *&dist);
   int get_extra_info_by_ids(const int64_t *ids, int64_t count,
                             char *extra_infos);
+  int get_raw_vector_by_ids(const int64_t *ids, int64_t count, float *&vectors, void *allocator = nullptr, int64_t dim = 0);
   int get_vid_bound(int64_t &min_vid, int64_t &max_vid);
   uint64_t estimate_memory(const uint64_t row_count, const bool is_build);
   int knn_search(const vsag::DatasetPtr &query, int64_t topk,
@@ -327,6 +329,41 @@ int HnswIndexHandler::get_extra_info_by_ids(const int64_t *ids, int64_t count,
     LOG_DEBUG("get_extra_info_by_ids success", KP(ids), K(count), KP(extra_infos));
   } else {
     ret = vsag_errcode2ob(result.error().type);
+  }
+  return ret;
+}
+
+int HnswIndexHandler::get_raw_vector_by_ids(const int64_t *ids, int64_t count, float *&vectors, void *allocator, int64_t dim)
+{
+  int ret = OB_SUCCESS;
+  vectors = nullptr;
+  tl::expected<DatasetPtr, Error> result = index_->GetRawVectorByIds(ids, count);
+  if (result.has_value()) {
+    DatasetPtr ds = result.value();
+    const float *raw_vectors = ds->GetFloat32Vectors();
+    if (OB_ISNULL(raw_vectors)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[OBVSAG] get_raw_vector_by_ids returned null vectors", K(ret), KP(ids), K(count));
+    } else {
+      if (OB_NOT_NULL(allocator) && dim > 0) {
+        common::ObIAllocator *ob_allocator = static_cast<common::ObIAllocator *>(allocator);
+        int64_t total_size = count * dim * sizeof(float);
+        float *copied_vectors = static_cast<float *>(ob_allocator->alloc(total_size));
+        if (OB_ISNULL(copied_vectors)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("[OBVSAG] fail to alloc memory for deep copy", K(ret), K(count), K(dim));
+        } else {
+          MEMCPY(copied_vectors, raw_vectors, total_size);
+          vectors = copied_vectors;
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("[OBVSAG] allocator is required for get_raw_vector_by_ids", K(ret), KP(ids), K(count));
+      }
+    }
+  } else {
+    ret = vsag_errcode2ob(result.error().type);
+    LOG_WARN("[OBVSAG] GetRawVectorByIds error", K(ret), K(result.error().type));
   }
   return ret;
 }
@@ -596,7 +633,7 @@ int construct_vsag_create_param(
     uint8_t create_type, const char *dtype, const char *metric, int dim,
     int max_degree, int ef_construction, int ef_search, void *allocator,
     int extra_info_size, int16_t refine_type, int16_t bq_bits_query,
-    bool bq_use_fht, char *result_param_str)
+    bool bq_use_fht, bool store_raw_vector, char *result_param_str)
 {
   int ret = OB_SUCCESS;
   bool is_hgraph_type = get_is_hgraph_type(create_type);
@@ -659,6 +696,10 @@ int construct_vsag_create_param(
                                      ",\"max_degree\":%d",
                                      max_degree))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(max_degree));
+  } else if (create_type == HGRAPH_TYPE && store_raw_vector &&
+             OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
+                                 ",\"store_raw_vector\":true"))) {
+    LOG_WARN("failed to fill store_raw_vector", K(ret));
   } else if (is_hgraph_type &&
       OB_FAIL(databuff_printf(
           result_param_str, buf_len, pos,
@@ -837,7 +878,8 @@ int create_index(VectorIndexPtr &index_handler,
                  const char *metric, int dim, int max_degree,
                  int ef_construction, int ef_search, void *allocator,
                  int extra_info_size /* = 0*/, int16_t refine_type /*= 0*/,
-                 int16_t bq_bits_query /*= 32*/, bool bq_use_fht /*= false*/)
+                 int16_t bq_bits_query /*= 32*/, bool bq_use_fht /*= false*/,
+                 bool store_raw_vector /*= false*/)
 {
   int ret = OB_SUCCESS;
   if (dtype == nullptr || metric == nullptr) {
@@ -864,7 +906,7 @@ int create_index(VectorIndexPtr &index_handler,
     if (OB_FAIL(construct_vsag_create_param(
         uint8_t(index_type), dtype, metric, dim, max_degree,
         ef_construction, ef_search, allocator, extra_info_size,
-        refine_type, bq_bits_query, bq_use_fht, result_param_str))) {
+        refine_type, bq_bits_query, bq_use_fht, store_raw_vector, result_param_str))) {
       LOG_WARN("construct_vsag_create_param fail", K(ret), K(index_type));
     } else {
       const std::string input_json_str(result_param_str);
@@ -1345,7 +1387,7 @@ int fdeserialize(VectorIndexPtr &index_handler,
       if (OB_FAIL(construct_vsag_create_param(
         uint8_t(index_type), dtype, metric, dim, max_degree,
         ef_construction, ef_search, hnsw->get_allocator(),
-        extra_info_size, refine_type, bq_bits_query, bq_use_fht, result_param_str))) {
+        extra_info_size, refine_type, bq_bits_query, bq_use_fht, false, result_param_str))) {
         LOG_WARN("construct_vsag_create_param fail", K(ret), K(index_type));
       }
     }
@@ -1406,6 +1448,22 @@ int get_extra_info_by_ids(VectorIndexPtr &index_handler,
     HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
     if (OB_FAIL(hnsw->get_extra_info_by_ids(ids, count, extra_infos))) {
       LOG_WARN("[OBVSAG] get_extra_info_by_ids error happend", K(ret));
+    }
+  }
+  return ret;
+}
+
+int get_raw_vector_by_ids(VectorIndexPtr &index_handler, const int64_t* ids, int64_t count, float *&vectors,
+                          void *allocator, int64_t dim)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_handler)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[OBVSAG] null pointer addr", K(ret), KP(index_handler));
+  } else {
+    HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
+    if (OB_FAIL(hnsw->get_raw_vector_by_ids(ids, count, vectors, allocator, dim))) {
+      LOG_WARN("[OBVSAG] get_raw_vector_by_ids error happend", K(ret));
     }
   }
   return ret;

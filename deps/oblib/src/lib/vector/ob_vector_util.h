@@ -56,7 +56,7 @@ int create_index(obvsag::VectorIndexPtr& index_handler, int index_type,
                  int max_degree, int ef_construction, int ef_search,
                  void* allocator = NULL, int extra_info_size = 0,
                  int16_t refine_type = 0, int16_t bq_bits_query = 32,
-                 bool bq_use_fht = false);
+                 bool bq_use_fht = false, bool store_raw_vector = false);
 
 int create_index(obvsag::VectorIndexPtr &index_handler, int index_type, const char *dtype, const char *metric,
     bool use_reorder, float doc_prune_ratio, int window_size, void *allocator = NULL, int extra_info_size = 0);
@@ -84,6 +84,12 @@ int cal_distance_by_id(obvsag::VectorIndexPtr index_handler,
                        const int64_t *ids,
                        int64_t count,
                        const float *&distances);
+int get_raw_vector_by_ids(obvsag::VectorIndexPtr &index_handler,
+                         const int64_t *ids,
+                         int64_t count,
+                         float *&vectors,
+                         void *allocator = nullptr,
+                         int64_t dim = 0);
 int get_extra_info_by_ids(obvsag::VectorIndexPtr& index_handler,
                           const int64_t* ids,
                           int64_t count,

@@ -14,6 +14,8 @@
 #include "ob_vector_kmeans_ctx.h"
 #include "lib/container/ob_array_array.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/vector_index/ob_vector_index_util.h"
+#include "share/allocator/ob_tenant_vector_allocator.h"
 #include "storage/ddl/ob_direct_load_struct.h"
 #include "lib/ob_define.h"
 #include "share/ob_errno.h"
@@ -39,7 +41,8 @@ int ObKmeansCtx::init(
     const int64_t dim,
     ObVectorIndexDistAlgorithm dist_algo,
     ObVectorNormalizeInfo *norm_info,
-    int64_t pq_m)
+    int64_t pq_m,
+    bool is_pq_stage)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == tenant_id || 0 >= lists || 0 >= samples_per_nlist || 0 >= dim || VIDA_MAX <= dist_algo
@@ -61,6 +64,7 @@ int ObKmeansCtx::init(
     max_sample_count_ = lists_ * samples_per_nlist;
     dist_algo_ = dist_algo;
     norm_info_ = norm_info;
+    is_pq_stage_ = is_pq_stage; // set is_pq_stage from parameter
     is_inited_ = true;
   }
   return ret;
@@ -170,6 +174,16 @@ int ObKmeansAlgo::init(ObKmeansCtx &kmeans_ctx, bool enable_parallel /* = false 
   } else {
     kmeans_ctx_ = &kmeans_ctx;
     enable_parallel_ = enable_parallel;
+    // decide whether to enable HGraph acceleration based on conditions
+    // conditions: 1. nlist >= threshold (5000)  2. is IVF clustering stage (not PQ quantization stage)
+    const int64_t nlist = kmeans_ctx.lists_;
+    const int64_t hgraph_threshold = ObVecIdxExtraInfo::IVF_BUILD_HGRAPH_THRESHOLD;
+    // check if is IVF clustering stage (not PQ quantization stage)
+    bool is_ivf_stage = !kmeans_ctx.is_pq_stage_ && (kmeans_ctx.dim_ == kmeans_ctx.sample_dim_);
+    enable_hgraph_ = is_ivf_stage && (nlist >= hgraph_threshold);
+    LOG_DEBUG("HGraph acceleration decision", K(enable_hgraph_), K(is_ivf_stage), K(kmeans_ctx.is_pq_stage_), K(nlist),
+             K(hgraph_threshold), K(kmeans_ctx.dim_), K(kmeans_ctx.sample_dim_));
+
     is_inited_ = true;
   }
   return ret;
@@ -595,7 +609,7 @@ int ObSingleKmeansExecutor::init(
     const int64_t pq_m_size/* = 1*/)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ctx_.init(tenant_id, lists, samples_per_nlist, dim, dist_algo, norm_info, 1 /*pq_m*/))) {
+  if (OB_FAIL(ctx_.init(tenant_id, lists, samples_per_nlist, dim, dist_algo, norm_info, 1 /*pq_m*/, false /* is_pq_stage */))) {
     LOG_WARN("fail to init kmeans ctx", K(ret), K(tenant_id), K(lists), K(samples_per_nlist), K(dim), K(dist_algo));
   } else {
     if (algo_type == ObKmeansAlgoType::KAT_ELKAN) {
@@ -711,7 +725,7 @@ int ObMultiKmeansExecutor::init(
     const int64_t pq_m_size/* = 1*/)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ctx_.init(tenant_id, lists, samples_per_nlist, dim, dist_algo, norm_info, pq_m_size))) {
+  if (OB_FAIL(ctx_.init(tenant_id, lists, samples_per_nlist, dim, dist_algo, norm_info, pq_m_size, true /* is_pq_stage */))) {
     LOG_WARN("fail to init kmeans ctx", K(ret), K(tenant_id), K(lists), K(samples_per_nlist), K(dim), K(dist_algo));
   } else {
     pq_m_size_ = pq_m_size;
@@ -1074,6 +1088,12 @@ int ObMultiKmeansExecutor::get_center(const int64_t pos, float *&center_vector)
 // ------------------ ObElkanKmeansAlgo implement ------------------
 void ObElkanKmeansAlgo::destroy()
 {
+  if (enable_hgraph_ && OB_NOT_NULL(hgraph_index_)) {
+    obvectorutil::delete_index(hgraph_index_);
+    hgraph_index_ = nullptr;
+    LOG_DEBUG("Released HGraph index in destroy()");
+  }
+
   ObKmeansAlgo::destroy();
 }
 
@@ -1082,6 +1102,7 @@ int ObElkanKmeansAlgo::assign_vectors_parallel(const ObIArray<float *> &input_ve
 {
   int ret = OB_SUCCESS;
   const int64_t sample_cnt = input_vectors.count();
+  const bool use_hgraph = is_hgraph_available();
 
   if (OB_ISNULL(task_handler_)) {
     // If task handler is unavailable, fallback to serial processing
@@ -1156,9 +1177,23 @@ int ObElkanKmeansAlgo::assign_vectors_parallel(const ObIArray<float *> &input_ve
 int ObElkanKmeansAlgo::search_nearest_center(const ObIArray<float*> &input_vectors, float* centers_distance, int32_t *data_cnt_in_cluster, float &dis_obj)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(kmeans_ctx_->lists_ != centers_[cur_idx_].count() || OB_ISNULL(centers_distance) || OB_ISNULL(data_cnt_in_cluster))) {
+  const bool use_hgraph = is_hgraph_available();
+  if (OB_UNLIKELY(kmeans_ctx_->lists_ != centers_[cur_idx_].count() || OB_ISNULL(data_cnt_in_cluster))) {
     ret = OB_ERR_UNEXPECTED;
-    SHARE_LOG(WARN, "param error", K(ret), K(kmeans_ctx_->lists_), K(centers_[cur_idx_].count()), KP(centers_distance), KP(data_cnt_in_cluster));
+    SHARE_LOG(WARN, "param error", K(ret), K(kmeans_ctx_->lists_), K(centers_[cur_idx_].count()),
+        KP(centers_distance), KP(data_cnt_in_cluster), K(use_hgraph));
+  } else if (use_hgraph) {
+    if (OB_UNLIKELY(nullptr == hgraph_index_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "hgraph enabled but index not ready", K(ret));
+    } else if (OB_FAIL(assign_vectors_parallel(input_vectors, nullptr, data_cnt_in_cluster, dis_obj))) {
+      SHARE_LOG(WARN, "failed to assign vectors with hgraph", K(ret));
+    } else {
+      dis_obj = dis_obj / std::max(1L, input_vectors.count());
+    }
+  } else if (OB_ISNULL(centers_distance)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "centers_distance is null for brute-force search", K(ret));
   } else {
     const int64_t sample_cnt = input_vectors.count();
     const int64_t center_count = kmeans_ctx_->lists_;
@@ -1187,6 +1222,147 @@ int ObElkanKmeansAlgo::search_nearest_center(const ObIArray<float*> &input_vecto
   return ret;
 }
 
+int ObElkanKmeansAlgo::build_hgraph_for_centers()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(kmeans_ctx_)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("kmeans_ctx is null", K(ret));
+  } else {
+    const int64_t nlist = kmeans_ctx_->lists_;
+    const int64_t dim = kmeans_ctx_->dim_;
+    ObVectorIndexParam hgraph_param;
+    hgraph_param.nlist_ = nlist;
+    hgraph_param.dim_ = dim;
+    hgraph_param.dist_algorithm_ = ObVectorIndexDistAlgorithm::VIDA_L2;
+    hgraph_param.m_ = 16;
+    hgraph_param.ef_construction_ = 200;
+    hgraph_param.ef_search_ = 64;
+    hgraph_param.extra_info_actual_size_ = 0;
+    hgraph_param.refine_type_ = 0;
+    hgraph_param.bq_bits_query_ = ObVectorIndexParam::DEFAULT_BQ_BITS_QUERY;
+    hgraph_param.bq_use_fht_ = false;
+
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(kmeans_ctx_->tenant_id_, "KmeansHGraphEst"));
+
+    // 1. estimate memory for hgraph construction
+    int64_t estimated_memory = 0;
+    if (OB_FAIL(ObVectorIndexUtil::estimate_hgraph_memory_for_ivf_centers(
+            hgraph_param, estimated_memory))) {
+      LOG_WARN("failed to estimate hgraph memory", K(ret), K(nlist), K(dim));
+    } else {
+      estimated_memory += nlist * sizeof(int64_t);
+      // 2. check memory limit
+      int64_t current_memory = ivf_build_mem_ctx_.get_all_vsag_use_mem_byte();
+      int64_t memory_limit = 0;
+      LOG_INFO("HGraph build memory check", K(current_memory), K(estimated_memory), K(nlist), K(dim));
+
+      if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_limit_size(
+              kmeans_ctx_->tenant_id_, memory_limit))) {
+        LOG_WARN("failed to get memory limit", K(ret), K(kmeans_ctx_->tenant_id_));
+      } else if (current_memory + estimated_memory > memory_limit) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("insufficient memory for HGraph construction",
+                 K(ret), K(current_memory), K(estimated_memory), K(memory_limit), K(nlist), K(dim));
+      } else {
+        // 3. memory enough, build hgraph
+        LOG_INFO("Starting HGraph construction with memory check",
+                 K(nlist), K(dim), K(estimated_memory), K(current_memory), K(memory_limit));
+        ret = do_build_hgraph_for_centers(hgraph_param);
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObElkanKmeansAlgo::do_build_hgraph_for_centers(const ObVectorIndexParam &param)
+{
+  int ret = OB_SUCCESS;
+  const int64_t nlist = param.nlist_;
+  const int64_t dim = param.dim_;
+
+  if (OB_NOT_NULL(hgraph_index_)) {
+    obvectorutil::delete_index(hgraph_index_);
+    hgraph_index_ = nullptr;
+    LOG_DEBUG("Released old HGraph index before rebuilding", K(nlist), K(dim));
+  }
+
+  ObCentersBuffer<float> &centers = get_cur_centers();
+  if (centers.count() != nlist) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("centers buffer not ready", K(ret), K(centers.count()), K(nlist));
+  } else {
+    // Initialize hgraph_allocator_ if not already initialized
+    if (!hgraph_allocator_.is_inited()) {
+      if (OB_ISNULL(kmeans_ctx_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("kmeans_ctx_ is null, cannot init hgraph allocator", K(ret));
+      } else if (OB_FAIL(hgraph_allocator_.init(
+          ivf_build_mem_ctx_.get_mem_context(),
+          ivf_build_mem_ctx_.get_all_vsag_use_mem(),
+          kmeans_ctx_->tenant_id_))) {
+        LOG_WARN("failed to init hgraph allocator", K(ret), K(kmeans_ctx_->tenant_id_));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // initialization failed, skip hgraph build
+    } else {
+      const char *metric = "l2";
+      int64_t memory_before = ivf_build_mem_ctx_.get_all_vsag_use_mem_byte();
+
+      if (OB_FAIL(obvectorutil::create_index(
+        hgraph_index_,
+        VIAT_HGRAPH,
+        "float32",
+        metric,
+        dim,
+        param.m_,
+        param.ef_construction_,
+        param.ef_search_,
+        &hgraph_allocator_,
+        param.extra_info_actual_size_,
+        param.refine_type_,
+        param.bq_bits_query_,
+        param.bq_use_fht_))) {
+        LOG_WARN("fail to create hgraph index", K(ret), K(nlist), K(dim));
+      } else {
+        LOG_DEBUG("Successfully created HGraph index, now adding centers data", K(nlist), K(dim));
+
+        float *all_centers_data = centers.at(0);
+        int64_t *center_ids = static_cast<int64_t *>(ivf_build_mem_ctx_.Allocate(sizeof(int64_t) * nlist));
+        if (OB_ISNULL(all_centers_data) || OB_ISNULL(center_ids)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to get centers data or allocate ids", K(ret), KP(all_centers_data), KP(center_ids));
+        } else {
+          // prepare id array
+          for (int64_t i = 0; i < nlist; ++i) {
+            center_ids[i] = i + 1; // id starts from 1
+          }
+          if (OB_FAIL(obvectorutil::build_index(hgraph_index_, all_centers_data, center_ids, dim, nlist))) {
+            LOG_WARN("failed to build hgraph index", K(ret), K(nlist), K(dim));
+            obvectorutil::delete_index(hgraph_index_);
+            hgraph_index_ = nullptr;
+          } else {
+            int64_t memory_after = ivf_build_mem_ctx_.get_all_vsag_use_mem_byte();
+            int64_t actual_used = memory_after - memory_before;
+            LOG_INFO("HGraph built successfully for K-means",
+                    K(nlist), K(dim), K(memory_before), K(memory_after), K(actual_used));
+          }
+          // clean id array
+          if (center_ids) {
+            ivf_build_mem_ctx_.Deallocate(center_ids);
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
 {
   int ret = OB_SUCCESS;
@@ -1198,15 +1374,16 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
     // Upper triangular matrix
     float* centers_distance = nullptr; // half the distance between each two centers
     int32_t *data_cnt_in_cluster = nullptr; // the number of vectors contained in each center (cluster)
-    // init tmp variables
-    float *tmp = nullptr;
-    int64_t center_dis_size = max(1, kmeans_ctx_->lists_ * (kmeans_ctx_->lists_ - 1) / 2);
-    if (OB_ISNULL(tmp = static_cast<float *>(ivf_build_mem_ctx_.Allocate(sizeof(float) * center_dis_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
-    } else {
-      MEMSET(tmp, 0, sizeof(float) * center_dis_size);
-      centers_distance = tmp;
+    if (!enable_hgraph_) {
+      float *tmp = nullptr;
+      int64_t center_dis_size = max(1, kmeans_ctx_->lists_ * (kmeans_ctx_->lists_ - 1) / 2);
+      if (OB_ISNULL(tmp = static_cast<float *>(ivf_build_mem_ctx_.Allocate(sizeof(float) * center_dis_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
+      } else {
+        MEMSET(tmp, 0, sizeof(float) * center_dis_size);
+        centers_distance = tmp;
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(data_cnt_in_cluster =
@@ -1230,6 +1407,14 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
       float dis_obj = 0.0;
       MEMSET(data_cnt_in_cluster, 0, sizeof(int32_t) * kmeans_ctx_->lists_);
       centers_[next_idx()].clear();
+
+      // try to build hgraph for centers
+      if (enable_hgraph_) {
+        if (OB_FAIL(build_hgraph_for_centers())) {
+          LOG_WARN("failed to build hgraph for centers", K(ret), K(iter));
+        }
+      }
+
       // 1. search nearest center
       if (OB_FAIL(search_nearest_center(input_vectors, centers_distance, data_cnt_in_cluster, dis_obj))) {
         SHARE_LOG(WARN, "failed to search nearest center", K(ret));
@@ -1281,6 +1466,14 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
         }
       }
     }  // iter end for
+
+    // only need to release index when hgraph is enabled
+    if (enable_hgraph_ && OB_NOT_NULL(hgraph_index_)) {
+      obvectorutil::delete_index(hgraph_index_);
+      hgraph_index_ = nullptr;
+      LOG_DEBUG("Released HGraph index after K-means completion");
+    }
+
     // free tmp memory
     int64_t mem_used = ivf_build_mem_ctx_.get_all_vsag_use_mem_byte() >> 20;
     LOG_INFO("elkan kmeans memused", K(ret), K(mem_used));
@@ -1311,6 +1504,59 @@ int ObElkanKmeansAlgo::add_vector_to_center_safe(int64_t center_idx, int64_t dim
   return ret;
 }
 
+int ObElkanKmeansAlgo::find_nearest_center_with_hgraph(const float* vector, int64_t &nearest_center_idx, float &distance)
+{
+  int ret = OB_SUCCESS;
+  nearest_center_idx = -1;
+  distance = std::numeric_limits<float>::max();
+  ObVsagSearchAlloc vsag_allocator(kmeans_ctx_->tenant_id_);
+
+  if (OB_ISNULL(vector)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("vector is null", K(ret));
+  } else if (OB_ISNULL(hgraph_index_)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("hgraph index not built, fallback to brute force", K(ret));
+  } else {
+    const float* distances = nullptr;
+    const int64_t* result_ids = nullptr;
+    int64_t result_size = 0;
+    const char* extra_info = nullptr;
+    int ef_search = 64;
+
+    if (OB_FAIL(obvectorutil::knn_search(
+        hgraph_index_,
+        const_cast<float*>(vector),
+        kmeans_ctx_->dim_,
+        1,
+        distances,
+        result_ids,
+        extra_info,
+        result_size,
+        ef_search,
+        nullptr, // invalid filter
+        false,   // reverse_filter
+        false,   // use_extra_info_filter
+        1.0f,    // valid_ratio
+        &vsag_allocator,
+        false))) { // need_extra_info
+      LOG_WARN("HGraph knn search failed", K(ret));
+    } else if (result_size <= 0 || OB_ISNULL(result_ids) || OB_ISNULL(distances)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid HGraph search result", K(ret), K(result_size), KP(result_ids), KP(distances));
+    } else if (result_ids[0] < 1 || result_ids[0] > kmeans_ctx_->lists_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("HGraph result out of range", K(ret), K(result_ids[0]), K(kmeans_ctx_->lists_));
+    } else {
+      nearest_center_idx = result_ids[0] - 1;
+      distance = distances[0];
+      LOG_DEBUG("found nearest center with hgraph", K(nearest_center_idx), K(distance));
+    }
+  }
+
+  return ret;
+}
+
 int ObElkanKmeansAlgo::assign_vectors_range(const ObIArray<float *> &input_vectors, int64_t start_idx, int64_t end_idx,
                                             float *centers_distance, int32_t *data_cnt_in_cluster, float &dis_obj,
                                             bool use_safe_add)
@@ -1318,6 +1564,11 @@ int ObElkanKmeansAlgo::assign_vectors_range(const ObIArray<float *> &input_vecto
   int ret = OB_SUCCESS;
   const int64_t dim = kmeans_ctx_->dim_;
   const int64_t center_count = kmeans_ctx_->lists_;
+  const bool use_hgraph = is_hgraph_available();
+  if (!use_hgraph && OB_ISNULL(centers_distance)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "centers distance is required without hgraph", K(ret));
+  }
 
   for (int64_t i = start_idx; OB_SUCC(ret) && i < end_idx; ++i) {
     if (check_stop()) {
@@ -1330,33 +1581,42 @@ int ObElkanKmeansAlgo::assign_vectors_range(const ObIArray<float *> &input_vecto
     float min_distance = FLT_MAX;
     float gate_distance = FLT_MAX;
 
-    if (OB_FAIL(calc_kmeans_distance(sample_vector, centers_[cur_idx_].at(0), dim, min_distance))) {
-      SHARE_LOG(WARN, "failed to calc kmeans distance", K(ret));
+    if (use_hgraph) {
+      if (OB_FAIL(find_nearest_center_with_hgraph(sample_vector, nearest_center_idx, min_distance))) {
+        SHARE_LOG(WARN, "failed to find nearest center with hgraph", K(ret));
+      } else if (nearest_center_idx < 0 || nearest_center_idx >= center_count) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "invalid hgraph result", K(ret), K(nearest_center_idx), K(center_count));
+      }
     } else {
-      nearest_center_idx = 0;
-      gate_distance = min_distance * GATE_DISTANCE_FACTOR;
-    }
+      // use Elkan algorithm to find the nearest center
+      if (OB_FAIL(calc_kmeans_distance(sample_vector, centers_[cur_idx_].at(0), dim, min_distance))) {
+        SHARE_LOG(WARN, "failed to calc kmeans distance", K(ret));
+      } else {
+        nearest_center_idx = 0;
+        gate_distance = min_distance * GATE_DISTANCE_FACTOR;
+      }
 
-    for (int64_t j = 1; OB_SUCC(ret) && j < center_count; ++j) {
-      float dis_near_cur = get_centers_distance(centers_distance, nearest_center_idx, j);
-      if (dis_near_cur < gate_distance) {
-        float dis_half_dim = 0.0f;
-        if (OB_FAIL(calc_kmeans_distance(sample_vector, centers_[cur_idx_].at(j), dim / 2, dis_half_dim))) {
-          SHARE_LOG(WARN, "failed to calc kmeans distance", K(ret));
-        } else if (dis_half_dim < min_distance) {
-          float full_distance = 0.0f;
-          if (OB_FAIL(calc_kmeans_distance(sample_vector + dim / 2, centers_[cur_idx_].at(j) + dim / 2, dim - dim / 2, full_distance))) {
+      for (int64_t j = 1; OB_SUCC(ret) && j < center_count; ++j) {
+        float dis_near_cur = get_centers_distance(centers_distance, nearest_center_idx, j);
+        if (dis_near_cur < gate_distance) {
+          float dis_half_dim = 0.0f;
+          if (OB_FAIL(calc_kmeans_distance(sample_vector, centers_[cur_idx_].at(j), dim / 2, dis_half_dim))) {
             SHARE_LOG(WARN, "failed to calc kmeans distance", K(ret));
-          } else if (OB_FALSE_IT(full_distance += dis_half_dim)) {
-          } else if (full_distance < min_distance) {
-            min_distance = full_distance;
-            gate_distance = min_distance * GATE_DISTANCE_FACTOR;
-            nearest_center_idx = j;
+          } else if (dis_half_dim < min_distance) {
+            float full_distance = 0.0f;
+            if (OB_FAIL(calc_kmeans_distance(sample_vector + dim / 2, centers_[cur_idx_].at(j) + dim / 2, dim - dim / 2, full_distance))) {
+              SHARE_LOG(WARN, "failed to calc kmeans distance", K(ret));
+            } else if (OB_FALSE_IT(full_distance += dis_half_dim)) {
+            } else if (full_distance < min_distance) {
+              min_distance = full_distance;
+              gate_distance = min_distance * GATE_DISTANCE_FACTOR;
+              nearest_center_idx = j;
+            }
           }
         }
       }
     }
-
     if (OB_SUCC(ret)) {
       // Update the distance of the target function
       dis_obj += min_distance;
@@ -1993,7 +2253,10 @@ int ObKmeansAssignTask::init(int64_t start_idx, int64_t end_idx, ObElkanKmeansAl
                              int32_t *data_cnt_in_cluster)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(algo) || OB_ISNULL(input_vectors) || OB_ISNULL(centers_distance) || OB_ISNULL(data_cnt_in_cluster)) {
+  const bool require_center_distance = (nullptr != algo) ? !algo->is_hgraph_available() : true;
+  if (OB_ISNULL(algo) || OB_ISNULL(input_vectors) ||
+      OB_ISNULL(data_cnt_in_cluster) ||
+      (require_center_distance && OB_ISNULL(centers_distance))) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), KP(algo), KP(input_vectors), KP(centers_distance),
               KP(data_cnt_in_cluster));

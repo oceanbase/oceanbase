@@ -26,7 +26,9 @@ public:
                                const ObVectorIndexParam &vec_param, int64_t dim,
                                IvfCacheType cache_type, bool &is_writable);
   static int scan_and_write_ivf_cent_cache(ObPluginVectorIndexService &service,
-                                           const ObTableID &table_id, const ObTabletID &tablet_id,
+                                           const ObTableID &table_id,
+                                           const ObTabletID &tablet_id,
+                                           const ObVectorIndexParam &vec_param,
                                            ObIvfCentCache &cent_cache);
 
 private:

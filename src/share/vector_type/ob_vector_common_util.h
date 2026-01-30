@@ -219,10 +219,12 @@ public:
   int get_nearest_probe_centers(
       float *vector,
       const int64_t dim,
-      ObIArray<float*> &centers,
+      float *centers_data,
+      const int64_t centers_count,
+      const int64_t center_dim,
       const int64_t nprobe,
       ObIAllocator &allocator,
-      share::ObVectorNormalizeInfo *norm_info = nullptr,
+      ObVectorNormalizeInfo *norm_info = nullptr,
       int l_idx = 0,
       int r_idx = -1);
   int get_center_idx(const int64_t idx, int64_t &center_id);

@@ -82,7 +82,7 @@ public:
       mem_context_ = nullptr;
     }
   }
-  int init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem, uint64_t tenant_id);
+  int init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem, uint64_t tenant_id, const char *label = "VIndexVsagADP");
   bool is_inited() { return OB_NOT_NULL(mem_context_); }
 
   std::string Name() override {

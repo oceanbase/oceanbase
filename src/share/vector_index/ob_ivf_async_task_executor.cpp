@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_ivf_async_task_executor.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_vector_index_ivf_cache_util.h"
 #include "storage/ls/ob_ls.h"
 
@@ -409,6 +410,7 @@ int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObSchemaGetterGuard &sche
   const ObTableSchema *data_table_schema = nullptr;
   ObSEArray<uint64_t, 1> col_ids;
   ObIvfAuxTableInfo cur_aux_table_info;
+  ObString index_prefix;
   if (is_sys_table(table_id)) {
     // do nothing
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, index_table_schema))) {
@@ -435,8 +437,10 @@ int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObSchemaGetterGuard &sche
     } else if (col_ids.count() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("count of col ids should be 1", K(ret), K(col_ids.count()));
+    } else if (OB_FAIL(ObPluginVectorIndexUtils::get_vector_index_prefix(*index_table_schema, index_prefix))) {
+      LOG_WARN("failed to get vector index prefix", KR(ret), K(index_table_schema->get_table_id()));
     } else {
-      ObIvfAuxKey key(data_table_schema->get_table_id(), col_ids.at(0));
+      ObIvfAuxKey key(data_table_schema->get_table_id(), col_ids.at(0), index_prefix);
       if (OB_FAIL(aux_table_info_map.get_refactored(key, cur_aux_table_info))) {
         if (ret != OB_HASH_NOT_EXIST) {
           LOG_WARN("fail to get refactored", K(ret), K(key));

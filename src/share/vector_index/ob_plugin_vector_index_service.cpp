@@ -1815,10 +1815,6 @@ int ObPluginVectorIndexService::process_pq_centroid_cache(ObIvfCentCache *cent_c
           } else {
             if (OB_FAIL(aux_info.push_back(centroid_vec))) {
               LOG_WARN("failed to add pq centroid to aux_info array", K(ret), K(m_idx), K(i));
-            } else if (OB_NOT_NULL(expr_cache)) {
-              if (OB_FAIL(expr_cache->append_center(centroid_vec))) {
-                LOG_WARN("failed to add pq centroid to expression cache", K(ret), K(m_idx), K(i));
-              }
             }
           }
         }
@@ -1831,7 +1827,8 @@ int ObPluginVectorIndexService::process_pq_centroid_cache(ObIvfCentCache *cent_c
 
 int ObPluginVectorIndexService::process_centroid_cache(ObIvfCentCache *cent_cache,
                                                      ObIArray<float*> &aux_info,
-                                                     ObExprVecIvfCenterIdCache *expr_cache)
+                                                     ObExprVecIvfCenterIdCache *expr_cache,
+                                                     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -1840,21 +1837,27 @@ int ObPluginVectorIndexService::process_centroid_cache(ObIvfCentCache *cent_cach
     LOG_WARN("cent_cache is null", K(ret));
   } else {
     uint64_t capacity = cent_cache->get_count();
+    // If expr_cache is provided, use its allocator (same as SQL query table logic)
+    ObIAllocator *used_allocator = OB_NOT_NULL(expr_cache) ? &expr_cache->get_allocator() : &allocator;
 
     for (uint64_t i = 1; i <= capacity && OB_SUCC(ret); ++i) {
       float *centroid_vec = nullptr;
-      if (OB_FAIL(cent_cache->read_centroid(i, centroid_vec))) {
-        LOG_WARN("fail to read centroid", K(ret), K(i));
+      if (cent_cache->has_hgraph_index()) {
+        if (OB_FAIL(cent_cache->read_centroid(i, centroid_vec, true /*deep_copy*/, used_allocator))) {
+          LOG_WARN("fail to get centroids from hgraph index", K(ret));
+        }
+      } else {
+        if (OB_FAIL(cent_cache->read_centroid(i, centroid_vec))) {
+          LOG_WARN("fail to read centroid", K(ret), K(i));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(centroid_vec)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("read centroid returned null pointer", K(i));
       } else {
         if (OB_FAIL(aux_info.push_back(centroid_vec))) {
           LOG_WARN("failed to add centroid to aux_info array", K(ret), K(i));
-        } else if (OB_NOT_NULL(expr_cache)) {
-          if (OB_FAIL(expr_cache->append_center(centroid_vec))) {
-            LOG_WARN("failed to add centroid to expression cache", K(ret), K(i));
-          }
         }
       }
     }
@@ -1882,17 +1885,17 @@ int ObPluginVectorIndexService::get_ivf_aux_info_from_cache(
   ObLSID ls_id;
   bool location_cache_hit = false;
   if (OB_FAIL(GCTX.location_service_->get(tenant_id_, cache_tablet_id, INT64_MAX, location_cache_hit, ls_id))) {
-    LOG_DEBUG("Failed to get ls_id by cache_tablet_id, will try original logic", K(ret), K(cache_tablet_id));
+    LOG_WARN("Failed to get ls_id by cache_tablet_id, will try original logic", K(ret), K(cache_tablet_id));
   } else {
 
     ObIvfCacheMgrKey cache_key(cache_tablet_id);
 
     if (OB_FAIL(acquire_ivf_cache_mgr_guard(ls_id, cache_key, cache_guard))) {
       ret = OB_CACHE_NOT_HIT;
-      LOG_DEBUG("Failed to acquire cache mgr guard, will try original logic", K(ret), K(ls_id), K(cache_key));
+      LOG_WARN("Failed to acquire cache mgr guard, will try original logic", K(ret), K(ls_id), K(cache_key));
     } else if (OB_ISNULL(cache_mgr = cache_guard.get_ivf_cache_mgr())) {
       ret = OB_CACHE_NOT_HIT;
-      LOG_DEBUG("Cache mgr is null, will try original logic", K(ret));
+      LOG_WARN("Cache mgr is null, will try original logic", K(ret));
     } else {
       LOG_DEBUG("Successfully acquired cache mgr, checking cache status", K(cache_tablet_id), K(ls_id),
                "cache_mgr_key", cache_mgr->get_cache_mgr_key(), "cache_type", cache_type);
@@ -1918,8 +1921,6 @@ int ObPluginVectorIndexService::get_ivf_aux_info_from_cache(
           RWLock::RLockGuard guard(cent_cache->get_lock());
           uint64_t capacity = cent_cache->get_count();
 
-          LOG_DEBUG("Found completed cache, reading data", K(capacity), K(cache_type));
-
           switch (cache_type) {
             case IvfCacheType::IVF_PQ_CENTROID_CACHE: {
               if (OB_FAIL(process_pq_centroid_cache(cent_cache, aux_info, expr_cache, m))) {
@@ -1928,7 +1929,7 @@ int ObPluginVectorIndexService::get_ivf_aux_info_from_cache(
               break;
             }
             case IvfCacheType::IVF_CENTROID_CACHE: {
-              if (OB_FAIL(process_centroid_cache(cent_cache, aux_info, expr_cache))) {
+              if (OB_FAIL(process_centroid_cache(cent_cache, aux_info, expr_cache, allocator))) {
                 LOG_WARN("failed to process centroid cache", K(ret));
               }
               break;
@@ -1946,24 +1947,16 @@ int ObPluginVectorIndexService::get_ivf_aux_info_from_cache(
               LOG_DEBUG("[IVF_CACHE_HIT] Successfully read centers from system cache", K(table_id), K(cache_tablet_id),
                        K(aux_info.count()), "cache_type", cache_type,
                        "cache_type_name", cache_type == IvfCacheType::IVF_CENTROID_CACHE ? "IVF_CENTROID" : "PQ_CENTROID");
-
-              if (OB_NOT_NULL(expr_cache)) {
-                expr_cache->set_cache_key(table_id, tablet_id);
-                LOG_DEBUG("System cache hit, expression cache updated with shallow copy", K(table_id), K(tablet_id), K(aux_info.count()));
-              }
             } else {
               ret = OB_ERR_UNEXPECTED;
               LOG_ERROR("[IVF_CACHE_ERROR] Cache is completed but contains no data, possible corruption",
                        K(ret), K(table_id), K(cache_tablet_id), K(cache_type), K(capacity),
                        "cache_type_name", cache_type == IvfCacheType::IVF_CENTROID_CACHE ? "IVF_CENTROID" : "PQ_CENTROID");
             }
-          } else {
-            ret = OB_CACHE_NOT_HIT;
-            LOG_DEBUG("[IVF_CACHE_MISS] Cache processing failed, will try original logic", K(ret), K(table_id), K(cache_tablet_id));
           }
         } else {
           ret = OB_CACHE_NOT_HIT;
-          LOG_DEBUG("Cache not completed, will try original logic", K(ret), K(cache_type));
+          LOG_WARN("Cache not completed, will try original logic", K(ret), K(cache_type));
         }
       }
     }
@@ -2030,6 +2023,60 @@ int ObPluginVectorIndexService::get_ivf_aux_info(
         }
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexService::get_ivf_aux_info(
+  const uint64_t table_id,
+  const ObTabletID tablet_id,
+  const int64_t dim,
+  ObIAllocator &allocator,
+  float* &aux_info,
+  int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<float*, 64> temp_aux_info;
+  aux_info = nullptr;
+  count = 0;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObPluginVectorIndexService is not inited", KR(ret), K_(tenant_id));
+  } else if (dim <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid dimension", K(ret), K(dim));
+  } else {
+    ObArenaAllocator tmp_allocator("GetIVFAuxInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+
+    // First, get data from table using the old interface with temporary allocator
+    if (OB_FAIL(get_ivf_aux_info(table_id, tablet_id, tmp_allocator, temp_aux_info))) {
+      LOG_WARN("failed to get aux info from table", K(ret), K(table_id), K(tablet_id));
+    } else if (temp_aux_info.empty()) {
+      // No data found, return empty result
+      aux_info = nullptr;
+      count = 0;
+    } else {
+      // Copy data from pointer array to continuous memory
+      count = temp_aux_info.count();
+      int64_t alloc_size = sizeof(float) * dim * count;
+      if (OB_ISNULL(aux_info = static_cast<float*>(allocator.alloc(alloc_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc continuous memory", K(ret), K(alloc_size));
+      } else {
+        float *current_pos = aux_info;
+        for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+          float *vec_data = temp_aux_info.at(i);
+          if (OB_ISNULL(vec_data)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("null vector data", K(ret), K(i));
+          } else {
+            MEMCPY(current_pos, vec_data, sizeof(float) * dim);
+            current_pos += dim;
+          }
         }
       }
     }

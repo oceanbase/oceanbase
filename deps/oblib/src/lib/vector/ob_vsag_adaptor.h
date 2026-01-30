@@ -82,7 +82,7 @@ int construct_vsag_create_param(
     uint8_t create_type, const char *dtype, const char *metric, int dim,
     int max_degree, int ef_construction, int ef_search, void *allocator,
     int extra_info_size, int16_t refine_type, int16_t bq_bits_query,
-    bool bq_use_fht, char *result_param_str);
+    bool bq_use_fht, bool store_raw_vector, char *result_param_str);
 int construct_vsag_search_param(uint8_t create_type,
                                              int64_t ef_search,
                                              bool use_extra_info_filter,
@@ -92,7 +92,8 @@ int create_index(VectorIndexPtr& index_handler, IndexType index_type,
                  const char* metric,int dim,
                  int max_degree, int ef_construction, int ef_search, void* allocator = nullptr,
                  int extra_info_size = 0, int16_t refine_type = 0,
-                 int16_t bq_bits_query = 32, bool bq_use_fht = false);
+                 int16_t bq_bits_query = 32, bool bq_use_fht = false,
+                 bool store_raw_vector = false);
 int create_index(VectorIndexPtr &index_handler, IndexType index_type, const char *dtype, const char *metric,
     bool use_reorder, float doc_prune_ratio, int window_size, void *allocator, int extra_info_size = 0);
 int build_index(VectorIndexPtr& index_handler, float* vector_list, int64_t* ids, int dim, int size, char *extra_infos = nullptr);
@@ -106,6 +107,8 @@ int get_index_type(VectorIndexPtr& index_handler);
 int cal_distance_by_id(VectorIndexPtr& index_handler, const float* vector, const int64_t* ids, int64_t count, const float *&distances);
 int cal_distance_by_id(VectorIndexPtr& index_handler, uint32_t len, uint32_t *dims, float *vals, const int64_t *ids,
     int64_t count, const float *&distances);
+int get_raw_vector_by_ids(VectorIndexPtr& index_handler, const int64_t* ids, int64_t count, float *&vectors,
+                          void *allocator = nullptr, int64_t dim = 0);
 int get_vid_bound(VectorIndexPtr& index_handler, int64_t &min_vid, int64_t &max_vid);
 int knn_search(VectorIndexPtr& index_handler,float* query_vector, int dim, int64_t topk,
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
