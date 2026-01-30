@@ -122,7 +122,7 @@ int ObPlanMonitorNodeList::submit_node(ObMonitorNode &node)
     LOG_WARN("fail alloc mem", K(mem_size), K(ret));
   } else {
     deep_cp_node = new(buf) ObMonitorNode(node);
-    deep_cp_node->covert_to_static_node();
+    deep_cp_node->convert_to_static_node();
     if (OB_NOT_NULL(node.profile_)) {
       if (OB_FAIL(node.profile_->to_persist_profile(deep_cp_node->raw_profile_,
                                                     deep_cp_node->raw_profile_len_, &allocator_))) {
@@ -220,7 +220,7 @@ int ObPlanMonitorNodeList::ObMonitorNodeTraverseCall::recursive_add_node_to_arra
       LOG_WARN("fail to push back mointor node", K(ret));
     } else {
       ObMonitorNode &last_node = node_array_.at(node_array_.count() - 1);
-      last_node.covert_to_static_node();
+      last_node.convert_to_static_node();
       if (fetch_profile_ && OB_NOT_NULL(last_node.profile_)
           && OB_FAIL(last_node.profile_->to_persist_profile(last_node.raw_profile_,
                                                             last_node.raw_profile_len_, alloc_))) {
@@ -274,7 +274,7 @@ uint64_t ObMonitorNode::calc_db_time()
   return (uint64_t)db_time;
 }
 
-void ObMonitorNode::covert_to_static_node()
+void ObMonitorNode::convert_to_static_node()
 {
   db_time_ = calc_db_time();
   static const uint64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();

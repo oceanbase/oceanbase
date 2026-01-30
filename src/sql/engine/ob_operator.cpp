@@ -1242,9 +1242,9 @@ int ObOperator::setup_op_feedback_info()
     ObExecFeedbackInfo &fb_info = ctx_.get_feedback_info();
     common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
     int64_t &total_cpu_time = fb_info.get_total_cpu_time();
-    op_monitor_info_.covert_to_static_node();
-    uint64_t db_time = op_monitor_info_.db_time_;
-    uint64_t block_time = op_monitor_info_.block_time_;
+    static const uint64_t scale = (1000 << 20) / OBSERVER_FREQUENCE.get_cpu_frequency_khz();
+    uint64_t db_time = (op_monitor_info_.calc_db_time() * scale) >> 20;
+    uint64_t block_time = (op_monitor_info_.block_time_ * scale) >> 20;
     uint64_t cpu_time = db_time - block_time;
     total_cpu_time += cpu_time;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
