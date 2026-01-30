@@ -22,6 +22,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_multi_tenant.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "observer/ob_server.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -148,7 +149,11 @@ void ObActiveSessHistTask::runTimerTask()
                                  false /* repeat */))) {
     // TG_SCHEDULE only fails when timer task queue is full.
     // But in ASH sample thread, there is only one task. So it would never happen.
-    LOG_ERROR("fail to schedule next ASH timer task", K(ret), K(duration));
+    if (!observer::ObServer::get_instance().is_stopped()) {
+      LOG_ERROR("fail to schedule next ASH timer task", K(ret), K(duration));
+    } else {
+      LOG_INFO("ash schedule failed when server stop.", K(ret), K(duration));
+    }
   }
 }
 

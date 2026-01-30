@@ -24,7 +24,7 @@ namespace share
 ObTenantErrsimModuleMgr::ObTenantErrsimModuleMgr()
     : is_inited_(false),
       tenant_id_(OB_INVALID_ID),
-      lock_(),
+      lock_(common::ObLatchIds::ERRSIM_LOCK),
       config_version_(0),
       is_whole_module_(false),
       module_set_(),

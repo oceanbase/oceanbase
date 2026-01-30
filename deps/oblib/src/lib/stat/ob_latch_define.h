@@ -433,6 +433,7 @@ LATCH_DEF(VECTOR_QUERY_LOCK, 394, "vector query lock", LATCH_FIFO, 1000, 0, true
 LATCH_DEF(VECTOR_ADAPTER_MAP_LOCK, 395, "vector adapter map lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(VECTOR_SYNC_SWITCH_LOCK, 396, "vector sync switch lock", LATCH_FIFO, 500, 0, true)
 LATCH_DEF(VECTOR_IVF_CACHE_LOCK, 397, "vector ivf cache lock", LATCH_READ_PREFER, 1000, 0, true)
+LATCH_DEF(ERRSIM_LOCK, 398, "ob errsim lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(JVM_FUNCTION_HELPER_MUTEX, 407, "jvm function helper mutex", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_DEDUP_QUEUE_MUTEX, 408, "ob dedup queue mutex", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_TIMER_SERVICE_MUTEX, 409, "ob timer service mutex", LATCH_FIFO, 2000, 0, true)
