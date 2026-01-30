@@ -2010,6 +2010,11 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprNewTime::eval_new_time_vector,                          /* 323 */
   NULL, // ObExprNLSCharsetId::eval_nls_charset_id_vector,               /* 324 */
   NULL, // ObExprCbrt::eval_double_cbrt_vector,                          /* 325 */
+  NULL, // ObExprJSONUnquote::eval_json_unquote_vector,                  /* 326 */
+  NULL, // ObExprJSONQuote::eval_json_quote_vector,                      /* 327 */
+  NULL, // ObExprJSONType::eval_json_type_vector,                        /* 328 */
+  NULL, // ObExprJSONLength::eval_json_length_vector,                    /* 329 */
+  NULL, // ObExprJSONKeys::eval_json_keys_vector,                        /* 330 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
