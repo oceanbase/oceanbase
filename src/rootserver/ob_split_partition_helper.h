@@ -53,6 +53,12 @@ public:
       const int64_t auto_part_size,
       const int64_t new_schema_version,
       ObMySQLTransaction &trans);
+  static int check_split_supported_index(
+      const share::schema::ObTableSchema &data_table_schema,
+      const share::schema::ObTableSchema &index_table_schema);
+  static int check_split_supported_index(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &data_table_schema);
   static int check_allow_split(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &table_schema);
@@ -74,7 +80,6 @@ public:
       const share::schema::ObTableSchema &data_table_schema,
       bool &enable_auto_split,
       int64_t &auto_part_size);
-
 private:
   static int prepare_start_args_(
       const uint64_t tenant_id,

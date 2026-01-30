@@ -479,7 +479,7 @@ private:
   ~ObServerAutoSplitScheduler () {}
   int batch_send_split_request(const ObIArray<ObSEArray<ObSplitTask*, 10>> &tenant_task_arrays);
   int check_and_fetch_tablet_split_info(const storage::ObTabletHandle &teblet_handle, storage::ObLS &ls, bool &can_split, ObAutoSplitTask &task);
-  int check_sstable_limit(const storage::ObTablet &tablet, bool &exceed_limit);
+  int check_sstable_limit(const ObTabletHandle &tablet_handle, bool &can_split);
 private:
   bool inited_;
   const static int64_t MAX_SPLIT_RPC_IN_BATCH = 20;

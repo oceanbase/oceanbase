@@ -18,6 +18,7 @@
 #include "storage/ob_parallel_external_sort.h"
 #include "storage/ddl/ob_complement_data_task.h"
 #include "storage/ddl/ob_tablet_split_task.h"
+#include "storage/ddl/ob_tablet_split_iterator.h"
 
 namespace oceanbase
 {
@@ -255,7 +256,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletLobSplitDag);
 };
 
-
+class ObMainTabletSSTableLobIterator;
 class ObTabletLobBuildMapTask : public share::ObITask
 {
 public:
@@ -266,7 +267,7 @@ public:
 private:
   // int prepare_context();
   int generate_next_task(ObITask *&next_task);
-  int build_sorted_map(ObIArray<ObRowScan*>& iters);
+  int build_sorted_map(ObIArray<ObMainTabletSSTableLobIterator *> &iters);
 private:
   bool is_inited_;
   int64_t task_id_;
@@ -393,20 +394,54 @@ private:
   ObLobSplitContext *ctx_;
 };
 
+// to scan one row from main tablet sstable, and to decide the target split destination tablet for each lob datum.
+// row-store/all-co: rowkey_lob_datums_scan_iter_ contains only one ObRowScan* that scans full columns.
+// rowkey co-store: rowkey_lob_datums_scan_iter_ contains rowkey-cg sstable iter, and each lob column cg sstable iter order by lob_col_idxs.
+class ObMainTabletSSTableLobIterator final
+{
+public:
+  ObMainTabletSSTableLobIterator(ObIAllocator &allocator);
+  ~ObMainTabletSSTableLobIterator();
+  bool is_valid() const;
+  int push_back(ObRowScan &row_scan_iter);
+  int get_next_row_and_collect_lobids(
+      const int64_t rowkey_cols_cnt,
+      const ObIArray<ObTabletID> &new_main_tablet_ids,
+      const ObIArray<ObTabletID> &new_lob_tablet_ids,
+      const ObTabletSplitMdsUserData &src_split_data,
+      const ObIArray<ObTabletSplitMdsUserData> &dst_split_datas,
+      const ObIArray<uint64_t> &lob_col_idxs,
+      const ObITableReadInfo &rowkey_read_info,
+      ObLobIdMap *submap);
+  TO_STRING_KV(K_(compound_scan_iters));
+private:
+  common::ObIAllocator *allocator_;
+  ObArray<ObRowScan*> compound_scan_iters_; // the first one is always the base row iter(full columns iter, or rowkey cg iter).
+DISALLOW_COPY_AND_ASSIGN(ObMainTabletSSTableLobIterator);
+};
+
 class ObTabletLobSplitUtil final
 {
 public:
+  static int fetch_lob_cg_order_by_col_idx(const ObCOSSTableV2 &co_sstable,
+                                           const ObIArray<uint64_t> &lob_col_idxs,
+                                           const ObStorageSchema &main_table_storage_schema,
+                                           ObIArray<ObSSTableWrapper> &lob_cg_sstable_wrappers,
+                                           ObIArray<ObSSTable *> &participant_sstables);
   static int open_rowscan_iters(const share::ObSplitSSTableType &split_sstable_type,
                                 ObIAllocator &allocator,
                                 int64_t table_id,
+                                const int64_t data_format_version,
                                 const ObTabletHandle &tablet_handle,
                                 const ObTableStoreIterator &table_store_iterator,
                                 const ObDatumRange &query_range,
                                 const ObStorageSchema &main_table_storage_schema,
-                                ObIArray<ObRowScan*> &iters);
+                                const ObIArray<uint64_t> &lob_col_idxs,
+                                ObIArray<ObMainTabletSSTableLobIterator *> &iters);
   static int open_uncommitted_scan_iters(ObLobSplitParam *param,
                                          ObLobSplitContext *ctx,
                                          int64_t table_id,
+                                         const int64_t data_format_version,
                                          const ObTabletHandle &tablet_handle,
                                          const ObTableStoreIterator &table_iter,
                                          const ObDatumRange &query_range,
@@ -416,6 +451,7 @@ public:
   static int open_snapshot_scan_iters(ObLobSplitParam *param,
                                       ObLobSplitContext *ctx,
                                       int64_t table_id,
+                                      const int64_t data_format_version,
                                       const ObTabletHandle &tablet_handle,
                                       const ObTableStoreIterator &table_iter,
                                       const ObDatumRange &query_range,

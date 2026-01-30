@@ -108,7 +108,7 @@ public:
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_split(const ObTabletID &dst_tablet_id,
-                     const ObITable::TableKey &src_table_key,
+                     const blocksstable::ObSSTable &src_sstable,
                      const blocksstable::ObSSTableBasicMeta &basic_meta,
                      const int64_t schema_version,
                      const ObIArray<blocksstable::MacroBlockId> &split_point_macros_id,

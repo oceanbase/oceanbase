@@ -148,6 +148,7 @@ public:
   int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
   int deep_copy(const ObStorageColumnGroupSchema &other, common::ObIAllocator &allocator);
+  int truncate_all_column_group(const int64_t schema_store_column_cnt);
   OB_INLINE bool is_all_column_group() const { return type_ == share::schema::ALL_COLUMN_GROUP; }
   OB_INLINE bool is_default_column_group () const { return type_ == share::schema::DEFAULT_COLUMN_GROUP; }
   OB_INLINE bool is_rowkey_column_group() const { return type_ == share::schema::ROWKEY_COLUMN_GROUP; }

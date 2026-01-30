@@ -705,6 +705,8 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_build_index_task.cpp
   ddl/ob_complement_data_task.cpp
   ddl/ob_tablet_split_util.cpp
+  ddl/ob_tablet_split_iterator.cpp
+  ddl/ob_tablet_split_sstable_helper.cpp
   ddl/ob_tablet_split_task.cpp
   ddl/ob_delete_lob_meta_row_task.cpp
   ddl/ob_ddl_clog.cpp

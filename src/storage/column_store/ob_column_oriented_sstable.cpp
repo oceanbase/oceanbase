@@ -691,12 +691,10 @@ int ObCOSSTableV2::scan(
     ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
+  // Scan the split dest tablet will scan the split source one, don't check tablet id.
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_cs_reading), K_(key), K_(base_type), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(!param.is_valid() || !context.is_valid() || !key_range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(key_range));
@@ -735,9 +733,6 @@ int ObCOSSTableV2::multi_scan(
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(!param.is_valid() || !context.is_valid() || 0 >= ranges.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(ranges));
@@ -871,7 +866,7 @@ int ObCOSSTableV2::get(
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(!param.is_valid() || param.tablet_id_ != key_.tablet_id_)) {
+  } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (param.read_info_->is_access_rowkey_only() || is_all_cg_base()) {
@@ -911,9 +906,6 @@ int ObCOSSTableV2::multi_get(
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("SSTable is not ready for accessing", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(param.tablet_id_ != key_.tablet_id_)) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("Tablet id is not match", K(ret), K(*this), K(param));
   } else if (OB_UNLIKELY(!param.is_valid() || !context.is_valid() || 0 >= rowkeys.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(rowkeys));

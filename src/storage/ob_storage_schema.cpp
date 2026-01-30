@@ -319,6 +319,20 @@ int ObStorageColumnGroupSchema::deep_copy(const ObStorageColumnGroupSchema &othe
   return ret;
 }
 
+int ObStorageColumnGroupSchema::truncate_all_column_group(const int64_t schema_store_column_cnt)
+{
+  int ret = OB_SUCCESS;
+  const int64_t new_column_cnt = schema_store_column_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  if (OB_UNLIKELY(!is_valid() || !is_all_column_group() || column_cnt_ <= new_column_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to truncate column group schema", K(ret), KPC(this), K(schema_store_column_cnt));
+  } else {
+    schema_column_cnt_ = schema_store_column_cnt;
+    column_cnt_ = new_column_cnt;
+  }
+  return ret;
+}
+
 int ObStorageColumnGroupSchema::copy_from(ObIArray<ObColDesc> &column_ids,
                                           const int64_t schema_rowkey_cnt,
                                           const ObColumnGroupSchema &cg_schema,
@@ -784,8 +798,15 @@ int ObStorageSchema::refactor_storage_schema(
          */
         const int64_t original_cg_array_count = column_group_array_.count();
         for (int64_t i = 0; OB_SUCC(ret) && i < original_cg_array_count; ++i) {
-          const ObStorageColumnGroupSchema &column_group = column_group_array_.at(i);
-          if (column_group.is_single_column_group()) {
+          ObStorageColumnGroupSchema &column_group = column_group_array_.at(i);
+          if (column_group.is_all_column_group() && column_group.get_column_count() > update_param.major_column_cnt_) {
+            // all column group must be before the column groups which will be truncated
+            if (OB_FAIL(column_group.truncate_all_column_group(store_column_cnt_))) {
+              STORAGE_LOG(WARN, "Failed to truncate all column group", K(ret), K(column_group), K_(store_column_cnt));
+            } else {
+              STORAGE_LOG(INFO, "finish truncate all column group", K(ret), K(column_group), K(update_param));
+            }
+          } else if (column_group.is_single_column_group()) {
             if (OB_UNLIKELY(column_group.get_column_count() <= 0)) {
               ret = OB_ERR_UNEXPECTED;
               STORAGE_LOG(WARN, "invalid column group schema", K(ret), K(column_group));

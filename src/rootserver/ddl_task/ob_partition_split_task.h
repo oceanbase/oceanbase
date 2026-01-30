@@ -232,7 +232,8 @@ private:
       const int64_t table_id,
       const ObTabletID &src_tablet_id,
       bool &is_src_tablet_exist);
-  int prepare_tablet_split_ranges_inner(
+  int set_tablet_split_ranges();
+  int get_tablet_split_ranges(
       ObSEArray<ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> &parallel_datum_rowkey_list);
   int prepare_tablet_split_infos(
       const share::ObLSID &ls_id,

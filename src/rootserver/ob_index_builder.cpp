@@ -762,6 +762,9 @@ int ObIndexBuilder::submit_build_index_task(
   } else if ((index_schema->is_rowkey_doc_id() || index_schema->is_vec_rowkey_vid_type()) && new_fetched_snapshot <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the fts/vec snapshot version should be more than zero", K(ret), K(new_fetched_snapshot));
+  } else if (data_schema->is_auto_partitioned_table()
+      && OB_FAIL(ObSplitPartitionHelper::check_split_supported_index(*data_schema, *index_schema))) {
+    LOG_WARN("failed to check split supported index", K(ret), KPC(index_schema));
   } else {
     bool is_create_fts_index = share::schema::is_fts_index(create_index_arg.index_type_);
     if (is_create_fts_index) {

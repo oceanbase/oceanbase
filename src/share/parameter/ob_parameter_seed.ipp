@@ -2288,6 +2288,9 @@ DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "ALL",
          "OFF: disable auto-partition for all global index.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
          "DISTRIBUTED, ALL, OFF");
+DEF_INT(_cs_auto_split_row_count_threshold, OB_TENANT_PARAMETER, "1000000", "(0,)",
+        "the minimum row count to trigger partition auto-split in column store scenario. Range: (0, +∞)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "1000", "[1, 2147483647]"
         "specifies transform how much const params in IN list to values table",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

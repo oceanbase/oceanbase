@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_schema.h"
 
+#include "rootserver/ob_split_partition_helper.h"
 #include "share/catalog/ob_external_catalog.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
@@ -8487,7 +8488,7 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "reorganizing table without primary key(s) is");
   } else if (OB_FAIL(get_is_column_store(is_table_column_store))) {
     LOG_WARN("failed to get is column store", K(ret));
-  } else if (is_table_column_store) {
+  } else if (is_table_column_store && data_version < DATA_VERSION_4_5_1_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to split a partition of column store table", KR(ret), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "column store table is");
@@ -8500,35 +8501,11 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     LOG_WARN("not support to split a partition of the table doing offline ddl", KR(ret), KPC(this));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the table doing offline ddl is");
   } else if (is_user_table()) {
-    // check indexes of auto-partitioned data table
-    ObArray<ObAuxTableMetaInfo> simple_index_infos;
-
-    if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
-      LOG_WARN("get_simple_index_infos failed", KR(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-        if (is_spatial_index(simple_index_infos[i].index_type_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support spatial index", KR(ret), K(simple_index_infos[i].index_type_));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "split partition of a table with spatial index is");
-        } else if (share::schema::is_fts_index(simple_index_infos[i].index_type_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support fulltext index", KR(ret), K(simple_index_infos[i].index_type_));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "split partition of a table with fulltext index is");
-        } else if (share::schema::is_multivalue_index(simple_index_infos[i].index_type_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support multivalue index", KR(ret), K(simple_index_infos[i].index_type_));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "split partition of a table with multivalue index is");
-        } else if (share::schema::is_vec_index(simple_index_infos[i].index_type_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support vec index", KR(ret), K(simple_index_infos[i].index_type_));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "split partition of a table with vec index is");
-        } else if (INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == simple_index_infos[i].index_type_) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support domain index", KR(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "split partition of a table with domain index is");
-        }
-      } // end for
+    ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(get_tenant_id(), schema_guard))) {
+      LOG_WARN("get tenant schema guard failed", K(ret));
+    } else if (OB_FAIL(rootserver::ObSplitPartitionHelper::check_split_supported_index(schema_guard, *this))) {
+      LOG_WARN("failed to check split supported index", K(ret));
     }
   } else { // !is_user_table()
     // 1. manual partition split is only supported for user-table

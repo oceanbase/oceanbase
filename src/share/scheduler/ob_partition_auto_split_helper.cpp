@@ -902,33 +902,65 @@ int ObRsAutoSplitScheduler::push_to_direct_cache(ObArray<ObArray<ObAutoSplitTask
   return ret;
 }
 
-int ObServerAutoSplitScheduler::check_sstable_limit(const storage::ObTablet &tablet, bool &exceed_limit)
+int ObServerAutoSplitScheduler::check_sstable_limit(
+    const ObTabletHandle &tablet_handle,
+    bool &can_split)
 {
   int ret = OB_SUCCESS;
-  ObTableStoreIterator iter;
-  ObITable *unused_table = nullptr;
-  int64_t count = 0;
-  exceed_limit = false;
-  if (OB_UNLIKELY(!tablet.is_valid())) {
+  can_split = true;
+  common::ObTabletID tablet_id;
+  ObTablet *tablet = nullptr;
+  bool is_last_major_column_store = false;
+  int64_t row_count_in_read_sstables = 0;
+  int64_t minor_major_tables_count = 0;
+  const uint64_t tenant_id = MTL_ID();
+  if (OB_UNLIKELY(!tablet_handle.is_valid() || nullptr == (tablet = tablet_handle.get_obj()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(tablet));
-  } else if (OB_FAIL(tablet.get_all_sstables(iter))) {
-    LOG_WARN("get all sstables failed", K(ret), K(tablet));
-  }
-  while (OB_SUCC(ret)) {
-    if (OB_FAIL(iter.get_next(unused_table))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("try to iterate sstables of the tablet failed", K(ret), K(tablet));
-      } else {
-        //overwrite ret
-        ret = OB_SUCCESS;
-        break;
+    LOG_WARN("invalid argument", K(tablet_handle));
+  } else if (OB_FALSE_IT(tablet_id = tablet->get_tablet_id())) {
+  } else if (OB_FALSE_IT(minor_major_tables_count = tablet->get_major_table_count() + tablet->get_minor_table_count())) {
+  } else if (OB_FALSE_IT(is_last_major_column_store = tablet->is_last_major_column_store())) {
+  } else if (minor_major_tables_count > ObServerAutoSplitScheduler::SOURCE_TABLET_SSTABLE_LIMIT) {
+    can_split = false;
+  } else if (is_last_major_column_store) {
+    ObTabletTableIterator table_store_iterator;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid tenant config", K(ret), K(tenant_id));
+    } else if (OB_FAIL(table_store_iterator.set_tablet_handle(tablet_handle))) {
+      LOG_WARN("set table hanlde failed", K(ret));
+    } else if (OB_FAIL(table_store_iterator.refresh_read_tables_from_tablet(INT64_MAX/*snapshot*/,
+        false/*allow_no_ready_read*/,
+        false/*major_sstable_only*/,
+        false/*need_split_src_table*/,
+        false/*need_split_dst_table*/))) {
+      LOG_WARN("get read tables failed", K(ret), K(tablet_id));
+    } else if (OB_UNLIKELY(!table_store_iterator.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(tablet_id));
+    } else {
+      while (OB_SUCC(ret)) {
+        ObITable *table = nullptr;
+        if (OB_FAIL(table_store_iterator.table_iter()->get_next(table))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("get next failed", K(ret), K(tablet_id));
+          }
+        } else if (nullptr != table && table->is_sstable()) {
+          row_count_in_read_sstables += static_cast<ObSSTable *>(table)->get_row_count();
+        }
       }
-    } else if (OB_UNLIKELY((++count) > ObServerAutoSplitScheduler::SOURCE_TABLET_SSTABLE_LIMIT)) {
-      exceed_limit = true;
-      break;
+      if (OB_SUCC(ret)) {
+        const int64_t row_count_threshold = tenant_config->_cs_auto_split_row_count_threshold;
+        can_split = row_count_in_read_sstables >= row_count_threshold;
+      }
     }
   }
+  LOG_TRACE("check sstables limit", K(ret), K(tablet_id), K(can_split),
+      K(minor_major_tables_count), K(is_last_major_column_store), K(row_count_in_read_sstables));
   return ret;
 }
 
@@ -944,21 +976,23 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   ObTablet *tablet = nullptr;
   ObTabletPointer *tablet_ptr = nullptr;
   ObRole role = INVALID_ROLE;
-  const share::ObLSID ls_id = ls.get_ls_id();
-  bool num_sstables_exceed_limit = false;
-  can_split = false;
+  can_split = true;
   task.reset();
   ObTabletSplitMdsUserData split_data;
   mds::MdsWriter writer;// will be removed later
   mds::TwoPhaseCommitState trans_stat;// will be removed later
   share::SCN trans_version;// will be removed later
 
+  common::ObTabletID tablet_id;
+  const share::ObLSID ls_id = ls.get_ls_id();
+  ObTabletStatus tablet_status(ObTabletStatus::MAX);
   if (OB_UNLIKELY(!tablet_handle.is_valid() || !ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_handle), K(ls_id));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer to tablet is nullptr", K(ret), KP(tablet));
+  } else if (OB_FALSE_IT(tablet_id = tablet->get_tablet_id())) {
   } else if (OB_FAIL(tablet->ObITabletMdsCustomizedInterface::get_latest_split_data(
       split_data, writer, trans_stat, trans_version))) {
     if (OB_EMPTY_RESULT == ret) {
@@ -985,8 +1019,6 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   if (OB_FAIL(ret)) {
   } else if (auto_split_tablet_size <= 0) {
     can_split = false;
-  } else if (OB_FAIL(check_sstable_limit(*tablet, num_sstables_exceed_limit))) {
-    LOG_WARN("fail to check sstable limit", K(ret), KPC(tablet));
   } else if (OB_FAIL(ls.get_ls_role(role))) {
     LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(ls_id));
   } else if (OB_FAIL(check_tablet_creation_limit(ObAutoSplitArgBuilder::get_max_split_partition_num(), 0.8/*safe_ratio*/, auto_split_tablet_size, real_auto_split_size))) {
@@ -996,10 +1028,10 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
       ret = OB_SUCCESS;
     }
   } else {
-    can_split = tablet->get_major_table_count() > 0 && tablet->get_data_tablet_id() == tablet->get_tablet_id()
-        && common::ObRole::LEADER == role && !num_sstables_exceed_limit && MTL_ID() != OB_SYS_TENANT_ID;
+    can_split = tablet->get_major_table_count() > 0 && tablet->get_data_tablet_id() == tablet_id
+        && common::ObRole::LEADER == role && MTL_ID() != OB_SYS_TENANT_ID;
     // TODO gaishun.gs resident_info
-    const int64_t used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_);
+    used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_);
     can_split &= (used_disk_space > real_auto_split_size);
     if (OB_SUCC(ret) && can_split) {
       ObTabletCreateDeleteMdsUserData user_data;
@@ -1009,19 +1041,27 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
           user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
         LOG_WARN("failed to get tablet status", K(ret), KPC(tablet));
         can_split = false;
+      } else if (OB_FALSE_IT(tablet_status = user_data.get_tablet_status())) {
       } else if (OB_FAIL(tablet->read_medium_info_list(allocator, medium_info_list))) {
         LOG_WARN("failed to get medium info list", K(ret), KPC(tablet));
         can_split = false;
-      } else if ((can_split = user_data.get_tablet_status() == ObTabletStatus::Status::NORMAL && (medium_info_list->size() == 0))) {
+      } else if (ObTabletStatus::Status::NORMAL != tablet_status || medium_info_list->size() > 0) {
+        can_split = false;
+      } else if (OB_FAIL(check_sstable_limit(tablet_handle, can_split))) {
+        LOG_WARN("fail to check sstable limit", K(ret), KPC(tablet));
+      } else if (can_split) {
         task.tenant_id_ = MTL_ID();
         task.ls_id_ = ls_id;
-        task.tablet_id_ = tablet->get_tablet_id();
+        task.tablet_id_ = tablet_id;
         task.auto_split_tablet_size_ = auto_split_tablet_size;
         task.used_disk_space_ = used_disk_space;
         task.retry_times_ = 0;
       }
     }
   }
+  LOG_TRACE("auto-split check_can_split", K(ret), K(can_split), K(ls_id),
+      K(role), K(tablet_id), K(tablet_status),
+      K(auto_split_tablet_size), K(used_disk_space), K(real_auto_split_size));
   return ret;
 }
 

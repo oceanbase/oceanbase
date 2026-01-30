@@ -1123,7 +1123,7 @@ int ObTabletCreateSSTableParam::init_for_ss_ddl(blocksstable::ObSSTableMergeRes 
 
 
 int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
-                                               const ObITable::TableKey &src_table_key,
+                                               const blocksstable::ObSSTable &src_sstable,
                                                const blocksstable::ObSSTableBasicMeta &basic_meta,
                                                const int64_t schema_version,
                                                const ObIArray<blocksstable::MacroBlockId> &split_point_macros_id,
@@ -1131,7 +1131,7 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
 {
   int ret = OB_SUCCESS;
   set_init_value_for_column_store_();
-  table_key_ = src_table_key;
+  table_key_ = src_sstable.get_key();
   table_key_.tablet_id_ = dst_tablet_id;
   sstable_logic_seq_ = basic_meta.sstable_logic_seq_;
   filled_tx_scn_ = basic_meta.filled_tx_scn_;
@@ -1157,6 +1157,13 @@ int ObTabletCreateSSTableParam::init_for_split(const ObTabletID &dst_tablet_id,
   full_column_cnt_ = 0;
   tx_data_recycle_scn_.set_min();
   column_group_cnt_ = 1;
+  if (src_sstable.is_co_sstable()) {
+    column_group_cnt_ = static_cast<const ObCOSSTableV2 &>(src_sstable).get_cs_meta().get_column_group_count();
+    co_base_type_ = static_cast<const ObCOSSTableV2 &>(src_sstable).is_all_cg_base()
+        ? ObCOSSTableBaseType::ALL_CG_TYPE : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
+    full_column_cnt_ = static_cast<const ObCOSSTableV2 &>(src_sstable).get_cs_meta().full_column_cnt_;
+    is_co_table_without_cgs_ = static_cast<const ObCOSSTableV2 &>(src_sstable).is_cgs_empty_co_table();
+  }
 
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));

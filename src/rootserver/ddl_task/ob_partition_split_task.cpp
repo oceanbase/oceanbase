@@ -129,6 +129,7 @@ int ObPartitionSplitTask::setup_src_tablet_ids_array()
     }
   }
   if (OB_FAIL(ret)) {
+    all_src_tablet_ids_.reset();
   } else if (all_src_tablet_ids_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to set up all src tablet ids", K(ret));
@@ -311,6 +312,10 @@ int ObPartitionSplitTask::init_tablet_compaction_scn_array()
         LOG_WARN("failed to push back to tablet compaction scn", K(ret));
       }
     }
+  }
+  if (OB_FAIL(ret)) {
+    index_tablet_compaction_scns_.reset();
+    lob_tablet_compaction_scns_.reset();
   }
   return ret;
 }
@@ -729,6 +734,9 @@ int ObPartitionSplitTask::check_freeze_progress(
       for (int64_t i = 0; OB_SUCC(ret) && i < result_array.count(); ++i) {
         const obrpc::ObCheckMemtableCntResult *cur_result = result_array.at(i);
         if (OB_FAIL(ret_array.at(i))) {
+        } else if (OB_ISNULL(cur_result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", K(ret), K(i));
         } else if (cur_result->memtable_cnt_ > 0) {
           // NOT finished
         } else if (cur_result->memtable_cnt_ == 0) {
@@ -875,12 +883,18 @@ int ObPartitionSplitTask::check_compaction_progress(
           LOG_WARN("rpc proxy wait failed", K(tmp_ret), K(arg));
           ret = tmp_ret;
         } else {
+          const obrpc::ObCheckMediumCompactionInfoListResult *result = nullptr;
           const ObIArray<const obrpc::ObCheckMediumCompactionInfoListResult *> &result_array = compaction_check_proxy.get_results();
-          const obrpc::ObCheckMediumCompactionInfoListResult *result = result_array.at(0);
           TCWLockGuard guard(lock_);
-          if (result->info_list_cnt_ > 0) {
+          if (OB_UNLIKELY(result_array.empty())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("result array is empty", K(ret), K(tablet_id));
+          } else if (OB_ISNULL(result = result_array.at(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("result is null", K(ret), K(tablet_id));
+          } else if (result->info_list_cnt_ > 0) {
             if (OB_FAIL(compaction_progress_map_.set_refactored(check_progress_key, ObCheckProgressStatus::ONGOING, true/*overwrite*/))) {
-              LOG_WARN("failed to update compaction progress", K(ret), K(replica_addr));
+              LOG_WARN("failed to update compaction progress", K(ret), K(tablet_id));
             }
           } else if (result->info_list_cnt_ == 0) {
             int64_t existed_compaction_scn;
@@ -1093,7 +1107,7 @@ int ObPartitionSplitTask::send_split_request(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(prepare_tablet_split_ranges_inner(param.parallel_datum_rowkey_list_))) {
+    } else if (OB_FAIL(get_tablet_split_ranges(param.parallel_datum_rowkey_list_))) {
       LOG_WARN("prepare tablet split ranges failed", K(ret));
     } else if (OB_FAIL(check_can_reuse_macro_block(schema_guard,
         dst_tenant_id_, param.source_table_ids_, param.can_reuse_macro_blocks_))) {
@@ -1555,14 +1569,11 @@ int ObPartitionSplitTask::send_split_rpc(
   // overwrite ret of rpc call function is expected.
   const ObIArray<int> &resp_ret_codes = is_split_start ? start_result.ret_codes_ : finish_result.ret_codes_;
   if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(target_split_info_array.count() < resp_ret_codes.count())) {
+  } else if (OB_UNLIKELY(target_split_info_array.count() != resp_ret_codes.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mismatched rpc request and response count", K(ret), K(target_split_info_array), K(resp_ret_codes));
   } else if (!resp_ret_codes.empty()) {
-    if (OB_UNLIKELY(resp_ret_codes.count() > target_split_info_array.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected err", K(ret), K(target_split_info_array), K(resp_ret_codes));
-    } else if (is_split_start && !min_split_start_scn_.is_valid_and_not_min()) {
+    if (is_split_start && !min_split_start_scn_.is_valid_and_not_min()) {
       if (OB_UNLIKELY(!start_result.min_split_start_scn_.is_valid_and_not_min())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected split start scn", K(ret), K(start_result));
@@ -2638,98 +2649,132 @@ int ObPartitionSplitTask::check_can_reuse_macro_block(
   return ret;
 }
 
-int ObPartitionSplitTask::prepare_tablet_split_ranges_inner(
-    ObSEArray<ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> &parallel_datum_rowkey_list)
+int split_errsim(const int errsim_code)
 {
   int ret = OB_SUCCESS;
-  parallel_datum_rowkey_list.reset();
-  ObLSID ls_id;
-  ObAddr leader_addr;
-  const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
-  const int64_t source_index_tablets_cnt = partition_split_arg_.src_local_index_tablet_ids_.count();
+#ifdef ERRSIM
+  if (errsim_code != 0) {
+    ret = -errsim_code;
+    FLOG_INFO("set_tablet_split_ranges", K(errsim_code));
+  }
+#endif
+  return ret;
+}
+
+int ObPartitionSplitTask::set_tablet_split_ranges()
+{
+  int ret = OB_SUCCESS;
+  int errsim_code = 0;
+#ifdef ERRSIM
+  errsim_code = std::abs(OB_E(EventTable::EN_PART_SPLIT_AT_DECIDE_RANGES) OB_SUCCESS);
+#endif
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(GCTX.srv_rpc_proxy_));
-  } else if (!data_tablet_parallel_rowkey_list_.empty()) {
-    if (OB_UNLIKELY(source_index_tablets_cnt != index_tablet_parallel_rowkey_list_.count())) {
-      ret = OB_ERR_UNEXPECTED; // defensive check.
-      LOG_WARN("unexpected err, mismatched parallel rowkey list count",
-        K(ret), K(task_status_), K(source_index_tablets_cnt), K(index_tablet_parallel_rowkey_list_));
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys", KR(ret), KP(GCTX.srv_rpc_proxy_));
+  } else if (!data_tablet_parallel_rowkey_list_.empty() || !index_tablet_parallel_rowkey_list_.empty()) {
+    const int64_t source_index_tablets_cnt = partition_split_arg_.src_local_index_tablet_ids_.count();
+    if (OB_LIKELY(!data_tablet_parallel_rowkey_list_.empty() && source_index_tablets_cnt == index_tablet_parallel_rowkey_list_.count())) {
+      // already serialized.
+    } else {
+      ret = OB_EAGAIN; // set eagain to retry.
+      LOG_WARN("some unknown scenes", K(ret), K(source_index_tablets_cnt),
+        K(data_tablet_parallel_rowkey_list_), K(index_tablet_parallel_rowkey_list_));
     }
-  } else if (OB_UNLIKELY(!index_tablet_parallel_rowkey_list_.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected err, empty parallel rowkey list for the data tablet, but non-empty ones for the index tablets",
-      K(ret), K(task_status_), K(data_tablet_parallel_rowkey_list_), K(index_tablet_parallel_rowkey_list_));
-  } else if (PREPARE_TABLET_SPLIT_RANGES != task_status_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected err, empty parallel rowkey list under a mismatched status", K(ret), K(task_status_));
-  } else if (OB_FAIL(index_tablet_parallel_rowkey_list_.prepare_allocate(source_index_tablets_cnt))) {
-    LOG_WARN("prepare alloc failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_tablet_leader_addr(GCTX.location_service_,
-          tenant_id_, partition_split_arg_.src_tablet_id_, rpc_timeout, ls_id, leader_addr))) {
-    LOG_WARN("failed to get orig leader addr", K(ret), "tablet_id", partition_split_arg_.src_tablet_id_);
   } else {
-    for (int64_t tablet_idx = 0; OB_SUCC(ret) && tablet_idx < 1 /*data_tablet*/ + source_index_tablets_cnt; tablet_idx++) {
-      const ObTabletID &src_tablet_id = tablet_idx == 0 ? partition_split_arg_.src_tablet_id_ : partition_split_arg_.src_local_index_tablet_ids_.at(tablet_idx - 1);
-      ObIArray<blocksstable::ObDatumRowkey> &target_parallel_rowkey_list = tablet_idx == 0 ?
-            data_tablet_parallel_rowkey_list_ : index_tablet_parallel_rowkey_list_.at(tablet_idx - 1);
-      obrpc::ObPrepareSplitRangesArg arg;
-      obrpc::ObPrepareSplitRangesRes result;
-      arg.ls_id_              = ls_id;
-      arg.tablet_id_          = src_tablet_id;
-      arg.user_parallelism_   = parallelism_; // parallelism_;
-      arg.schema_tablet_size_ = std::max(tablet_size_, 128 * 1024 * 1024L/*128MB*/);
-      arg.ddl_type_ = task_type_;
-      if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr)
-        .by(tenant_id_).timeout(rpc_timeout).prepare_tablet_split_task_ranges(arg, result))) {
-        LOG_WARN("prepare tablet split task ranges failed", K(ret), K(arg));
-      } else if (OB_UNLIKELY(result.parallel_datum_rowkey_list_.empty())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected parallel info", K(ret), K(result));
-      } else if (OB_FAIL(target_parallel_rowkey_list.prepare_allocate(result.parallel_datum_rowkey_list_.count()))) {
-        LOG_WARN("prepare allocate failed", K(ret), K(result));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < result.parallel_datum_rowkey_list_.count(); i++) {
-          if (OB_FAIL(result.parallel_datum_rowkey_list_.at(i).deep_copy(target_parallel_rowkey_list.at(i), allocator_))) {
-            LOG_WARN("deep copy range failed", K(ret));
+    ObLSID ls_id;
+    ObAddr leader_addr;
+    const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
+    const int64_t source_index_tablets_cnt = partition_split_arg_.src_local_index_tablet_ids_.count();
+    if (OB_FAIL(ObDDLUtil::get_tablet_leader_addr(GCTX.location_service_,
+        tenant_id_, partition_split_arg_.src_tablet_id_, rpc_timeout, ls_id, leader_addr))) {
+      LOG_WARN("failed to get orig leader addr", K(ret), "tablet_id", partition_split_arg_.src_tablet_id_);
+    } else if (errsim_code == 1 && OB_FAIL(split_errsim(errsim_code))) {
+    } else if (OB_FAIL(index_tablet_parallel_rowkey_list_.prepare_allocate(source_index_tablets_cnt))) {
+      LOG_WARN("prepare alloc failed", K(ret));
+    } else if (errsim_code == 2 && OB_FAIL(split_errsim(errsim_code))) {
+    } else {
+      for (int64_t tablet_idx = 0; OB_SUCC(ret) && tablet_idx < 1 /*data_tablet*/ + source_index_tablets_cnt; tablet_idx++) {
+        const ObTabletID &src_tablet_id = tablet_idx == 0 ? partition_split_arg_.src_tablet_id_ : partition_split_arg_.src_local_index_tablet_ids_.at(tablet_idx - 1);
+        ObIArray<blocksstable::ObDatumRowkey> &target_parallel_rowkey_list = tablet_idx == 0 ?
+              data_tablet_parallel_rowkey_list_ : index_tablet_parallel_rowkey_list_.at(tablet_idx - 1);
+        obrpc::ObPrepareSplitRangesArg arg;
+        obrpc::ObPrepareSplitRangesRes result;
+        arg.ls_id_              = ls_id;
+        arg.tablet_id_          = src_tablet_id;
+        arg.user_parallelism_   = parallelism_; // parallelism_;
+        arg.schema_tablet_size_ = std::max(tablet_size_, 128 * 1024 * 1024L/*128MB*/);
+        arg.ddl_type_ = task_type_;
+        if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr)
+          .by(tenant_id_).timeout(rpc_timeout).prepare_tablet_split_task_ranges(arg, result))) {
+          LOG_WARN("prepare tablet split task ranges failed", K(ret), K(arg));
+        } else if (errsim_code == 3 && tablet_idx == 1 && OB_FAIL(split_errsim(errsim_code))) {
+        } else if (OB_UNLIKELY(result.parallel_datum_rowkey_list_.empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected parallel info", K(ret), K(result));
+        } else if (OB_FAIL(target_parallel_rowkey_list.prepare_allocate(result.parallel_datum_rowkey_list_.count()))) {
+          LOG_WARN("prepare allocate failed", K(ret), K(result));
+        } else if (errsim_code == 4 && tablet_idx == 2 && OB_FAIL(split_errsim(errsim_code))) {
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < result.parallel_datum_rowkey_list_.count(); i++) {
+            if (OB_FAIL(result.parallel_datum_rowkey_list_.at(i).deep_copy(target_parallel_rowkey_list.at(i), allocator_))) {
+              LOG_WARN("deep copy range failed", K(ret));
+            } else if (errsim_code == 5 && tablet_idx == 3 && OB_FAIL(split_errsim(errsim_code))) {
+            }
           }
         }
+      } // END FOR
+    } // END ELSE
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(update_task_message())) {
+        LOG_WARN("update parallel split info failed", K(ret));
+      } else if (errsim_code == 6 && OB_FAIL(split_errsim(errsim_code))) {
       }
     }
-    if (OB_FAIL(ret)) {
-      data_tablet_parallel_rowkey_list_.reset(); // reset.
-      index_tablet_parallel_rowkey_list_.reset(); // reset.
-    } else if (OB_FAIL(update_task_message())) {
-      LOG_WARN("update parallel split info failed", K(ret));
-    }
+  } // END ELSE
+  if (OB_FAIL(ret)) {
+    data_tablet_parallel_rowkey_list_.reset();
+    index_tablet_parallel_rowkey_list_.reset();
   }
-  if (OB_SUCC(ret)) {
-    if (ObDDLTaskStatus::PREPARE_TABLET_SPLIT_RANGES == task_status_) {
-      // do nothing.
-    } else if (ObDDLTaskStatus::WAIT_DATA_TABLE_SPLIT_END == task_status_) {
-      if (OB_FAIL(parallel_datum_rowkey_list.push_back(data_tablet_parallel_rowkey_list_))) {
-        LOG_WARN("push back failed", K(ret));
-      }
-    } else if (ObDDLTaskStatus::WAIT_LOB_TABLE_SPLIT_END == task_status_) {
-      if (OB_FAIL(parallel_datum_rowkey_list.push_back(data_tablet_parallel_rowkey_list_))) { // lob meta.
-        LOG_WARN("push back failed", K(ret));
-      } else if (OB_FAIL(parallel_datum_rowkey_list.push_back(data_tablet_parallel_rowkey_list_))) { // lob piece.
-        LOG_WARN("push back failed", K(ret));
-      }
-    } else if (ObDDLTaskStatus::WAIT_LOCAL_INDEX_SPLIT_END == task_status_) {
-      if (OB_UNLIKELY(source_index_tablets_cnt != index_tablet_parallel_rowkey_list_.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("mismatched datum rowkey list", K(ret), K(source_index_tablets_cnt), K(index_tablet_parallel_rowkey_list_));
-      } else if (OB_FAIL(parallel_datum_rowkey_list.assign(index_tablet_parallel_rowkey_list_))) {
-        LOG_WARN("assign failed", K(ret));
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected status", K(ret), K(task_status_), K(data_tablet_parallel_rowkey_list_), K(index_tablet_parallel_rowkey_list_));
+  return ret;
+}
+
+int ObPartitionSplitTask::get_tablet_split_ranges(
+    ObSEArray<ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> &parallel_datum_rowkey_list)
+{
+  int ret = OB_SUCCESS;
+  parallel_datum_rowkey_list.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ObDDLTaskStatus::WAIT_DATA_TABLE_SPLIT_END == task_status_) {
+    if (OB_UNLIKELY(data_tablet_parallel_rowkey_list_.empty())) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("error sys", K(ret), K(data_tablet_parallel_rowkey_list_));
+    } else if (OB_FAIL(parallel_datum_rowkey_list.push_back(data_tablet_parallel_rowkey_list_))) {
+      LOG_WARN("push back failed", K(ret));
     }
+  } else if (ObDDLTaskStatus::WAIT_LOB_TABLE_SPLIT_END == task_status_) {
+    if (OB_UNLIKELY(data_tablet_parallel_rowkey_list_.empty())) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("error sys", K(ret), K(data_tablet_parallel_rowkey_list_));
+    } else if (OB_FAIL(parallel_datum_rowkey_list.push_back(data_tablet_parallel_rowkey_list_))) { // lob meta.
+      LOG_WARN("push back failed", K(ret));
+    } else if (OB_FAIL(parallel_datum_rowkey_list.push_back(data_tablet_parallel_rowkey_list_))) { // lob piece.
+      LOG_WARN("push back failed", K(ret));
+    }
+  } else if (ObDDLTaskStatus::WAIT_LOCAL_INDEX_SPLIT_END == task_status_) {
+    if (OB_UNLIKELY(index_tablet_parallel_rowkey_list_.count() != partition_split_arg_.src_local_index_tablet_ids_.count())) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("error sys", K(ret), K(index_tablet_parallel_rowkey_list_));
+    } else if (OB_FAIL(parallel_datum_rowkey_list.assign(index_tablet_parallel_rowkey_list_))) {
+      LOG_WARN("assign failed", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status", K(ret), K(task_status_), K(data_tablet_parallel_rowkey_list_), K(index_tablet_parallel_rowkey_list_));
   }
   return ret;
 }
@@ -2870,11 +2915,10 @@ int ObPartitionSplitTask::register_split_info_mds(const share::ObDDLTaskStatus n
 int ObPartitionSplitTask::prepare_tablet_split_ranges(const share::ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> unused_parallel_datum_rowkey_list;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(prepare_tablet_split_ranges_inner(unused_parallel_datum_rowkey_list))) {
+  } else if (OB_FAIL(set_tablet_split_ranges())) {
     LOG_WARN("prepare tablet split ranges failed", K(ret));
   } else if (OB_FAIL(switch_status(next_task_status, true/*enable_flt_tracing*/, ret))) {
     LOG_WARN("fail to switch task status", K(ret), K(next_task_status));
