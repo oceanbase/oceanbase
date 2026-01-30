@@ -218,6 +218,29 @@ bool ObDASIterUtils::is_vec_spiv_scan(const ObDASBaseCtDef *attach_ctdef, ObDASB
   return bret;
 }
 
+bool ObDASIterUtils::is_vec_hnsw_scan(const ObDASBaseCtDef *attach_ctdef, ObDASBaseRtDef *attach_rtdef)
+{
+  int ret = OB_SUCCESS;
+
+  int bret = false;
+  if (attach_ctdef != nullptr) {
+    const ObDASVecAuxScanCtDef *vec_aux_ctdef = nullptr;
+    ObDASVecAuxScanRtDef *vec_aux_rtdef = nullptr;
+
+    if (OB_FAIL(ObDASUtils::find_target_das_def(
+            attach_ctdef, attach_rtdef, DAS_OP_VEC_SCAN, vec_aux_ctdef, vec_aux_rtdef))) {
+      LOG_TRACE("find DAS_OP_VEC_SCAN definition failed, not vector hnsw index scan", K(ret));
+    } else if (vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ
+    || vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH) {
+      bret = true;
+    }
+  }
+
+  return bret;
+}
+
 int ObDASIterUtils::create_tsc_iter_tree(ObDASIterTreeType tree_type,
                                          const ObTableScanCtDef &tsc_ctdef,
                                          ObTableScanRtDef &tsc_rtdef,
@@ -3419,7 +3442,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
           // need lookup vid_rowkey
           if (OB_FAIL(create_local_lookup_sub_tree(scan_param, alloc, vec_aux_ctdef, vec_aux_rtdef, vid_rowkey_ctdef,
                                                    vid_rowkey_rtdef, nullptr, nullptr, related_tablet_ids, trans_desc,
-                                                   snapshot, related_tablet_ids.doc_rowkey_tablet_id_, hnsw_scan_iter,
+                                                   snapshot, related_tablet_ids.vid_rowkey_tablet_id_, hnsw_scan_iter,
                                                    aux_lookup_iter, batch_count))) {
             LOG_WARN("failed to create aux local lookup sub tree", K(ret));
           } else if (hnsw_scan_iter->enable_using_simplified_scan() && vec_aux_ctdef->access_pk_) {

@@ -152,6 +152,7 @@ public:
   common::ObTabletID special_aux_tablet_id_;
     // for spiv
   common::ObTabletID dim_docid_value_tablet_id_;
+  common::ObTabletID vid_rowkey_tablet_id_;
   /* used by vector index */
 
   void reset()
@@ -169,6 +170,7 @@ public:
     delta_buf_tablet_id_.reset();
     index_id_tablet_id_.reset();
     snapshot_tablet_id_.reset();
+    vid_rowkey_tablet_id_.reset();
   }
 };
 

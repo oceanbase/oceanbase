@@ -486,7 +486,7 @@ int ObDASScanOp::init_related_tablet_ids(ObDASRelatedTabletID &related_tablet_id
     LOG_WARN("unexpected related scan array not match", K(ret), K_(related_ctdefs), K_(related_tablet_ids));
   } else if (OB_FAIL(get_rowkey_domain_tablet_id(related_tablet_ids))) {
     LOG_WARN("fail to get rowkey doc tablet id", K(ret));
-  } else if (OB_FAIL(get_doc_rowkey_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_))) {
+  } else if (OB_FAIL(get_doc_rowkey_tablet_id(related_tablet_ids))) {
     LOG_WARN("failed to get doc rowkey tablet id", K(ret));
   } else if (OB_FAIL(get_index_merge_tablet_ids(related_tablet_ids.index_merge_tablet_ids_))) {
     LOG_WARN("failed to get index merge tablet ids", K(ret));
@@ -1129,10 +1129,28 @@ int ObDASScanOp::get_rowkey_domain_tablet_id(ObDASRelatedTabletID &related_table
   return ret;
 }
 
-int ObDASScanOp::get_doc_rowkey_tablet_id(common::ObTabletID &tablet_id) const
+int ObDASScanOp::get_domain_rowkey_tablet_id(const ObDASBaseCtDef *ctdef,
+                                             common::ObTabletID &tablet_id) const
 {
   int ret = OB_SUCCESS;
   tablet_id.reset();
+  if (OB_ISNULL(ctdef)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(ctdef));
+  } else if (ctdef->op_type_ == DAS_OP_IR_AUX_LOOKUP) {
+    const ObDASIRAuxLookupCtDef *aux_lookup_ctdef = static_cast<const ObDASIRAuxLookupCtDef*>(ctdef);
+    for (int64_t i = 0; OB_SUCC(ret) && !tablet_id.is_valid() && i < related_ctdefs_.count(); ++i) {
+      if (aux_lookup_ctdef->get_lookup_scan_ctdef() == related_ctdefs_.at(i)) {
+        tablet_id = related_tablet_ids_.at(i);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASScanOp::get_doc_rowkey_tablet_id(ObDASRelatedTabletID &related_tablet_ids) const
+{
+  int ret = OB_SUCCESS;
   const ObDASBaseCtDef *ctdef = nullptr;
   ObDASBaseRtDef *rtdef = nullptr;
   if (nullptr != attach_ctdef_) {
@@ -1144,10 +1162,18 @@ int ObDASScanOp::get_doc_rowkey_tablet_id(common::ObTabletID &tablet_id) const
       LOG_WARN("failed to find aux lookup ctdef", K(ret));
     } else if (nullptr != ctdef) {
       const ObDASIRAuxLookupCtDef *aux_lookup_ctdef = static_cast<const ObDASIRAuxLookupCtDef*>(ctdef);
-      for (int64_t i = 0; OB_SUCC(ret) && !tablet_id.is_valid() && i < related_ctdefs_.count(); ++i) {
-        if (aux_lookup_ctdef->get_lookup_scan_ctdef() == related_ctdefs_.at(i)) {
-          tablet_id = related_tablet_ids_.at(i);
+      if (ObDASIterUtils::is_vec_hnsw_scan(ctdef, rtdef)) {
+        if (OB_FAIL(get_domain_rowkey_tablet_id(ctdef, related_tablet_ids.vid_rowkey_tablet_id_))) {
+          LOG_WARN("fail to get vid rowkey tablet id", K(ret));
+        } else if (OB_FAIL(ObDASUtils::find_child_das_ctdef(aux_lookup_ctdef->get_doc_id_scan_ctdef(),
+                                                            DAS_OP_IR_AUX_LOOKUP,
+                                                            ctdef))) {
+          LOG_WARN("failed to find aux lookup ctdef", K(ret));
+        } else if (OB_FAIL(get_domain_rowkey_tablet_id(ctdef, related_tablet_ids.doc_rowkey_tablet_id_))) {
+          LOG_WARN("fail to get rowkey doc tablet id", K(ret));
         }
+      } else if (OB_FAIL(get_domain_rowkey_tablet_id(ctdef, related_tablet_ids.doc_rowkey_tablet_id_))) {
+        LOG_WARN("fail to get rowkey doc tablet id", K(ret));
       }
     }
   }
@@ -1204,7 +1230,8 @@ int ObDASScanOp::get_vec_ir_tablet_ids(ObDASRelatedTabletID &related_tablet_ids)
                                        related_tablet_ids.index_id_tablet_id_,
                                        related_tablet_ids.snapshot_tablet_id_,
                                        related_tablet_ids.lookup_tablet_id_,
-                                       related_tablet_ids.rowkey_vid_tablet_id_))) {
+                                       related_tablet_ids.rowkey_vid_tablet_id_,
+                                       related_tablet_ids.vid_rowkey_tablet_id_))) {
       LOG_WARN("failed to get hnsw ir tablet ids", K(ret));
     }
   }
@@ -1278,7 +1305,8 @@ int ObDASScanOp::get_hnsw_ir_tablet_ids(
     common::ObTabletID &index_id_tid,
     common::ObTabletID &snapshot_tid,
     common::ObTabletID &com_aux_vec_tid,
-    common::ObTabletID &rowkey_vid_tid)
+    common::ObTabletID &rowkey_vid_tid,
+    common::ObTabletID &vid_rowkey_tid)
 {
   int ret = OB_SUCCESS;
   vec_row_tid.reset();
@@ -1320,6 +1348,10 @@ int ObDASScanOp::get_hnsw_ir_tablet_ids(
       }
       case ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN: {
         rowkey_vid_tid = related_tablet_ids_.at(i);
+        break;
+      }
+      case ObTSCIRScanType::OB_VEC_VID_ROWKEY_SCAN: {
+        vid_rowkey_tid = related_tablet_ids_.at(i);
         break;
       }
       default: {
