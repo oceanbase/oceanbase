@@ -5138,9 +5138,10 @@ int ObTscCgService::generate_rowkey_domain_id_ctdef(
       LOG_WARN("generate table loc meta failed", K(ret));
     } else if (OB_FAIL(tsc_ctdef.attach_spec_.attach_loc_metas_.push_back(scan_loc_meta))) {
       LOG_WARN("store scan loc meta failed", K(ret));
-    } else if (cur_type == ObDomainIdUtils::ObDomainIDType::EMB_VEC &&
-               OB_FAIL(semantic_index_info.generate(data_schema,
-                                                    rowkey_domain_id_schema,
+    } else if ((cur_type == ObDomainIdUtils::ObDomainIDType::EMB_VEC ||
+                cur_type == ObDomainIdUtils::ObDomainIDType::IVFPQ_CID ||
+                cur_type == ObDomainIdUtils::ObDomainIDType::IVFFLAT_CID) &&
+               OB_FAIL(semantic_index_info.generate(data_schema, rowkey_domain_id_schema,
                                                     scan_ctdef->result_output_.count(),
                                                     OB_NOT_NULL(scan_ctdef->trans_info_expr_)))) {
       LOG_WARN("fail to generate semantic index info", K(ret));

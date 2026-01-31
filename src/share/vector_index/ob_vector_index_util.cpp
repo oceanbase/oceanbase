@@ -2959,6 +2959,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_ivf(
         LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
       } else if (is_centroid_index_table_with_type(type, index_table_schema->get_index_type())) {
         if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
+          LOG_INFO("skip unavaliable index table", K(ret), KPC(index_table_schema));
           // skip unavaliable index table
         } else {
           bool has_same_col_id = false;
@@ -3027,6 +3028,7 @@ int ObVectorIndexUtil::get_latest_avaliable_index_tids_for_ivf(
                    index_table_schema->get_index_type() != INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL) {
           // skip if index_table_schema not match when ivf pq
         } else if (!index_table_schema->can_read_index() || !index_table_schema->is_index_visible()) {
+          LOG_INFO("skip unavaliable index table", K(ret), KPC(index_table_schema));
           // skip unavaliable index table
         } else {
           ObString index_prefix;
@@ -5277,7 +5279,18 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
       LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(new_index_schema));
     } else if (OB_FAIL(ddl_service.generate_tablet_id(new_index_schema))) {
       LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(new_index_schema));
-    } else {
+    }
+    // 如果是IVF索引且主表是无主键的分区表，需要检查索引表是否包含分区键，如果没有则添加
+    if (OB_SUCC(ret) && new_index_schema.is_vec_ivf_index()
+        && data_table_schema.is_partitioned_table()
+        && data_table_schema.is_table_without_pk()) {
+      if (OB_FAIL(ObVecIndexBuilderUtil::set_part_key_columns(data_table_schema, new_index_schema))) {
+        LOG_WARN("fail to set part key columns for ivf index on heap table", K(ret));
+      } else if (OB_FAIL(new_index_schema.sort_column_array_by_column_id())) {
+        LOG_WARN("failed to sort column", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (!new_index_params.empty()) {
         new_index_schema.set_index_params(new_index_params);
         // only vec_delta_buffer_type\vec_index_id_type may need update extra_info columns.
@@ -7713,6 +7726,56 @@ int ObVectorIndexUtil::check_need_embedding_when_rebuild(const ObString &old_idx
   return ret;
 }
 
+int ObVectorIndexUtil::get_part_key_num(const schema::ObTableSchema &data_schema, int8_t &part_key_num)
+{
+  int ret = OB_SUCCESS;
+  part_key_num = 0;
+  schema::ObTableSchema::const_column_iterator col_begin = data_schema.column_begin();
+  schema::ObTableSchema::const_column_iterator col_end = data_schema.column_end();
+  for (; OB_SUCC(ret) && col_begin != col_end; col_begin++) {
+    const schema::ObColumnSchemaV2 *col_schema = *col_begin;
+    if (OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr column schema", K(ret));
+    } else if (col_schema->is_tbl_part_key_column()) {
+      part_key_num++;
+    }
+  }
+  return ret;
+}
+
+int ObDasSemanticIndexInfo::generate_ivf_info(const schema::ObTableSchema *data_schema,
+                                              const schema::ObTableSchema *rowkey_domain_schema,
+                                              int64_t result_output_count,
+                                              bool has_trans_info_expr)
+{
+  int ret = OB_SUCCESS;
+  part_key_num_ = 0;
+  if (data_schema->is_table_with_hidden_pk_column() && data_schema->is_partitioned_table()) {
+    int64_t trans_expr_cnt = has_trans_info_expr ? 1 : 0;
+    int64_t domain_id_cnt = rowkey_domain_schema->is_vec_ivfpq_rowkey_cid_index() ? 2 : 1; // pq code index has 2 ids: cid,pq_cid
+    int64_t index_column_cnt = rowkey_domain_schema->get_column_count();
+    int64_t index_rowkey_cnt = rowkey_domain_schema->get_rowkey_column_num();
+    if (result_output_count == (index_column_cnt + trans_expr_cnt)) {
+      if (OB_FAIL(ObVectorIndexUtil::get_part_key_num(*data_schema, part_key_num_))) {
+        LOG_WARN("fail to get part key num", K(ret), KPC(data_schema));
+      } else if (index_column_cnt != index_rowkey_cnt + domain_id_cnt + part_key_num_) {
+        if (index_column_cnt == index_rowkey_cnt + domain_id_cnt) {
+          LOG_INFO("rowkey_domain_schema column_count != idx_column_cnt != idx_rowkey_num + domain_id + part_key_num",
+                   K(index_column_cnt), K(index_rowkey_cnt), K(domain_id_cnt), K(part_key_num_),
+                   K(trans_expr_cnt), KPC(rowkey_domain_schema));
+          part_key_num_ = 0;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected ivf_index column_count", K(ret), KPC(rowkey_domain_schema), K(index_column_cnt),
+                   K(index_rowkey_cnt), K(domain_id_cnt), K(part_key_num_), K(trans_expr_cnt));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDasSemanticIndexInfo::generate(const schema::ObTableSchema *data_schema,
                                      const schema::ObTableSchema *rowkey_domain_schema,
                                      int64_t result_output_count,
@@ -7722,6 +7785,10 @@ int ObDasSemanticIndexInfo::generate(const schema::ObTableSchema *data_schema,
   if (OB_ISNULL(data_schema) || OB_ISNULL(rowkey_domain_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(data_schema), KP(rowkey_domain_schema));
+  } else if (rowkey_domain_schema->is_vec_ivf_index()) {
+    if (OB_FAIL(generate_ivf_info(data_schema, rowkey_domain_schema, result_output_count, has_trans_info_expr))) {
+      LOG_WARN("fail to generate ivf domain info", K(ret), KPC(data_schema), KPC(rowkey_domain_schema), K(result_output_count), K(has_trans_info_expr));
+    }
   } else {
     is_emb_vec_tbl_ = rowkey_domain_schema->is_hybrid_vec_index_embedded_type();
     use_rowkey_vid_tbl_ = !data_schema->is_table_with_hidden_pk_column();
@@ -7730,21 +7797,13 @@ int ObDasSemanticIndexInfo::generate(const schema::ObTableSchema *data_schema,
     if (data_schema->is_table_with_hidden_pk_column() && data_schema->is_partitioned_table()) {
       int64_t trans_expr_cnt = has_trans_info_expr ? 1 : 0;
       if (result_output_count == (rowkey_domain_schema->get_column_count() + trans_expr_cnt)) {
-        schema::ObTableSchema::const_column_iterator col_begin = data_schema->column_begin();
-        schema::ObTableSchema::const_column_iterator col_end = data_schema->column_end();
-        for (; OB_SUCC(ret) && col_begin != col_end; col_begin++) {
-          const schema::ObColumnSchemaV2 *col_schema = *col_begin;
-          if (OB_ISNULL(col_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected nullptr column schema", K(ret));
-          } else if (col_schema->is_tbl_part_key_column()) {
-            part_key_num_++;
-          }
+        if (OB_FAIL(ObVectorIndexUtil::get_part_key_num(*data_schema, part_key_num_))) {
+          LOG_WARN("fail to get part key num", K(ret), KPC(data_schema));
         }
       }
     }
     if (OB_FAIL(ret)) {
-    }else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(rowkey_domain_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, vec_index_param))) {
+    } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(rowkey_domain_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, vec_index_param))) {
       LOG_WARN("fail to parser params from string", K(ret), K(rowkey_domain_schema->get_index_params()));
     } else {
       sync_interval_type_ = vec_index_param.sync_interval_type_;

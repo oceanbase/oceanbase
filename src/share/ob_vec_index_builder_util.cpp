@@ -662,14 +662,18 @@ int ObVecIndexBuilderUtil::check_vec_index_allowed(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(data_schema));
   } else if (data_schema.is_partitioned_table() && data_schema.is_table_without_pk()) {
-    if (share::schema::is_vec_spiv_index_aux(index_type) || share::schema::is_local_vec_hnsw_index(index_type)) {
+    if (share::schema::is_vec_spiv_index_aux(index_type) || share::schema::is_local_vec_hnsw_index(index_type) ||
+        share::schema::is_local_vec_ivf_index(index_type)) {
       uint64_t tenant_id = data_schema.get_tenant_id();
       uint64_t data_version = 0;
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
         LOG_WARN("get tenant data version failed", K(ret));
-      } else if (data_version < DATA_VERSION_4_4_1_0) {
+      } else if (!share::schema::is_local_vec_ivf_index(index_type) && data_version < DATA_VERSION_4_4_1_0) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "tcreate vector index on partition table without primary key");
+      } else if (share::schema::is_local_vec_ivf_index(index_type) && data_version < DATA_VERSION_4_5_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vec ivf index on partition table without primary key");
       }
     } else {
       ret = OB_NOT_SUPPORTED;
@@ -1104,6 +1108,7 @@ int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
     if (share::schema::is_vec_dim_docid_value_type(arg.index_type_)) {
       need_add_skip_index = true;
     }
+    bool is_hidden_primary_key = false;
     HEAP_VAR(ObRowDesc, row_desc) {
       // 1. add rowkey columns
       for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_columns_.count(); ++i) {
@@ -1136,6 +1141,8 @@ int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
                                                           false/*is_hidden*/,
                                                           false/*is_specified_storing_col*/))) {
           LOG_WARN("failed to add column", K(ret), KPC(rowkey_column), K(row_desc));
+        } else if (rowkey_column->is_hidden_pk_column_id(rowkey_column->get_column_id())) {
+          is_hidden_primary_key = true;
         }
       }
       bool need_set_extra_info = false;
@@ -1151,7 +1158,7 @@ int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
       ObVectorIndexParam index_param; // not use
       if (OB_FAIL(ret)) {
       } else if ((is_vec_ivfpq_pq_centroid_index(arg.index_type_) || need_set_extra_info) &&
-                 OB_FAIL(set_extra_info_columns(data_schema, row_desc, true, index_param, index_schema))) {
+                 OB_FAIL(set_extra_info_columns(data_schema, row_desc, true, index_param, index_schema, false/*need_set_part_key*/))) {
         LOG_WARN("fail to set extra info columns", K(ret));
       }
       if (OB_SUCC(ret)) {
@@ -1194,6 +1201,18 @@ int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
         // centroid/pq_centroid/sq8_meta need part key
         LOG_WARN("fail to generate part key columns", K(ret));
       }
+      // 4. If the primary key is hidden, a partition key needs to be added to the rowkey_cid\cid_vec\pqcode table.
+      bool need_add_part_key_on_code_table =
+          is_hidden_primary_key &&
+          (is_vec_ivfflat_cid_vector_index(arg.index_type_) || is_vec_ivfflat_rowkey_cid_index(arg.index_type_) ||
+           is_vec_ivfpq_code_index(arg.index_type_) || is_vec_ivfpq_rowkey_cid_index(arg.index_type_));
+      if (OB_FAIL(ret)) {
+      } else if (need_add_part_key_on_code_table) {
+        if (OB_FAIL(set_part_key_columns(data_schema, index_schema))) {
+          LOG_WARN("fail to generate part key columns", K(ret));
+        }
+      }
+
       if (FAILEDx(index_schema.sort_column_array_by_column_id())) {
         LOG_WARN("failed to sort column", K(ret));
       } else {
@@ -4833,7 +4852,8 @@ int ObVecIndexBuilderUtil::set_extra_info_columns(const ObTableSchema &data_sche
                                                   ObRowDesc &row_desc,
                                                   bool need_set_rk,
                                                   ObVectorIndexParam &index_param,
-                                                  ObTableSchema &index_schema)
+                                                  ObTableSchema &index_schema,
+                                                  bool need_set_part_key /*= true*/)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ret)) {
@@ -4841,11 +4861,18 @@ int ObVecIndexBuilderUtil::set_extra_info_columns(const ObTableSchema &data_sche
     ObTableSchema::const_column_iterator tmp_begin = data_schema.column_begin();
     ObTableSchema::const_column_iterator tmp_end = data_schema.column_end();
     for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+      bool need_set = false;
       ObColumnSchemaV2 *col_schema = (*tmp_begin);
       if (OB_ISNULL(col_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret), KP(col_schema));
-      } else if (!col_schema->is_rowkey_column() && !col_schema->is_tbl_part_key_column()) {
+      } else if (col_schema->is_rowkey_column()) {
+        need_set = true;
+      } else if (need_set_part_key && col_schema->is_tbl_part_key_column()) {
+        need_set = true;
+      }
+
+      if (OB_FAIL(ret) || !need_set) {
       } else if (is_column_exist(index_schema, *col_schema)) {
       } else {
         ObColumnSchemaV2 column;

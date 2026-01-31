@@ -4912,9 +4912,10 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
                                                                       *scan_ctdef,
                                                                       nullptr))) {
       LOG_WARN("fail to generate das result output", K(ret));
-    } else if (rowkey_domain_schema->is_hybrid_vec_index_embedded_type() &&
-               OB_FAIL(semantic_index_info.generate(data_schema,
-                                                    rowkey_domain_schema,
+    } else if ((rowkey_domain_schema->is_hybrid_vec_index_embedded_type() ||
+                rowkey_domain_schema->is_vec_ivfpq_rowkey_cid_index() ||
+                rowkey_domain_schema->is_vec_ivfflat_rowkey_cid_index()) &&
+               OB_FAIL(semantic_index_info.generate(data_schema, rowkey_domain_schema,
                                                     scan_ctdef->result_output_.count(),
                                                     OB_NOT_NULL(scan_ctdef->trans_info_expr_)))) {
       LOG_WARN("fail to generate semantic index info", K(ret));

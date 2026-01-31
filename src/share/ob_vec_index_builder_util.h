@@ -179,7 +179,8 @@ public:
       ObRowDesc &row_desc,
       bool need_set_rk,
       ObVectorIndexParam &index_param,
-      ObTableSchema &index_schema);
+      ObTableSchema &index_schema,
+      bool need_set_part_key = true);
   static int del_extra_info_columns(
       const ObTableSchema &data_schema,
       ObVectorIndexParam &index_param,
@@ -191,6 +192,7 @@ public:
       ObColumnSchemaV2 *dst_column,
       ObSchemaGetterGuard &schema_guard,
       bool &is_offline);
+  static int set_part_key_columns(const ObTableSchema &data_schema, ObTableSchema &index_schema);
 
 private:
   static int append_vec_hnsw_args(
@@ -565,9 +567,6 @@ private:
   static bool is_column_exist(
       const ObTableSchema &index_schema,
       const ObColumnSchemaV2 &col);
-  static int set_part_key_columns(
-      const ObTableSchema &data_schema,
-      ObTableSchema &index_schema);
 
   static int get_extra_info_actual_size(
       const ObTableSchema &data_schema,

@@ -401,7 +401,6 @@ protected:
                         const ObDASScanCtDef *ctdef,
                         ObDASScanRtDef *rtdef,
                         ObDASScanIter *iter,
-                        int64_t pri_key_cnt,
                         ObTabletID &tablet_id,
                         bool &first_scan,
                         ObTableScanParam &scan_param);
@@ -411,7 +410,6 @@ protected:
                         ObDASScanRtDef *rtdef,
                         ObDASScanIter *iter,
                         ObTabletID &tablet_id);
-  int do_rowkey_cid_table_scan();
 
   int build_cid_vec_query_range(const ObString &cid, int64_t rowkey_cnt, ObNewRange &cid_rowkey_range);
   int build_cid_vec_query_rowkey(const ObString &cid, bool is_min, int64_t rowkey_cnt, common::ObRowkey &rowkey);
@@ -438,8 +436,6 @@ protected:
                                 bool save_center_vec = false,
                                 ObIvfCentCache *cent_cache = nullptr,
                                 bool is_cache_usable = false);
-  int parse_centroid_datum(const ObDASScanCtDef *cid_vec_ctdef, ObIAllocator &allocator,
-                           blocksstable::ObDatumRow *datum_row, ObString &cid, ObString &cid_vec);
   int get_main_rowkey_from_cid_vec_datum(ObIAllocator &allocator, const ObDASScanCtDef *cid_vec_ctdef,
                                          const int64_t rowkey_cnt, ObRowkey &main_rowkey, bool need_alloc = true);
   int get_pre_filter_rowkey_batch(ObIAllocator &allocator,
@@ -503,16 +499,9 @@ protected:
 
 protected:
   static const int64_t CENTROID_PRI_KEY_CNT = 1;
-  static const int64_t CENTROID_ALL_KEY_CNT = 2;
-
   static const int64_t CID_VEC_COM_KEY_CNT = 1;        // Only the vec column is a common column
   static const int64_t CID_VEC_FIXED_PRI_KEY_CNT = 1;  // center_id is FIXED PRI KEY
-  static const int64_t ROWKEY_CID_PRI_KEY_CNT = 1;
-
-  static const int64_t SQ_MEAT_PRI_KEY_CNT = 1;
-  static const int64_t SQ_MEAT_ALL_KEY_CNT = 2;
   static const int64_t POST_ENLARGEMENT_FACTOR = 2;
-  static const int64_t PRE_ENLARGEMENT_FACTOR = 2;
   // in centroid table
   static const int64_t CID_IDX = 0;
   static const int64_t CID_VECTOR_IDX = 1;
@@ -645,9 +634,6 @@ protected:
   int do_ivf_scan_post(bool is_vectorized, T *search_vec);
   virtual int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized);
   int check_cid_exist(const ObString &src_cid, bool &src_cid_exist);
-  int get_cid_from_rowkey_cid_table(ObString &cid);
-  int filter_pre_rowkey_batch(bool is_vectorized, int64_t batch_row_count);
-  int filter_rowkey_by_cid(bool is_vectorized, int64_t batch_row_count, int &push_count);
   virtual int process_ivf_scan_post(bool is_vectorized);
   int parse_cid_vec_datum(
     ObIAllocator& allocator,
@@ -689,8 +675,6 @@ protected:
 
   int process_ivf_scan_post(bool is_vectorized) override;
   int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized) override;
-  int filter_pre_rowkey_batch(bool is_vectorized, int64_t batch_row_count, IvfRowkeyHeap &rowkey_heap);
-  int filter_rowkey_by_cid(bool is_vectorized, int64_t batch_row_count, IvfRowkeyHeap &rowkey_heap, int &push_count);
   int parse_pq_ids_vec_datum(
     ObIAllocator &allocator,
     int64_t cid_vec_column_count,
@@ -724,16 +708,7 @@ protected:
       bool need_distances = true,
       int64_t incremental_nprobes = -1);
 
-  int get_cid_from_pq_rowkey_cid_table(ObIAllocator &allocator, ObString &cid, ObString &pq_cids);
   int check_cid_exist(const ObString &src_cid, float *&center_vec, bool &src_cid_exist);
-  int calc_adc_distance(
-    bool is_vectorized,
-    const ObString &cid,
-    const ObString &pq_center_ids,
-    IvfRowkeyHeap &rowkey_heap,
-    ObArray<float *> &splited_residual,
-    float *residual,
-    int &push_count);
   int calc_distance_between_pq_ids(
     bool is_vectorized,
     const ObString &pq_center_ids,
@@ -758,7 +733,6 @@ protected:
     const float* search_vec,
     float* dis_table,
     bool is_vectorized);
-  int process_ivf_scan_brute_inner(bool is_vectorized);
   int calc_distance_with_precompute(
     ObEvalCtx::BatchInfoScopeGuard &guard,
     int64_t scan_row_cnt,

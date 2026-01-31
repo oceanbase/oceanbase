@@ -1004,6 +1004,8 @@ public:
               index_type == INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL));
   }
 
+  static int get_part_key_num(const schema::ObTableSchema &data_schema, int8_t &part_key_num);
+
 private:
   static void save_column_schema(
       const ObColumnSchemaV2 *&old_column,
@@ -1292,6 +1294,10 @@ public:
                const schema::ObTableSchema *rowkey_domain_schema,
                int64_t result_output_count,
                bool has_trans_info_expr);
+  int generate_ivf_info(const schema::ObTableSchema *data_schema,
+                        const schema::ObTableSchema *rowkey_domain_schema,
+                        int64_t result_output_count,
+                        bool has_trans_info_expr);
 
   TO_STRING_KV(K_(is_emb_vec_tbl), K_(use_rowkey_vid_tbl), K_(part_key_num), K_(sync_interval_type));
 

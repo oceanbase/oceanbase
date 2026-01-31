@@ -4706,7 +4706,8 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
     bool is_pre_filter = vec_aux_ctdef->is_pre_filter();
     bool need_pre_lookup = (is_pre_filter || can_use_adaptive_path)
                            && !data_table_ctdef->pd_expr_spec_.pushdown_filters_.empty()
-                           && !is_primary_index;
+                           && !is_primary_index
+                           && !vec_aux_ctdef->all_filters_can_be_picked_out_;
 
     if (OB_SUCC(ret)) {
       ObDASIter *inv_idx_scan_iter_sub_tree = nullptr;
