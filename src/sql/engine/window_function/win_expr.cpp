@@ -1477,6 +1477,9 @@ int RankLikeExpr<rank_op>::process_next_row_streaming(StreamingWinExprEvalCtx &c
     bool equal_with_prev_row = (prev_row_idx == -1) ? first_row_equal_to_last_row_in_previous_batch_ : (relative_rank == relative_rank_of_prev_row_);
     if (equal_with_prev_row) {
       num_rows_equal_with_prev_row_ += 1;
+      if (prev_row_idx == -1) {
+        relative_rank_of_prev_row_ = relative_rank;
+      }
     } else {
       if (rank_op == T_WIN_FUN_RANK) {
         rank_of_prev_row_ += num_rows_equal_with_prev_row_;
