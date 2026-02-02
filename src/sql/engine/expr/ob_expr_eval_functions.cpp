@@ -2003,7 +2003,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprQuarter::calc_quarter_vector,                                    /* 316 */
   ObExprToDays::calc_to_days_vector,                                     /* 317 */
   NULL, // ObExprRandCanonical::calc_random_expr_canonical_vector        /* 318 */
-  ObExprLoadFile::eval_load_file_vector,                                      /* 319 */
+  ObExprLoadFile::eval_load_file_vector,                                 /* 319 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document_vector          /* 320 */
   NULL, // ObExprToTypeName::eval_to_type_name_vector,                   /* 321 */
   NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null_vector,        /* 322 */
