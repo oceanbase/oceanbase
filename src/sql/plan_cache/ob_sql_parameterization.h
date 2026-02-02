@@ -254,6 +254,7 @@ private:
   static int mark_special_hidden_const_node(ParseNode &root);
   static int mark_array_hidden_const_node(ParseNode *root);
   static int get_cast_array_basic_type(const ParseNode *root, const ParseNode *&basic_type_node);
+  static int add_varchar_charset_and_fp_check(const ParseNode *node, SqlInfo &sql_info);
 };
 
 }

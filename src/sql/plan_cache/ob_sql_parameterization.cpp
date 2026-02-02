@@ -2115,6 +2115,33 @@ int ObSqlParameterization::get_cast_array_basic_type(const ParseNode *root, cons
   return ret;
 }
 
+int ObSqlParameterization::add_varchar_charset_and_fp_check(const ParseNode *node, SqlInfo &sql_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_PC_LOG(WARN, "invalid argument", K(ret));
+  } else if (OB_FAIL(add_varchar_charset(node, sql_info))) {
+    SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
+  }
+  if (sql_info.need_check_fp_) {
+    ObPCParseInfo p_info;
+    p_info.param_idx_ = sql_info.total_ - 1;
+    p_info.flag_ = NOT_PARAM;
+    p_info.raw_text_pos_ = node->sql_str_off_;
+    if (node->sql_str_off_ == -1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("invalid str off", K(lbt()), K(node),
+          K(node->raw_param_idx_), K(get_type_name(node->type_)));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sql_info.parse_infos_.push_back(p_info))) {
+      SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sql_info, SQL_EXECUTION_MODE mode)
 {
   int ret = OB_SUCCESS;
@@ -2144,53 +2171,31 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
     } else {
       for (int i = 0; OB_SUCC(ret) && i < basic_node->param_num_; ++i) {
         if (PL_EXECUTE_MODE == mode && OB_FAIL(sql_info.ps_not_param_offsets_.push_back(sql_info.total_))) {
-        LOG_WARN("pushback offset failed", K(sql_info.total_));
-      } else if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
+          LOG_WARN("pushback offset failed", K(sql_info.total_));
+        } else if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
           SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
-        } else if (OB_FAIL(add_varchar_charset(basic_node, sql_info))) {
-          SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
-        }
-        if (sql_info.need_check_fp_) {
-          ObPCParseInfo p_info;
-          p_info.param_idx_ = sql_info.total_ - 1;
-          p_info.flag_ = NOT_PARAM;
-          p_info.raw_text_pos_ = basic_node->sql_str_off_;
-          if (basic_node->sql_str_off_ == -1) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("invalid str off", K(lbt()), K(basic_node),
-                K(basic_node->raw_param_idx_), K(get_type_name(basic_node->type_)));
-          }
-          if (OB_FAIL(ret)) {
-
-          } else if (OB_FAIL(sql_info.parse_infos_.push_back(p_info))) {
-            SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
-          }
+        } else if (OB_FAIL(add_varchar_charset_and_fp_check(basic_node, sql_info))) {
+          LOG_WARN("failed to add varchar charset and fp check", K(ret));
         }
       }
     }
   } else {
-    if (PL_EXECUTE_MODE == mode && OB_FAIL(sql_info.ps_not_param_offsets_.push_back(sql_info.total_++))) {
+    if (IS_DATATYPE_OP(node->type_) && node->param_num_ > 1) {
+      for (int i = 0; OB_SUCC(ret) && i < node->param_num_; ++i) {
+        if (PL_EXECUTE_MODE == mode && OB_FAIL(sql_info.ps_not_param_offsets_.push_back(sql_info.total_++))) {
+          LOG_WARN("pushback offset failed", K(node->value_));
+        } else if (PL_EXECUTE_MODE != mode && OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
+          SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
+        } else if (OB_FAIL(add_varchar_charset_and_fp_check(node, sql_info))) {
+          LOG_WARN("failed to add varchar charset and fp check", K(ret));
+        }
+      }
+    } else if (PL_EXECUTE_MODE == mode && OB_FAIL(sql_info.ps_not_param_offsets_.push_back(sql_info.total_++))) {
       LOG_WARN("pushback offset failed", K(node->value_));
     } else if (PL_EXECUTE_MODE != mode && OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
       SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
-    } else if (OB_FAIL(add_varchar_charset(node, sql_info))) {
-      SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
-    }
-    if (sql_info.need_check_fp_) {
-      ObPCParseInfo p_info;
-      p_info.param_idx_ = sql_info.total_ - 1;
-      p_info.flag_ = NOT_PARAM;
-      p_info.raw_text_pos_ = node->sql_str_off_;
-      if (node->sql_str_off_ == -1) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("invalid str off", K(lbt()), K(node),
-            K(node->raw_param_idx_), K(get_type_name(node->type_)));
-      }
-      if (OB_FAIL(ret)) {
-
-      } else if (OB_FAIL(sql_info.parse_infos_.push_back(p_info))) {
-        SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
-      }
+    } else if (OB_FAIL(add_varchar_charset_and_fp_check(node, sql_info))) {
+      LOG_WARN("failed to add varchar charset and fp check", K(ret));
     }
   }
 
