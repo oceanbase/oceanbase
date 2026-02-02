@@ -17724,6 +17724,7 @@ def_table_schema(
 # 12589: __all_virtual_ss_macro_cache_info
 # 12590: __all_virtual_ss_local_cache_diagnose_info
 # 12591: __all_virtual_ddl_dag_monitor
+# 12592: __all_virtual_vector_segment_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -45835,6 +45836,8 @@ def_table_schema(
 # 21713: V$OB_SS_LOCAL_CACHE_DIAGNOSE
 # 21714: GV$OB_SINDI_INDEX_INFO
 # 21715: V$OB_SINDI_INDEX_INFO
+# 21716: GV$OB_HNSW_INDEX_SEGMENT_INFO
+# 21717: V$OB_HNSW_INDEX_SEGMENT_INFO
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
