@@ -427,7 +427,7 @@ int ObLogExpand::inner_replace_op_exprs(ObRawExprReplacer &replacer)
           ret = OB_SUCCESS;// if name exceeds, just truncate name and return
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_FAIL(ret)) {
       } else {
         ObIAllocator &allocator =
           get_plan()->get_optimizer_context().get_expr_factory().get_allocator();

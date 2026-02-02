@@ -566,6 +566,14 @@ int ObLogGroupBy::inner_replace_op_exprs(ObRawExprReplacer &replacer)
       }
     }
   }
+  if (OB_SUCC(ret) && is_three_stage_expand_aggr()) {
+    // replace group_distinct_exprs
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_distinct_exprs_.count(); ++i) {
+      if (OB_FAIL(replace_exprs_action(replacer, group_distinct_exprs_.at(i)))) {
+        LOG_WARN("failed to replace group distinct exprs", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
