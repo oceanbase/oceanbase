@@ -7995,7 +7995,7 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                            random_expr))) {
     LOG_WARN("failed to get range list win func exchange info", K(ret));
   } else if (OB_FALSE_IT(use_part_topn = need_sort && win_func_helper.part_cnt_ > 0 &&
-                                         !win_func_helper.force_normal_sort_ &&
+                                         !win_func_helper.force_hash_sort_ &&
                                          win_func_helper.enable_topn_ &&
                                          prefix_pos == 0 &&
                                          NULL != win_func_helper.topn_const_ &&
@@ -8014,7 +8014,7 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                      prefix_pos,
                                                      top->get_is_local_order(),
                                                      (use_part_topn || use_topn) ? win_func_helper.topn_const_ : NULL,
-                                                     false,
+                                                     win_func_helper.is_fetch_with_ties_,
                                                      use_part_topn ? &hash_sortkey : NULL,
                                                      true))) {
     LOG_WARN("failed to allocate sort and exchange as top", K(ret));

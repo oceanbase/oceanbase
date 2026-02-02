@@ -1577,6 +1577,9 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       break;
     }
     case RUNTIME_FILTER: {
+      AllocBloomFilterContext *alloc_bf_ctx = static_cast<AllocBloomFilterContext *>(ctx);
+      CK( OB_NOT_NULL(alloc_bf_ctx));
+      OC( (check_in_px_scope_pre)(*alloc_bf_ctx));
       break;
     }
     case RUNTIME_FILTER_PRUNING: {
@@ -1707,6 +1710,7 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
         AllocBloomFilterContext *alloc_bf_ctx = static_cast<AllocBloomFilterContext *>(ctx);
         CK( OB_NOT_NULL(alloc_bf_ctx));
         OC( (allocate_runtime_filter_for_hash_join)(*alloc_bf_ctx));
+        OC( (check_in_px_scope_post)(*alloc_bf_ctx));
         if (OB_FAIL(ret)) {
         } else if (LOG_SORT == get_type()
                    && get_plan()->get_optimizer_context().enable_topn_runtime_filter()
@@ -5689,6 +5693,7 @@ int ObLogicalOperator::fill_in_part_join_filter_info(const ObLogicalOperator *cu
       } else {
         gi_op->set_tablet_id_expr(tablet_id_expr);
         gi_op->set_join_filter_info(tsc->get_join_filter_info());
+        gi_op->set_index_table_id(tsc->get_index_table_id());
         ObLogJoinFilter *jf_create_op = gi_op->get_join_filter_info().log_join_filter_create_op_;
         jf_create_op->set_paired_join_filter(gi_op);
         gi_op->add_flag(GI_USE_PARTITION_FILTER);
@@ -6267,7 +6272,7 @@ int ObLogicalOperator::allocate_normal_join_filter(ObIArray<JoinFilterInfo*> &in
         } else if (OB_FAIL(try_prepare_rf_query_range_info(join_filter_create, join_filter_use,
                                                            node, *info))) {
           LOG_WARN("failed to prepare_rf_query_range_info");
-        } else if (get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_5_0) &&
+        } else if (get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_0) &&
                    OB_FAIL(node->update_optimizer_info(*info))) {
           LOG_WARN("failed to update optimizer info", K(ret));
         } else if (!enable_runtime_filter_adaptive_apply) {
@@ -6359,6 +6364,32 @@ int ObLogicalOperator::allocate_normal_join_filter(ObIArray<JoinFilterInfo*> &in
   }
   return ret;
 }
+int ObLogicalOperator::check_in_px_scope_pre(AllocBloomFilterContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  // once a px coordinator is found, set in px to true
+  if (LOG_EXCHANGE == get_type()) {
+    const ObLogExchange *op = static_cast<const ObLogExchange *>(this);
+    if (!ctx.in_px_scope_ && op->is_px_coord()) {
+      ctx.previous_px_scope_ = ctx.in_px_scope_;
+      ctx.in_px_scope_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_in_px_scope_post(AllocBloomFilterContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  // reset to parent's px scope mark
+  if (LOG_EXCHANGE == get_type()) {
+    const ObLogExchange *op = static_cast<const ObLogExchange *>(this);
+    if (ctx.in_px_scope_ && op->is_px_coord()) {
+      ctx.in_px_scope_ = ctx.previous_px_scope_;
+    }
+  }
+  return ret;
+}
 
 int ObLogicalOperator::allocate_runtime_filter_for_hash_join(AllocBloomFilterContext &ctx)
 {
@@ -6366,6 +6397,20 @@ int ObLogicalOperator::allocate_runtime_filter_for_hash_join(AllocBloomFilterCon
   ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
   if (LOG_JOIN != get_type()) {
     //do nothing
+  } else if (join_op->get_join_filter_infos().empty()) {
+    //do nothing
+  } else if (!ctx.in_px_scope_) {
+    ObIArray<JoinFilterInfo*> &join_filter_infos = join_op->get_join_filter_infos();
+    for (int i = 0; i < join_filter_infos.count() && OB_SUCC(ret); ++i) {
+      JoinFilterInfo *info = join_filter_infos.at(i);
+      if (OB_ISNULL(info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("join filter info is null", K(ret));
+      } else {
+        info->need_partition_join_filter_ = false;
+        info->can_use_join_filter_ = false;
+      }
+    }
   } else {
     ObIArray<JoinFilterInfo*> &join_filter_infos = join_op->get_join_filter_infos();
     if (join_filter_infos.empty()) {

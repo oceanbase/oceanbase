@@ -3617,9 +3617,14 @@ bool ObWindowDistHint::WinDistOption::is_valid() const
   } else if (WinDistAlgo::WIN_DIST_HASH != algo_ &&
              WinDistAlgo::WIN_DIST_NONE != algo_ &&
              WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_ &&
+             use_hash_sort_) {
+    bret = false;
+  } else if (WinDistAlgo::WIN_DIST_HASH != algo_ &&
+             WinDistAlgo::WIN_DIST_NONE != algo_ &&
+             WinDistAlgo::WIN_DIST_HASH_LOCAL != algo_ &&
              WinDistAlgo::WIN_DIST_RANGE != algo_ &&
-             WinDistAlgo::WIN_DIST_LIST != algo_
-            && (use_hash_sort_ || use_topn_sort_)) {
+             WinDistAlgo::WIN_DIST_LIST != algo_ &&
+            use_topn_sort_) {
     bret = false;
   } else {
     for (int64_t i = 0; bret && i < win_func_idxs_.count(); ++i) {

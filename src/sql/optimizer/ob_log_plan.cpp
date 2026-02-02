@@ -270,7 +270,7 @@ int ObLogPlan::generate_join_orders(ObJoinOrder *&join_order)
     LOG_WARN("failed to distribute special quals", K(ret));
   } else if (OB_FAIL(init_width_estimation_info(stmt))) {
     LOG_WARN("failed to init width estimation info", K(ret));
-  } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_5_1) &&
+  } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_6_0) &&
              get_optimizer_context().get_join_order_enum_threshold() <=
              stmt->get_table_items().count()) {
     SMART_VAR(ObJoinOrderEnumPermutation, join_order_enum, *this, quals) {
@@ -5487,12 +5487,12 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
       groupby_helper.enable_expansion_ordered_output_ = rowsets_enabled
                                                         && (policy.case_compare("ordered") == 0)
                                                         && session_info->use_rich_format()
-                                                        && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_5_1
+                                                        && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_6_0
                                                         && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
       groupby_helper.enable_distinct_with_expansion_ = rowsets_enabled
                                                 && (policy.case_compare("normal") == 0 || policy.case_compare("ordered") == 0 || policy.case_compare("auto") == 0)
                                                 && session_info->use_rich_format()
-                                                && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_5_1
+                                                && groupby_helper.optimizer_features_enable_version_ >= COMPAT_VERSION_4_6_0
                                                 && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0;
     }
     if (OB_FAIL(ret)) {

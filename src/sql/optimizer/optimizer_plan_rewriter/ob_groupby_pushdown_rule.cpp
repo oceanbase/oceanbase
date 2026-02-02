@@ -36,7 +36,8 @@ namespace sql
 
 bool ObGroupByPushdownRule::is_enabled(const ObOptimizerContext &ctx)
 {
-  return ctx.enable_partial_group_by_pushdown();
+  return ctx.enable_partial_group_by_pushdown() && ctx.get_query_ctx() != NULL &&
+         ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_0);
 }
 
 int ObGroupByPushdownRule::apply_rule(ObLogPlan *root_plan,

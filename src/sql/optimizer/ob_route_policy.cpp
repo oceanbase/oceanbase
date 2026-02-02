@@ -556,7 +556,7 @@ int ObRoutePolicy::check_can_route_to_columnstore_replica(const ObStmt *stmt,
       FALSE_IT(tenant_id = session_info->get_effective_tenant_id())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(top_stmt), KP(session_info), KP(schema_guard));
-  } else if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_5_1) ||
+  } else if (!query_ctx->check_opt_compat_version(COMPAT_VERSION_4_6_0) ||
              GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
     // do nothing
   } else if (session_info->is_in_transaction() || !session_info->is_user_session()) {

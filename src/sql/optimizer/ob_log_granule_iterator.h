@@ -42,7 +42,8 @@ public:
   used_by_lake_table_(false),
   px_rf_info_(),
   enable_adaptive_task_splitting_(false),
-  controlled_tsc_(nullptr)
+  controlled_tsc_(nullptr),
+  index_table_id_(OB_INVALID_ID)
   { }
   virtual ~ObLogGranuleIterator()
   { }
@@ -98,6 +99,8 @@ public:
   void set_enable_adaptive_task_splitting(bool value) { enable_adaptive_task_splitting_ = value; }
   bool enable_adaptive_task_splitting() const { return enable_adaptive_task_splitting_; }
   int check_adaptive_task_splitting(ObLogTableScan *tsc);
+  void set_index_table_id(uint64_t index_table_id) {index_table_id_ = index_table_id; }
+  uint64_t get_index_table_id() { return index_table_id_;}
 private:
   int check_exist_deadlock_condition(const ObLogicalOperator *op, bool &exist);
   int branch_has_exchange(const ObLogicalOperator *op, bool &has_exchange);
@@ -115,6 +118,8 @@ private:
   ObPxRFStaticInfo px_rf_info_; // for runtime filter extract query range
   bool enable_adaptive_task_splitting_;
   ObLogicalOperator *controlled_tsc_; // only when gi is directly add above tsc.
+
+  uint64_t index_table_id_;
 };
 
 }

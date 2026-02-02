@@ -350,8 +350,7 @@ public:
       expr_factory_(expr_factory),
       session_info_(session_info),
       valid_rtfs_(),
-      consumer_table_infos_(),
-      in_px_scope_(false)
+      consumer_table_infos_()
   {}
   virtual ~JoinFilterPushdownRewriter() {}
 
@@ -405,7 +404,6 @@ public:
   ObSQLSessionInfo *session_info_;
   common::ObSEArray<JoinFilterMetaInfo*, 4, common::ModulePageAllocator, true> valid_rtfs_;
   common::ObSEArray<JoinUseMetaInfo*, 4, common::ModulePageAllocator, true> consumer_table_infos_;
-  bool in_px_scope_;
 };
 
 } // namespace sql

@@ -170,7 +170,6 @@ namespace sql
     int append_join_filter_infos(const common::ObIArray<JoinFilterInfo*> &infos) { return append(join_filter_infos_, infos); }
     const common::ObIArray<JoinFilterInfo*> &get_join_filter_infos() const { return join_filter_infos_; }
     common::ObIArray<JoinFilterInfo*> &get_join_filter_infos() { return join_filter_infos_; }
-
     inline bool can_use_batch_nlj() const { return can_use_batch_nlj_; }
     void set_can_use_batch_nlj(bool can_use) { can_use_batch_nlj_ = can_use; }
     void set_join_path(JoinPath *path) { join_path_ = path; }

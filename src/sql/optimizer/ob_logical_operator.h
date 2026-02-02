@@ -426,9 +426,12 @@ class AllocBloomFilterContext
 {
 public:
   TO_STRING_KV(K_(filter_id));
-  AllocBloomFilterContext() : filter_id_(0) {};
+  AllocBloomFilterContext() : filter_id_(0), in_px_scope_(false), previous_px_scope_(true) {};
   ~AllocBloomFilterContext() = default;
   int64_t filter_id_;
+
+  bool in_px_scope_;
+  bool previous_px_scope_;
 };
 
 struct ObExchangeInfo
@@ -1439,7 +1442,9 @@ public:
    * Allocate runtime filter operator.
    */
   int allocate_runtime_filter_for_hash_join(AllocBloomFilterContext &ctx);
+  int check_in_px_scope_pre(AllocBloomFilterContext &ctx);
 
+  int check_in_px_scope_post(AllocBloomFilterContext &ctx);
   static int check_is_table_scan(const ObLogicalOperator &op,
                                  bool &is_table_scan);
 

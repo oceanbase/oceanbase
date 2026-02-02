@@ -37,7 +37,8 @@ namespace sql
 
 bool ObDistinctPushdownRule::is_enabled(const ObOptimizerContext &ctx)
 {
-    return ctx.enable_partial_distinct_pushdown();
+    return ctx.enable_partial_distinct_pushdown() && ctx.get_query_ctx() != NULL &&
+           ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_0);
 }
 
 int ObDistinctPushdownRule::apply_rule(ObLogPlan *root_plan,

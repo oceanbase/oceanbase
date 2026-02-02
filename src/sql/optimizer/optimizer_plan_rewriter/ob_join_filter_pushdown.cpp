@@ -30,8 +30,8 @@ JoinFilterPushdown::~JoinFilterPushdown()
 }
 bool JoinFilterPushdown::is_enabled(const ObOptimizerContext& ctx)
 {
-  return ctx.enable_runtime_filter() &&
-         ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_5_0);
+  return ctx.enable_runtime_filter() && ctx.get_query_ctx() != NULL &&
+         ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_0);
 }
 
 int JoinFilterPushdown::apply_rule(ObLogPlan* root_plan, ObOptimizerContext& ctx) {
@@ -43,7 +43,7 @@ int JoinFilterPushdown::apply_rule(ObLogPlan* root_plan, ObOptimizerContext& ctx
      || OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (!ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_5_0)) {
+  } else if (!ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_6_0)) {
   } else if (!is_enabled(ctx)) {
     OPT_TRACE("runtime filter pushdown is disabled");
   } else {

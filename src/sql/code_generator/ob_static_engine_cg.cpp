@@ -4530,6 +4530,7 @@ int ObStaticEngineCG::generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorS
     LOG_WARN("not supported at this time", K(ret));
   } else if (op.get_join_filter_info().is_inited_) {
     spec.bf_info_ = op.get_join_filter_info();
+    spec.set_related_id(op.get_index_table_id());
     if (OB_ISNULL(op.get_tablet_id_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("op is null", K(ret));

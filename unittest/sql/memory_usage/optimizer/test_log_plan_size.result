@@ -23,7 +23,7 @@
 | ObLogTopk | 1064 |
 | ObLogCount | 1048 |
 | ObLogMerge | 1488 |
-| ObLogGranuleIterator | 1336 |
+| ObLogGranuleIterator | 1344 |
 | ObLogJoinFilter | 1464 |
 | ObLogSequence | 1208 |
 | ObLogMonitoringDump | 1048 |

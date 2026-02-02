@@ -1393,18 +1393,13 @@ struct NoSpecialExprPredicate {
 
     // need to update the following marks
     // update dfo level ++
-    // if node is px_coordinator. reset all context
     int JoinFilterPushdownRewriter::visit_exchange(ObLogExchange * exchangenode, JoinFilterPushdownContext* context, JoinFilterPushdownResult*& result)
     {
       int ret = OB_SUCCESS;
-      bool is_in_px_scope = in_px_scope_;
       JoinFilterPushdownContext* pushdown_context = context;
       if (OB_ISNULL(exchangenode) || OB_ISNULL(exchangenode->get_child(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("exchange node is null", K(ret));
-      } else if (!in_px_scope_ && exchangenode->is_consumer()
-                 && ObGlobalHint::DEFAULT_PARALLEL >= exchangenode->get_parallel()) {
-        in_px_scope_ = true;
       } else if (context == NULL) {
         // do nothing
         // we only update context for exchange in.
@@ -1433,8 +1428,6 @@ struct NoSpecialExprPredicate {
       if (OB_SUCC(ret)) {
         if (OB_FAIL(this->rewrite_children(exchangenode, pushdown_context))) {
           LOG_WARN("failed to rewrite children", K(ret));
-        } else {
-          in_px_scope_ = is_in_px_scope;
         }
       }
       return ret;
@@ -1936,8 +1929,6 @@ struct NoSpecialExprPredicate {
         LOG_WARN("join prt is invalid", K(ret), KP(joinnode), KP(joinnode->get_join_path()));
       } else if (OB_FAIL(JoinFilterPushdownContext::init(&this->get_allocator(), context))){
         LOG_WARN("failed to init pushdown context", K(ret), KP(joinnode));
-      } else if (!in_px_scope_) {
-        OPT_TRACE("join not in px scope, id=", joinnode->get_op_id());
       } else if (HASH_JOIN != joinnode->get_join_algo()) {
         //do nothing
       } else if (RIGHT_OUTER_JOIN == joinnode->get_join_type() ||

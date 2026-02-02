@@ -23683,7 +23683,7 @@ int ObJoinOrder::check_match_common_gen_col_index(ObRawExpr *expr,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(expr), K(table_item));
   } else if (expr->get_expr_type() == T_OP_AND || expr->get_expr_type() == T_OP_OR) {
-    bool match_one_branch = OPT_CTX.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_5_1;
+    bool match_one_branch = OPT_CTX.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_6_0;
     is_match = !match_one_branch;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *param = expr->get_param_expr(i);
