@@ -1385,10 +1385,16 @@ int ObMPStmtPrexecute::send_prepare_packet(uint32_t statement_id,
   extend_flag.IS_PS_OUT = is_ps_out ? 1 : 0;
   prexecute_packet.set_extend_flag(extend_flag);
 
-  if (OB_SUCC(ret) && OB_FAIL(response_packet(prexecute_packet, NULL))) {
-    LOG_WARN("response packet failed", K(ret));
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(response_packet(prexecute_packet, NULL))) {
+    LOG_WARN("prexec response prepare packet failed");
+    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      LOG_WARN("prepare packet oom, disconnect connection");
+      force_disconnect();
+    }
   }
-  LOG_DEBUG("send prepare packet in prepare-execute protocol.", K(statement_id),
+  LOG_DEBUG("send prepare packet in prepare-execute protocol.", K(ret),
+                                                                K(statement_id),
                                                                 K(column_num),
                                                                 K(param_num),
                                                                 K(warning_count),
