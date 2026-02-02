@@ -59,6 +59,24 @@ int deserialize_(BufferCtx *&ctx_, int64_t type_idx, const char *buf, const int6
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   if (IDX == type_idx) {
+
+    if (type_idx == 15) {
+      // resolve compatibility issues when upgrading from 42x to 44x
+      // dima: 2026012300113661970
+      int64_t tmp_pos = pos;
+      int64_t version = 0;
+      if (OB_SUCCESS == serialization::decode(buf, buf_len, tmp_pos, version)) {
+        if (version == 0) {
+          ret = OB_ERR_UNEXPECTED;
+          MDS_LOG(WARN, "invalid ctx version", KR(ret), K(version), K(type_idx), K(IDX));
+        } else if (version == 2) {
+          type_idx = 18;
+          return deserialize_<18>(ctx_, type_idx, buf, buf_len, pos, allocator);
+        }
+      }
+      MDS_LOG(INFO, "type_idx is 15", KR(ret), K(version), K(type_idx), K(IDX));
+    }
+
     using ImplType = GET_CTX_TYPE_BY_TUPLE_IDX(IDX);
     ImplType *p_impl = nullptr;
     set_mds_mem_check_thread_local_info(MdsWriter(WriterType::UNKNOWN_WRITER, 0), typeid(ImplType).name());
