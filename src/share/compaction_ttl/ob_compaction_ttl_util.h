@@ -130,6 +130,8 @@ public:
   OB_INLINE static int check_alter_partition_for_append_only_valid(const schema::ObTableSchema &table_schema,
                                                                    const obrpc::ObAlterTableArg::AlterPartitionType alter_partition_type);
 
+  OB_INLINE static int check_truncate_table_for_append_only_valid(const schema::ObTableSchema &table_schema);
+
   OB_INLINE static int check_exchange_partition_for_append_only_valid(const share::schema::ObTableSchema &base_table_schema,
                                                                       const share::schema::ObTableSchema &inc_table_schema);
 
@@ -601,6 +603,19 @@ int ObCompactionTTLUtil::check_alter_partition_for_append_only_valid(
       COMMON_LOG(WARN, "truncate or drop partition for append_only table is not supported", KR(ret), K(table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate or drop partition for append_only table is");
     }
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::check_truncate_table_for_append_only_valid(const schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (table_schema.is_append_only_merge_engine()) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "truncate table for append_only table is not supported", KR(ret), K(table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate append_only table is");
   }
 
   return ret;

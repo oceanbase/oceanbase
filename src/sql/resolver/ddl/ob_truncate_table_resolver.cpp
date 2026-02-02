@@ -151,6 +151,8 @@ int ObTruncateTableResolver::resolve(const ParseNode &parser_tree)
         SQL_RESV_LOG(WARN, "truncate table required by materialized view is not supported",
             KR(ret), K(orig_table_schema->get_table_name()));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table required by materialized view is");
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_truncate_table_for_append_only_valid(*orig_table_schema))) {
+        LOG_WARN("fail to check truncate table for append only valid", KR(ret), KPC(orig_table_schema));
       }
     }
   }

@@ -25939,6 +25939,8 @@ int ObDDLService::check_table_schema_is_legal(const obrpc::ObTruncateTableArg &a
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("can not truncate table in recyclebin",
             KR(ret), K(table_name), K(table_id), K(database_name));
+  } else if (OB_FAIL(ObCompactionTTLUtil::check_truncate_table_for_append_only_valid(table_schema))) {
+    LOG_WARN("fail to check truncate table for append only valid", KR(ret), K(table_schema));
   } else if (table_schema.is_user_table() || table_schema.is_mysql_tmp_table()) {
     if (table_schema.has_mlog_table()) {
       ret = OB_NOT_SUPPORTED;
@@ -26182,6 +26184,8 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("truncate materialized view log is not supported", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate materialized view log is");
+      } else if (OB_FAIL(ObCompactionTTLUtil::check_truncate_table_for_append_only_valid(*orig_table_schema))) {
+        LOG_WARN("fail to check truncate table for append only valid", KR(ret), KPC(orig_table_schema));
       } else if (!orig_table_schema->is_user_table() && !orig_table_schema->is_tmp_table()) {
         if (orig_table_schema->is_sys_table() || orig_table_schema->is_external_table()) {
           ret = OB_NOT_SUPPORTED;

@@ -184,9 +184,9 @@ int ObIMicroBlockRowScanner::open(
   } else {
     reset_blockscan();
     use_private_bitmap_ = false;
-    contain_uncommitted_row_ = ObStoreFormat::is_row_store_type_with_flat(block_data.get_micro_header()->get_row_store_type())
-                                   ? block_data.get_micro_header()->contain_uncommitted_rows()
-                                   : !sstable_->is_major_sstable();
+    contain_uncommitted_row_ = (sstable_->is_major_type_sstable() || sstable_->is_ddl_type_sstable() || sstable_->is_ddl_merge_sstable())
+                                 ? false
+                                 : block_data.get_micro_header()->contain_uncommitted_rows();
     reverse_scan_ = context_->query_flag_.is_reverse_scan();
     is_left_border_ = is_left_border;
     is_right_border_ = is_right_border;
@@ -213,9 +213,9 @@ int ObIMicroBlockRowScanner::open_column_block(
     LOG_WARN("failed to init micro block reader", K(ret), KPC(read_info_));
   } else {
     reset_blockscan();
-    contain_uncommitted_row_ = ObStoreFormat::is_row_store_type_with_flat(block_data.get_micro_header()->get_row_store_type())
-                                   ? block_data.get_micro_header()->contain_uncommitted_rows()
-                                   : !sstable_->is_major_sstable();
+    contain_uncommitted_row_ = (sstable_->is_major_type_sstable() || sstable_->is_ddl_type_sstable() || sstable_->is_ddl_merge_sstable())
+                                 ? false
+                                 : block_data.get_micro_header()->contain_uncommitted_rows();
     reverse_scan_ = context_->query_flag_.is_reverse_scan();
     macro_id_ = macro_id;
 
