@@ -143,7 +143,7 @@ public:
   {
     return true;
   }
-  virtual common::ObTTLType get_ttl_type() override
+  virtual common::ObTTLType get_ttl_type() const override
   {
     return common::ObTTLType::LOB_CHECK;
   }
@@ -200,7 +200,7 @@ public:
   {
     return true;
   }
-  virtual common::ObTTLType get_ttl_type() override
+  virtual common::ObTTLType get_ttl_type() const override
   {
     return common::ObTTLType::LOB_REPAIR;
   }

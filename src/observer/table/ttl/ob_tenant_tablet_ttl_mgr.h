@@ -187,10 +187,12 @@ public:
   virtual int get_ctx_by_tablet(ObTabletID tablet_id, ObTTLTaskCtx*& ctx);
   virtual int set_ctx_by_tablet(ObTabletID tablet_id, ObTTLTaskCtx* ctx);
   virtual ObTTLType get_task_type() { return local_tenant_task_.task_type_; }
+  virtual ObTTLType get_ttl_type() const { return ObTTLType::NORMAL; }
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;
-  virtual common::ObTTLType get_ttl_type() { return ObTTLType::NORMAL; }
+
+
   struct ObTTLTenantInfo
   {
   public:
@@ -332,6 +334,7 @@ public:
                                  bool need_copy_task = true) override;
   virtual int64_t get_tenant_task_table_id() override { return common::ObTTLUtil::TTL_ROWKEY_TASK_TABLE_ID; }
   virtual int64_t get_tenant_task_tablet_id() override { return common::ObTTLUtil::TTL_ROWKEY_TASK_TABLET_ID; }
+  virtual ObTTLType get_ttl_type() const override { return ObTTLType::HBASE_ROWKEY; }
   virtual int do_after_leader_switch() override;
   virtual int safe_to_destroy(bool &is_safe) override;
   virtual int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table) override;

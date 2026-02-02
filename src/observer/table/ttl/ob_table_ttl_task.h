@@ -120,6 +120,7 @@ public:
 protected:
   virtual int get_scan_ranges(ObIArray<ObNewRange> &ranges, const ObKVAttr &kv_attributes);
   virtual int init_ob_table_query(ObTableQuery &query, ObKVAttr &attr);
+  virtual bool is_rowkey_ttl_task() const { return false; }
   int init_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
                   const table::ObITableEntity &entity,
                   table::ObTableCtx &ctx);
@@ -199,10 +200,12 @@ public:
                    table::ObTTLTaskInfo &ttl_info);
 private:
   virtual int get_scan_ranges(ObIArray<ObNewRange> &ranges, const ObKVAttr &kv_attributes) override;
+  bool is_rowkey_ttl_task() const override { return true; }
 
 private:
   common::ObArenaAllocator hrowkey_alloc_;
   ObSEArray<ObString, 4> rowkeys_;
+  bool rowkey_iter_end_;  // true when all rowkeys have been processed (get_scan_ranges returned OB_ITER_END)
 };
 
 class ObTableTTLDag final: public share::ObIDag

@@ -405,9 +405,16 @@ int ObTableTTLDeleteTask::process_one()
     info_.ttl_del_cnt_ += result.get_ttl_del_row();
     if (result.get_del_row() < PER_TASK_DEL_ROWS
         && result.get_end_ts() > ObTimeUtility::current_time()) {
-      ret = OB_ITER_END; // finsh task
-      info_.err_code_ = ret;
-      LOG_DEBUG("finish delete", KR(ret), K_(info));
+      if (is_rowkey_ttl_task()) {
+        ObRowkey &start_rowkey = get_start_rowkey();
+        if (!start_rowkey.is_valid()) {
+          ret = OB_ITER_END;
+          info_.err_code_ = ret;
+        }
+      } else {
+        ret = OB_ITER_END;
+        info_.err_code_ = ret;
+      }
     }
   }
   reset_timeout_ts();
@@ -506,7 +513,8 @@ int ObTableTTLDeleteTask::init_ob_table_query(ObTableQuery &query, ObKVAttr &att
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !is_rowkey_ttl_task()) {
+    // Rowkey TTL: ranges are filled in init_scan_tb_ctx (one rowkey per round); skip here to avoid advancing start_rowkey
     if (OB_FAIL(get_scan_ranges(query.get_scan_ranges(), attr))) {
       LOG_WARN("fail to get scan ranges", K(ret), K(query), K(attr));
     }
@@ -521,6 +529,8 @@ int ObTableTTLDeleteTask::init_scan_tb_ctx(ObKvSchemaCacheGuard &schema_cache_gu
 {
   int ret = OB_SUCCESS;
   ObExprFrameInfo *expr_frame_info = nullptr;
+  ObKVAttr kv_attributes;
+  ObIArray<ObNewRange> &ranges = query.get_scan_ranges();
   tb_ctx.set_scan(true);
   tb_ctx.set_schema_cache_guard(&schema_cache_guard);
   tb_ctx.set_schema_guard(&schema_guard_);
@@ -528,23 +538,41 @@ int ObTableTTLDeleteTask::init_scan_tb_ctx(ObKvSchemaCacheGuard &schema_cache_gu
   tb_ctx.set_sess_guard(&sess_guard_);
   if (tb_ctx.is_init()) {
     LOG_INFO("tb ctx has been inited", K(tb_ctx));
-  } else if (OB_FAIL(tb_ctx.init_common(credential_, get_tablet_id(), get_timeout_ts()))) {
-    LOG_WARN("fail to init table ctx common part", KR(ret), "table_id", get_table_id(),
-      "tablet_id", get_tablet_id(), "timeout_ts", get_timeout_ts());
-  } else if (OB_FAIL(tb_ctx.init_ttl_scan(query))) {
-    LOG_WARN("fail to init ttl scan ctx", KR(ret), K(tb_ctx));
-  } else if (OB_FAIL(cache_guard.init(&tb_ctx))) {
-    LOG_WARN("fail to init cache guard", K(ret));
-  } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx, expr_frame_info))) {
-    LOG_WARN("fail to get expr frame info from cache", K(ret));
-  } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(tb_ctx, *expr_frame_info))) {
-    LOG_WARN("fail to alloc expr memory", K(ret));
-  } else if (OB_FAIL(tb_ctx.init_exec_ctx())) {
-    LOG_WARN("fail to init exec ctx", KR(ret), K(tb_ctx));
-  } else if (OB_FAIL(tb_ctx.init_expr_frame_info(expr_frame_info))) {
-    LOG_WARN("fail to init expr frame info", KR(ret));
-  } else {
-    tb_ctx.set_init_flag(true);
+  } else if (OB_FAIL(schema_cache_guard.get_kv_attributes(kv_attributes))) {
+    LOG_WARN("fail to get kv attributes", K(ret));
+  } else if (is_rowkey_ttl_task()) {
+    // Rowkey TTL: refill ranges for this round (one rowkey per round); OB_ITER_END when no more rowkeys
+    ranges.reset();
+    if (OB_FAIL(get_scan_ranges(ranges, kv_attributes))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get scan ranges", K(ret));
+      }
+    } else if (ranges.empty()) {
+      ret = OB_ITER_END;
+      LOG_DEBUG("no ranges to process", K(ret));
+    }
+  }
+
+  // Common init logic for both rowkey and non-rowkey TTL tasks
+  if (OB_SUCC(ret) && !tb_ctx.is_init()) {
+    if (OB_FAIL(tb_ctx.init_common(credential_, get_tablet_id(), get_timeout_ts()))) {
+      LOG_WARN("fail to init table ctx common part", KR(ret), "table_id", get_table_id(),
+        "tablet_id", get_tablet_id(), "timeout_ts", get_timeout_ts());
+    } else if (OB_FAIL(tb_ctx.init_ttl_scan(query))) {
+      LOG_WARN("fail to init ttl scan ctx", KR(ret), K(tb_ctx));
+    } else if (OB_FAIL(cache_guard.init(&tb_ctx))) {
+      LOG_WARN("fail to init cache guard", K(ret));
+    } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx, expr_frame_info))) {
+      LOG_WARN("fail to get expr frame info from cache", K(ret));
+    } else if (OB_FAIL(ObTableExprCgService::alloc_exprs_memory(tb_ctx, *expr_frame_info))) {
+      LOG_WARN("fail to alloc expr memory", K(ret));
+    } else if (OB_FAIL(tb_ctx.init_exec_ctx())) {
+      LOG_WARN("fail to init exec ctx", KR(ret), K(tb_ctx));
+    } else if (OB_FAIL(tb_ctx.init_expr_frame_info(expr_frame_info))) {
+      LOG_WARN("fail to init expr frame info", KR(ret));
+    } else {
+      tb_ctx.set_init_flag(true);
+    }
   }
 
   return ret;
@@ -613,7 +641,8 @@ int ObTableTTLDeleteTask::init_tb_ctx(ObKvSchemaCacheGuard &schema_cache_guard,
 
 ObTableHRowKeyTTLDelTask::ObTableHRowKeyTTLDelTask()
   : hrowkey_alloc_(ObMemAttr(MTL_ID(), "HRowkeyTaskAlc")),
-    rowkeys_()
+    rowkeys_(),
+    rowkey_iter_end_(false)
 {
   rowkeys_.set_attr(ObMemAttr(MTL_ID(), "HRowkeyTaskRks"));
 }
@@ -648,43 +677,79 @@ int ObTableHRowKeyTTLDelTask::get_scan_ranges(ObIArray<ObNewRange> &ranges, cons
 {
   int ret = OB_SUCCESS;
   UNUSED(kv_attributes);
-  if (rowkeys_.empty()) {
+  if (rowkey_iter_end_) {
+    ret = OB_ITER_END;
+  } else if (rowkeys_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rowkeys is empty", K(ret));
   } else {
     ObRowkey &start_rowkey = get_start_rowkey();
-    uint64 rowkey_size = rowkeys_.count();
     ObString start_rowkey_str;
-    if (!start_rowkey.is_valid()) {
-      start_rowkey_str = rowkeys_.at(0);
-    } else {
+    bool has_start_rowkey = start_rowkey.is_valid();
+    if (has_start_rowkey) {
       ObObj *obj_ptr = const_cast<ObObj *>(start_rowkey.get_obj_ptr());
       start_rowkey_str = obj_ptr[ObHTableConstants::COL_IDX_K].get_string();
     }
-    for (int i = 0; OB_SUCC(ret) && i < rowkeys_.count(); i++) {
-      if (start_rowkey_str.compare(rowkeys_.at(i))) {
-        // continue
+
+    int target_idx = -1;
+    if (!has_start_rowkey) {
+      target_idx = 0;
+    } else {
+      for (int i = 0; target_idx < 0 && i < rowkeys_.count(); i++) {
+        if (start_rowkey_str.compare(rowkeys_.at(i)) == 0) {
+          target_idx = i;
+        }
+      }
+    }
+
+    if (target_idx < 0 || target_idx >= rowkeys_.count()) {
+      // No more rowkeys to process
+      rowkey_iter_end_ = true;
+      ret = OB_ITER_END;
+    } else {
+      // Generate range for the target rowkey: [rowkey, min, min] to [rowkey, max, max]
+      ObString rowkey = rowkeys_[target_idx];
+      ObNewRange range;
+      ObObj *start_key = static_cast<ObObj*>(hrowkey_alloc_.alloc(sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE));
+      ObObj *end_key = static_cast<ObObj*>(hrowkey_alloc_.alloc(sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE));
+      if (OB_ISNULL(start_key) || OB_ISNULL(end_key)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for range keys", K(ret));
       } else {
-        ObString rowkey = rowkeys_[i];
-        ObNewRange range;
-        ObObj *start_key = static_cast<ObObj*>(hrowkey_alloc_.alloc(sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE));
-        ObObj *end_key = static_cast<ObObj*>(hrowkey_alloc_.alloc(sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE));
-        if (OB_ISNULL(start_key) || OB_ISNULL(end_key)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory for range keys", K(ret));
+        new (start_key) ObObj[ObHTableConstants::HTABLE_ROWKEY_SIZE]();
+        new (end_key) ObObj[ObHTableConstants::HTABLE_ROWKEY_SIZE]();
+        start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
+        start_key[ObHTableConstants::COL_IDX_Q].set_min_value();
+        start_key[ObHTableConstants::COL_IDX_T].set_min_value();
+        end_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
+        end_key[ObHTableConstants::COL_IDX_Q].set_max_value();
+        end_key[ObHTableConstants::COL_IDX_T].set_max_value();
+        range.start_key_.assign(start_key, ObHTableConstants::HTABLE_ROWKEY_SIZE);
+        range.end_key_.assign(end_key, ObHTableConstants::HTABLE_ROWKEY_SIZE);
+        if (OB_FAIL(ranges.push_back(range))) {
+          LOG_WARN("fail to add scan range", K(ret), K(range));
         } else {
-          new (start_key) ObObj[ObHTableConstants::HTABLE_ROWKEY_SIZE]();
-          new (end_key) ObObj[ObHTableConstants::HTABLE_ROWKEY_SIZE]();
-          start_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
-          start_key[ObHTableConstants::COL_IDX_Q].set_min_value();
-          start_key[ObHTableConstants::COL_IDX_T].set_min_value();
-          end_key[ObHTableConstants::COL_IDX_K].set_varbinary(rowkey);
-          end_key[ObHTableConstants::COL_IDX_Q].set_max_value();
-          end_key[ObHTableConstants::COL_IDX_T].set_max_value();
-          range.start_key_.assign(start_key, ObHTableConstants::HTABLE_ROWKEY_SIZE);
-          range.end_key_.assign(end_key, ObHTableConstants::HTABLE_ROWKEY_SIZE);
-          if (OB_FAIL(ranges.push_back(range))) {
-            LOG_WARN("fail to add scan range", K(ret), K(range));
+          // Update start_rowkey to the next rowkey for next iteration
+          // If this is the last rowkey, set start_rowkey to invalid so that next call returns OB_ITER_END
+          ObRowkey &start_rowkey = get_start_rowkey();
+          if (target_idx + 1 < rowkeys_.count()) {
+            // There is a next rowkey, update start_rowkey to it
+            ObString next_rowkey = rowkeys_[target_idx + 1];
+            ObObj *rowkey_buf = static_cast<ObObj*>(hrowkey_alloc_.alloc(sizeof(ObObj) * ObHTableConstants::HTABLE_ROWKEY_SIZE));
+            if (OB_ISNULL(rowkey_buf)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to allocate memory for next rowkey, will retry next time", K(ret), K(target_idx), K(rowkeys_.count()));
+            } else {
+              new (rowkey_buf) ObObj[ObHTableConstants::HTABLE_ROWKEY_SIZE]();
+              rowkey_buf[ObHTableConstants::COL_IDX_K].set_varbinary(next_rowkey);
+              rowkey_buf[ObHTableConstants::COL_IDX_Q].set_min_value();
+              rowkey_buf[ObHTableConstants::COL_IDX_T].set_min_value();
+              start_rowkey.assign(rowkey_buf, ObHTableConstants::HTABLE_ROWKEY_SIZE);
+            }
+          } else {
+            // This is the last rowkey, set start_rowkey to invalid so that next call returns OB_ITER_END
+            start_rowkey.reset();
+            rowkey_iter_end_ = true;
           }
         }
       }

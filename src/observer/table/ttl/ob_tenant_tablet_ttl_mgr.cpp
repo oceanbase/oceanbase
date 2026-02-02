@@ -1315,8 +1315,9 @@ int ObTabletTTLScheduler::reload_tenant_task()
     } else {
       LOG_WARN("fail to read tenant ttl task", KR(ret), K_(tenant_id));
     }
-  } else if (OB_RS_TTL_TASK_MOVE == static_cast<ObTTLTaskStatus>(tenant_task.status_) ||
-             OB_RS_TTL_TASK_CANCEL == static_cast<ObTTLTaskStatus>(tenant_task.status_)) {
+  }
+  if (OB_SUCC(ret) && (OB_RS_TTL_TASK_MOVE == static_cast<ObTTLTaskStatus>(tenant_task.status_) ||
+                       OB_RS_TTL_TASK_CANCEL == static_cast<ObTTLTaskStatus>(tenant_task.status_))) {
     local_tenant_task_.reuse();
     FLOG_INFO("tenant task is finish now, reuse local tenant task", KR(ret), K_(local_tenant_task), K(tenant_task.task_id_));
   } else if (OB_FAIL(ObTTLUtil::transform_tenant_state(static_cast<ObTTLTaskStatus>(tenant_task.status_), expected_state))) {
