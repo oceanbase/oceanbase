@@ -6939,7 +6939,10 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
   ObPartitionFuncType part_type;
   SMART_VAR (ObDeleteResolver, delete_resolver, resolver_ctx) {
     ObDeleteStmt *delete_stmt = delete_resolver.create_stmt<ObDeleteStmt>();
-    CK (OB_NOT_NULL(delete_stmt));
+    if (OB_ISNULL(delete_stmt)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("create delete stmt failed", K(ret));
+    }
     CK (OB_NOT_NULL(resolver_ctx.query_ctx_));
     OZ (delete_stmt->get_table_items().push_back(&table_item));
     OZ (delete_stmt->set_table_bit_index(table_id));
