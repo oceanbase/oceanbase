@@ -154,7 +154,7 @@ ObBlockMaxScoreIterator::ObBlockMaxScoreIterator()
     scorer_(nullptr),
     calc_max_score_(nullptr),
     scan_dim_datum_(),
-    has_been_advanced_(false),
+    has_advance_doc_id_(false),
     is_inited_(false)
 {
 }
@@ -175,7 +175,7 @@ void ObBlockMaxScoreIterator::reset()
   }
   calc_max_score_ = nullptr;
   scan_dim_datum_.reuse();
-  has_been_advanced_ = false;
+  has_advance_doc_id_ = false;
   is_inited_ = false;
 }
 
@@ -239,6 +239,7 @@ int ObBlockMaxScoreIterator::advance_to(const ObDatum &domain_id, const bool inc
     LOG_WARN("not initialized", K(ret));
   } else if (OB_FAIL(advance_doc_id_.from_datum(domain_id))) {
     LOG_WARN("fail to deep copy domain id", K(ret), K(domain_id));
+  } else if (FALSE_IT(has_advance_doc_id_ = true)) {
   } else if (!max_score_tuple_.is_valid()) {
     id_in_range = false;
   } else if (OB_FAIL(domain_id_cmp_.compare(domain_id, *max_score_tuple_.max_domain_id_, cmp_ret))) {
@@ -253,7 +254,6 @@ int ObBlockMaxScoreIterator::advance_to(const ObDatum &domain_id, const bool inc
   if (OB_FAIL(ret)) {
   } else if (id_in_range) {
     max_score_tuple_.min_domain_id_ = &advance_doc_id_.get_datum();
-    has_been_advanced_ = true;
   } else if (FALSE_IT(rowkey_domain_id_datum.shallow_copy_from_datum(advance_doc_id_.get_datum()))) {
   } else if (OB_FAIL(stat_iter_.advance_to(advance_rowkey_, inclusive))) {
     LOG_WARN("fail to advance to", K(ret), K_(advance_rowkey), K(inclusive));
@@ -261,8 +261,6 @@ int ObBlockMaxScoreIterator::advance_to(const ObDatum &domain_id, const bool inc
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get next", K(ret));
     }
-  } else {
-    has_been_advanced_ = true;
   }
 
 
@@ -382,7 +380,7 @@ int ObBlockMaxScoreIterator::calc_domain_id_range(const ObDatumRow &agg_row, con
       // Min datum in last iterated range might not aligned with the upper bound of max score.
       // but since we scan doc id in ascending order, we can use current iter doc id datum to refine the min doc id semantic.
 
-      if (!has_been_advanced_) {
+      if (!has_advance_doc_id_) {
         max_score_tuple_.min_domain_id_ = &min_datum;
       } else if (OB_FAIL(domain_id_cmp_.compare(min_datum, advance_doc_id_.get_datum(), cmp_ret))) {
         LOG_WARN("fail to compare domain id", K(ret), K(agg_row), K_(advance_doc_id));
