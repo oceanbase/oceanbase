@@ -64,7 +64,9 @@ int ObCompactionTTLUtil::is_compaction_ttl_schema(
   ObSimpleTableTTLChecker ttl_checker;
   const bool valid_data_version = tenant_data_version >= COMPACTION_TTL_CMP_DATA_VERSION;
   const uint64_t table_id = table_schema.get_table_id();
-  if (OB_FAIL(ttl_checker.init(table_schema, table_schema.get_ttl_definition(), true/*in_full_column_order*/))) {
+  if (table_schema.get_ttl_flag().ttl_type_ != ObTTLDefinition::COMPACTION && (table_schema.is_aux_lob_table() || table_schema.is_index_table())) {
+    // is_compaction_ttl = false
+  } else if (OB_FAIL(ttl_checker.init(table_schema, table_schema.get_ttl_definition(), true/*in_full_column_order*/))) {
     COMMON_LOG(WARN, "fail to init ttl checker", KR(ret), K(table_schema));
   } else if (1 == ttl_checker.get_ttl_definition().count()) { // only one ttl expr
     const ObTableTTLExpr &ttl_expr = ttl_checker.get_ttl_definition().at(0);

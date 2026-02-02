@@ -1484,9 +1484,7 @@ int ObSimpleTableTTLChecker::inner_init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
   } else {
-    if (!table_schema.is_user_table()) {
-      // do nothing
-    } else if (OB_FAIL(parse_ttl_definition(ttl_definition))) {
+    if (OB_FAIL(parse_ttl_definition(ttl_definition))) {
       LOG_WARN("Fail to parse ttl definition", KR(ret), K(ttl_definition));
     } else if (ttl_definition_.count() > 0) {
       ttl_type_ = static_cast<ObTTLDefinition::ObTTLType>(table_schema.get_ttl_flag().ttl_type_);
