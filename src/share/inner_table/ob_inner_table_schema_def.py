@@ -68374,7 +68374,32 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE;
+    WITH s AS (
+      SELECT owner, name, type, line, text, origin_con_id
+      FROM dba_source
+    ),
+    r (owner, name, type, line, origin_con_id, part_no, part_text, rest_text) AS (
+      SELECT owner, name, type, line, origin_con_id,
+            1 AS part_no,
+            CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, 1, INSTR(text, CHR(10)) - 1) ELSE SUBSTR(text, 1, 4000) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 1, 4000) ELSE text END AS part_text,
+            CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, INSTR(text, CHR(10)) + 1) ELSE SUBSTR(text, 4001) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 4001) ELSE NULL END AS rest_text
+      FROM s
+      UNION ALL
+      SELECT owner, name, type, line, origin_con_id,
+            part_no + 1,
+            CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, 1, INSTR(rest_text, CHR(10)) - 1) ELSE SUBSTR(rest_text, 1, 4000) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 1, 4000) ELSE rest_text END AS part_text,
+            CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, INSTR(rest_text, CHR(10)) + 1) ELSE SUBSTR(rest_text, 4001) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 4001) ELSE NULL END AS rest_text
+      FROM r
+      WHERE rest_text IS NOT NULL
+    )
+    SELECT owner,
+          name,
+          type,
+          line + part_no - 1 AS line,
+          CASE WHEN part_text IS NULL THEN TO_CLOB(CHR(10)) ELSE part_text END AS text,
+          origin_con_id
+    FROM r
+    ORDER BY owner, type, name, line;
 """.replace("\n", " ")
 )
 
@@ -68389,20 +68414,32 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE
-    WHERE origin_con_id != 1 AND
-      (owner = USER OR
-       USER_CAN_ACCESS_OBJ(CASE type
-         WHEN 'PACKAGE' THEN 3
-         WHEN 'PACKAGE BODY' THEN 3
-         WHEN 'PROCEDURE' THEN 12
-         WHEN 'FUNCTION' THEN 9
-         WHEN 'TRIGGER' THEN 7
-         WHEN 'TYPE' THEN 4
-         WHEN 'TYPE BODY' THEN 4
-         END, object_id, database_id) = 1)
-    UNION ALL
-    SELECT owner, name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE origin_con_id = 1;
+    WITH s AS (
+      SELECT owner, name, type, line, text, origin_con_id
+      FROM all_source
+    ),
+    r (owner, name, type, line, origin_con_id, part_no, part_text, rest_text) AS (
+      SELECT owner, name, type, line, origin_con_id,
+            1 AS part_no,
+            CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, 1, INSTR(text, CHR(10)) - 1) ELSE SUBSTR(text, 1, 4000) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 1, 4000) ELSE text END AS part_text,
+            CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, INSTR(text, CHR(10)) + 1) ELSE SUBSTR(text, 4001) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 4001) ELSE NULL END AS rest_text
+      FROM s
+      UNION ALL
+      SELECT owner, name, type, line, origin_con_id,
+            part_no + 1,
+            CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, 1, INSTR(rest_text, CHR(10)) - 1) ELSE SUBSTR(rest_text, 1, 4000) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 1, 4000) ELSE rest_text END AS part_text,
+            CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, INSTR(rest_text, CHR(10)) + 1) ELSE SUBSTR(rest_text, 4001) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 4001) ELSE NULL END AS rest_text
+      FROM r
+      WHERE rest_text IS NOT NULL
+    )
+    SELECT r.owner,
+          name,
+          type,
+          line + part_no - 1 AS line,
+          CASE WHEN part_text IS NULL THEN TO_CLOB(CHR(10)) ELSE part_text END AS text,
+          origin_con_id
+    FROM r
+    ORDER BY r.owner, type, name, line;
 """.replace("\n", " ")
 )
 
@@ -68416,8 +68453,31 @@ def_table_schema(
     normal_columns  = [],
     gm_columns      = [],
     in_tenant_space = True,
-    view_definition = """
-    SELECT name, type, line, text, origin_con_id from SYS.ALL_VIRTUAL_SOURCE WHERE owner = USER AND origin_con_id != 1;
+    view_definition = """WITH s AS (
+      SELECT name, type, line, text, origin_con_id
+      FROM user_source
+    ),
+    r (name, type, line, origin_con_id, part_no, part_text, rest_text) AS (
+      SELECT name, type, line, origin_con_id,
+            1 AS part_no,
+            CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, 1, INSTR(text, CHR(10)) - 1) ELSE SUBSTR(text, 1, 4000) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 1, 4000) ELSE text END AS part_text,
+            CASE WHEN INSTR(text, CHR(10)) > 0 THEN CASE WHEN INSTR(text, CHR(10)) <= 4000 THEN SUBSTR(text, INSTR(text, CHR(10)) + 1) ELSE SUBSTR(text, 4001) END WHEN LENGTH(text) > 4000 THEN SUBSTR(text, 4001) ELSE NULL END AS rest_text
+      FROM s
+      UNION ALL
+      SELECT name, type, line, origin_con_id,
+            part_no + 1,
+            CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, 1, INSTR(rest_text, CHR(10)) - 1) ELSE SUBSTR(rest_text, 1, 4000) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 1, 4000) ELSE rest_text END AS part_text,
+            CASE WHEN INSTR(rest_text, CHR(10)) > 0 THEN CASE WHEN INSTR(rest_text, CHR(10)) <= 4000 THEN SUBSTR(rest_text, INSTR(rest_text, CHR(10)) + 1) ELSE SUBSTR(rest_text, 4001) END WHEN LENGTH(rest_text) > 4000 THEN SUBSTR(rest_text, 4001) ELSE NULL END AS rest_text
+      FROM r
+      WHERE rest_text IS NOT NULL
+    )
+    SELECT name,
+          type,
+          line + part_no - 1 AS line,
+          CASE WHEN part_text IS NULL THEN TO_CLOB(CHR(10)) ELSE part_text END AS text,
+          origin_con_id
+    FROM r
+    ORDER BY type, name, line;
 """.replace("\n", " ")
 )
 #
