@@ -220,7 +220,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_shared_major_for_macro_cache)
 
   OK(exe_sql("insert into test_macro_cache values (1)"));
   sleep(1);
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   OK(exe_sql("alter table test_macro_cache storage_cache_policy (global = 'hot');"));
   FLOG_INFO("[TEST] finish alter storage cache policy");
   check_macro_cache_exist();
@@ -328,7 +328,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
   OK(exe_sql("insert into test_space_occupy values (8)"));
   OK(exe_sql("insert into test_space_occupy values (9)"));
 
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   OK(exe_sql("alter table test_space_occupy storage_cache_policy (global = 'auto');"));
   OK(exe_sql("alter table test_space_occupy storage_cache_policy (global = 'hot');"));
   check_macro_cache_exist();
@@ -399,7 +399,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   OK(exe_sql("insert into test_macro_cache_full values (8)"));
   OK(exe_sql("insert into test_macro_cache_full values (9)"));
 
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   OK(exe_sql("alter table test_macro_cache_full storage_cache_policy (global = 'auto');"));
   OK(exe_sql("alter table test_macro_cache_full storage_cache_policy (global = 'hot');"));
   ObStorageCachePolicyPrewarmer prewarmer2;
@@ -461,7 +461,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
   set_ls_and_tablet_id_for_run_ctx("test_micro_cache");
   OK(exe_sql("insert into test_micro_cache values (1)"));
   OK(exe_sql("insert into test_micro_cache values (2)"));
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   FLOG_INFO("[TEST] finish to wait major freeze");
 
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);

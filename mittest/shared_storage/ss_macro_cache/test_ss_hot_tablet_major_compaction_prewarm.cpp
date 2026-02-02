@@ -106,7 +106,9 @@ TEST_F(ObHotTabletMajorCompactionPrewarmTest, test_compaction)
   OK(exe_sql("create table test_compaction (a varchar(1000)) storage_cache_policy (global = 'hot')"));
   OK(exe_sql("insert into test_compaction select randstr(1000, random(10)) from table(generator(16000))"));
   set_ls_and_tablet_id_for_run_ctx("test_compaction");
-  OK(medium_compact(run_ctx_.tablet_id_.id()));
+  // wait policy refresh finish before major compaction, to ensure the tablet is HOT.
+  OK(TestCompactionUtil::wait_policy_refresh_finish(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), "HOT"/*storage_cache_policy*/));
+  OK(TestCompactionUtil::medium_compact(run_ctx_.tenant_id_, run_ctx_.tablet_id_.id(), run_ctx_.ls_id_));
   check_macro_cache_exist();
   FLOG_INFO("[TEST] finish test_compaction");
 }

@@ -39,7 +39,7 @@ public:
   int start();
   static int close();
   observer::ObServer& get_curr_observer() { return cluster_->get_observer(); }
-  observer::ObSimpleServer& get_curr_simple_server() { return *cluster_; }
+  static observer::ObSimpleServer& get_curr_simple_server() { return *cluster_; }
 
   int create_tenant_with_retry(const char *tenant_name = "tt1",
                                const char *memory_size = "4G",
