@@ -1856,7 +1856,7 @@ int ObMPQuery::deserialize_com_field_list()
     const int64_t str2_len = strlen(str2);
     const int pre_size = str1_len + str2_len;
     //寻找client传过来的table_name和filed wildcard之间的分隔符（table_name [NULL] filed wildcard）
-    for (; static_cast<int>(str[i]) != 0 && i < length; ++i) {}
+    for (; i < length && static_cast<int>(str[i]) != 0; ++i) {}
     char *dest_str = static_cast<char *>(alloc->alloc(length + pre_size));
     if (OB_ISNULL(dest_str)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
