@@ -22108,7 +22108,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
       LOG_WARN("fail to assign schema", K(ret));
     } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("failed to check if oralce compat mode", K(ret));
-    } else if (OB_FAIL(generate_column_name_map.create(hash_capacity, "OfflineDDL", "OfflineDDL", dst_tenant_id))) {
+    } else if (OB_FAIL(generate_column_name_map.create(hash_capacity, "OfflineDDL", "OfflineDDL"))) {
       LOG_WARN("failed to create generate column name map", K(ret));
     }
     lib::Worker::CompatMode compat_mode = (is_oracle_mode ?
