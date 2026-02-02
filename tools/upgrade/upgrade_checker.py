@@ -1132,6 +1132,27 @@ def check_shared_storage(query_cur):
         else:
           logging.info('current startup mode is {}'.format(results[0][0]))
 
+# 检查是否存在向量索引, 如果存在则不允许升级到4.4.2.0版本
+def check_vector_index_exist(query_cur):
+  sql = """select distinct value from GV$OB_PARAMETERS where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    if min_cluster_version < get_version("4.3.3.0"):
+      logging.info("Cluster version < 4.3.3.0, skip vector index check")
+    else:
+      sql = """select 1 from oceanbase.__all_virtual_vector_index_info limit 1"""
+      (desc, results) = query_cur.exec_query(sql, print_when_succ=False)
+      if len(results) > 0:
+        fail_list.append("exist vector index in the cluster, upgrade to current version is not supported")
+        logging.info("check vector index exist failed, found vector index in use")
+      else:
+        logging.info("check vector index exist success")
+
 
 # 开始升级前的检查
 def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
@@ -1181,6 +1202,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_
       check_enable_record_trace_id(cur, query_cur)
       check_sys_table_progressive_merge_round(query_cur)
       check_shared_storage(query_cur)
+      check_vector_index_exist(query_cur)
       check_fail_list()
       modify_server_permanent_offline_time(cur)
     except Exception as e:
