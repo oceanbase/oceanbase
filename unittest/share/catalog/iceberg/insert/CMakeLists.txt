@@ -1,0 +1,2 @@
+ob_unittest(test_avro_write)
+ob_unittest(test_json_write)

@@ -101,7 +101,7 @@ int ObStmtResolver::resolve_table_relation_node(const ParseNode *node,
 int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
                                                    ObString &table_name,
                                                    ObString &db_name,
-                                                   common::ObString &catalog_name,
+                                                   ObString &catalog_name,
                                                    bool &is_db_explicit,
                                                    bool is_org /*false*/,
                                                    bool is_oracle_sys_view,
@@ -195,7 +195,11 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
         } else {
           if (is_external_catalog_id(catalog_id)) {
             CK(OB_NOT_NULL(schema_checker_->get_sql_schema_guard()));
-            OZ(ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_sql_schema_guard(), session_info_, catalog_id, db_name, allocator_));
+            OZ(ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_sql_schema_guard(),
+                                              session_info_,
+                                              catalog_id,
+                                              db_name,
+                                              allocator_));
           } else {
             CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
             OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),

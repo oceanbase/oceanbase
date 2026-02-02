@@ -21,6 +21,8 @@
 #include "storage/tx/ob_xa_ctx.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
 #include "src/sql/ob_sql_ccl_rule_manager.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/iceberg/write/ob_snapshot_producer.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -896,6 +898,20 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
         errcode = tmp_ret;
         LOG_WARN("fail to finish direct insert", KR(tmp_ret));
       }
+    }
+
+    if (plan_ctx->get_lake_table_metadata() != NULL
+        && plan_ctx->get_iceberg_data_files().count() > 0
+        && OB_SUCCESS == close_ret
+        && (OB_SUCCESS == errcode || OB_ITER_END == errcode)) {
+      const iceberg::ObIcebergTableMetadata& iceberg_table_metadata =
+        *static_cast<const iceberg::ObIcebergTableMetadata*>(plan_ctx->get_lake_table_metadata());
+      ObArenaAllocator tmp_allocator;
+      iceberg::ObSnapshotProducer snapshot_producer(iceberg_table_metadata,
+                                                    tmp_allocator,
+                                                    plan_ctx->get_iceberg_data_files());
+      OZ(snapshot_producer.init());
+      OZ(snapshot_producer.commit());
     }
 //    // 必须要在executor_.execute_plan运行之后再调用exec_result_的一系列函数。
 //    if (OB_FAIL(exec_result_.close(ctx))) {

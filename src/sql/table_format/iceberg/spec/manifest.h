@@ -13,15 +13,21 @@
 #ifndef MANIFEST_H
 #define MANIFEST_H
 
+#include <optional>
+
 #include "sql/table_format/iceberg/avro_schema_util.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
-#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/manifest_list.h"
 #include "sql/table_format/iceberg/spec/partition.h"
 #include "sql/table_format/iceberg/spec/schema.h"
 #include "sql/table_format/iceberg/spec/schema_field.h"
 #include "sql/table_format/iceberg/spec/spec.h"
 #include "sql/table_format/iceberg/spec/type.h"
+
+namespace avro
+{
+class GenericRecord;
+} // namespace avro
 
 namespace oceanbase
 {
@@ -63,6 +69,8 @@ enum class DataFileContent
   EQUALITY_DELETES = 2,
 };
 
+class DataFile;
+
 class ObSerializableDataFile
 {
   OB_UNIS_VERSION(1);
@@ -73,11 +81,9 @@ public:
                              record_count_(0),
                              file_size_in_bytes_(0) {}
   ~ObSerializableDataFile() = default;
-  TO_STRING_KV(K_(content),
-               K_(file_format),
-               K_(record_count),
-               K_(file_size_in_bytes),
-               K_(file_path));
+  int assign(const DataFile &other);
+  int assign(const ObSerializableDataFile &other);
+  TO_STRING_KV(K_(content), K_(file_format), K_(record_count), K_(file_size_in_bytes), K_(file_path));
 
   DataFileContent content_;
   DataFileFormat file_format_;
@@ -90,9 +96,17 @@ class DataFile : public SpecWithAllocator
 {
 public:
   explicit DataFile(ObIAllocator &allocator);
-  int decode_field(const ManifestMetadata &manifest_metadata,
-                   const FieldProjection &field_projection,
-                   avro::Decoder &decoder);
+  DataFile(ObIAllocator& allocator,
+    DataFileContent content,
+    ObString file_path,
+    DataFileFormat file_format,
+    int64_t record_count,
+    int64_t file_size_in_bytes);
+  int assign(const DataFile &other); //todo
+  int assign(const ObSerializableDataFile &other);
+  void shallow_copy(const DataFile &other);
+  int init_from_avro(const ManifestMetadata &manifest_metadata,
+                     const avro::GenericRecord &avro_data_file);
   // PartitionValues 的顺序和 PartitionSpec 里面的列顺序一样
   // FieldProjection children 的 idx 的顺序也是和 PartitionSpec 一样
   static int read_partition_values_from_avro(ObIAllocator &allocator,
@@ -106,6 +120,9 @@ public:
                                             const avro::NodePtr &avro_node,
                                             avro::Decoder &decoder,
                                             ObObj &obj);
+  int decode_field(const ManifestMetadata &manifest_metadata,
+                   const FieldProjection &field_projection,
+                   avro::Decoder &decoder);
 
   DataFileContent content;
   ObString file_path;
@@ -295,6 +312,8 @@ public:
                                    LongType::get_instance(),
                                    "The length of a referenced content stored in the file; "
                                    "required if content_offset is present");
+
+  constexpr static const char *FILE_FORMAT_NAMES[] = {"AVRO", "ORC", "PARQUET", "PUFFIN"};
 
 private:
   int decode_partitions_(const ManifestMetadata &manifest_metadata,

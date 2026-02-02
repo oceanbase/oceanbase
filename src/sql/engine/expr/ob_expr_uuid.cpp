@@ -420,6 +420,32 @@ int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
   return ret;
 }
 
+int ObExprUuid::gen_uuid_bin(unsigned char* scratch)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator calc_buf("ServerUuid");
+  bool need_reset = false;
+  if (OB_ISNULL(uuid_node)) {
+    need_reset = true;
+    if (OB_ISNULL(uuid_node = static_cast<ObUUIDNode*>(calc_buf.alloc(sizeof(ObUUIDNode))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (OB_FAIL(uuid_node->init())) {
+      LOG_WARN("failed to init", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_FAIL(calc(scratch))) {
+    LOG_WARN("failed to calc", K(ret));
+  }
+
+  if (need_reset) {
+    uuid_node = NULL;
+  }
+  return ret;
+}
+
 ObExprUuid2bin::ObExprUuid2bin(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_UUID2BIN, N_UUID_TO_BIN, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {

@@ -14,15 +14,17 @@
 
 #include "sql/table_format/iceberg/spec/snapshot.h"
 
+#include <avro/DataFile.hh>
+#include <avro/Stream.hh>
+#include <avro/Generic.hh>
+
 #include "share/ob_define.h"
 #include "sql/table_format/iceberg/avro_schema_util.h"
 #include "sql/table_format/iceberg/scan/delete_file_index.h"
 #include "sql/table_format/iceberg/scan/task.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
 #include "sql/table_format/iceberg/spec/manifest_list.h"
-
-#include <avro/DataFile.hh>
-#include <avro/Stream.hh>
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 
 namespace oceanbase
 {
@@ -316,6 +318,33 @@ int Snapshot::get_manifest_files_(const ObString &access_info,
 //   }
 //   return ret;
 // }
+
+int Snapshot::to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OZ(J_OBJ_START());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %ld)", SEQUENCE_NUMBER, sequence_number));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %ld)", SNAPSHOT_ID, snapshot_id));
+  OZ(J_COMMA());
+  if (parent_snapshot_id.has_value()) {
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %ld)", PARENT_SNAPSHOT_ID, parent_snapshot_id.value()));
+    OZ(J_COMMA());
+  }
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %ld)", TIMESTAMP_MS, timestamp_ms));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : )", SUMMARY));
+  OZ(ObCatalogJsonUtils::map_to_json_kv_string(summary, buf, buf_len, pos));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s" : "%.*s")", MANIFEST_LIST, manifest_list.length(), manifest_list.ptr()));
+  if (schema_id.has_value()) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s" : %d)", SCHEMA_ID, schema_id.value()));
+  }
+  OZ(J_OBJ_END());
+  return ret;
+}
+
 
 } // namespace iceberg
 } // namespace sql

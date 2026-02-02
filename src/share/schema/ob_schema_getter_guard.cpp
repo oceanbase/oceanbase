@@ -318,7 +318,9 @@ int ObSchemaGetterGuard::check_has_local_unique_index(
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const ObSimpleTableSchemaV2 *index_schema = NULL;
   has_local_unique_index = false;
-  if (OB_FAIL(get_table_schema(tenant_id, table_id, table_schema))) {
+  if (is_external_object_id(table_id)) {
+    // do nothing
+  } else if (OB_FAIL(get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
@@ -1576,7 +1578,9 @@ int ObSchemaGetterGuard::get_can_write_index_array(
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   int64_t can_write_count = 0;
   const ObSimpleTableSchemaV2 *index_schema = NULL;
-  if (OB_FAIL(get_table_schema(tenant_id, table_id, table_schema))) {
+  if (is_external_object_id(table_id)) {
+    // do nothing
+  } else if (OB_FAIL(get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;

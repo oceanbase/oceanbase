@@ -13,9 +13,11 @@
 #ifndef MANIFEST_LIST_H
 #define MANIFEST_LIST_H
 
+#include <optional>
+#include <avro/Node.hh>
+
 #include "sql/table_format/iceberg/avro_schema_util.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
-#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/schema_field.h"
 #include "sql/table_format/iceberg/spec/spec.h"
 #include "sql/table_format/iceberg/spec/type.h"
@@ -109,6 +111,7 @@ public:
   ObFixedArray<PartitionFieldSummary *, ObIAllocator> partitions;
   std::optional<ObString> key_metadata;
 
+  ::avro::NodePtr manifest_file_node;
   static int get_read_expected_schema(StructType *&struct_type);
 
   static constexpr const char *MANIFEST_PATH = "manifest_path";
@@ -279,6 +282,8 @@ public:
                                    KEY_METADATA,
                                    BinaryType::get_instance(),
                                    "Encryption key metadata blob");
+
+  static const StructType partition_summary_type;
 
 private:
   int decode_partitions_(const FieldProjection &field_projection, avro::Decoder &decoder);

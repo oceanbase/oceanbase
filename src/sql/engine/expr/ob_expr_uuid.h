@@ -86,6 +86,7 @@ public:
   static int eval_uuid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   //used to generate uuid for server_uuid system variable.
   static int gen_server_uuid(char *server_uuid, const int64_t uuid_len);
+  static int gen_uuid_bin(unsigned char* scratch);
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

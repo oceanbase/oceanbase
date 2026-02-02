@@ -13,9 +13,10 @@
 #ifndef OCEANBASE_SCHEMA_FIELD_H
 #define OCEANBASE_SCHEMA_FIELD_H
 
-#include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
+#include "lib/string/ob_string.h"
+#include "share/ob_define.h"
 
 namespace oceanbase
 {
@@ -91,9 +92,7 @@ private:
 };
 
 } // namespace iceberg
-
 } // namespace sql
-
 } // namespace oceanbase
 
 #endif // OCEANBASE_SCHEMA_FIELD_H

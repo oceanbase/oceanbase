@@ -47,6 +47,7 @@ int ObCatalogProperties::to_string_with_alloc(ObString &str, ObIAllocator &alloc
   int64_t pos = 0;
   do {
     buf_len *= 2;
+    pos = 0;
     ret = OB_SUCCESS;
     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

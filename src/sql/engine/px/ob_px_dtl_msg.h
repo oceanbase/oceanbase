@@ -33,6 +33,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObSqcCtx;
 
 typedef obrpc::ObRpcResultCode ObPxUserErrorMsg;
 struct ObDASTabletLoc;
@@ -433,6 +434,7 @@ public:
   virtual ~ObPxFinishSqcResultMsg() = default;
   const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
+  int set_sqc_iceberg_data_files(const ObSqcCtx &sqc_ctx);
   void reset()
   {
     dfo_id_ = common::OB_INVALID_ID;

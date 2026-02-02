@@ -2047,12 +2047,13 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
   int ret = OB_SUCCESS;
   void *ptr= NULL;
   IndexDMLInfo* index_dml_info = NULL;
+  ObSqlSchemaGuard* sql_schema_guard = optimizer_context_.get_sql_schema_guard();
   ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
   ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   const ObTableSchema* index_schema = NULL;
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+  if (OB_ISNULL(sql_schema_guard) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null",K(ret), K(schema_guard), K(session_info));
+    LOG_WARN("get unexpected null",K(ret), K(sql_schema_guard), K(session_info));
   } else if (OB_ISNULL(ptr = get_allocator().alloc(sizeof(IndexDMLInfo)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
@@ -2062,8 +2063,8 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
       LOG_WARN("failed to assign table info", K(ret));
     } else if (has_tg) {
       table_dml_info->is_primary_index_ = true;
-    } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
-                                                      table_info.ref_table_id_, index_schema))) {
+    } else if (OB_FAIL(sql_schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                          table_info.ref_table_id_, index_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
     } else if (OB_ISNULL(index_schema)) {
       ret = OB_ERR_UNEXPECTED;

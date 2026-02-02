@@ -15,10 +15,14 @@
 
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_fixed_array.h"
-#include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
 
 #include <avro/Decoder.hh>
 #include <avro/Types.hh>
+#include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
+#include "deps/oblib/src/lib/container/ob_array.h"
+#include "sql/table_format/iceberg/spec/spec.h"
+#include <avro/Node.hh>
+#include <avro/Encoder.hh>
 
 namespace oceanbase
 {
@@ -151,8 +155,33 @@ public:
                          ObIArray<V> &value);
 };
 
+class ToAvroNodeVisitor
+{
+public:
+  explicit ToAvroNodeVisitor(const ObString& root_node_name);
+  int visit(const StructType& type, ::avro::NodePtr& node);
+  int visit(const ListType& type, ::avro::NodePtr& node);
+  int visit(const MapType& type, ::avro::NodePtr& node);
+  int visit(const StringType& type, ::avro::NodePtr& node);
+  int visit(const BinaryType& type, ::avro::NodePtr& node);
+  int visit(const BooleanType& type, ::avro::NodePtr& node);
+  int visit(const IntType& type, ::avro::NodePtr& node);
+  int visit(const LongType& type, ::avro::NodePtr& node);
+
+  int visit(const SchemaField& field, ::avro::NodePtr& node);
+  constexpr static const char* FIELD_ID_PROP = "field-id";
+  constexpr static const char* ELEMENT_ID_PROP = "element-id";
+  constexpr static const char* KEY_ID_PROP = "key-id";
+  constexpr static const char* VALUE_ID_PROP = "value-id";
+
+private:
+  ObArray<int32_t> field_ids_;
+  const ObString root_node_name_;
+};
+
+
 } // namespace iceberg
 } // namespace sql
 } // namespace oceanbase
 
-#endif // OCEANBASE_AVRO_SCHEMA_UTIL_H
+#endif // AVRO_SCHEMA_UTIL_H

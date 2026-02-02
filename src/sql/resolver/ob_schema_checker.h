@@ -143,7 +143,7 @@ public:
                          const bool with_hidden_flag,
                          bool &is_exist,
                          const bool is_built_in_index = false,
-                         const uint64_t catalog_id = OB_INTERNAL_CATALOG_ID); // to many place used this function, assign default catalog_id
+                         const uint64_t catalog_id = OB_INTERNAL_CATALOG_ID); // too many place used this function, assign default catalog_id
 
   // mock_fk_parent_table begin
   int get_mock_fk_parent_table_with_name(

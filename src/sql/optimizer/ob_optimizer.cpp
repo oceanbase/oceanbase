@@ -1325,13 +1325,15 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
       if (OB_ISNULL(table_info) || OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sql schema guard is nullptr", K(ret), K(table_info), K(schema_guard), K(session));
+      } else if (is_external_object_id(table_info->ref_table_id_)) {
+        // do nothing
       } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
                                                         table_info->ref_table_id_, table_schema))) {
         LOG_WARN("get table schema failed", K(ret), K(table_info->ref_table_id_));
-      } else if (!table_schema->get_foreign_key_infos().empty()) {
-        ctx_.set_has_fk(true);
-      }
-      if (OB_SUCC(ret)) {
+      } else {
+        if (!table_schema->get_foreign_key_infos().empty()) {
+          ctx_.set_has_fk(true);
+        }
         if (OB_FAIL(table_schema->check_has_trigger_on_table(*schema_guard,
                                                              trigger_exists,
                                                              del_upd_stmt->get_trigger_events()))) {

@@ -934,7 +934,7 @@ int ObSqlSchemaGuard::get_lake_table_metadata(
   int ret = OB_SUCCESS;
   lake_table_metadata = NULL;
   for (int64_t i = 0; NULL == lake_table_metadata && i < lake_table_metadatas_.count(); i++) {
-    if (table_id == lake_table_metadatas_[i]->table_id_) {
+    if (OB_NOT_NULL(lake_table_metadatas_[i]) && table_id == lake_table_metadatas_[i]->table_id_) {
       lake_table_metadata = lake_table_metadatas_[i];
     }
   }

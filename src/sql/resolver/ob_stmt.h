@@ -551,7 +551,7 @@ public:
   static inline bool is_catalog_supported_dml_stmt(stmt::StmtType stmt_type)
   {
     return stmt_type == stmt::T_SELECT
-           // || stmt_type == stmt::T_INSERT
+           || stmt_type == stmt::T_INSERT
            // || stmt_type == stmt::T_INSERT_ALL
            // || stmt_type == stmt::T_REPLACE
            // || stmt_type == stmt::T_MERGE

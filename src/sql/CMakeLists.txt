@@ -1718,6 +1718,9 @@ ob_set_subtarget(ob_sql iceberg
   table_format/iceberg/scan/task.cpp
   table_format/iceberg/scan/conversions.cpp
   table_format/iceberg/scan/delete_file_index.cpp
+  table_format/iceberg/write/ob_manifest_writer.cpp
+  table_format/iceberg/write/ob_snapshot_producer.cpp
+  table_format/iceberg/write/metadata_helper.cpp
 )
 
 ob_add_new_object_target(ob_sql ob_sql)

@@ -14,6 +14,7 @@
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "share/ob_time_utility2.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "sql/resolver/dml/ob_aggr_expr_push_up_analyzer.h"
 #include "sql/resolver/dml/ob_group_by_checker.h"
 #include "sql/resolver/dml/ob_insert_resolver.h"
@@ -8436,6 +8437,7 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
   int64_t column_cnt = 0;
   ObInsertStmt *insert_stmt = NULL;
   ObInsertTableInfo *insert_table_info = NULL;
+  bool is_target_iceberg_table = false;
   if (OB_FAIL(ret)) {
   } else if (NULL == upper_insert_resolver_) {
   } else if (OB_ISNULL(insert_stmt = upper_insert_resolver_->get_insert_stmt())) {
@@ -8444,6 +8446,20 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
   } else if (OB_ISNULL(insert_table_info = &insert_stmt->get_insert_table_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null insert table info", K(ret));
+  } else {
+    const TableItem *table_item = insert_stmt->get_table_item_by_id(insert_table_info->table_id_);
+    const share::schema::ObTableSchema *table_schema = NULL;
+    if (OB_NOT_NULL(table_item) && OB_NOT_NULL(schema_checker_) && OB_NOT_NULL(params_.session_info_)) {
+      if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                    table_item->ref_id_, table_schema))) {
+        LOG_WARN("get table schema failed", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret));
+      } else if (table_schema->is_external_table()) {
+        is_target_iceberg_table = (table_schema->get_lake_table_format() == share::ObLakeTableFormat::ICEBERG);
+      }
+    }
   }
   /* first set, need resolve select_item name*/
   if (OB_SUCC(ret)) {
@@ -8470,7 +8486,8 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
         if (insert_table_info != NULL
             && insert_table_info->values_desc_.at(i) != NULL
             && insert_table_info->values_desc_.at(i)->is_generated_column()
-            && select_item.expr_->get_expr_type() != T_DEFAULT) {
+            && select_item.expr_->get_expr_type() != T_DEFAULT
+            && !is_target_iceberg_table) {
           // should not insert non-default value to a generated column
           ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
           LOG_WARN("non-default value for generated column is not allowed", K(ret));

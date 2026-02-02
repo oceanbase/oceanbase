@@ -12,18 +12,28 @@
 
 #ifndef SNAPSHOT_H
 #define SNAPSHOT_H
+
+#include <optional>
+
 #include "lib/container/ob_array.h"
+#include "lib/container/ob_fixed_array.h"
 #include "lib/json/ob_json.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
-#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/spec.h"
 
 namespace oceanbase
 {
+namespace common
+{
+class ObJsonObject;
+}
+
 namespace sql
 {
 namespace iceberg
 {
+
+using common::ObJsonObject;
 
 class Snapshot : public SpecWithAllocator
 {
@@ -37,6 +47,7 @@ public:
   // int plan_files(ObIAllocator &allocator,
   //                const ObString &access_info,
   //                ObIArray<FileScanTask *> &file_scan_tasks) const;
+  int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const;
 
   int64_t snapshot_id;
   std::optional<int64_t> parent_snapshot_id;

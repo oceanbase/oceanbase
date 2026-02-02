@@ -45,6 +45,9 @@ public:
   void set_location_object_id(int64_t location_object_id);
   int set_location_object_sub_path(const ObString &location_object_sub_path);
   // used by filesystem catalog only
+  int get_current_version(ObIAllocator &allocator,
+                          const ObString &table_location,
+                          int64_t &version_number) const;
   int load_by_table_location(const ObString &table_location);
   int load_by_metadata_location(const ObString &metadata_location);
   int resolve_time_travel_info(const share::ObTimeTravelInfo *time_travel_info,

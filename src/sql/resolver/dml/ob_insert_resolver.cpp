@@ -136,6 +136,9 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     if (OB_ISNULL(tmp_table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(tmp_table_item), K(ret));
+    } else if (share::ObLakeTableFormat::ICEBERG == tmp_table_item->lake_table_format_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite into iceberg table");
     } else if (!insert_stmt->value_from_select()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite with values");

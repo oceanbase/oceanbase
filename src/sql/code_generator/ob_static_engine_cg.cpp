@@ -9598,9 +9598,18 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     const bool in_root_job)
 {
   UNUSED(in_root_job);
-  ObIAllocator &alloc = phy_plan_->get_allocator();
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(1 != op.get_num_of_child())) {
+  ObIAllocator &alloc = phy_plan_->get_allocator();
+  const share::ObILakeTableMetadata *lake_table_metadata = op.get_lake_table_metadata();
+  const ObLogPlan *log_plan = NULL;
+  ObExecContext *exec_ctx = NULL;
+  ObPhysicalPlanCtx *plan_ctx = NULL;
+  if (OB_ISNULL(log_plan = op.get_plan())
+      || OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())
+      || OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else if (OB_UNLIKELY(1 != op.get_num_of_child())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected count of children", K(ret), K(op.get_num_of_child()));
   } else if (OB_FAIL(deep_copy_obj(alloc, op.get_outfile_name(), spec.outfile_name_))) {
@@ -9623,6 +9632,8 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     LOG_WARN("init fixed array failed", K(ret), K(op.get_select_exprs().count()));
   } else if (OB_FAIL(spec.alias_names_.store_strs(op.get_alias_names()))) {
     LOG_WARN("failed to deep copy strs", K(ret));
+  } else if (OB_FAIL(spec.field_ids_.assign(op.get_field_ids()))) {
+    LOG_WARN("failed to assign field ids", K(ret));
   } else {
     ObString var;
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_user_vars().count(); ++i) {
@@ -9665,6 +9676,12 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
       spec.parallel_ = op.get_parallel();
       spec.is_overwrite_ = op.get_is_overwrite();
       spec.plan_->need_drive_dml_query_ = true;
+    }
+  }
+  if (OB_SUCC(ret) && lake_table_metadata != NULL) {
+    spec.lake_table_format_ = lake_table_metadata->get_format_type();
+    if (OB_FAIL(plan_ctx->set_lake_table_metadata(lake_table_metadata))) {
+      LOG_WARN("failed to set lake table metadata", K(ret));
     }
   }
   return ret;

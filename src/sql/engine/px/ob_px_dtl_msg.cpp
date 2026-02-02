@@ -14,6 +14,7 @@
 
 #include "ob_px_dtl_msg.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
+#include "sql/engine/px/ob_sqc_ctx.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -112,3 +113,12 @@ int ObPxTabletRange::assign(const ObPxTabletRange &other)
   return ret;
 }
 
+int ObPxFinishSqcResultMsg::set_sqc_iceberg_data_files(const ObSqcCtx &sqc_ctx)
+{
+  int ret = OB_SUCCESS;
+  OZ(sqc_iceberg_data_files_.prepare_allocate(sqc_ctx.iceberg_data_files_.size()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < sqc_ctx.iceberg_data_files_.size(); ++i) {
+    OZ(sqc_iceberg_data_files_.at(i).assign(*sqc_ctx.iceberg_data_files_.at(i)));
+  }
+  return ret;
+}

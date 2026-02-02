@@ -34,6 +34,7 @@ public:
   }
 
   ~ObRestCatalog();
+  virtual ObCatalogProperties::CatalogType get_catalog_type() const override;
 
   virtual int list_namespace_names(common::ObIArray<common::ObString> &ns_names) override;
   virtual int list_table_names(const common::ObString &ns_name,

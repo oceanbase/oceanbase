@@ -13,20 +13,28 @@
 #ifndef STATISTICS_H
 #define STATISTICS_H
 
+#include <optional>
+
 #include "lib/container/ob_array.h"
+#include "lib/container/ob_fixed_array.h"
 #include "lib/json/ob_json.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
-#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/spec.h"
 
 namespace oceanbase
 {
+namespace common
+{
+class ObJsonObject;
+}
 
 namespace sql
 {
 
 namespace iceberg
 {
+
+using common::ObJsonObject;
 
 class BlobMetadata : public SpecWithAllocator
 {

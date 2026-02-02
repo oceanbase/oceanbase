@@ -1740,5 +1740,6 @@ void ObPhysicalPlan::update_adaptive_pc_info(const ObAuditRecordData &record,
   }
 }
 
+
 } //namespace sql
 } //namespace oceanbase

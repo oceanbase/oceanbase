@@ -64,6 +64,11 @@ int ObRestCatalog::do_init(const ObString &properties)
   return ret;
 }
 
+ObCatalogProperties::CatalogType ObRestCatalog::get_catalog_type() const
+{
+  return ObCatalogProperties::CatalogType::REST_TYPE;
+}
+
 int ObRestCatalog::list_namespace_names(common::ObIArray<common::ObString> &ns_names)
 {
   int ret = OB_SUCCESS;

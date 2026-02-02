@@ -14,6 +14,8 @@
 #include "ob_physical_plan_ctx.h"
 #include "src/sql/engine/ob_des_exec_context.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/iceberg/spec/manifest.h"
 
 namespace oceanbase
 {
@@ -1546,6 +1548,48 @@ uint64_t ObPhysicalPlanCtx::get_last_refresh_scn(uint64_t mview_id) const
     }
   }
   return last_refresh_scn;
+}
+
+int ObPhysicalPlanCtx::set_iceberg_data_files(const common::ObIArray<iceberg::ObSerializableDataFile> &data_files)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < data_files.count(); ++i) {
+    iceberg::DataFile* data_file = OB_NEWx(iceberg::DataFile, &allocator_, allocator_);
+    if (OB_ISNULL(data_file)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for data file", K(ret));
+    } else {
+      OZ(data_file->assign(data_files.at(i)));
+      OZ(iceberg_data_files_.push_back(data_file));
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalPlanCtx::set_lake_table_metadata(const share::ObILakeTableMetadata* lake_table_metadata)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(lake_table_metadata)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(lake_table_metadata));
+  } else if (share::ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()) {
+    iceberg::ObIcebergTableMetadata *iceberg_table_metadata = NULL;
+    if (OB_ISNULL(iceberg_table_metadata
+                  = OB_NEWx(iceberg::ObIcebergTableMetadata, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate iceberg table metadata", K(ret));
+    } else if (OB_FAIL(iceberg_table_metadata->assign(
+                    *static_cast<const iceberg::ObIcebergTableMetadata *>(lake_table_metadata)))) {
+      LOG_WARN("failed to assign iceberg table metadata", K(ret));
+    } else {
+      lake_table_metadata_ = iceberg_table_metadata;
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
+    LOG_WARN("not supported format type", K(lake_table_metadata->get_format_type()));
+  }
+  return ret;
 }
 
 } //sql

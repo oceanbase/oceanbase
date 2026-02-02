@@ -493,6 +493,7 @@ int ObPxSQCProxy::report(int end_ret) const
   finish_msg.sqc_id_ = sqc.get_sqc_id();
   finish_msg.dfo_id_ = sqc.get_dfo_id();
   finish_msg.rc_ = sqc_ret;
+  OZ(finish_msg.set_sqc_iceberg_data_files(sqc_ctx));
   // 重写错误码，使得scheduler端能等待远端schema刷新并重试
   if (OB_SUCCESS != sqc_ret && is_schema_error(sqc_ret)) {
     ObInterruptUtil::update_schema_error_code(sqc_arg.exec_ctx_, finish_msg.rc_);

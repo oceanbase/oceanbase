@@ -49,6 +49,7 @@ namespace transaction
 }
 namespace sql
 {
+
 class ObTablePartitionInfo;
 class ObPhyOperatorMonnitorInfo;
 struct ObAuditRecordData;

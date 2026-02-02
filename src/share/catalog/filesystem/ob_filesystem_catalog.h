@@ -35,6 +35,10 @@ class ObFileSystemCatalog final : public ObIExternalCatalog, ObIExternalTableMet
 public:
   explicit ObFileSystemCatalog(common::ObIAllocator &allocator)
       : allocator_(allocator), location_object_id_(OB_INVALID_ID) {};
+  ObCatalogProperties::CatalogType get_catalog_type() const override
+  {
+    return ObCatalogProperties::CatalogType::FILESYSTEM_TYPE;
+  }
 
   int list_namespace_names(common::ObIArray<common::ObString> &ns_names) override;
 

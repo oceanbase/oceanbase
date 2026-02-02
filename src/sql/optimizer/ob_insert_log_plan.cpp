@@ -19,6 +19,8 @@
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "share/catalog/ob_cached_catalog_meta_getter.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -2073,21 +2075,24 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
 {
   int ret = OB_SUCCESS;
   ObLogSelectInto *select_into = NULL;
-  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSqlSchemaGuard* sql_schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
   ObSQLSessionInfo *session_info = NULL;
   const ObInsertStmt *stmt = get_stmt();
   ObColumnRefRawExpr *col_expr = NULL;
+  ObObj outfile_obj;
+  ObSqlString outfile_name_sqlstr;
+  ObString outfile_name_str;
   if (OB_ISNULL(old_top) || OB_ISNULL(stmt)
-      || OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
+      || OB_ISNULL(sql_schema_guard = get_optimizer_context().get_sql_schema_guard())
       || OB_ISNULL(session_info = get_optimizer_context().get_session_info())
       || stmt->get_table_items().count() != 2
       || OB_ISNULL(stmt->get_table_item(0)) || OB_ISNULL(stmt->get_table_item(1))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Get unexpected null", K(ret), K(old_top), K(schema_guard), K(session_info), K(stmt));
-  } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
-                                                    stmt->get_insert_table_info().ref_table_id_,
-                                                    table_schema))) {
+    LOG_WARN("Get unexpected null", K(ret), K(old_top), K(sql_schema_guard), K(session_info), K(stmt));
+  } else if (OB_FAIL(sql_schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                        stmt->get_insert_table_info().ref_table_id_,
+                                                        table_schema))) {
     LOG_WARN("get table schema from schema guard failed", K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2099,40 +2104,62 @@ int ObInsertLogPlan::allocate_select_into_as_top_for_insert(ObLogicalOperator *&
   } else {
     ObString external_properties;
     const ObString &table_format_or_properties = table_schema->get_external_file_format().empty()
-                                            ? table_schema->get_external_properties()
-                                            : table_schema->get_external_file_format();
+                                                 ? table_schema->get_external_properties()
+                                                 : table_schema->get_external_file_format();
     const ObInsertTableInfo& table_info = stmt->get_insert_table_info();
     if (table_format_or_properties.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("external properties is empty", K(ret));
-    } else if (table_schema->get_external_properties().empty()) { //目前只支持写odps外表 其他类型暂不支持
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support to insert into external table which is not in odps", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table which is not in odps");
     } else if (OB_FAIL(ob_write_string(get_allocator(), table_format_or_properties, external_properties))) {
       LOG_WARN("failed to append string", K(ret));
     } else if (OB_FAIL(select_into->get_select_exprs().assign(table_info.column_conv_exprs_))) {
       LOG_WARN("failed to get select exprs", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_info.values_desc_.count(); i++) {
-      if (OB_ISNULL(col_expr = table_info.values_desc_.at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_info.column_exprs_.count(); i++) {
+      if (OB_ISNULL(col_expr = table_info.column_exprs_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(select_into->get_alias_names().push_back(col_expr->get_column_name()))) {
         LOG_WARN("failed to push back column name", K(ret));
+      } else if (OB_FAIL(select_into->get_field_ids().push_back(
+                      iceberg::ObIcebergUtils::get_iceberg_field_id(col_expr->get_column_id())))) {
+        LOG_WARN("failed to push back column id", K(ret));
       }
     }
+    OZ(outfile_name_sqlstr.append(table_schema->get_external_file_location()));
+    OZ(outfile_name_sqlstr.append("/"));
+    if (!table_schema->get_external_file_location_access_info().empty()) {
+      OZ(outfile_name_sqlstr.append("?"));
+      OZ(outfile_name_sqlstr.append(table_schema->get_external_file_location_access_info()));
+    }
+    OZ((ob_write_string(get_allocator(), outfile_name_sqlstr.string(), outfile_name_str)));
+
     if (OB_SUCC(ret)) {
       select_into->set_is_overwrite(stmt->is_external_table_overwrite());
       select_into->set_external_properties(external_properties);
       select_into->set_external_partition(stmt->get_table_item(0)->external_table_partition_);
       select_into->set_child(ObLogicalOperator::first_child, old_top);
-      // compute property
-      if (OB_FAIL(select_into->compute_property())) {
-        LOG_WARN("failed to compute equal set", K(ret));
-      } else {
-        old_top = select_into;
+      select_into->set_is_single(false);
+
+      outfile_obj.set_varchar(outfile_name_str);
+      outfile_obj.set_collation_type(session_info->get_local_collation_connection());
+      select_into->set_outfile_name(outfile_obj);
+
+      if (select_into->get_external_partition().empty() && table_schema->is_partitioned_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into partitioned external table");
+        LOG_WARN("not support to insert into partitioned external table", K(ret));
       }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (table_schema->get_catalog_id() != OB_INTERNAL_CATALOG_ID) {
+        ObILakeTableMetadata *lake_table_metadata = NULL;
+        OZ(sql_schema_guard->get_lake_table_metadata(table_schema->get_table_id(), lake_table_metadata));
+        OX(select_into->set_lake_table_metadata(lake_table_metadata));
+      }
+      OZ(select_into->compute_property());
+      OX(old_top = select_into);
     }
   }
   return ret;

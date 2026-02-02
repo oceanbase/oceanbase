@@ -19,7 +19,7 @@
 | ObLogValues | 1304 |
 | ObLogMaterial | 1032 |
 | ObLogWindowFunction | 1216 |
-| ObLogSelectInto | 1312 |
+| ObLogSelectInto | 1360 |
 | ObLogTopk | 1064 |
 | ObLogCount | 1048 |
 | ObLogMerge | 1488 |

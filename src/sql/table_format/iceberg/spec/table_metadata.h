@@ -13,6 +13,8 @@
 #ifndef TABLE_METADATA_H
 #define TABLE_METADATA_H
 
+#include <optional>
+
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/json/ob_json.h"
@@ -92,6 +94,10 @@ public:
   explicit TableMetadata(ObIAllocator &allocator);
   int assign(const TableMetadata &other);
 
+  // The metadata file location. This is used by writers to determine whether to writer
+  // a new metadata file and get current_version number.
+  ObString metadata_file_location;
+
   // An integer version number for the format. Currently, this can be 1 or 2 based on the spec.
   // Implementations must throw an exception if a table's version is higher than the supported
   // version.
@@ -120,12 +126,16 @@ public:
 
   // The table’s schemas. Only store latest schema
   ObFixedArray<Schema *, ObIAllocator> schemas;
+  // A list of schemas, stored as objects with `schema-id`.
+  ObString schemas_str;
+  ObString current_schema_str;
 
   // ID of the table's current schema.
   int32_t current_schema_id;
 
   // A list of partition specs, stored as full partition spec objects.
   ObFixedArray<PartitionSpec *, ObIAllocator> partition_specs;
+  ObString partition_specs_str;
 
   // ID of the "current" spec that writers should use by default.
   int32_t default_spec_id;
@@ -180,6 +190,14 @@ public:
   int get_table_property(const char *table_property_key, ObString &value) const;
   int get_table_default_write_format(DataFileFormat &data_file_format) const;
   void reset();
+  inline int64_t get_next_sequence_number() const
+  {
+    return format_version > FormatVersion::V1 ? last_sequence_number + 1 : INITIAL_SEQUENCE_NUMBER;
+  }
+  int add_snapshot(Snapshot *snapshot);
+  // extra_snapshot_capacity: 为 snapshots 数组预留的额外容量，写入时需要 +1
+  int assign(const TableMetadata &other, int64_t extra_snapshot_capacity);
+  int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const;
 
   static constexpr const char *FORMAT_VERSION = "format-version";
   static constexpr const char *TABLE_UUID = "table-uuid";

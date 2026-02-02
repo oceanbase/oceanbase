@@ -175,10 +175,12 @@ int ObStorageHdfsBase::get_or_create_write_file(const ObString &uri, const bool 
       hdfs_write_file_ = obHdfsOpenFile(hdfs_fs, path_buf_, O_WRONLY, 0, 0, 0);
       if (OB_ISNULL(hdfs_write_file_)) {
         ret = OB_HDFS_OPEN_FILE_ERROR;
-        OB_LOG(WARN, "failed to open hdfs writable file", K(ret), K_(path_buf));
+        char *ex = obHdfsGetLastExceptionRootCause();
+        OB_LOG(WARN, "failed to open hdfs writable file", K(ret), K_(path_buf), K(ex));
       } else if (0 == obHdfsFileIsOpenForWrite(hdfs_write_file_)) {
         ret = OB_HDFS_OPEN_FILE_ERROR;
-        OB_LOG(WARN, "failed to get the opened hdfs writable file", K(ret), K_(path_buf));
+        char *ex = obHdfsGetLastExceptionRootCause();
+        OB_LOG(WARN, "failed to get the opened hdfs writable file", K(ret), K_(path_buf), K(ex));
       }
     }
   }

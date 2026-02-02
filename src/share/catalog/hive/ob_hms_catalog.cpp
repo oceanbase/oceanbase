@@ -110,23 +110,12 @@ int ObHMSCatalog::fetch_namespace_schema(const uint64_t database_id,
   return ret;
 }
 
-int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
-                                            const uint64_t database_id,
-                                            const uint64_t table_id,
-                                            const common::ObString &ns_name,
-                                            const common::ObString &tbl_name,
-                                            const ObNameCaseMode case_mode,
-                                            ObILakeTableMetadata *&table_metadata)
+int ObHMSCatalog::fetch_latest_table(const common::ObString &ns_name,
+                                     const common::ObString &tbl_name,
+                                     const ObNameCaseMode case_mode,
+                                     ApacheHive::Table &original_table)
 {
   int ret = OB_SUCCESS;
-  ObLakeTableFormat table_format = ObLakeTableFormat::INVALID;
-  ObArenaAllocator tmp_allocator;
-  // hive 表返回表的 location, iceberg 表返回 metadata 的 location
-  ObString table_location;
-  ObString storage_access_info;
-  uint64_t location_object_id = OB_INVALID_ID;
-  ObString location_object_sub_path;
-  Apache::Hadoop::Hive::Table original_table;
 
   if (OB_ISNULL(client_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -147,8 +136,29 @@ int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
       }
     }
   }
+  return ret;
+}
 
-  if (OB_FAIL(ret)) {
+int ObHMSCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
+                                            const uint64_t database_id,
+                                            const uint64_t table_id,
+                                            const common::ObString &ns_name,
+                                            const common::ObString &tbl_name,
+                                            const ObNameCaseMode case_mode,
+                                            ObILakeTableMetadata *&table_metadata)
+{
+  int ret = OB_SUCCESS;
+  ObLakeTableFormat table_format = ObLakeTableFormat::INVALID;
+  ObArenaAllocator tmp_allocator;
+  // hive 表返回表的 location, iceberg 表返回 metadata 的 location
+  ObString table_location;
+  ObString storage_access_info;
+  uint64_t location_object_id = OB_INVALID_ID;
+  ObString location_object_sub_path;
+  Apache::Hadoop::Hive::Table original_table;
+
+  if (OB_FAIL(fetch_latest_table(ns_name, tbl_name, case_mode, original_table))) {
+    LOG_WARN("failed to fetch latest table", K(ret), K(ns_name), K(tbl_name));
   } else if (OB_FAIL(deduce_lake_table_format(tmp_allocator,
                                               original_table,
                                               table_format,
@@ -398,7 +408,20 @@ int ObHMSCatalog::fetch_iceberg_table_statistics(
   return ret;
 }
 
-
+int ObHMSCatalog::alter_table_with_lock(const ObString &db_name,
+                                        const ObString &tbl_name,
+                                        const ObNameCaseMode case_mode,
+                                        const ApacheHive::Table &new_table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(client_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("hive metastore client is null", K(ret));
+  } else if (OB_FAIL(client_->alter_table_with_lock(db_name, tbl_name, new_table, case_mode))) {
+    LOG_WARN("failed to alter table", K(ret));
+  }
+  return ret;
+}
 
 
 } // namespace share

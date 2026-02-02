@@ -304,6 +304,16 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
               "tx_desc", *session->get_tx_desc(),
               "tx_result", session->get_trans_result());
   }
+  if (OB_SUCC(ret) && pkt.sqc_iceberg_data_files_.count() > 0) {
+    if (OB_ISNULL(ctx.get_physical_plan_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("phy plan ctx is null", K(ret));
+    } else if (OB_FAIL(ctx.get_physical_plan_ctx()->set_iceberg_data_files(pkt.sqc_iceberg_data_files_))) {
+      LOG_WARN("fail set iceberg data files", K(ret));
+    } else {
+      LOG_TRACE("on_sqc_finish_msg gather iceberg data files", K(pkt.sqc_iceberg_data_files_));
+    }
+  }
   if (OB_FAIL(ret)) {
   } else if (common::OB_INVALID_ID != pkt.temp_table_id_) {
     if (OB_FAIL(ctx.add_temp_table_interm_result_ids(pkt.temp_table_id_,
