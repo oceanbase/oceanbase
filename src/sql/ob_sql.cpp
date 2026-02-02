@@ -1493,8 +1493,12 @@ int ObSql::do_real_prepare(const ObString &sql,
     info_ctx.raw_params_ = &pc_ctx.fp_result_.raw_params_;
     info_ctx.fixed_param_idx_ = &pc_ctx.fixed_param_idx_;
     info_ctx.raw_sql_.assign_ptr(sql.ptr(), sql.length());
-    if (!context.is_dbms_sql_ &&
-        OB_FAIL(do_add_ps_cache(info_ctx, *context.schema_guard_, result))) {
+    bool is_real_dynamic_sql = context.is_dynamic_sql_
+                             && context.is_from_pl_
+                             && context.secondary_namespace_ == NULL;
+    if (!context.is_dbms_sql_
+        && !(is_real_dynamic_sql && result.get_external_retrieve_info().get_into_exprs().count() > 0)
+        && OB_FAIL(do_add_ps_cache(info_ctx, *context.schema_guard_, result))) {
       LOG_WARN("add to ps plan cache failed",
                K(ret), K(info_ctx.normalized_sql_), K(param_cnt));
     } else if (is_inner_sql) {
