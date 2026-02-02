@@ -735,7 +735,7 @@ void ObLockWaitMgr::on_lock_conflict(ObTxDesc &tx,
   if (tx.has_conflict_infos()) {
     ObSArray<ObRowConflictInfo> &cflict_infos = tx.get_conflict_info_array();
     on_lock_conflict(cflict_infos, &tx, tx.get_assoc_session_id(), is_lock_wait_timeout);
-    tx.reset_conflict_info_array();
+    // tx.reset_conflict_info_array();
   }
   TRANS_LOG(TRACE, "end stmt handle lock conflict end", K(tx));
 }
