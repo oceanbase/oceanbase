@@ -22,6 +22,7 @@
 #include "storage/shared_storage/ob_ss_reader_writer.h"
 #include "storage/shared_storage/ob_ss_micro_cache.h"
 #include "storage/shared_storage/ob_file_manager.h"
+#include "storage/shared_storage/ob_ss_local_cache_util.h"
 #include "lib/random/ob_random.h"
 #include "lib/compress/ob_compress_util.h"
 
@@ -109,6 +110,7 @@ public:
   static int64_t get_prev_blk_ckpt_time_us() { return ObTimeUtility::current_time_us() - SS_DO_BLK_CKPT_INTERVAL_US + DIFF_CKPT_TIME_US; }
   static int64_t get_prev_scan_reusable_blk_time_us() { return ObTimeUtility::current_time_us() - SS_SCAN_REUSABLE_BLK_INTERVAL_US + DIFF_CKPT_TIME_US; }
   static int64_t get_prev_print_stat_time_us() { return ObTimeUtility::current_time_us() - SS_PRINT_CACHE_STAT_INTERVAL_US + DIFF_CKPT_TIME_US; }
+  static int use_up_tenant_memory(const uint64_t tenant_id, const int64_t reach_pct, ObIArray<void *> &alloc_ptrs);
 };
 
 MacroBlockId TestSSCommonUtil::gen_macro_block_id(const int64_t second_id)
@@ -702,6 +704,40 @@ void TestSSCommonUtil::resume_all_bg_task(ObSSMicroCache *micro_cache)
     task_runner.release_cache_task_.is_inited_ = true;
     task_runner.blk_ckpt_task_.is_inited_ = true;
   }
+}
+
+int TestSSCommonUtil::use_up_tenant_memory(const uint64_t tenant_id, const int64_t reach_pct, ObIArray<void *> &alloc_ptrs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || reach_pct <= 0 || reach_pct > 100)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(reach_pct));
+  } else {
+    const int64_t ALLOC_SIZE = 1024 * 1024L;
+    while (OB_SUCC(ret)) {
+      int64_t total_mem = 0;
+      int64_t total_used = 0;
+      if (OB_FAIL(ObSSLocalCacheUtil::get_tenant_memory_info(tenant_id, total_mem, total_used))) {
+        LOG_WARN("fail to get tenant memory info", KR(ret), K(tenant_id));
+      } else if (total_mem > 0 && total_used > 0 && total_used * 100 >= total_mem * reach_pct) {
+        break;
+      } else {
+        void *ptr = ob_malloc(ALLOC_SIZE, ObMemAttr(tenant_id, "TestAlloc"));
+        if (ptr != nullptr) {
+          if (OB_FAIL(alloc_ptrs.push_back(ptr))) {
+            LOG_WARN("fail to push back", KR(ret), KP(ptr), K(alloc_ptrs.count()));
+          }
+        } else {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        }
+      }
+    }
+
+    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
 }
 
 }  // namespace storage

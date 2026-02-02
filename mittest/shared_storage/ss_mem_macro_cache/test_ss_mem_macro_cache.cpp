@@ -336,6 +336,60 @@ TEST_F(TestSSMemMacroCache, test_huge_data_evict)
   }
 }
 
+TEST_F(TestSSMemMacroCache, test_evict_blk_for_high_memory_usage)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("TEST_CASE: start test_evict_blk_for_high_memory_usage");
+  ObSSMemMacroCache *mem_macro_cache = MTL(ObSSMemMacroCache *);
+  ASSERT_NE(nullptr, mem_macro_cache);
+  ASSERT_EQ(OB_SUCCESS, mem_macro_cache->clear_mem_macro_cache());
+
+  ObSSMemMacroCacheStat &cache_stat = mem_macro_cache->cache_stat_;
+  ObSSMacroCacheMemBlockPool &mem_blk_pool = mem_macro_cache->buf_mgr_.mem_blk_pool_;
+  const int64_t total_blk_cnt = mem_blk_pool.total_blk_cnt_;
+  const int64_t evict_trigger_cnt = total_blk_cnt * SS_DEF_TRIGGER_EVICT_USAGE_PCT / 100;
+
+  int32_t blk_size = mem_macro_cache->blk_size_;
+  const int64_t macro_blk_size = 256 * 1024;
+  const int64_t align_size = 4 * 1024;
+  ObArenaAllocator allocator;
+  char * buf = static_cast<char *>(allocator.alloc(macro_blk_size));
+  ASSERT_NE(nullptr, buf);
+
+  const int64_t macro_blk_cnt = evict_trigger_cnt * blk_size / macro_blk_size;
+  {
+    for (int64_t i = 0; i < macro_blk_cnt; ++i) {
+      MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
+      const uint64_t effective_tablet_id = macro_id.second_id();
+      char c = macro_id.hash() % 26 + 'a';
+      MEMSET(buf, c, macro_blk_size);
+      int32_t offset = -1;
+      if (OB_FAIL(mem_macro_cache->put(macro_id, effective_tablet_id, buf, macro_blk_size))) {
+        LOG_WARN("fail to put macro_block", KR(ret), K(i), K(macro_id));
+      }
+    }
+
+    ob_usleep(3 * 1000 * 1000);
+    ASSERT_LE(0, cache_stat.mem_blk_stat().evict_blk_cnt_);
+    ASSERT_LT(0, cache_stat.mem_blk_stat().alloc_blk_cnt_);
+    ASSERT_LT(0, cache_stat.mem_usage_stat().macro_meta_cnt_);
+  }
+
+  {
+    ObSEArray<void *, 128> alloc_ptrs;
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::use_up_tenant_memory(MTL_ID(), 99, alloc_ptrs));
+    ASSERT_LT(0, alloc_ptrs.count());
+
+    ob_usleep(3 * 1000 * 1000);
+    ASSERT_LT(0, cache_stat.mem_blk_stat().evict_blk_cnt_);
+    ASSERT_LT(0, cache_stat.mem_blk_stat().extra_evict_blk_cnt_);
+
+    for (int64_t i = 0; i < alloc_ptrs.count(); ++i) {
+      ob_free(alloc_ptrs.at(i));
+    }
+  }
+}
+
 }  // namespace storage
 }  // namespace oceanbase
 
