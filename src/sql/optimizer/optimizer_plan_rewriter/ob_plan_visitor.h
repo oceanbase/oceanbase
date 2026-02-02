@@ -179,7 +179,7 @@ public:
     int ret = OB_SUCCESS;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL((this->dispatch_visit(child, context, result)))) {
+    } else if (OB_FAIL(SMART_CALL((this->dispatch_visit(child, context, result))))) {
     }
     return ret;
   }
@@ -232,7 +232,7 @@ SimplePlanVisitor() {}
     int ret = OB_SUCCESS;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL((this->dispatch_visit(child, context, result)))) {
+    } else if (OB_FAIL(SMART_CALL((this->dispatch_visit(child, context, result))))) {
     }
     return ret;
   }
