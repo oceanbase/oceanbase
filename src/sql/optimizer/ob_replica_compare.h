@@ -41,6 +41,9 @@ public:
   bool operator()(const ObRoutePolicy::CandidateReplica &replica1, const ObRoutePolicy::CandidateReplica &replica2);
   int get_sort_ret() const { return ret_; }
 
+  CompareRes compare_replica(const ObRoutePolicy::CandidateReplica &replica1,
+                             const ObRoutePolicy::CandidateReplica &replica2);
+
   inline CompareRes compare_other_region(const ObRoutePolicy::CandidateReplica &replica1,
                                          const ObRoutePolicy::CandidateReplica &replica2);
   inline CompareRes compare_zone_type(const ObRoutePolicy::CandidateReplica &replica1,
@@ -110,13 +113,18 @@ ObReplicaCompare::CompareRes ObReplicaCompare::compare_pos_type(const ObRoutePol
                                                const ObRoutePolicy::CandidateReplica &replica2)
 {
   CompareRes cmp_ret = EQUAL;
-  if ((replica1.attr_.pos_type_ == ObRoutePolicy::SAME_SERVER || replica1.attr_.pos_type_ == ObRoutePolicy::SAME_IDC)
-      && replica2.attr_.pos_type_ == ObRoutePolicy::SAME_REGION) {
+  // First compare is_preferred_zone_
+  if (replica1.attr_.is_preferred_zone_ && !replica2.attr_.is_preferred_zone_) {
     cmp_ret = LESS;
-  } else if ((replica2.attr_.pos_type_ == ObRoutePolicy::SAME_SERVER || replica2.attr_.pos_type_ == ObRoutePolicy::SAME_IDC)
-             && replica1.attr_.pos_type_ == ObRoutePolicy::SAME_REGION ) {
+  } else if (!replica1.attr_.is_preferred_zone_ && replica2.attr_.is_preferred_zone_) {
     cmp_ret = GREATER;
-  } else {/*do nohtong*/  }
+  } else if ((replica1.attr_.pos_type_ == ObRoutePolicy::SAME_SERVER || replica1.attr_.pos_type_ == ObRoutePolicy::SAME_IDC)
+    && replica2.attr_.pos_type_ == ObRoutePolicy::SAME_REGION) {
+  cmp_ret = LESS;
+  } else if ((replica2.attr_.pos_type_ == ObRoutePolicy::SAME_SERVER || replica2.attr_.pos_type_ == ObRoutePolicy::SAME_IDC)
+          && replica1.attr_.pos_type_ == ObRoutePolicy::SAME_REGION ) {
+    cmp_ret = GREATER;
+  } else {/*do nothing*/  }
   return cmp_ret;
 }
 

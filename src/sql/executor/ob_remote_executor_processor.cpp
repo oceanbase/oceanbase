@@ -777,6 +777,20 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
                NULL, session->get_effective_tenant_id())) {
           ret = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
         }
+        if (OB_NOT_NULL(session)
+            && session->get_route_to_column_replica()
+            && OB_NO_REPLICA_VALID == ret) {
+          bool ap_query_replica_fallback = true;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(session->get_sys_variable(share::SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
+                                                    ap_query_replica_fallback))) {
+            LOG_WARN("failed to get ap_query_replica_fallback", K(tmp_ret));
+          } else if (ap_query_replica_fallback) {
+            ret = OB_NO_READABLE_REPLICA;
+            session->set_route_to_column_replica(false);
+            LOG_WARN("retry for no valid column replica", K(ret));
+          }
+        }
         DAS_CTX(exec_ctx_).get_location_router().refresh_location_cache_by_errno(true, ret);
       }
       //监控项统计结束

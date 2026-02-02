@@ -11942,8 +11942,7 @@
     ],
     "info_cn": "控制 AP 查询副本自适应选择策略。OFF：关闭。AUTO：根据查询特征和代价自适应选择列存副本。FORCE：尽可能选择列存副本执行。",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "ap_query_cost_threshold": {
     "id": 10763,
@@ -11956,8 +11955,7 @@
     "publish_version": "4.5.1",
     "info_cn": "自适应选择列存副本时的代价阈值",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   },
   "ap_query_replica_fallback": {
     "id": 10764,
@@ -11970,7 +11968,6 @@
     "publish_version": "4.5.1",
     "info_cn": "当 ap 查询自动分流功能开启控制时，控制无可用列存副本的情况下查询是否回退到非列存副本执行",
     "background_cn": "",
-    "ref_url": "",
-    "placeholder": true
+    "ref_url": ""
   }
 }

@@ -1667,6 +1667,40 @@ int ObTransferUtils::get_ls_member_list(const share::ObLSID &ls_id, common::ObMe
   return ret;
 }
 
+int ObTransferUtils::get_ls_member_list_and_learner_list(
+    const share::ObLSID &ls_id,
+    common::ObMemberList &member_list,
+    common::GlobalLearnerList &learner_list)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = nullptr;
+  int64_t cluster_id = GCONF.cluster_id;
+  uint64_t tenant_id = MTL_ID();
+  ObStorageHASrcInfo src_info;
+  obrpc::ObFetchLSMemberAndLearnerListInfo member_and_learner_info;
+  src_info.cluster_id_ = cluster_id;
+
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get src ls member list get invalid argument", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(get_ls_leader(ls_id, src_info.src_addr_))) {
+    LOG_WARN("failed to get src ls leaer", K(ret), K(ls_id));
+  } else if (OB_FAIL(ls_service->get_storage_rpc()->fetch_ls_member_and_learner_list(tenant_id, ls_id, src_info, member_and_learner_info))) {
+    LOG_WARN("failed to get ls member info", K(ret), K(ls_id));
+  } else if (!member_and_learner_info.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("member and learner list is not valid", K(ret), K(member_and_learner_info), K(ls_id));
+  } else if (OB_FAIL(member_list.deep_copy(member_and_learner_info.member_list_))) {
+    LOG_WARN("failed to copy member list", K(ret), K(ls_id));
+  } else if (OB_FAIL(learner_list.deep_copy(member_and_learner_info.learner_list_))) {
+    LOG_WARN("failed to copy learner list", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
 int ObTransferUtils::check_inc_major_backfill(
     const share::ObLSID &ls_id,
     const share::SCN &backfill_scn,
@@ -1773,6 +1807,110 @@ int ObTransferUtils::check_ddl_merge_finished(
       LOG_WARN("tablet still has inc major ddl kv, cannot transfer", K(ret), KPC(tablet), K(ddl_kvs));
     }
   }
+  return ret;
+}
+
+int ObTransferUtils::get_transfer_ls_info(
+  const uint64_t tenant_id,
+  const ObLSID &src_ls_id,
+  const ObLSID &dest_ls_id,
+  ObISQLClient &sql_client,
+  ObTransferLSInfo &transfer_ls_info)
+{
+  int ret = OB_SUCCESS;
+  transfer_ls_info.reset();
+  ObLSStatusOperator ls_op;
+  ObLSStatusInfo src_info;
+  ObLSStatusInfo dest_info;
+
+  if (OB_INVALID_TENANT_ID == tenant_id || !src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get transfer ls info get invalid argument", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+  } else if (OB_FAIL(ls_op.get_ls_status_info(tenant_id, src_ls_id, src_info, sql_client,share::OBCG_TRANSFER))) {
+    LOG_WARN("failed to get src ls status info", K(ret), K(src_ls_id));
+  } else if (OB_FAIL(ls_op.get_ls_status_info(tenant_id, dest_ls_id, dest_info, sql_client,share::OBCG_TRANSFER))) {
+    LOG_WARN("failed to get dest ls status info", K(ret), K(dest_ls_id));
+  } else {
+    transfer_ls_info.src_is_duplicate_ls_ = src_info.is_duplicate_ls();
+    transfer_ls_info.dest_is_duplicate_ls_ = dest_info.is_duplicate_ls();
+    LOG_INFO("get transfer ls info", K(ret), K(src_ls_id), K(dest_ls_id), K(transfer_ls_info));
+  }
+  return ret;
+}
+
+int ObTransferUtils::get_transfer_need_check_addr_list(
+  const share::ObLSID src_ls_id,
+  const share::ObLSID dest_ls_id,
+  const ObTransferLSInfo &transfer_ls_info,
+  common::ObMemberList &member_list,
+  common::GlobalLearnerList &learner_list,
+  common::ObIArray<common::ObAddr> &addr_list)
+{
+  int ret = OB_SUCCESS;
+  addr_list.reset();
+  member_list.reset();
+  learner_list.reset();
+
+  if (!src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get transfer need check addr list get invalid argument", K(ret), K(src_ls_id), K(dest_ls_id), K(transfer_ls_info));
+  } else {
+    ObLSID ls_id;
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    int64_t quorum = 0;
+
+    if (transfer_ls_info.must_get_learner_list_from_src_ls()) {
+      ls_id = src_ls_id;
+    } else if (transfer_ls_info.must_get_learner_list_from_dest_ls()) {
+      ls_id = dest_ls_id;
+    } else {
+      ls_id = dest_ls_id;
+    }
+
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_id));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls is null", K(ret), K(ls_id));
+    } else {
+      if (OB_FAIL(ls->get_paxos_member_list_and_learner_list(member_list, quorum, learner_list, true /*filter_logonly_replica*/))) {
+        LOG_WARN("failed to get ls member list and learner list", K(ret), K(ls_id));
+      } else if (OB_FAIL(get_need_check_addr_list_(member_list, learner_list, transfer_ls_info.need_check_r_replica(), addr_list))) {
+        LOG_WARN("failed to get need check replay addr list", K(ret), K(member_list), K(learner_list));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObTransferUtils::get_need_check_addr_list_(
+  const common::ObMemberList &member_list,
+  const common::GlobalLearnerList &learner_list,
+  const bool need_check_r_replica,
+  common::ObIArray<common::ObAddr> &addr_list)
+{
+  int ret = OB_SUCCESS;
+  addr_list.reset();
+
+  if (OB_FAIL(member_list.get_addr_array(addr_list))) {
+    LOG_WARN("failed to get addr array", K(ret), K(member_list));
+  }
+  // only primary tenant need check learner list for strong read
+  else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < learner_list.get_member_number(); ++i) {
+      common::ObMember learner;
+      if (OB_FAIL(learner_list.get_member_by_index(i, learner))) {
+        LOG_WARN("failed to get learner by index", K(ret), K(i));
+      } else if (learner.is_columnstore() || need_check_r_replica) {
+        if (OB_FAIL(addr_list.push_back(learner.get_server()))) {
+          LOG_WARN("failed to push back addr", K(ret), K(learner));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

@@ -1089,7 +1089,7 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
                                  exec_ctx.get_sql_ctx(),
                                  is_weak_read))) {
       LOG_WARN("get is weak read failed", K(ret));
-    } else if (OB_FAIL(exec_ctx.get_my_session()->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    } else if (OB_FAIL(exec_ctx.get_my_session()->get_ob_route_policy(route_policy))) {
       LOG_WARN("get route policy failed", K(ret));
     } else if (table_schema->is_duplicate_table()) {
       loc_meta_.is_dup_table_ = 1;
@@ -1099,7 +1099,11 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
       if (is_dml_table) {
         loc_meta_.select_leader_ = 1;
       } else if (!is_weak_read) {
-        loc_meta_.select_leader_ = loc_meta_.is_dup_table_ ? 0 : 1;
+        if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(loc_meta_.route_policy_)) {
+          loc_meta_.select_leader_ = 0;
+        } else {
+          loc_meta_.select_leader_ = loc_meta_.is_dup_table_ ? 0 : 1;
+        }
       } else {
         loc_meta_.select_leader_ = 0;
         loc_meta_.is_weak_read_ = 1;
@@ -1350,7 +1354,7 @@ int ObTableLocation::init(
   } else if (OB_UNLIKELY(!can_use_table_location(table_schema->get_lake_table_format()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected lake table type", K(table_schema->get_lake_table_format()));
-  } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+  } else if (OB_FAIL(session_info->get_ob_route_policy(route_policy))) {
     LOG_WARN("fail to get sys variable", K(ret));
   } else {
     table_type_ = table_schema->get_table_type();
@@ -1359,6 +1363,9 @@ int ObTableLocation::init(
     OZ(ObExternalTableUtils::get_external_file_location(*table_schema, schema_guard, exec_ctx->get_allocator(), file_location));
     loc_meta_.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
     loc_meta_.route_policy_ = route_policy;
+    if (route_policy == COLUMN_STORE_ONLY && (is_dml_table || !(table_schema->is_user_table() || table_schema->is_index_table()))) {
+      loc_meta_.route_policy_ = READONLY_ZONE_FIRST;
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1431,7 +1438,11 @@ int ObTableLocation::init(
     if (is_dml_table) {
       loc_meta_.select_leader_ = 1;
     } else if (!is_weak_read) {
-      loc_meta_.select_leader_ = loc_meta_.is_dup_table_ ? 0 : 1;
+      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(loc_meta_.route_policy_)) {
+        loc_meta_.select_leader_ = 0;
+      } else {
+        loc_meta_.select_leader_ = loc_meta_.is_dup_table_ ? 0 : 1;
+      }
     } else {
       loc_meta_.select_leader_ = 0;
       loc_meta_.is_weak_read_ = 1;
@@ -1494,14 +1505,11 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
   }
   if (OB_SUCC(ret) && !is_weak_read) {
     int64_t route_policy_type = 0;
-    if (OB_FAIL(session->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
+    if (OB_FAIL(session->get_ob_route_policy(route_policy_type))) {
       LOG_WARN("fail to get sys variable", K(ret));
     } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
       if (dml_stmt.get_query_ctx()->is_contain_inner_table_) {
         is_weak_read = true;
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, weak read request");
       }
     }
   }

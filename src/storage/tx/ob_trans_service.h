@@ -197,6 +197,7 @@ public:
     volatile int64_t write_throttle_by_pending_log_size_limit_;
     volatile int64_t write_throttle_by_pending_log_sleep_interval_;
     volatile int64_t trx_max_log_cb_limit_;
+    volatile int64_t col_replica_max_local_wait_time_;
   };
 public:
   ObTransService();

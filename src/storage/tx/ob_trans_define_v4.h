@@ -286,7 +286,7 @@ public:
   bool elr_; // whether allowed read elr
   bool force_strongly_read_;
 public:
-  TO_STRING_KV(K_(version), K_(tx_id), K_(scn));
+  TO_STRING_KV(K_(version), K_(tx_id), K_(scn), K_(force_strongly_read));
   ObTxSnapshot();
   ObTxSnapshot(const share::SCN &version);
   ~ObTxSnapshot();
@@ -299,6 +299,8 @@ public:
   const ObTxSEQ &tx_seq() const { return scn_; }
   void set_elr(const bool elr) { elr_ = elr; }
   bool is_elr() const { return elr_; }
+  void set_force_strongly_read(const bool force_read) { force_strongly_read_ = force_read; }
+  bool is_force_strongly_read() const { return force_strongly_read_; }
   OB_UNIS_VERSION(1);
 };
 
@@ -351,6 +353,8 @@ public:
   int assign(const ObTxReadSnapshot &);
   void try_set_read_elr();
   bool read_elr() const { return core_.is_elr(); }
+  void set_force_strongly_read() { core_.set_force_strongly_read(true); }
+  bool is_force_strongly_read() const { return core_.is_force_strongly_read(); }
   /**
    * only used for lob, other situation DONOT use
    *

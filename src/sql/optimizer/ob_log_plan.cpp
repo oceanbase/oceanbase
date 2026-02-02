@@ -715,8 +715,6 @@ int ObLogPlan::select_location(ObTablePartitionInfo *tbl_part_info)
   if (OB_ISNULL(exec_ctx) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("exec ctx is NULL", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
-    LOG_WARN("get route policy failed", K(ret));
   } else if (OB_ISNULL(tbl_part_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tbl part info is NULL", K(ret));
@@ -727,17 +725,13 @@ int ObLogPlan::select_location(ObTablePartitionInfo *tbl_part_info)
               &tbl_part_info->get_phy_tbl_location_info_for_update()))) {
     LOG_WARN("fail to push back phy tble loc info",
              K(ret), K(tbl_part_info->get_phy_tbl_location_info_for_update()));
-  } else {
-    tbl_part_info->get_loc_meta().route_policy_ = route_policy;
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObLogPlan::select_replicas(*exec_ctx,
                                                 tbl_loc_list,
                                                 optimizer_context_.get_local_server_addr(),
                                                 phy_tbl_loc_info_list))) {
     LOG_WARN("fail to select replicas", K(ret), K(tbl_loc_list.count()),
              K(optimizer_context_.get_local_server_addr()),
-             K(phy_tbl_loc_info_list.count()));
+             K(tbl_loc_list), K(phy_tbl_loc_info_list));
   }
   return ret;
 }
@@ -748,20 +742,52 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
                                ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObCandiTableLoc*, 8> column_store_only_phy_tbl_loc_info_list;
+  ObSEArray<ObCandiTableLoc*, 8> other_phy_tbl_loc_info_list;
   bool is_weak = true;
-  for (int64_t i = 0; OB_SUCC(ret) && is_weak && i < tbl_loc_list.count(); i++) {
-    bool is_weak_read = false;
+  ObRoutePolicyType other_route_policy = INVALID_POLICY;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < tbl_loc_list.count(); i++) {
     const ObTableLocation *table_location = tbl_loc_list.at(i);
+    ObCandiTableLoc *phy_tbl_loc_info = nullptr;
     if (OB_ISNULL(table_location)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table location is NULL", K(ret), K(i), K(tbl_loc_list.count()));
-    } else if (!table_location->get_loc_meta().is_weak_read_) {
-      is_weak = false;
+    } else if (i >= phy_tbl_loc_info_list.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("phy_tbl_loc_info_list count mismatch", K(ret), K(i), K(phy_tbl_loc_info_list.count()));
+    } else {
+      phy_tbl_loc_info = phy_tbl_loc_info_list.at(i);
+      if (OB_ISNULL(phy_tbl_loc_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("phy_tbl_loc_info is NULL", K(ret), K(i));
+      } else if (table_location->get_loc_meta().route_policy_ == COLUMN_STORE_ONLY) {
+        if (OB_FAIL(column_store_only_phy_tbl_loc_info_list.push_back(phy_tbl_loc_info))) {
+          LOG_WARN("fail to push back column_store_only phy_tbl_loc_info", K(ret), K(i));
+        }
+      } else {
+        if (other_phy_tbl_loc_info_list.empty()) {
+          other_route_policy = static_cast<ObRoutePolicyType>(table_location->get_loc_meta().route_policy_);
+        } else if (other_route_policy != static_cast<ObRoutePolicyType>(table_location->get_loc_meta().route_policy_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("route policy mismatch", K(ret), K(i), K(other_route_policy), K(tbl_loc_list));
+        }
+        if (FAILEDx(other_phy_tbl_loc_info_list.push_back(phy_tbl_loc_info))) {
+          LOG_WARN("fail to push back other phy_tbl_loc_info", K(ret), K(i));
+        } else if (!table_location->get_loc_meta().is_weak_read_) {
+          is_weak = false;
+        }
+      }
     }
   }
+
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(select_replicas(exec_ctx, is_weak, local_server, phy_tbl_loc_info_list))) {
-      LOG_WARN("select replicas failed", K(ret));
+    if (!column_store_only_phy_tbl_loc_info_list.empty() &&
+        OB_FAIL(select_replicas(exec_ctx, false, COLUMN_STORE_ONLY, local_server, column_store_only_phy_tbl_loc_info_list))) {
+      LOG_WARN("select replicas failed for column_store_only table", K(ret), K(local_server));
+    } else if (!other_phy_tbl_loc_info_list.empty() &&
+               OB_FAIL(select_replicas(exec_ctx, is_weak, other_route_policy, local_server, other_phy_tbl_loc_info_list))) {
+      LOG_WARN("select replicas failed for other table", K(ret), K(is_weak), K(local_server));
     }
   }
   return ret;
@@ -769,6 +795,7 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
 
 int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
                                bool is_weak,
+                               ObRoutePolicyType route_policy_type,
                                const ObAddr &local_server,
                                ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list)
 {
@@ -780,23 +807,21 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
   bool is_hit_partition = false;
   int64_t proxy_stat = 0;
   ObFollowerFirstFeedbackType follower_first_feedback = FFF_HIT_MIN;
-  int64_t route_policy_type = 0;
   bool proxy_priority_hit_support = false;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get unexpected NULL", K(ret), K(session));
-  } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
-    LOG_WARN("fail to get sys variable", K(ret));
   } else {
     proxy_priority_hit_support = session->get_proxy_cap_flags().is_priority_hit_support();
   }
 
   if (OB_FAIL(ret)) {
-  } else if (is_weak) {
+  } else if (is_weak || COLUMN_STORE_ONLY == route_policy_type) {
     int64_t max_read_stale_time = exec_ctx.get_my_session()->get_ob_max_read_stale_time();
     uint64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
-    if (OB_FAIL(ObLogPlan::weak_select_replicas(local_server,
-                                                static_cast<ObRoutePolicyType>(route_policy_type),
+    if (OB_FAIL(ObLogPlan::weak_select_replicas(exec_ctx,
+                                                local_server,
+                                                route_policy_type,
                                                 proxy_priority_hit_support,
                                                 tenant_id,
                                                 max_read_stale_time,
@@ -821,9 +846,6 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
         }
       }
     }
-  } else if (COLUMN_STORE_ONLY == route_policy_type) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, weak read request");
   } else {
     const bool sess_in_retry = session->get_is_in_retry_for_dup_tbl(); //重试状态下不优化复制表的副本选择
     const bool is_dup_ls_modified = session->is_dup_ls_modified();
@@ -896,7 +918,8 @@ int ObLogPlan::strong_select_replicas(const ObAddr &local_server,
   return ret;
 }
 
-int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
+int ObLogPlan::weak_select_replicas(ObExecContext &exec_ctx,
+                                    const ObAddr &local_server,
                                     ObRoutePolicyType route_type,
                                     bool proxy_priority_hit_support,
                                     uint64_t tenant_id,
@@ -919,6 +942,7 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
     route_policy_ctx.is_proxy_priority_hit_support_ = proxy_priority_hit_support;
     route_policy_ctx.max_read_stale_time_ = max_read_stale_time;
     route_policy_ctx.tenant_id_ = tenant_id;
+    common::ObZone preferred_zone = exec_ctx.get_first_weak_select_zone();
 
     if (OB_FAIL(route_policy.init())) {
       LOG_WARN("fail to init route policy", K(ret));
@@ -934,7 +958,7 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
           if (phy_part_loc_info.has_selected_replica()) {//do nothing
           } else {
             ObIArray<ObRoutePolicy::CandidateReplica> &replica_array = phy_part_loc_info.get_partition_location().get_replica_locations();
-            if (OB_FAIL(route_policy.init_candidate_replicas(replica_array))) {
+            if (OB_FAIL(route_policy.init_candidate_replicas(replica_array, preferred_zone))) {
               LOG_WARN("fail to init candidate replicas", K(replica_array), K(ret));
             } else if (OB_FAIL(route_policy.calculate_replica_priority(local_server,
                                                                        phy_part_loc_info.get_ls_id(),
@@ -956,6 +980,35 @@ int ObLogPlan::weak_select_replicas(const ObAddr &local_server,
                                                               intersect_server_list,
                                                               is_hit_partition))) {
       LOG_WARN("fail to select intersect replica", K(route_policy_ctx), K(phy_tbl_loc_info_list), K(intersect_server_list), K(ret));
+    } else if (!exec_ctx.has_first_weak_select_zone()) {
+      ObAddr selected_server;
+      bool found_selected_server = false;
+      for (int64_t i = 0; !found_selected_server && i < phy_tbl_loc_info_list.count(); ++i) {
+        const ObCandiTableLoc *phy_tbl_loc_info = phy_tbl_loc_info_list.at(i);
+        if (OB_NOT_NULL(phy_tbl_loc_info)) {
+          const ObCandiTabletLocIArray &phy_part_loc_info_list = phy_tbl_loc_info->get_phy_part_loc_info_list();
+          for (int64_t j = 0; !found_selected_server && j < phy_part_loc_info_list.count(); ++j) {
+            const ObCandiTabletLoc &phy_part_loc_info = phy_part_loc_info_list.at(j);
+            if (phy_part_loc_info.has_selected_replica()) {
+              ObRoutePolicy::CandidateReplica selected_replica;
+              if (OB_FAIL(phy_part_loc_info.get_selected_replica(selected_replica))) {
+                LOG_WARN("fail to get selected replica", K(ret));
+              } else {
+                selected_server = selected_replica.get_server();
+                found_selected_server = true;
+              }
+            }
+          }
+        }
+      }
+      if (found_selected_server) {
+        share::ObServerLocality svr_locality;
+        if (OB_FAIL(ObRoutePolicy::get_server_locality(selected_server, route_policy.get_server_locality_array(), svr_locality))) {
+          LOG_WARN("fail to get server locality", K(selected_server), K(ret));
+        } else {
+          exec_ctx.set_first_weak_select_zone(svr_locality.get_zone());
+        }
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -11657,6 +11710,9 @@ int ObLogPlan::do_post_plan_processing()
              OB_FAIL(ObUselessPredicateRemoval::remove_useless_predicate(root))) {
     LOG_WARN("failed to exec useless predicate removal", K(ret));
   } else if (OB_FAIL(candi_allocate_rescan())) {
+    LOG_WARN("failed to candi allocate rescan");
+  } else if (OB_FAIL(check_if_ap_query_need_retry())) {
+    LOG_WARN("failed to check if ap query need retry", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -14566,11 +14622,13 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
       if (info->can_use_join_filter_ || info->need_partition_join_filter_) {
         bool use_column_store = false;
         bool use_row_store = false;
+        int64_t route_policy = 0;
         if (scan->use_column_store()) {
           info->use_column_store_ = true;
         } else if (OB_FAIL(will_use_column_store(info->table_id_,
                                                  info->index_id_,
                                                  info->ref_table_id_,
+                                                 route_policy,
                                                  use_column_store,
                                                  use_row_store))) {
           LOG_WARN("failed to check will use column store", K(ret));
@@ -14742,6 +14800,7 @@ ERRSIM_POINT_DEF(ERRSIM_ALWAYS_USE_CO_SCAN)
 int ObLogPlan::will_use_column_store(const uint64_t table_id,
                                     const uint64_t index_id,
                                     const uint64_t ref_table_id,
+                                    const int64_t route_policy,
                                     bool &use_column_store,
                                     bool &use_row_store)
 {
@@ -14761,8 +14820,13 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
       OB_ISNULL(session_info=get_optimizer_context().get_session_info())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(stmt), K(schema_guard), K(ret));
-  } else if (get_optimizer_context().use_column_store_replica() &&
-             index_id == ref_table_id) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, schema, is_link))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null table schema", K(ret));
+  } else if (index_id == ref_table_id &&
+             COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy)) {
     use_column_store = true;
     use_row_store = false;
   } else if (OB_FALSE_IT(session_disable_column_store=!session_info->is_enable_column_store())) {
@@ -14770,11 +14834,6 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
   } else if (is_link) {
     use_column_store = false;
     use_row_store = true;
-  } else if (OB_FAIL(schema_guard->get_table_schema(index_id, schema, is_link))) {
-    LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_ISNULL(schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null table schema", K(ret));
   } else if (OB_FAIL(schema->has_all_column_group(has_row_store))) {
     LOG_WARN("failed to check has row store", K(ret));
   } else if (OB_FAIL(schema->get_is_column_store(has_column_store))) {
@@ -16653,6 +16712,295 @@ int ObLogPlan::extend_rollup_to_groupset(const ObIArray<ObRawExpr *> &gby_exprs,
     }
   }
   LOG_TRACE("extend rollup to groupset", K(groupset_exprs), K(rollup_exprs), K(gby_exprs));
+  return ret;
+}
+
+int ObLogPlan::check_if_ap_query_need_retry()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *root = get_plan_root();
+  ObQueryCtx *query_ctx = NULL;
+  double select_cost = 0.0;
+  bool is_parallel_select = false;
+  bool has_user_table = false;
+  bool is_single_stmt_txn = false;
+  APQueryRoutePolicy ap_query_route_policy = APQueryRoutePolicy::OFF;
+  uint64_t cost_threshold = 50000;
+  bool has_cs_zone = false;
+  bool is_weak_read = false;
+  ObSQLSessionInfo *session_info = get_optimizer_context().get_session_info();
+  int64_t route_policy_type = 0;
+  bool can_route_to_cs = false;
+  bool all_table_have_creplica = true;
+  bool ap_query_replica_fallback = true;
+
+  if (OB_ISNULL(root) || OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(session_info) || OB_ISNULL(query_ctx = get_stmt()->get_query_ctx()) ||
+      OB_ISNULL(optimizer_context_.get_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(session_info->get_ob_route_policy(route_policy_type))) {
+    LOG_WARN("failed to get route policy", K(ret));
+  } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type) ||
+             session_info->get_route_to_column_replica()) {
+    // do nothing
+  } else if (OB_FAIL(ObRoutePolicy::check_can_route_to_columnstore_replica(
+              get_stmt(),
+              session_info,
+              can_route_to_cs))) {
+    LOG_WARN("failed to check can route to columnstore replica", K(ret));
+  } else if (!can_route_to_cs) {
+    // do nothing
+  } else if (OB_FAIL(query_ctx->get_query_hint().get_ap_query_route_policy(
+                     session_info,
+                     ap_query_route_policy))) {
+    LOG_WARN("failed to get ap_query_route_policy", K(ret));
+  } else if (APQueryRoutePolicy::OFF == ap_query_route_policy) {
+    // OFF: always consider as not ap query, do nothing
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
+                                                     ap_query_replica_fallback))) {
+    LOG_WARN("failed to get ap_query_replica_fallback", K(ret));
+  } else if (OB_FAIL(check_user_table_replica_rec(root, ap_query_replica_fallback, has_user_table, all_table_have_creplica))) {
+    LOG_WARN("failed to check user table replica", K(ret));
+  } else if (ap_query_replica_fallback && !all_table_have_creplica) {
+    LOG_TRACE("skip ap query retry because of no available column store replica",
+      K(has_user_table), K(all_table_have_creplica));
+  } else if (!has_user_table) {
+    LOG_TRACE("skip ap query retry because of no user table",
+      K(has_user_table), K(all_table_have_creplica));
+  } else if (APQueryRoutePolicy::FORCE == ap_query_route_policy) {
+    // FORCE: directly throw ap query error without checking parallel or cost
+    ret = OB_AP_QUERY_NEED_RETRY;
+    LOG_WARN("route to column replica (FORCE mode)", K(ret));
+  } else if (optimizer_context_.get_is_weak_read()) {
+    ret = OB_AP_QUERY_NEED_RETRY;
+    LOG_WARN("route to column replica for weak read", K(ret), K(optimizer_context_.get_is_weak_read()));
+  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_AP_QUERY_COST_THRESHOLD,
+                                                    cost_threshold))) {
+    LOG_WARN("failed to get ap_query_cost_threshold", K(ret));
+  } else if (OB_FAIL(get_select_cost_from_plan(root, is_parallel_select, select_cost))) {
+    LOG_WARN("failed to get select cost from plan", K(ret));
+  } else if (is_parallel_select || select_cost > cost_threshold) {
+    ret = OB_AP_QUERY_NEED_RETRY;
+    LOG_WARN("ap query will retry with column replica", K(ret), K(select_cost),
+             K(is_parallel_select), K(cost_threshold));
+  } else {
+    LOG_TRACE("not ap query", K(select_cost), K(is_parallel_select), K(cost_threshold));
+  }
+  if (OB_AP_QUERY_NEED_RETRY == ret) {
+    session_info->set_route_to_column_replica(true);
+  }
+  return ret;
+}
+
+int ObLogPlan::check_user_table_replica(ObLogTableScan *tsc_op, bool need_check_creplica, bool &is_user_table, bool &all_have_creplica)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
+  if (OB_ISNULL(tsc_op) || OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table scan operator is null", K(ret));
+  } else {
+    // Check if it is a user table
+    uint64_t ref_table_id = tsc_op->get_ref_table_id();
+    ObSchemaGetterGuard *schema_guard = get_optimizer_context().get_schema_guard();
+    ObSQLSessionInfo *session_info = get_optimizer_context().get_session_info();
+    const ObTableSchema *table_schema = NULL;
+    if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(schema_guard), K(session_info));
+    } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                        ref_table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+    } else if (OB_ISNULL(table_schema)) {
+      // do nothing
+    } else {
+      is_user_table = table_schema->is_user_table();
+      const ObTablePartitionInfo *table_part_info = tsc_op->get_table_partition_info();
+      if (is_user_table && need_check_creplica && OB_NOT_NULL(table_part_info)) {
+        // Check if all tablets in this user table have available column store replicas
+        const ObCandiTableLoc &candi_table_loc = table_part_info->get_phy_tbl_location_info();
+        const ObCandiTabletLocIArray &candi_tablet_locs = candi_table_loc.get_phy_part_loc_info_list();
+        common::ObSEArray<common::ObTabletID, 16> tablet_ids;
+
+        // Collect tablet ids from current table scan
+        for (int64_t j = 0; OB_SUCC(ret) && j < candi_tablet_locs.count(); ++j) {
+          const ObOptTabletLoc &tablet_loc = candi_tablet_locs.at(j).get_partition_location();
+          const common::ObTabletID &tablet_id = tablet_loc.get_tablet_id();
+          if (tablet_id.is_valid()) {
+            if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+              LOG_WARN("failed to push back tablet id", K(ret), K(tablet_id));
+            }
+          }
+        }
+
+        // Check if all tablets in this table scan have available column store replicas
+        if (OB_SUCC(ret) && tablet_ids.count() > 0) {
+          if (OB_FAIL(check_tablet_has_available_creplica(
+                  tablet_ids,
+                  exec_ctx->get_das_ctx().get_location_router(),
+                  table_part_info->get_loc_meta(),
+                  all_have_creplica))) {
+            LOG_WARN("failed to check tablet has available replica", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_tablet_has_available_creplica(const common::ObIArray<common::ObTabletID> &tablet_ids,
+                                                   ObDASLocationRouter &das_router,
+                                                   const ObDASTableLocMeta &loc_meta,
+                                                   bool &all_have_replica)
+{
+  int ret = OB_SUCCESS;
+  all_have_replica = true;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObDASTabletLoc tablet_loc;
+  ObDASTableLocMeta tmp_loc_meta(allocator);
+  if (OB_UNLIKELY(tablet_ids.count() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(tablet_ids.count()));
+  } else if (OB_FAIL(tmp_loc_meta.assign(loc_meta))) {
+    LOG_WARN("fail to assign loc meta", K(ret), K(loc_meta));
+  } else {
+    tmp_loc_meta.select_leader_ = false;
+    tmp_loc_meta.route_policy_ = COLUMN_STORE_ONLY;
+    for (int64_t tablet_idx = 0; OB_SUCC(ret) && all_have_replica && tablet_idx < tablet_ids.count(); ++tablet_idx) {
+      const common::ObTabletID &tablet_id = tablet_ids.at(tablet_idx);
+      if (OB_FAIL(das_router.get_tablet_loc(tmp_loc_meta, tablet_id, tablet_loc))) {
+        all_have_replica = false;
+        ret = OB_SUCCESS;
+        LOG_INFO("tablet has no available creplica", K(tablet_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_user_table_replica_rec(ObLogicalOperator *op, bool need_check_creplica, bool &has_user_table, bool &all_have_creplica)
+{
+  int ret = OB_SUCCESS;
+  has_user_table = false;
+  all_have_creplica = true;
+
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("logical operator is null", K(ret));
+  } else if (op->is_table_scan()) {
+    // Check current operator if it is a table scan
+    ObLogTableScan *tsc_op = static_cast<ObLogTableScan *>(op);
+    bool is_user_table = false;
+    bool current_all_have_creplica = all_have_creplica;
+    if (OB_FAIL(check_user_table_replica(tsc_op, need_check_creplica, is_user_table, current_all_have_creplica))) {
+      LOG_WARN("failed to check user table column replica", K(ret));
+    } else {
+      has_user_table |= is_user_table;
+      all_have_creplica &= current_all_have_creplica;
+    }
+  } else {
+    // Recursively check all child operators
+    bool check_next = true;
+    for (int64_t i = 0; OB_SUCC(ret) && check_next && i < op->get_num_of_child(); ++i) {
+      ObLogicalOperator *child = op->get_child(i);
+      bool child_has_user_table = false;
+      bool child_all_have_creplica = all_have_creplica;
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child operator is null", K(ret), K(i));
+      } else if (OB_FAIL(SMART_CALL(check_user_table_replica_rec(child, need_check_creplica, child_has_user_table, all_have_creplica)))) {
+        LOG_WARN("failed to check child operator", K(ret), K(i));
+      } else {
+        has_user_table |= child_has_user_table;
+        all_have_creplica &= child_all_have_creplica;
+        if (need_check_creplica && !all_have_creplica) {
+          check_next = false;
+        } else if (!need_check_creplica && has_user_table) {
+          check_next = false;
+        } else {
+          check_next = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::get_top_select_ops(ObLogicalOperator *top, ObIArray<ObLogicalOperator *> &select_ops) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (top->get_stmt()->is_select_stmt()) {
+    if (OB_FAIL(select_ops.push_back(top))) {
+      LOG_WARN("failed to push back select op", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < top->get_num_of_child(); i++) {
+      ObLogicalOperator *child = top->get_child(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (SMART_CALL(OB_FAIL(get_top_select_ops(child, select_ops)))) {
+        LOG_WARN("failed to get top select ops", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_is_parallel_select(ObLogicalOperator *top, bool &is_parallel) const
+{
+  int ret = OB_SUCCESS;
+  is_parallel = false;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (top->get_parallel() > 1) {
+    is_parallel = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_parallel && i < top->get_num_of_child(); i++) {
+      ObLogicalOperator *child = top->get_child(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (SMART_CALL(OB_FAIL(check_is_parallel_select(child, is_parallel)))) {
+        LOG_WARN("failed to check is parallel select", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::get_select_cost_from_plan(ObLogicalOperator *op, bool &is_parallel, double &cost) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObLogicalOperator *, 4> select_ops;
+  is_parallel = false;
+  cost = 0.0;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(get_top_select_ops(op, select_ops))) {
+    LOG_WARN("failed to get top select ops", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_ops.count(); i++) {
+      ObLogicalOperator *select_op = select_ops.at(i);
+      bool child_is_parallel = false;
+      if (OB_ISNULL(select_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(check_is_parallel_select(select_op, child_is_parallel))) {
+        LOG_WARN("failed to check is parallel select", K(ret));
+      } else {
+        is_parallel |= child_is_parallel;
+        cost += select_op->get_cost();
+      }
+    }
+  }
   return ret;
 }
 

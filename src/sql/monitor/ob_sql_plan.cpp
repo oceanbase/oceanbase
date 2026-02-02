@@ -279,9 +279,11 @@ int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outl
   outline_global_hint.dml_parallel_ = ObGlobalHint::UNSET_PARALLEL;
   outline_global_hint.parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   const ObQueryCtx *query_ctx = NULL;
-  if (OB_ISNULL(query_ctx = plan.get_optimizer_context().get_query_ctx())) {
+  const ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(query_ctx = plan.get_optimizer_context().get_query_ctx()) ||
+      OB_ISNULL(session_info = plan.get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(query_ctx));
+    LOG_WARN("unexpected NULL", K(ret), K(query_ctx), K(session_info));
   } else {
     outline_global_hint.opt_features_version_ = query_ctx->optimizer_features_enable_version_;
     if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan))) {
@@ -299,6 +301,20 @@ int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outl
       outline_global_hint.merge_parallel_hint(plan.get_optimizer_context().get_max_parallel());
     } else if (plan.get_optimizer_context().get_max_parallel() > ObGlobalHint::DEFAULT_PARALLEL) {
       outline_global_hint.merge_parallel_hint(plan.get_optimizer_context().get_max_parallel());
+    }
+
+    if (session_info->get_route_to_column_replica()) {
+      ObObj force_val;
+      force_val.set_varchar(ObString::make_string("FORCE"));
+      if (OB_FAIL(outline_global_hint.opt_params_.add_opt_param_hint(
+                  ObOptParamHint::AP_QUERY_ROUTE_POLICY, force_val, /* overwrite */ true))) {
+        LOG_WARN("failed to add or update opt param hint for AP_QUERY_ROUTE_POLICY", K(ret));
+      }
+    } else {
+      if (OB_FAIL(outline_global_hint.opt_params_.remove_opt_param(
+                  ObOptParamHint::AP_QUERY_ROUTE_POLICY))) {
+        LOG_WARN("failed to remove AP_QUERY_ROUTE_POLICY opt param", K(ret));
+      }
     }
   }
   LOG_TRACE("after construct_outline_global_hint", K(outline_global_hint.parallel_das_dml_option_),

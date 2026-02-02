@@ -2286,14 +2286,15 @@ int ObWaitDataReadyTask::replace_learners_for_add_(ObLS *ls)
   ObMember old_dst = ctx_->arg_.dst_;
   old_dst.set_migrating();
   const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  const bool need_check_transfer_scn = new_dst.is_columnstore();
   if (OB_FAIL(added_learners.add_member(new_dst))) {
     LOG_WARN("failed to add member", K(ret), KPC(ctx_));
   } else if (OB_FAIL(removed_learners.add_member(old_dst))) {
     LOG_WARN("failed to add member", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ls->replace_learners(added_learners, removed_learners, change_member_list_timeout_us))) {
+  } else if (OB_FAIL(ls->replace_learners(added_learners, removed_learners, need_check_transfer_scn, change_member_list_timeout_us))) {
     LOG_WARN("failed to replace learners", K(ret), KPC(ctx_));
   } else {
-    LOG_INFO("replace learners for add", K(added_learners), K(removed_learners));
+    LOG_INFO("replace learners for add", K(added_learners), K(removed_learners), K(need_check_transfer_scn));
   }
   return ret;
 }
@@ -2309,16 +2310,17 @@ int ObWaitDataReadyTask::replace_learners_for_migration_(ObLS *ls)
   old_dst.set_migrating();
   ObMember src = ctx_->arg_.src_;
   src.reset_migrating();
+  const bool need_check_transfer_scn = new_dst.is_columnstore();
   if (OB_FAIL(added_learners.add_member(new_dst))) {
     LOG_WARN("failed to add member", K(ret), KPC(ctx_));
   } else if (OB_FAIL(removed_learners.add_member(old_dst))) {
     LOG_WARN("failed to add member", K(ret), KPC(ctx_));
   } else if (OB_FAIL(removed_learners.add_member(src))) {
     LOG_WARN("failed to add member", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ls->replace_learners(added_learners, removed_learners, change_member_list_timeout_us))) {
+  } else if (OB_FAIL(ls->replace_learners(added_learners, removed_learners, need_check_transfer_scn, change_member_list_timeout_us))) {
     LOG_WARN("failed to replace learners", K(ret), KPC(ctx_));
   } else {
-    LOG_INFO("replace members for migration", K(added_learners), K(removed_learners));
+    LOG_INFO("replace members for migration", K(added_learners), K(removed_learners), K(need_check_transfer_scn));
   }
   return ret;
 }

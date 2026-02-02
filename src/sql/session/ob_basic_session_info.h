@@ -1754,6 +1754,9 @@ public:
   void reuse_labels() { labels_.reuse(); }
   bool is_real_inner_session() const { return is_real_inner_session_; }
   void set_real_inner_session(bool value) { is_real_inner_session_ = value; }
+  inline void set_route_to_column_replica(bool v) { route_to_column_replica_ = v; }
+  inline bool get_route_to_column_replica() const { return route_to_column_replica_; }
+  int get_ob_route_policy(int64_t &route_policy) const;
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
@@ -2965,11 +2968,11 @@ private:
   int64_t sql_mem_used_;
   bool shadow_top_query_string_;
   bool use_pl_inner_info_string_;
-  bool route_to_column_replica_;
   bool is_first_gen_pl_cache_str_; // whether is first time t o generate sys_var_in_pl_cache_str_
   common::ObString sys_var_in_pl_cache_str_;
   common::ObSEArray<int64_t, 8> influence_pl_cache_var_indexs_;
   bool global_rich_vector_configured_;
+  bool route_to_column_replica_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;

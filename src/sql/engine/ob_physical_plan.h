@@ -612,6 +612,8 @@ public:
   bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
   bool px_worker_share_plan_enabled() const { return px_worker_share_plan_enabled_; }
   void set_px_worker_share_plan_enabled(bool v) { px_worker_share_plan_enabled_ = v; }
+  inline void set_is_route_to_column_replica(bool v) { route_to_column_replica_ = v; }
+  bool is_route_to_column_replica() const { return route_to_column_replica_; }
 
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;

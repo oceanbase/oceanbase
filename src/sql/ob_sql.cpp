@@ -4546,6 +4546,10 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
           }
         }
       }
+
+      if (OB_SUCC(ret)) {
+        session->set_route_to_column_replica(plan->is_route_to_column_replica());
+      }
     }
   }
   FLT_SET_TAG(hit_plan, pc_ctx.sql_ctx_.plan_cache_hit_);

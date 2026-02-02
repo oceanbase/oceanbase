@@ -261,6 +261,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
                                                  *op.get_stmt(),
                                                  *table_schema,
                                                  *cg_.opt_ctx_->get_session_info(),
+                                                 op.get_route_policy(),
                                                  tsc_ctdef.das_dppr_tbl_->get_loc_meta()))) {
         LOG_WARN("generate table loc meta failed", K(ret));
       }
@@ -630,10 +631,8 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
     } else if (FALSE_IT(scan_ctdef.table_param_.set_plan_enable_rich_format(op.get_plan()->get_optimizer_context().get_enable_rich_vector_format()))) {
     } else if (OB_FAIL(extract_das_output_column_ids(op, scan_ctdef, *table_schema, cg_ctx, tsc_out_cols))) {
       LOG_WARN("extract tsc output column ids failed", K(ret));
-    } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
-      LOG_WARN("get route policy failed", K(ret));
     } else {
-      is_cs_replica_query = ObRoutePolicyType::COLUMN_STORE_ONLY == route_policy;
+      is_cs_replica_query = ObRoutePolicyType::COLUMN_STORE_ONLY == op.get_route_policy();
     }
   }
   if (OB_FAIL(ret)) {
@@ -2065,6 +2064,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
                                             const ObDMLStmt &stmt,
                                             const ObTableSchema &table_schema,
                                             const ObSQLSessionInfo &session,
+                                            const int64_t route_policy,
                                             ObDASTableLocMeta &loc_meta)
 {
   int ret = OB_SUCCESS;
@@ -2087,7 +2087,6 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   CK (OB_NOT_NULL(schema_guard->get_schema_guard()));
   OZ (ObExternalTableUtils::get_external_file_location(table_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location));
   loc_meta.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
-  int64_t route_policy = 0;
   bool is_weak_read = false;
   // broadcast table (insert into select) read local for materialized view create,here three conditions:
   // 1. inner sql tag weak read
@@ -2098,14 +2097,10 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   if (OB_ISNULL(cg_.opt_ctx_) || OB_ISNULL(cg_.opt_ctx_->get_exec_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(cg_.opt_ctx_), K(ret));
-  } else if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
-    LOG_WARN("get route policy failed", K(ret));
   } else if (stmt.get_query_ctx()->has_dml_write_stmt_
              && !is_new_mv_create) {
     loc_meta.select_leader_ = 1;
     loc_meta.is_weak_read_ = 0;
-  } else if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
-    LOG_WARN("get route policy failed", K(ret));
   } else if (OB_FAIL(ObTableLocation::get_is_weak_read(stmt, &session,
                                                        cg_.opt_ctx_->get_exec_ctx()->get_sql_ctx(),
                                                        is_weak_read))) {
@@ -2114,7 +2109,8 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
     loc_meta.is_weak_read_ = 1;
     loc_meta.select_leader_ = 0;
   } else if (loc_meta.is_dup_table_
-             || is_new_mv_create) {
+             || is_new_mv_create
+             || COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy)) {
     loc_meta.select_leader_ = 0;
     loc_meta.is_weak_read_ = 0;
   } else {
@@ -4669,6 +4665,7 @@ int ObTscCgService::generate_vec_id_lookup_ctdef(const ObLogTableScan &op,
                                                *op.get_stmt(),
                                                *index_schema,
                                                *cg_.opt_ctx_->get_session_info(),
+                                               op.get_route_policy(),
                                                *scan_loc_meta))) {
       LOG_WARN("generate table loc meta failed", K(ret));
     } else if (OB_FAIL(tsc_ctdef.attach_spec_.attach_loc_metas_.push_back(scan_loc_meta))) {
@@ -4771,6 +4768,7 @@ int ObTscCgService::generate_doc_id_lookup_ctdef(const ObLogTableScan &op,
                                                *op.get_stmt(),
                                                *index_schema,
                                                *cg_.opt_ctx_->get_session_info(),
+                                               op.get_route_policy(),
                                                *scan_loc_meta))) {
       LOG_WARN("generate table loc meta failed", K(ret));
     } else if (OB_FAIL(tsc_ctdef.attach_spec_.attach_loc_metas_.push_back(scan_loc_meta))) {
@@ -5134,6 +5132,7 @@ int ObTscCgService::generate_rowkey_domain_id_ctdef(
                                                *op.get_stmt(),
                                                *rowkey_domain_id_schema,
                                                *cg_.opt_ctx_->get_session_info(),
+                                               op.get_route_policy(),
                                                *scan_loc_meta))) {
       LOG_WARN("generate table loc meta failed", K(ret));
     } else if (OB_FAIL(tsc_ctdef.attach_spec_.attach_loc_metas_.push_back(scan_loc_meta))) {
@@ -5213,6 +5212,7 @@ int ObTscCgService::generate_table_lookup_ctdef(const ObLogTableScan &op,
                                                *op.get_stmt(),
                                                *table_schema,
                                                *cg_.opt_ctx_->get_session_info(),
+                                               op.get_route_policy(),
                                                *tsc_ctdef.lookup_loc_meta_))) {
       LOG_WARN("generate table loc meta failed", K(ret));
     } else {

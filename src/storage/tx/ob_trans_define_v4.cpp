@@ -1357,6 +1357,7 @@ ObTxSnapshot::~ObTxSnapshot()
 {
   scn_.reset();
   elr_ = false;
+  force_strongly_read_ = false;
 }
 
 void ObTxSnapshot::reset()
@@ -1365,6 +1366,7 @@ void ObTxSnapshot::reset()
   tx_id_.reset();
   scn_.reset();
   elr_ = false;
+  force_strongly_read_ = false;
 }
 
 ObTxSnapshot &ObTxSnapshot::operator=(const ObTxSnapshot &r)
@@ -1373,6 +1375,7 @@ ObTxSnapshot &ObTxSnapshot::operator=(const ObTxSnapshot &r)
   tx_id_ = r.tx_id_;
   scn_ = r.scn_;
   elr_ = r.elr_;
+  force_strongly_read_ = r.force_strongly_read_;
   return *this;
 }
 

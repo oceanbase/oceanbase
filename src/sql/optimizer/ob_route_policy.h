@@ -28,6 +28,8 @@ namespace sql
 {
 class ObCandiTabletLoc;
 class ObCandiTableLoc;
+class ObStmt;
+class ObSQLSessionInfo;
 enum ObRoutePolicyType
 {
   INVALID_POLICY = 0,
@@ -93,7 +95,8 @@ public:
         zone_type_(common::ZONE_TYPE_INVALID),
         start_service_time_(0),
         server_stop_time_(0),
-        server_status_(share::ObServerStatus::OB_DISPLAY_MAX)
+        server_status_(share::ObServerStatus::OB_DISPLAY_MAX),
+        is_preferred_zone_(false)
         {}
     ~ReplicaAttribute(){}
     bool operator==(const ReplicaAttribute &other_attr) const
@@ -120,8 +123,9 @@ public:
       start_service_time_ = 0;
       server_stop_time_ = 0;
       server_status_ = share::ObServerStatus::OB_DISPLAY_MAX;
+      is_preferred_zone_ = false;
     }
-    TO_STRING_KV(K(pos_type_), K(merge_status_), K(zone_type_), K(zone_status_), K(start_service_time_), K(server_stop_time_), K(server_status_));
+    TO_STRING_KV(K(pos_type_), K(merge_status_), K(zone_type_), K(zone_status_), K(start_service_time_), K(server_stop_time_), K(server_status_), K(is_preferred_zone_));
     PositionType pos_type_;
     MergeStatus merge_status_;
     share::ObZoneStatus::Status zone_status_;
@@ -129,6 +133,7 @@ public:
     int64_t start_service_time_;
     int64_t server_stop_time_;
     share::ObServerStatus::DisplayStatus server_status_;
+    bool is_preferred_zone_;
   };
   class CandidateReplica final : public share::ObLSReplicaLocation
   {
@@ -180,7 +185,8 @@ public:
                                  common::ObIArray<CandidateReplica>& candi_replicas,
                                  ObRoutePolicyCtx &ctx,
                                  bool is_inner_table = false);
-  int init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas);
+  int init_candidate_replicas(common::ObIArray<CandidateReplica> &candi_replicas,
+                              const common::ObZone &preferred_zone = common::ObZone());
   int select_replica_with_priority(const ObRoutePolicyCtx &route_policy_ctx,
                                    const common::ObIArray<CandidateReplica> &replica_array,
                                    ObCandiTabletLoc &phy_part_loc_info);
@@ -201,6 +207,8 @@ public:
     return !has_readonly_zone_ && (UNMERGE_FOLLOWER_FIRST == ctx.policy_type_);
   }
 
+  const common::ObIArray<share::ObServerLocality> &get_server_locality_array() const { return server_locality_array_; }
+
   static int get_server_locality(const common::ObAddr &addr,
                                  const common::ObIArray<share::ObServerLocality> &server_locality_array,
                                  share::ObServerLocality &svr_locality);
@@ -208,10 +216,14 @@ public:
                           const share::ObServerLocality &locality2);
   static bool is_same_region(const share::ObServerLocality &locality1,
                              const share::ObServerLocality &locality2);
+  static int check_can_route_to_columnstore_replica(const ObStmt *stmt,
+                                                    ObSQLSessionInfo *session_info,
+                                                    bool &can_route);
 
 protected:
   int init_candidate_replica(const common::ObIArray<share::ObServerLocality> &server_locality_array,
-                             CandidateReplica &candi_replica);
+                             CandidateReplica &candi_replica,
+                             const common::ObZone &preferred_zone = common::ObZone());
   int calc_position_type(const share::ObServerLocality &candi_locality,
                          CandidateReplica &candi_replica);
   int calc_intersect_repllica(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,

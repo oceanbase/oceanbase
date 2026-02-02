@@ -442,8 +442,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTransferBuildTabletInfoCtx);
 };
 
+struct ObTransferLSInfo final
+{
+public:
+  ObTransferLSInfo() : src_is_duplicate_ls_(false), dest_is_duplicate_ls_(false) {}
+  ~ObTransferLSInfo() = default;
+  void reset();
+  bool allow_learner_list_not_same() const { return src_is_duplicate_ls_ != dest_is_duplicate_ls_; }
+  bool need_check_r_replica() const { return src_is_duplicate_ls_ && dest_is_duplicate_ls_; }
+  bool must_get_learner_list_from_src_ls() const { return dest_is_duplicate_ls_ && !src_is_duplicate_ls_; }
+  bool must_get_learner_list_from_dest_ls() const { return src_is_duplicate_ls_ && !dest_is_duplicate_ls_; }
+  TO_STRING_KV(K_(src_is_duplicate_ls), K_(dest_is_duplicate_ls));
 
-
+  bool src_is_duplicate_ls_;
+  bool dest_is_duplicate_ls_;
+};
 
 }
 }

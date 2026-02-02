@@ -563,6 +563,12 @@ const char *ObSysVarSqlTranspiler::SQL_TRANSPILER_NAMES[] = {
   "BASIC",
   0
 };
+const char *ObSysVarApQueryRoutePolicy::AP_QUERY_ROUTE_POLICY_NAMES[] = {
+  "OFF",
+  "AUTO",
+  "FORCE",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "__ob_client_capability_flag",
@@ -612,6 +618,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_show_ddl_in_compat_mode",
   "_windowfunc_optimization_settings",
   "activate_all_roles_on_login",
+  "ap_query_cost_threshold",
+  "ap_query_replica_fallback",
+  "ap_query_route_policy",
   "auto_generate_certs",
   "auto_increment_cache_size",
   "auto_increment_increment",
@@ -1460,6 +1469,9 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__SHOW_DDL_IN_COMPAT_MODE,
   SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS,
   SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN,
+  SYS_VAR_AP_QUERY_COST_THRESHOLD,
+  SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
+  SYS_VAR_AP_QUERY_ROUTE_POLICY,
   SYS_VAR_AUTO_GENERATE_CERTS,
   SYS_VAR_AUTO_INCREMENT_CACHE_SIZE,
   SYS_VAR_AUTO_INCREMENT_INCREMENT,
@@ -3105,7 +3117,10 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "_optimizer_max_permutations",
   "_idp_step_reduction_threshold",
   "ob_enable_pl_async_commit",
-  "caching_sha2_password_digest_rounds"
+  "caching_sha2_password_digest_rounds",
+  "ap_query_route_policy",
+  "ap_query_cost_threshold",
+  "ap_query_replica_fallback"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4155,6 +4170,9 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarIdpStepReductionThreshold)
         + sizeof(ObSysVarObEnablePlAsyncCommit)
         + sizeof(ObSysVarCachingSha2PasswordDigestRounds)
+        + sizeof(ObSysVarApQueryRoutePolicy)
+        + sizeof(ObSysVarApQueryCostThreshold)
+        + sizeof(ObSysVarApQueryReplicaFallback)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11766,6 +11784,33 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarCachingSha2PasswordDigestRounds));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarApQueryRoutePolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarApQueryRoutePolicy", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AP_QUERY_ROUTE_POLICY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarApQueryRoutePolicy));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarApQueryCostThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarApQueryCostThreshold", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AP_QUERY_COST_THRESHOLD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarApQueryCostThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarApQueryReplicaFallback())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarApQueryReplicaFallback", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AP_QUERY_REPLICA_FALLBACK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarApQueryReplicaFallback));
       }
     }
 
@@ -21070,6 +21115,39 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCachingSha2PasswordDigestRounds())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarCachingSha2PasswordDigestRounds", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_AP_QUERY_ROUTE_POLICY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarApQueryRoutePolicy)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarApQueryRoutePolicy)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarApQueryRoutePolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarApQueryRoutePolicy", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_AP_QUERY_COST_THRESHOLD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarApQueryCostThreshold)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarApQueryCostThreshold)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarApQueryCostThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarApQueryCostThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_AP_QUERY_REPLICA_FALLBACK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarApQueryReplicaFallback)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarApQueryReplicaFallback)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarApQueryReplicaFallback())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarApQueryReplicaFallback", K(ret));
       }
       break;
     }

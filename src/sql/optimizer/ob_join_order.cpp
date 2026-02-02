@@ -341,6 +341,10 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
         LOG_WARN("top stmt should not be null", K(ret));
       } else if (OB_FAIL(top_stmt->check_table_be_modified(ref_table_id, is_dml_table))) {
         LOG_WARN("failed to check table be modified", K(ret));
+      } else if (is_dml_table && top_stmt != stmt) {
+        if (!session_info->is_in_transaction()) {
+          is_dml_table = false;
+        }
       }
     }
 
@@ -2214,12 +2218,13 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
   int ret = OB_SUCCESS;
   bool index_back_will_use_row_store = false;
   bool index_back_will_use_column_store = false;
-  if (OB_ISNULL(get_plan())) {
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(table_partition_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null plan", K(ret));
   } else if (OB_FAIL(get_plan()->will_use_column_store(OB_INVALID_ID,
                                                        ref_id,
                                                        ref_id,
+                                                       table_partition_info_->get_loc_meta().route_policy_,
                                                        index_back_will_use_column_store,
                                                        index_back_will_use_row_store))) {
     LOG_WARN("failed to check will use column store", K(ret));
@@ -3439,7 +3444,8 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
       OB_ISNULL(opt_ctx->get_exec_ctx()) ||
       OB_ISNULL(opt_ctx->get_exec_ctx()->get_sql_ctx()) ||
       OB_ISNULL(helper.table_opt_info_) ||
-      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
+      OB_ISNULL(session_info = opt_ctx->get_session_info()) ||
+      OB_ISNULL(table_partition_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(params),
         K(stmt), K(ret));
@@ -3518,6 +3524,7 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
       } else if (OB_FAIL(get_plan()->will_use_column_store(table_id,
                                                           valid_index_ids.at(i),
                                                           ref_table_id,
+                                                          table_partition_info_->get_loc_meta().route_policy_,
                                                           use_column_store,
                                                           use_row_store))) {
         LOG_WARN("failed to check will use column store", K(ret));
@@ -4790,7 +4797,7 @@ int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
   index_info_cache.set_base_table_id(ref_table_id);
   tmp_helper.is_index_merge_ = true;
   has_valid_path = false;
-  if (OB_ISNULL(node) || OB_UNLIKELY(!node->is_scan_node())) {
+  if (OB_ISNULL(node) || OB_UNLIKELY(!node->is_scan_node()) || OB_ISNULL(table_partition_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected index merge node", K(ret), KPC(node));
   } else if (OB_FAIL(tmp_helper.filters_.assign(node->filter_))) {
@@ -4837,6 +4844,7 @@ int ObJoinOrder::build_access_path_for_scan_node(const uint64_t table_id,
   } else if (OB_FAIL(get_plan()->will_use_column_store(table_id,
                                                        node->index_tid_,
                                                        ref_table_id,
+                                                       table_partition_info_->get_loc_meta().route_policy_,
                                                        use_column_store,
                                                        use_row_store))) {
     LOG_WARN("failed to check will use column store", K(ret));
@@ -15803,6 +15811,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
         } else if (OB_FAIL(get_plan()->will_use_column_store(info->table_id_,
                                                             info->index_id_,
                                                             info->ref_table_id_,
+                                                            0,
                                                             will_use_column_store,
                                                             will_use_row_store))) {
           LOG_WARN("failed to check will use column store", K(ret));

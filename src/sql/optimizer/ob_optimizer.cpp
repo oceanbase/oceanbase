@@ -773,7 +773,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to check force use parallel das dml", K(ret));
   } else if (OB_FAIL(init_parallel_policy(stmt, *session_info))) { // call after check pdml enabled
     LOG_WARN("fail to check enable pdml", K(ret));
-  } else if (OB_FAIL(init_replica_policy(stmt, *session_info))) {
+  } else if (OB_FAIL(init_route_policy(stmt, *session_info))) {
     LOG_WARN("fail to check enable column store replica", K(ret));
   } else if (OB_FAIL(init_correlation_model(stmt, *session_info))) {
     LOG_WARN("failed to init correlation model", K(ret));
@@ -1124,20 +1124,55 @@ int ObOptimizer::init_px_node_opt_info(int64_t tenant_id)
   return ret;
 }
 
-int ObOptimizer::init_replica_policy(ObDMLStmt &dml_stmt, const ObSQLSessionInfo &session)
+int ObOptimizer::init_route_policy(ObDMLStmt &dml_stmt, ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   int64_t route_policy_type = 0;
-  if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
+  bool is_weak_read = false;
+  ObQueryCtx *query_ctx = dml_stmt.get_query_ctx();
+  if (OB_ISNULL(query_ctx) || OB_ISNULL(ctx_.get_exec_ctx()->get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null query ctx", K(ret));
+  } else if (OB_FAIL(ObTableLocation::get_is_weak_read(dml_stmt,
+                                                &session,
+                                                ctx_.get_exec_ctx()->get_sql_ctx(),
+                                                is_weak_read))) {
+    LOG_WARN("failed to get is weak read", K(ret));
+  } else if (session.get_route_to_column_replica()) {
+    // do nothing
+  } else if (OB_FAIL(session.get_ob_route_policy(route_policy_type))) {
     LOG_WARN("fail to get sys variable", K(ret));
   } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
-    if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
-        dml_stmt.get_query_ctx()->is_contain_select_for_update_) {
+    if (query_ctx->has_dml_write_stmt_ ||
+        query_ctx->is_contain_select_for_update_) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, read query request");
-    } else {
-      ctx_.set_use_column_store_replica(true);
     }
+  } else {
+    APQueryRoutePolicy ap_query_route_policy = APQueryRoutePolicy::OFF;
+    bool can_route_to_cs = false;
+    bool ap_query_replica_fallback = true;
+    if (OB_FAIL(query_ctx->get_query_hint().get_ap_query_route_policy(&session, ap_query_route_policy))) {
+      LOG_WARN("failed to get adaptive replica chosen", K(ret));
+    } else if (APQueryRoutePolicy::FORCE != ap_query_route_policy) {
+      // do nothing
+    } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
+                                                ap_query_replica_fallback))) {
+      LOG_WARN("failed to get ap_query_replica_fallback", K(ret));
+    } else if (ap_query_replica_fallback && session.get_is_in_retry()) {
+      // do nothing
+    } else if (OB_FAIL(ObRoutePolicy::check_can_route_to_columnstore_replica(&dml_stmt,
+                                                                             &session,
+                                                                             can_route_to_cs))) {
+      LOG_WARN("failed to check can route to columnstore replica", K(ret));
+    } else if (!can_route_to_cs) {
+      // do nothing
+    } else {
+      session.set_route_to_column_replica(true);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ctx_.set_is_weak_read(is_weak_read);
   }
   return ret;
 }

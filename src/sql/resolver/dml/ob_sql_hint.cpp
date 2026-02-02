@@ -53,6 +53,40 @@ void ObQueryHint::reset()
   other_start_id_ = 1;
 }
 
+int ObQueryHint::get_ap_query_route_policy(const ObSQLSessionInfo *session,
+                                             APQueryRoutePolicy &val) const
+{
+  int ret = OB_SUCCESS;
+  bool has_hint = false;
+  int64_t int_val = 0;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(session));
+  } else if (OB_FAIL(global_hint_.opt_params_.has_opt_param(
+                     ObOptParamHint::AP_QUERY_ROUTE_POLICY, has_hint))) {
+    LOG_WARN("failed to check whether has hint param", K(ret));
+  } else if (has_hint) {
+    // If there is opt param, return the value from hint
+    if (OB_FAIL(global_hint_.opt_params_.get_enum_opt_param(
+                ObOptParamHint::AP_QUERY_ROUTE_POLICY, int_val))) {
+      LOG_WARN("failed to get enum opt param", K(ret));
+    } else {
+      val = static_cast<APQueryRoutePolicy>(int_val);
+    }
+  } else if (has_outline_data()) {
+    // If there is outline data, return OFF
+    val = APQueryRoutePolicy::OFF;
+  } else {
+    // Otherwise, return the value from session
+    if (OB_FAIL(session->get_sys_variable(share::SYS_VAR_AP_QUERY_ROUTE_POLICY, int_val))) {
+      LOG_WARN("failed to get sys variable", K(ret));
+    } else {
+      val = static_cast<APQueryRoutePolicy>(int_val);
+    }
+  }
+  return ret;
+}
+
 int ObQueryHint::create_hint_table(ObIAllocator *allocator, ObTableInHint *&table)
 {
   int ret = common::OB_SUCCESS;

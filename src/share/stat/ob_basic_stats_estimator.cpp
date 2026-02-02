@@ -527,7 +527,7 @@ int ObBasicStatsEstimator::get_tablet_locations(ObExecContext &ctx,
   if (OB_ISNULL(session) || OB_UNLIKELY(tablet_ids.count() != partition_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(session), K(tablet_ids.count()), K(partition_ids.count()));
-  } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+  } else if (OB_FAIL(session->get_ob_route_policy(route_policy))) {
     LOG_WARN("get route policy failed", K(ret));
   } else {
     candi_tablet_locs.reset();

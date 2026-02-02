@@ -63,7 +63,11 @@ int ObPlanMatchHelper::match_plan(ObPlanCacheCtx &pc_ctx,
       // check base table constraints
       if (OB_FAIL(calc_table_locations(base_cons, plan_tbl_locs, pc_ctx,
                                       out_tbl_locations, phy_tbl_infos))) {
-        LOG_WARN("failed to calculate table locations", K(ret), K(base_cons));
+        if (OB_SUCC(ObPlanSet::process_replica_error(ret, plan, GET_MY_SESSION(pc_ctx.exec_ctx_)))) {
+          is_matched = false;
+        } else {
+          LOG_WARN("failed to calculate table locations", K(ret), K(base_cons));
+        }
       } else if (has_duplicate_table &&
                 OB_FAIL(ObLogPlan::adjust_dup_table_replica_by_cons(dup_rep_cons, phy_tbl_infos))) {
         LOG_WARN("failed to reselect duplicate table replica", K(ret));

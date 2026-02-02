@@ -1588,7 +1588,13 @@ int ObTransService::check_replica_readable_(const ObTxReadSnapshot &snapshot,
       } while (OB_SUCC(ret) && is_force_refresh && !dup_table_readable);
 
       if (OB_SUCC(ret) && !dup_table_readable) {
-        if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot.core_.version_, src))) {
+        if (snapshot.is_force_strongly_read()) {
+          if (OB_FAIL(try_force_strongly_read_follower(ls, expire_ts, snapshot))) {
+            TRANS_LOG(WARN, "force strongly read a follower failed", K(ret), K(expire_ts), K(snapshot));
+          } else {
+            TRANS_LOG(INFO, "force strongly read a follower", K(ret), K(expire_ts), K(snapshot));
+          }
+        } else if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot.core_.version_, src))) {
           TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));
         } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
           ret = OB_NOT_MASTER;
@@ -1657,6 +1663,49 @@ int ObTransService::wait_follower_readable_(ObLS &ls,
       }
     } while (OB_REPLICA_NOT_READABLE == ret);
   }
+  return ret;
+}
+
+int ObTransService::try_force_strongly_read_follower(ObLS &ls,
+                                                     const int64_t expire_ts,
+                                                     const ObTxReadSnapshot &snapshot)
+{
+  int ret = OB_SUCCESS;
+
+  if (!snapshot.is_force_strongly_read() || snapshot.source_ != ObTxReadSnapshot::SRC::GLOBAL) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(ls.get_ls_id()), K(expire_ts), K(snapshot));
+  } else {
+    int64_t retry_cnt = 0;
+    const int64_t MAX_RETRY_CNT = 10;
+    const int64_t MAX_RETRY_INTERVAL = 1 * 1000;
+    int64_t MAX_SLEEP_TIME =
+        OB_MAX(get_tenant_config_cache().col_replica_max_local_wait_time_, 1 * 1000);
+    do {
+      if (retry_cnt * MAX_RETRY_INTERVAL >= MAX_SLEEP_TIME) {
+        ret = OB_REPLICA_NOT_READABLE;
+        TRANS_LOG(WARN, "local retry too much times, report the error", K(ret), K(retry_cnt),
+                  K(MAX_SLEEP_TIME), K(MAX_RETRY_INTERVAL),K(get_tenant_config_cache().col_replica_max_local_wait_time_));
+      } else if (check_ls_readable_(ls, snapshot.core_.version_, snapshot.source_)) {
+        ret = OB_SUCCESS;
+        TRANS_LOG(INFO, "the follower is readable under the gts", K(ret), K(ls.get_ls_id()),
+                  K(expire_ts), K(snapshot));
+      } else {
+        ret = OB_EAGAIN;
+        retry_cnt++;
+        if (retry_cnt % 1000 == 0) {
+          MAX_SLEEP_TIME =
+              OB_MAX(get_tenant_config_cache().col_replica_max_local_wait_time_, 1 * 1000);
+        }
+        ob_usleep(MAX_RETRY_INTERVAL);
+      }
+
+      if (OB_SUCC(ret) && OB_UNLIKELY(ObTimeUtility::fast_current_time() >= expire_ts)) {
+        ret = OB_TIMEOUT;
+      }
+    } while (OB_EAGAIN == ret);
+  }
+
   return ret;
 }
 

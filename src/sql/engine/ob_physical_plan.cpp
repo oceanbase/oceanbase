@@ -17,6 +17,7 @@
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/monitor/ob_sql_plan.h"
 #include "sql/code_generator/ob_enable_rich_format_flags.h"
+#include "sql/optimizer/ob_route_policy.h"
 
 namespace oceanbase
 {
@@ -145,6 +146,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     px_worker_share_plan_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
     optimizer_features_enable_version_(0),
+    route_to_column_replica_(false),
     is_gtt_temp_table_v2_(false),
     create_reason_(),
     cache_node_id_(common::OB_INVALID_ID),
@@ -269,6 +271,7 @@ void ObPhysicalPlan::reset()
   px_worker_share_plan_enabled_ = false;
   extend_sql_plan_monitor_metrics_ = false;
   optimizer_features_enable_version_ = 0;
+  route_to_column_replica_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -961,6 +964,23 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
       }
     }
     LOG_DEBUG("set table location", K(tl), K(tl.use_das()));
+  }
+
+  // Check if any table location has COLUMN_STORE_ONLY route policy
+  if (OB_SUCC(ret)) {
+    route_to_column_replica_ = false;
+    for (int64_t i = 0; !route_to_column_replica_ && i < table_locations_.count(); ++i) {
+      const ObTableLocation &tl = table_locations_.at(i);
+      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(tl.get_loc_meta().route_policy_)) {
+        route_to_column_replica_ = true;
+      }
+    }
+    for (int64_t i = 0; !route_to_column_replica_ && i < das_table_locations_.count(); ++i) {
+      const ObTableLocation &tl = das_table_locations_.at(i);
+      if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(tl.get_loc_meta().route_policy_)) {
+        route_to_column_replica_ = true;
+      }
+    }
   }
 
   return ret;

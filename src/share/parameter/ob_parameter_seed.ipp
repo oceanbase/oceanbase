@@ -1239,6 +1239,10 @@ DEF_INT(_trx_max_log_cb_limit, OB_TENANT_PARAMETER, "16", "[0,)",
         "Control the upper limit of TxLogCbs involved in the participant to manage the maximum "
         "concurrency of  submiting logs in a transaction",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_c_replica_strong_read_local_max_wait_time, OB_TENANT_PARAMETER, "500ms", "[1ms,30m]",
+        "Defines the maximum local wait time for Column-only Replica when serving follower strong "
+        "consistency reads",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_minor_compaction_amplification_factor, OB_TENANT_PARAMETER, "0", "[0,100]",
         "thre L1 compaction write amplification factor, 0 means default 25, Range: [0,100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

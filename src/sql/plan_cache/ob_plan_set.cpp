@@ -90,6 +90,9 @@ int ObPlanSet::match_params_info(const ParamStore *params,
     RECORD_CACHE_MISS(PARAMS_INFO_NOT_MATCH, pc_ctx,
                       "params count not equal",
                       K(params->count()), K(params_info_.count()));
+  } else if (route_to_column_replica_ && OB_NOT_NULL(exec_ctx.get_my_session()) &&
+             exec_ctx.get_my_session()->is_in_transaction()) {
+    is_same = false;
   } else {
     //匹配原始的参数
     int64_t N = params->count();
@@ -645,6 +648,8 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
     is_same = false;
   } else if (infos.count() != params_info_.count()) {
     is_same = false;
+  } else if (route_to_column_replica_ && session_info->is_in_transaction()) {
+    is_same = false;
   } else {
     int64_t N = infos.count();
     for (int64_t i = 0; is_same && i < N; ++i) {
@@ -775,6 +780,7 @@ void ObPlanSet::reset()
   can_delay_init_datum_store_ = false;
   params_constraint_.reset();
   alloc_.reset();
+  route_to_column_replica_ = false;
 }
 
 ObPlanCache *ObPlanSet::get_plan_cache() const
@@ -1549,6 +1555,7 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     const ObPhysicalPlan &sql_plan = dynamic_cast<const ObPhysicalPlan &>(plan);
     enable_inner_part_parallel_exec_ = sql_plan.get_px_dop() > 1;
     contain_index_location = sql_plan.contain_index_location();
+    route_to_column_replica_ = sql_plan.is_route_to_column_replica();
     LOG_DEBUG("using px", K(enable_inner_part_parallel_exec_));
     plan.get_pre_expr_ref_count();
   }
@@ -2055,7 +2062,12 @@ int ObSqlPlanSet::try_get_local_plan(ObPlanCacheCtx &pc_ctx,
     } else if (OB_FAIL(get_plan_type(plan->get_table_locations(),
                                      plan->has_uncertain_local_operator(), pc_ctx,
                                      real_type))) {
-      LOG_WARN("fail to get plan type", K(ret));
+      if (OB_SUCC(process_replica_error(ret, plan, pc_ctx.sql_ctx_.session_info_))) {
+        plan = NULL;
+        get_next = true;
+      } else {
+        LOG_WARN("fail to get plan type", K(ret));
+      }
     } else if (OB_PHY_PLAN_LOCAL != real_type) {
       LOG_DEBUG("not local plan", K(real_type));
       RECORD_CACHE_MISS(LOCATION_CONSTR_NOT_MATCH, pc_ctx, "Location constraint not match", K(real_type));
@@ -2105,7 +2117,12 @@ int ObSqlPlanSet::try_get_remote_plan(ObPlanCacheCtx &pc_ctx,
                                   remote_plan_->has_uncertain_local_operator(),
                                   pc_ctx,
                                   real_type))) {
-    LOG_WARN("fail to get plan type", K(ret));
+    if (OB_SUCC(process_replica_error(ret, remote_plan_, pc_ctx.sql_ctx_.session_info_))) {
+      remote_plan_ = NULL;
+      get_next = true;
+    } else {
+      LOG_WARN("fail to get plan type", K(ret));
+    }
   } else if (OB_PHY_PLAN_REMOTE != real_type) {
     LOG_DEBUG("remote type is not match", K(real_type));
     RECORD_CACHE_MISS(LOCATION_CONSTR_NOT_MATCH, pc_ctx, "Location constraint not match with remote plan",
@@ -2867,6 +2884,26 @@ int ObPlanSet::match_and_merge_plan_cons(const ObPlanCacheCtx &pc_ctx, bool &is_
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObPlanSet::process_replica_error(const int error_code,
+                                     const ObPhysicalPlan *plan,
+                                     ObBasicSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NO_REPLICA_VALID == error_code && OB_NOT_NULL(session_info) &&
+      OB_NOT_NULL(plan) && plan->is_route_to_column_replica()) {
+    bool ap_query_replica_fallback = true;
+    if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
+                                               ap_query_replica_fallback))) {
+      LOG_WARN("failed to get ap_query_replica_fallback", K(ret));
+    } else if (!ap_query_replica_fallback) {
+      ret = error_code;
+    }
+  } else {
+    ret = error_code;
   }
   return ret;
 }

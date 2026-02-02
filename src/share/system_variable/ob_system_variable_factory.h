@@ -6114,6 +6114,29 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(844); }
 };
+class ObSysVarApQueryRoutePolicy : public ObEnumSysVar
+{
+public:
+  const static char * AP_QUERY_ROUTE_POLICY_NAMES[];
+public:
+  ObSysVarApQueryRoutePolicy() : ObEnumSysVar(AP_QUERY_ROUTE_POLICY_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_AP_QUERY_ROUTE_POLICY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(845); }
+};
+class ObSysVarApQueryCostThreshold : public ObIntSysVar
+{
+public:
+  ObSysVarApQueryCostThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_AP_QUERY_COST_THRESHOLD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(846); }
+};
+class ObSysVarApQueryReplicaFallback : public ObBoolSysVar
+{
+public:
+  ObSysVarApQueryReplicaFallback() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_AP_QUERY_REPLICA_FALLBACK; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(847); }
+};
 
 
 class ObSysVarFactory
@@ -6137,7 +6160,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 746;
+  const static int64_t OB_SYS_VARS_COUNT = 749;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

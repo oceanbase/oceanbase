@@ -260,6 +260,7 @@ void ObTransService::TenantConfigCache::reset()
   write_throttle_by_pending_log_size_limit_ = 0;
   write_throttle_by_pending_log_sleep_interval_ = 0;
   trx_max_log_cb_limit_ = 0;
+  col_replica_max_local_wait_time_ = 0;
 }
 
 int ObTransService::TenantConfigCache::refresh()
@@ -272,6 +273,7 @@ int ObTransService::TenantConfigCache::refresh()
     write_throttle_by_pending_log_size_limit_ = tenant_config->_write_throttle_by_pending_log_size_limit;
     write_throttle_by_pending_log_sleep_interval_ = tenant_config->_write_throttle_by_pending_log_sleep_interval;
     trx_max_log_cb_limit_ = tenant_config->_trx_max_log_cb_limit;
+    col_replica_max_local_wait_time_ = tenant_config->_c_replica_strong_read_local_max_wait_time;
   } else {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid tenant config", KR(ret), K(tenant_id_));

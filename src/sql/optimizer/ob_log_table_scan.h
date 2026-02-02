@@ -784,6 +784,14 @@ public:
   inline ObTablePartitionInfo *get_table_partition_info() { return table_partition_info_; }
   inline const ObTablePartitionInfo *get_table_partition_info() const { return table_partition_info_; }
   inline void set_table_partition_info(ObTablePartitionInfo *table_partition_info) { table_partition_info_ = table_partition_info; }
+  inline int64_t get_route_policy() const
+  {
+    int64_t route_policy = 0;
+    if (OB_NOT_NULL(table_partition_info_)) {
+      route_policy = table_partition_info_->get_loc_meta().route_policy_;
+    }
+    return route_policy;
+  }
 
   bool is_index_scan() const { return ref_table_id_ != index_table_id_; }
   bool is_table_whole_range_scan() const

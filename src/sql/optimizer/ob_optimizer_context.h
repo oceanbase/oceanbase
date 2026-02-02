@@ -296,7 +296,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     is_skip_scan_enabled_(false),
     enable_better_inlist_costing_(false),
     correlation_type_(ObEstCorrelationType::MAX),
-    use_column_store_replica_(false),
     push_join_pred_into_view_enabled_(true),
     table_access_policy_(ObTableAccessPolicy::AUTO),
     enable_new_query_range_(false),
@@ -320,6 +319,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     rowsets_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
     enable_delete_insert_scan_(false),
+    is_weak_read_(false),
     min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
     next_op_id_(0),
     enable_hash_groupby_limit_pushdown_(true),
@@ -793,8 +793,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_is_skip_scan_enabled(bool v) { is_skip_scan_enabled_ = v; }
   inline bool get_enable_better_inlist_costing() const { return enable_better_inlist_costing_; }
   inline void set_enable_better_inlist_costing(bool v) { enable_better_inlist_costing_ = v; }
-  inline bool use_column_store_replica() const { return use_column_store_replica_; }
-  inline void set_use_column_store_replica(bool use) { use_column_store_replica_ = use; }
 
   inline void set_correlation_type(ObEstCorrelationType type) { correlation_type_ = type; }
   inline ObEstCorrelationType get_correlation_type() const { return correlation_type_; }
@@ -851,6 +849,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_max_permutation(uint64_t max_permutation) { max_permutation_ = max_permutation; }
   inline uint64_t get_idp_reduction_threshold() const { return idp_reduction_threshold_; }
   inline void set_idp_reduction_threshold(uint64_t threshold) { idp_reduction_threshold_ = threshold; }
+  inline bool get_is_weak_read() const { return is_weak_read_; }
+  inline void set_is_weak_read(bool is_weak_read) { is_weak_read_ = is_weak_read; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -964,7 +964,6 @@ private:
   bool is_skip_scan_enabled_;
   bool enable_better_inlist_costing_;
   ObEstCorrelationType correlation_type_;
-  bool use_column_store_replica_;
   bool push_join_pred_into_view_enabled_;
   ObTableAccessPolicy table_access_policy_;
   bool enable_new_query_range_;
@@ -988,6 +987,7 @@ private:
   bool rowsets_enabled_;
   bool extend_sql_plan_monitor_metrics_;
   bool enable_delete_insert_scan_;
+  bool is_weak_read_;
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
   int64_t next_op_id_;
   bool enable_hash_groupby_limit_pushdown_;

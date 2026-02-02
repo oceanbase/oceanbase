@@ -254,6 +254,7 @@ struct ObOptParamHint
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
     DEF(ENABLE_WINDOW_FUNCTION_STREAMING_PROCESS,)  \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
+    DEF(AP_QUERY_ROUTE_POLICY,)                     \
     DEF(ENABLE_MERGE_INTO,)                         \
     DEF(JOIN_ORDER_ENUM_THRESHOLD,)                 \
     DEF(OPTIMIZER_MAX_PERMUTATIONS,)                \
@@ -266,8 +267,9 @@ struct ObOptParamHint
   int merge_opt_param_hint(const ObOptParamHint &other);
   int add_opt_param_hint(const ObString &param_name, const ObObj &val)
   { return add_opt_param_hint(get_opt_param_value(param_name), val);  }
-  int add_opt_param_hint(const OptParamType param_type, const ObObj &val);
-  int get_opt_param(const OptParamType param_type, ObObj &val) const;
+  int add_opt_param_hint(const OptParamType param_type, const ObObj &val, bool overwrite = false);
+  int remove_opt_param(const OptParamType param_type);
+  int get_opt_param(const OptParamType param_type, ObObj &val, int64_t *idx_ptr = nullptr) const;
   int has_enable_opt_param(const OptParamType param_type, bool &enabled) const;
   int print_opt_param_hint(PlanText &plan_text) const;
   int get_bool_opt_param(const OptParamType param_type, bool &val, bool &is_exists) const;

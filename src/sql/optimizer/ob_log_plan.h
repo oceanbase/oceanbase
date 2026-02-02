@@ -97,6 +97,8 @@ class ObHashRollupInfo;
 class ObGroupingSetInfo;
 class ObTablePartitionInfo;
 class ObJoinOrderEnum;
+class ObDASLocationRouter;
+struct ObDASTableLocMeta;
 
 struct TableDependInfo {
   TableDependInfo() :
@@ -262,6 +264,7 @@ public:
                              common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list);
   static int select_replicas(ObExecContext &exec_ctx,
                              bool is_weak,
+                             ObRoutePolicyType route_policy_type,
                              const common::ObAddr &local_server,
                              common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list);
 
@@ -335,6 +338,18 @@ public:
   virtual int generate_plan();
 
   int do_post_plan_processing();
+
+  int check_if_ap_query_need_retry();
+  int check_user_table_replica_rec(ObLogicalOperator *op, bool need_check_creplica, bool &has_user_table, bool &all_have_creplica);
+  int check_user_table_replica(ObLogTableScan *tsc_op, bool need_check_creplica, bool &is_user_table, bool &all_have_creplica);
+  int check_tablet_has_available_creplica(const common::ObIArray<common::ObTabletID> &tablet_ids,
+                                         ObDASLocationRouter &das_router,
+                                         const ObDASTableLocMeta &loc_meta,
+                                         bool &all_have_replica);
+
+  int get_top_select_ops(ObLogicalOperator *top, ObIArray<ObLogicalOperator *> &select_ops) const;
+  int check_is_parallel_select(ObLogicalOperator *top, bool &is_parallel) const;
+  int get_select_cost_from_plan(ObLogicalOperator *op, bool &is_parallel, double &cost) const;
 
   int do_post_traverse_processing();
 
@@ -1697,6 +1712,7 @@ public:
   int will_use_column_store(const uint64_t table_id,
                             const uint64_t index_id,
                             const uint64_t ref_table_id,
+                            const int64_t route_policy,
                             bool &use_column_store,
                             bool &use_row_store);
 
@@ -1944,7 +1960,8 @@ private: // member functions
                                     bool &is_hit_partition,
                                     bool sess_in_retry,
                                     bool is_dup_ls_modified);
-  static int weak_select_replicas(const common::ObAddr &local_server,
+  static int weak_select_replicas(ObExecContext &exec_ctx,
+                                  const common::ObAddr &local_server,
                                   ObRoutePolicyType route_type,
                                   bool proxy_priority_hit_support,
                                   uint64_t tenant_id,

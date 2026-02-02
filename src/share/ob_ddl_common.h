@@ -539,6 +539,7 @@ static inline bool is_direct_load_retry_err(const int ret)
     || ret == OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
     || ret == OB_ERR_REMOTE_SCHEMA_NOT_FULL
     || ret == OB_SQL_RETRY_SPM
+    || ret == OB_AP_QUERY_NEED_RETRY
     ;
 }
 

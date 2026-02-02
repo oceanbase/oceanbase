@@ -859,19 +859,48 @@ int ObOptParamHint::merge_opt_param_hint(const ObOptParamHint &other)
   return ret;
 }
 
-int ObOptParamHint::add_opt_param_hint(const OptParamType param_type, const ObObj &val)
+int ObOptParamHint::add_opt_param_hint(const OptParamType param_type, const ObObj &val, bool overwrite)
 {
   int ret = OB_SUCCESS;
   ObObj cur_value;
+  int64_t idx = OB_INVALID_INDEX;
   if (!is_param_val_valid(param_type, val)) {
     /* do nothing */
-  } else if (OB_FAIL(get_opt_param(param_type, cur_value))) {
+  } else if (OB_FAIL(get_opt_param(param_type, cur_value, &idx))) {
     LOG_WARN("failed to get opt param", K(ret), K(param_type));
   } else if (!cur_value.is_nop_value()) {
-    /* exists opt param hint for this type, use the first opt param hint */
+    if (overwrite) {
+      param_vals_.at(idx) = val;
+    } else {
+      /* exists opt param hint for this type, use the first opt param hint */
+    }
   } else if (OB_FAIL(param_types_.push_back(param_type))
              || OB_FAIL(param_vals_.push_back(val))) {
     LOG_WARN("failed to push back", K(ret), K(param_type), K(val));
+  }
+  return ret;
+}
+
+int ObOptParamHint::remove_opt_param(const OptParamType param_type)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = OB_INVALID_INDEX;
+  if (OB_UNLIKELY(param_types_.count() != param_vals_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected opt param hint", K(ret), K(param_types_.count()), K(param_vals_.count()));
+  } else {
+    for (int64_t i = 0; OB_INVALID_INDEX == idx && i < param_types_.count(); ++i) {
+      if (param_type == param_types_.at(i)) {
+        idx = i;
+      }
+    }
+    if (OB_INVALID_INDEX == idx) {
+      // param not found, do nothing
+    } else if (OB_FAIL(param_types_.remove(idx))) {
+      LOG_WARN("failed to remove opt param type", K(ret), K(param_type), K(idx));
+    } else if (OB_FAIL(param_vals_.remove(idx))) {
+      LOG_WARN("failed to remove opt param value", K(ret), K(param_type), K(idx));
+    }
   }
   return ret;
 }
@@ -1086,6 +1115,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                  && val.get_int() <= 16;
       break;
     }
+    case AP_QUERY_ROUTE_POLICY: {
+      if (val.is_int()) {
+        is_valid = 0 <= val.get_int() && val.get_int() < static_cast<int64_t>(APQueryRoutePolicy::MAX);
+      } else if (val.is_varchar()) {
+        int64_t type = OB_INVALID_ID;
+        ObSysVarApQueryRoutePolicy sv;
+        is_valid = (OB_SUCCESS == sv.find_type(val.get_varchar(), type));
+      }
+      break;
+    }
     case PARTITION_ORDERED: {
       is_valid = val.is_varchar()
                  && (0 == val.get_varchar().case_compare("asc")
@@ -1114,7 +1153,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
   return is_valid;
 }
 
-int ObOptParamHint::get_opt_param(const OptParamType param_type, ObObj &val) const
+int ObOptParamHint::get_opt_param(const OptParamType param_type, ObObj &val, int64_t *idx_ptr) const
 {
   int ret = OB_SUCCESS;
   int64_t idx = OB_INVALID_INDEX;
@@ -1123,6 +1162,9 @@ int ObOptParamHint::get_opt_param(const OptParamType param_type, ObObj &val) con
     if (param_type == param_types_.at(i)) {
       idx = i;
     }
+  }
+  if (nullptr != idx_ptr) {
+    *idx_ptr = idx;
   }
   if (OB_INVALID_INDEX == idx) {
     /* do nothing */
@@ -1296,6 +1338,13 @@ int ObOptParamHint::get_enum_opt_param(const OptParamType param_type, int64_t &v
       }
       case ENABLE_OPTIMIZER_ROWGOAL: {
         ObSysVarEnableOptimizerRowgoal sv;
+        if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
+          LOG_WARN("param obj is invalid", K(ret), K(obj));
+        }
+        break;
+      }
+      case AP_QUERY_ROUTE_POLICY: {
+        ObSysVarApQueryRoutePolicy sv;
         if (OB_FAIL(sv.find_type(obj.get_varchar(), val))) {
           LOG_WARN("param obj is invalid", K(ret), K(obj));
         }

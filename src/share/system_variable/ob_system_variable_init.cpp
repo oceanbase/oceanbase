@@ -11649,13 +11649,53 @@ static struct VarsInit{
     ObSysVars[844].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
     }();
 
+    [&] (){
+      ObSysVars[845].default_value_ = "1" ;
+      ObSysVars[845].info_ = "Controls adaptive route policy for ap query. OFF: disabled, AUTO: automatically choose column replica based on query characteristics and cost analysis, FORCE: force to choose column replica." ;
+      ObSysVars[845].name_ = "ap_query_route_policy" ;
+      ObSysVars[845].data_type_ = ObIntType ;
+      ObSysVars[845].enum_names_ = "[u'OFF', u'AUTO', u'FORCE']" ;
+      ObSysVars[845].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[845].id_ = SYS_VAR_AP_QUERY_ROUTE_POLICY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_ROUTE_POLICY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_ROUTE_POLICY] = 845 ;
+      ObSysVars[845].base_value_ = "1" ;
+    ObSysVars[845].alias_ = "OB_SV_AP_QUERY_ROUTE_POLICY" ;
+    }();
+
+    [&] (){
+      ObSysVars[846].default_value_ = "200000" ;
+      ObSysVars[846].info_ = "Cost threshold for selecting column store replica." ;
+      ObSysVars[846].name_ = "ap_query_cost_threshold" ;
+      ObSysVars[846].data_type_ = ObUInt64Type ;
+      ObSysVars[846].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[846].id_ = SYS_VAR_AP_QUERY_COST_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_COST_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_COST_THRESHOLD] = 846 ;
+      ObSysVars[846].base_value_ = "200000" ;
+    ObSysVars[846].alias_ = "OB_SV_AP_QUERY_COST_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[847].default_value_ = "1" ;
+      ObSysVars[847].info_ = "When ap_query_route_policy is AUTO or FORCE, controls whether query will fallback to non-column replica when there is no available column replica" ;
+      ObSysVars[847].name_ = "ap_query_replica_fallback" ;
+      ObSysVars[847].data_type_ = ObIntType ;
+      ObSysVars[847].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[847].id_ = SYS_VAR_AP_QUERY_REPLICA_FALLBACK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_REPLICA_FALLBACK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_REPLICA_FALLBACK] = 847 ;
+      ObSysVars[847].base_value_ = "1" ;
+    ObSysVars[847].alias_ = "OB_SV_AP_QUERY_REPLICA_FALLBACK" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 845;
+static int64_t var_amount = 848;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

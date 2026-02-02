@@ -205,6 +205,10 @@ public:
       const share::ObLSID &dest_ls_id);
   static bool enable_transfer_dml_ctrl(const uint64_t data_version);
   static int get_ls_member_list(const share::ObLSID &ls_id, common::ObMemberList &member_list);
+  static int get_ls_member_list_and_learner_list(
+      const share::ObLSID &ls_id,
+      common::ObMemberList &member_list,
+      common::GlobalLearnerList &learner_list);
   static int get_ls_leader(const share::ObLSID &ls_id, common::ObAddr &addr);
   static int check_inc_major_backfill(
       const share::ObLSID &ls_id,
@@ -214,6 +218,22 @@ public:
       bool &is_trans_abort);
   static int check_ddl_merge_finished(
     const ObTablet *tablet);
+  // check whether member list / learner list is same (element must be ObMember)
+  template <typename ListType>
+  static int check_list_is_same(const ListType &lhs, const ListType &rhs, bool &is_same);
+  static int get_transfer_ls_info(
+      const uint64_t tenant_id,
+      const ObLSID &src_ls_id,
+      const ObLSID &dest_ls_id,
+      ObISQLClient &sql_client,
+      ObTransferLSInfo &transfer_ls_info);
+  static int get_transfer_need_check_addr_list(
+      const share::ObLSID src_ls_id,
+      const share::ObLSID dest_ls_id,
+      const ObTransferLSInfo &transfer_ls_info,
+      common::ObMemberList &member_list,
+      common::GlobalLearnerList &learner_list,
+      common::ObIArray<common::ObAddr> &addr_list);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,
@@ -249,7 +269,34 @@ private:
               const share::ObStorageHACostItemType item_type,
               const share::ObStorageHACostItemName item_name,
               share::ObStorageHAPerfDiagParams &params);
+  static int get_need_check_addr_list_(
+      const common::ObMemberList &member_list,
+      const common::GlobalLearnerList &learner_list,
+      const bool need_check_r_replica,
+      common::ObIArray<common::ObAddr> &addr_list);
 };
+
+template <typename ListType>
+int ObTransferUtils::check_list_is_same(const ListType &lhs, const ListType &rhs, bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = true;
+  if (lhs.get_member_number() != rhs.get_member_number()) {
+    is_same = false;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < lhs.get_member_number() && is_same; ++i) {
+      common::ObMember member;
+      if (OB_FAIL(lhs.get_member_by_index(i, member))) {
+        STORAGE_LOG(WARN, "failed to get member by index", K(ret), K(i));
+        break;
+      } else if (!rhs.contains(member.get_server())) {
+        is_same = false;
+      }
+    }
+  }
+
+  return ret;
+}
 
 } // end namespace storage
 } // end namespace oceanbase

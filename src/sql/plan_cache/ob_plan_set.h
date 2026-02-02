@@ -178,6 +178,7 @@ public:
         pre_cal_expr_handler_(NULL),
         can_skip_params_match_(false),
         can_delay_init_datum_store_(false),
+        route_to_column_replica_(false),
         resource_map_rule_(),
         is_cli_return_rowid_(false),
         params_constraint_(alloc_)
@@ -242,6 +243,10 @@ public:
 
   bool get_can_skip_params_match() { return can_skip_params_match_; }
   bool get_can_delay_init_datum_store() { return can_delay_init_datum_store_; }
+  bool is_route_to_column_replica() const { return route_to_column_replica_; }
+  static int process_replica_error(const int error_code,
+                                   const ObPhysicalPlan *plan,
+                                   ObBasicSessionInfo *session_info);
   int match_and_merge_plan_cons(const ObPlanCacheCtx &pc_ctx, bool &is_matched);
   virtual bool has_any_plan() = 0;
 
@@ -318,6 +323,8 @@ protected:
   PreCalcExprHandler* pre_cal_expr_handler_;
   bool can_skip_params_match_;
   bool can_delay_init_datum_store_;
+  // if true, this plan needs to route to column replica
+  bool route_to_column_replica_;
 
 public:
   //variable for resource map rule

@@ -1697,5 +1697,10 @@ int ObTransferBuildTabletInfoCtx::get_src_reorganization_scn(
   }
   return ret;
 }
-
 #endif
+
+void ObTransferLSInfo::reset()
+{
+  src_is_duplicate_ls_ = false;
+  dest_is_duplicate_ls_ = false;
+}

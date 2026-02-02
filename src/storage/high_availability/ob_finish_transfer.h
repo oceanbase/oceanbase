@@ -24,6 +24,7 @@
 #include "share/transfer/ob_transfer_info.h"
 #include "share/ob_balance_define.h"
 #include "storage/ob_storage_async_rpc.h"
+#include "ob_transfer_struct.h"
 
 namespace oceanbase {
 namespace storage {
@@ -35,20 +36,21 @@ public:
   ObTxFinishTransfer();
   virtual ~ObTxFinishTransfer();
   int init(const share::ObTransferTaskID &task_id, const uint64_t tenant_id, const share::ObLSID &src_ls_id,
-      const share::ObLSID &dest_ls_id, common::ObMySQLProxy &sql_proxy);
+      const share::ObLSID &dest_ls_id, common::ObMySQLProxy &sql_proxy, ObTransferLSInfo *transfer_ls_info);
   int process(int64_t &round);
 
 private:
   int do_tx_transfer_doing_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
       const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id, int64_t &round);
 
-  // unlock both src and dest ls member list
+  // unlock both src and dest ls member list and learner list
   // @param[in]: tenant_id
   // @param[in]: src_ls_id
   // @param[in]: dest_ls_id
   // @param[out]: member list
-  int unlock_src_and_dest_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &src_ls_id,
-      const share::ObLSID &dest_ls_id, common::ObMemberList &member_list);
+  // @param[out]: learner list
+  int unlock_src_and_dest_ls_member_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id, common::ObMemberList &member_list, common::GlobalLearnerList &learner_list);
 
   // get transfer tablet list from inner table
   // @param[in]: task_id
@@ -76,33 +78,30 @@ private:
   // check ls backfilled
   // @param[in]: tenant_id
   // @param[in]: ls_id
-  // @param[in]: member_list
+  // @param[in]: addr_list
   // @param[in]: tablet_list
-  // @param[in]: quorum
   int check_ls_logical_table_replaced(const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
-      const common::ObMemberList &member_list, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
-      const int64_t quorum, bool &all_backfilled);
+      const common::ObIArray<common::ObAddr> &addr_list, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
+      bool &all_backfilled);
 
   // inner check ls logical table replaced
   // @param[in]: tenant_id
   // @param[in]: dest_ls_id
-  // @param[in]: member_addr_list
+  // @param[in]: addr_list
   // @param[in]: tablet_list
-  // @param[in]: quorum
   int inner_check_ls_logical_table_replaced_(const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
-      const common::ObArray<common::ObAddr> &member_addr_list,
-      const common::ObArray<share::ObTransferTabletInfo> &tablet_list, const int64_t quorum, bool &all_backfilled);
+      const common::ObIArray<common::ObAddr> &addr_list, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
+      bool &all_backfilled);
 
   // wait until all ls replay scn satisfy
   // @param[in]: tenant_id
   // @param[in]: ls_id
   // @param[in]: member_list
   // @param[in]: tablet_list
-  // @param[in]: quorum
   // @param[in]: timeout_ctx
   int wait_all_ls_replica_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
-      const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &member_addr_list, const share::SCN &finish_scn,
-      const int64_t quorum, ObTimeoutCtx &timeout_ctx, bool &check_passed);
+      const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &addr_list, const share::SCN &finish_scn,
+      ObTimeoutCtx &timeout_ctx, bool &check_passed);
 
   // check ls replica match scn
   // @param[in]: task_id
@@ -125,11 +124,13 @@ private:
   // @param[out]: ls handle
   int get_ls_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, storage::ObLSHandle &ls_handle);
 
-  // get ls member list
+  // get ls member list and learner list
   // @param[in]: tenant_id
   // @param[in]: ls_id
-  // @param[in]: member_list
-  int get_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObMemberList &member_list);
+  // @param[out]: member_list
+  // @param[out]: learner_list
+  int get_ls_member_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObMemberList &member_list,
+      common::GlobalLearnerList &learner_list);
 
   // check src ls and dest ls has same member list
   // @param[in]: tenant_id
@@ -139,23 +140,26 @@ private:
   int check_same_member_list_(const uint64_t tenant_id, const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id,
       bool &same_member_list);
 
-  // unlock ls member list
+  // unlock ls member list and learner list
   // @param[in]: tenant_id
   // @param[in]: ls_id
   // @param[in]: member_list
+  // @param[in]: learner_list
   // @param[in]: lock timeout
   // @param[in]: lock_owner
-  int unlock_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status,
-      const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id,
-      const int64_t lock_timeout);
+  int unlock_ls_member_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const common::ObMemberList &member_list, const common::GlobalLearnerList &learner_list,
+      const ObTransferLockStatus &status, const bool need_check_palf_leader,
+      const share::ObLSID &need_check_palf_leader_ls_id, const int64_t lock_timeout);
 
-  // lock ls member list
+  // lock ls member list and learner list
   // @param[in]: tenant_id
   // @param[in]: ls_id
   // @param[in]: member_list
-  int lock_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObMemberList &member_list, const ObTransferLockStatus &status);
+  // @param[in]: learner_list
+  // @param[in]: status
+  int lock_ls_member_and_learner_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const common::ObMemberList &member_list, const common::GlobalLearnerList &learner_list, const ObTransferLockStatus &status);
 
   // @param[in]: src_ls_id
   // @param[in]: dest_ls_id
@@ -252,8 +256,6 @@ private:
   // commit a transaction
   int commit_trans_(const bool is_commit, ObMySQLTransaction &trans);
 
-  int get_transfer_quorum_(const ObMemberList &member_list, int64_t &quorum);
-
   // lock transfer task while doing
   // @param[in]: task_id
   // @param[in]: trans
@@ -280,6 +282,11 @@ private:
       const int64_t round,
       const bool is_report) const;
 
+  int check_addr_list_is_match_(
+      const common::ObMemberList &src_member_list,
+      const common::GlobalLearnerList &src_learner_list,
+      bool &is_match);
+
 private:
   static const int64_t DEFAULT_WAIT_INTERVAL_US = 10_ms;
   static const int64_t TASK_EXECUTE_LONG_WARNING_THRESHOLD = 60_min;
@@ -296,6 +303,7 @@ private:
   int64_t round_;
   share::ObStorageHACostItemName diagnose_result_msg_;
   uint64_t data_version_;
+  ObTransferLSInfo *ls_transfer_info_;
   DISALLOW_COPY_AND_ASSIGN(ObTxFinishTransfer);
 };
 

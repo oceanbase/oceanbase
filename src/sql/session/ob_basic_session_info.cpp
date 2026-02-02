@@ -25,6 +25,7 @@
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "observer/ob_server.h"
 #include "share/catalog/ob_catalog_utils.h"
+#include "sql/optimizer/ob_route_policy.h"
 #include "lib/number/ob_number_v2.h"
 
 
@@ -174,7 +175,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       use_pl_inner_info_string_(false),
       is_first_gen_pl_cache_str_(true),
       influence_pl_cache_var_indexs_(),
-      global_rich_vector_configured_(false)
+      global_rich_vector_configured_(false),
+      route_to_column_replica_(false)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -581,6 +583,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   use_pl_inner_info_string_ = false;
   sys_var_in_pl_cache_str_.reset();
   is_first_gen_pl_cache_str_ = true;
+  route_to_column_replica_ = false;
 }
 
 int ObBasicSessionInfo::reset_timezone()
@@ -8208,6 +8211,17 @@ bool ObBasicSessionInfo::get_extend_sql_plan_monitor_metrics() const
 bool ObBasicSessionInfo::get_rowsets_enabled() const
 {
   return inf_pc_configs_.rowsets_enabled_;
+}
+
+int ObBasicSessionInfo::get_ob_route_policy(int64_t &route_policy) const
+{
+  int ret = OB_SUCCESS;
+  if (get_route_to_column_replica()) {
+    route_policy = static_cast<int64_t>(sql::COLUMN_STORE_ONLY);
+  } else if (OB_FAIL(get_sys_variable(share::SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    SQL_SESSION_LOG(WARN, "get route policy failed", K(ret));
+  }
+  return ret;
 }
 
 int ObBasicSessionInfo::ensure_sys_var_loaded(const ObSysVarClassType sys_var_id) const

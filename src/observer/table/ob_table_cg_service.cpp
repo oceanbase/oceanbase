@@ -1170,21 +1170,24 @@ int ObTableLocCgService::generate_table_loc_meta(const ObTableCtx &ctx,
   loc_meta.ref_table_id_ = simple_table_schema.get_table_id();
   loc_meta.table_loc_id_ = ctx.get_ref_table_id();
   loc_meta.is_dup_table_ = simple_table_schema.is_duplicate_table();
-  if (ctx.is_weak_read()) {
-    loc_meta.is_weak_read_ = 1;
-    loc_meta.select_leader_ = 0;
-  } else if (loc_meta.is_dup_table_) {
-    loc_meta.select_leader_ = 0;
-    loc_meta.is_weak_read_ = 0;
-  } else {
-    //strong consistency read policy is used by default
-    loc_meta.select_leader_ = 1;
-    loc_meta.is_weak_read_ = 0;
-  }
-  if (OB_FAIL(ctx.get_session_info().get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+  if (OB_FAIL(ctx.get_session_info().get_ob_route_policy(route_policy))) {
     LOG_WARN("fail to get route policy from session", K(ret));
   } else {
     loc_meta.route_policy_ = route_policy;
+    if (ctx.is_weak_read()) {
+      loc_meta.is_weak_read_ = 1;
+      loc_meta.select_leader_ = 0;
+    } else if (loc_meta.is_dup_table_) {
+      loc_meta.select_leader_ = 0;
+      loc_meta.is_weak_read_ = 0;
+    } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy) && !ctx.is_dml()) {
+      loc_meta.select_leader_ = 0;
+      loc_meta.is_weak_read_ = 0;
+    } else {
+      //strong consistency read policy is used by default
+      loc_meta.select_leader_ = 1;
+      loc_meta.is_weak_read_ = 0;
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (simple_table_schema.is_user_table()) {

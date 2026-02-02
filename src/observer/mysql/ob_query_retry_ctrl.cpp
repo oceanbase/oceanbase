@@ -304,7 +304,8 @@ public:
       v.no_more_test_ = true;
     } else if (is_direct_load(v) && !is_load_local(v)) {
       if (is_direct_load_retry_err(err)) {
-        if (OB_SQL_RETRY_SPM == err) {
+        if (OB_SQL_RETRY_SPM == err ||
+            OB_AP_QUERY_NEED_RETRY == err) {
           v.retry_type_ = RETRY_TYPE_LOCAL;
         } else {
           try_packet_retry(v);
@@ -851,6 +852,27 @@ void ObQueryRetryCtrl::location_error_nothing_readable_proc(ObRetryParam &v)
   }
 }
 
+void ObQueryRetryCtrl::no_replica_valid_proc(ObRetryParam &v)
+{
+  int ret = OB_SUCCESS;
+  bool ap_query_replica_fallback = true;
+  // Only retry when route_to_column_replica is set and ap_query_replica_fallback is true
+  if (!v.session_.get_route_to_column_replica()) {
+    empty_proc(v);
+  } else if (OB_FAIL(v.session_.get_sys_variable(share::SYS_VAR_AP_QUERY_REPLICA_FALLBACK,
+                                                 ap_query_replica_fallback))) {
+    LOG_WARN("failed to get ap_query_replica_fallback", K(ret));
+    empty_proc(v);
+  } else if (!ap_query_replica_fallback) {
+    empty_proc(v);
+  } else {
+    // Set route_to_column_replica to false before retry
+    v.session_.set_route_to_column_replica(false);
+    // Use the same retry logic as OB_NO_READABLE_REPLICA
+    location_error_nothing_readable_proc(v);
+  }
+}
+
 void ObQueryRetryCtrl::peer_server_status_uncertain_proc(ObRetryParam &v)
 {
   ObRetryObject retry_obj(v);
@@ -1200,6 +1222,7 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("LOCATION", OB_LOCATION_LEADER_NOT_EXIST,       location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_LS_LOCATION_LEADER_NOT_EXIST,    location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_NO_READABLE_REPLICA,             location_error_nothing_readable_proc, inner_location_error_nothing_readable_proc, ObDASRetryCtrl::tablet_location_retry_proc);
+  ERR_RETRY_FUNC("LOCATION", OB_NO_REPLICA_VALID,                no_replica_valid_proc,               empty_proc,                                  nullptr);
   ERR_RETRY_FUNC("LOCATION", OB_NOT_MASTER,                      location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_RS_NOT_MASTER,                   location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
   ERR_RETRY_FUNC("LOCATION", OB_RS_SHUTDOWN,                     location_error_proc,        inner_location_error_proc,                            ObDASRetryCtrl::tablet_location_retry_proc);
@@ -1248,6 +1271,7 @@ int ObQueryRetryCtrl::init()
 
   /* sql */
   ERR_RETRY_FUNC("SQL",      OB_ERR_INSUFFICIENT_PX_WORKER,      px_thread_not_enough_proc,  short_wait_retry_proc,                                nullptr);
+  ERR_RETRY_FUNC("SQL",      OB_AP_QUERY_NEED_RETRY,             force_local_retry_proc,     force_local_retry_proc,                               nullptr);
   // create a new interval part when inserting a row which has no matched part,
   // wait and retry, will see new part
   ERR_RETRY_FUNC("SQL",      OB_NO_PARTITION_FOR_INTERVAL_PART,  short_wait_retry_proc,             short_wait_retry_proc,                         nullptr);

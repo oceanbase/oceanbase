@@ -29,6 +29,13 @@ class ObSQLSessionInfo;
 struct PlanText;
 struct TableItem;
 
+enum class APQueryRoutePolicy {
+  OFF,
+  AUTO,
+  FORCE,
+  MAX
+};
+
 struct ObHints
 {
   ObHints () : stmt_id_(OB_INVALID_STMT_ID) {}
@@ -70,6 +77,8 @@ struct ObQueryHint {
   const ObGlobalHint &get_global_hint() const { return global_hint_; }
   bool has_outline_data() const { return is_valid_outline_; }
   bool has_user_def_outline() const { return user_def_outline_; }
+  int get_ap_query_route_policy(const ObSQLSessionInfo *session,
+                                APQueryRoutePolicy &val) const;
 
   int set_outline_data_hints(const ObGlobalHint &global_hint,
                              const int64_t stmt_id,

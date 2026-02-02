@@ -430,6 +430,9 @@ int wait_follower_readable_(ObLS &ls,
                             const int64_t expire_ts,
                             const share::SCN &snapshot,
                             const ObTxReadSnapshot::SRC src);
+int try_force_strongly_read_follower(ObLS &ls,
+                                     const int64_t expire_ts,
+                                     const ObTxReadSnapshot &snapshot);
 MonotonicTs get_req_receive_mts_();
 bool is_ls_dropped_(const share::ObLSID ls_id);
 static bool common_retryable_error_(const int ret);

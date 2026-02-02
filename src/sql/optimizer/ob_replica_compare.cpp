@@ -39,13 +39,12 @@ ObReplicaCompare::ObReplicaCompare(ObRoutePolicyType policy_type)
         cmp_func_array_[POS_TYPE] = &ObReplicaCompare::compare_pos_type;
       }
 
-
-bool ObReplicaCompare::operator()(const ObRoutePolicy::CandidateReplica &replica1,
-                                  const ObRoutePolicy::CandidateReplica &replica2)
+ObReplicaCompare::CompareRes ObReplicaCompare::compare_replica(const ObRoutePolicy::CandidateReplica &replica1,
+                                                               const ObRoutePolicy::CandidateReplica &replica2)
 {
   int ret = OB_SUCCESS;
-  bool bool_ret = false;
   CompareType *cmp_type_array = NULL;
+  CompareRes cmp_res = EQUAL;
   if (OB_FAIL(ret_)) {//do nothing if we already have an error
   } else {
     if (READONLY_ZONE_FIRST == policy_type_) {
@@ -62,7 +61,6 @@ bool ObReplicaCompare::operator()(const ObRoutePolicy::CandidateReplica &replica
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected policy type", K(policy_type_), K(ret));
     }
-    CompareRes cmp_res = EQUAL;
     for(int64_t i = 0 ; OB_SUCC(ret) && cmp_res == EQUAL && i < CMP_CNT; ++i) {
       CompareType cmp_type = cmp_type_array[i];
       CmpFuncPtr cmp_fun = cmp_func_array_[cmp_type];
@@ -73,8 +71,20 @@ bool ObReplicaCompare::operator()(const ObRoutePolicy::CandidateReplica &replica
         cmp_res = (this->*cmp_fun)(replica1, replica2);
       }
     }
-    bool_ret = (cmp_res == LESS);
     ret_ = ret;
+  }
+  return cmp_res;
+}
+
+bool ObReplicaCompare::operator()(const ObRoutePolicy::CandidateReplica &replica1,
+                                  const ObRoutePolicy::CandidateReplica &replica2)
+{
+  int ret = OB_SUCCESS;
+  CompareRes cmp_res = compare_replica(replica1, replica2);
+  bool bool_ret = false;
+  if (OB_FAIL(ret_)) {//do nothing if we already have an error
+  } else {
+    bool_ret = (cmp_res == LESS);
   }
   return bool_ret;
 }
