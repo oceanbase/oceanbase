@@ -509,27 +509,31 @@ int ObExprConcat::eval_concat_text_vector(const ObExpr &expr, ObEvalCtx &ctx, co
     ObIAllocator &calc_alloc = alloc_guard.get_allocator();
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
       ObIVector *arg_vec = static_cast<ObIVector *>(expr.args_[i]->get_vector(ctx));
-      ObDatumMeta input_meta = expr.args_[i]->datum_meta_;
-      bool has_lob_header = expr.args_[i]->obj_meta_.has_lob_header();
-      ObTextStringIter input_iter(input_meta.type_, input_meta.cs_type_, arg_vec->get_string(idx), has_lob_header);
-      ObTextStringIterState state;
-      ObString src_block_data;
-      if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
-        LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
-      }
-      while (OB_SUCC(ret)
-              && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
-        if (OB_FAIL(output_result.append(src_block_data))) {
-          LOG_WARN("output_result append failed", K(ret), K(src_block_data));
-        } else {
-          off += src_block_data.length();
+      if (arg_vec->is_null(idx)) {
+        // do nothing
+      } else {
+        ObDatumMeta input_meta = expr.args_[i]->datum_meta_;
+        bool has_lob_header = expr.args_[i]->obj_meta_.has_lob_header();
+        ObTextStringIter input_iter(input_meta.type_, input_meta.cs_type_, arg_vec->get_string(idx), has_lob_header);
+        ObTextStringIterState state;
+        ObString src_block_data;
+        if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
+          LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
         }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-        ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
-              input_iter.get_inner_ret() : OB_INVALID_DATA;
-        LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+        while (OB_SUCC(ret)
+                && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+          if (OB_FAIL(output_result.append(src_block_data))) {
+            LOG_WARN("output_result append failed", K(ret), K(src_block_data));
+          } else {
+            off += src_block_data.length();
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                input_iter.get_inner_ret() : OB_INVALID_DATA;
+          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+        }
       }
     }
     if (OB_SUCC(ret)) {

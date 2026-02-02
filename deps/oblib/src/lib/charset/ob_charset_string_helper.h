@@ -1708,7 +1708,7 @@ public:
     if (is_ascii) {
       return length;
     } else if (can_do_ascii_optimize(coll_type)) {
-      if (is_ascii_str(str.ptr(), length)) {
+      if (is_ascii_str(str.ptr(), std::min<int64_t>(length, str.length()))) {
         return length;
       } else {
         return charpos_optimized(coll_type, str.ptr(), str.length(), length);
@@ -1727,7 +1727,7 @@ public:
     if constexpr (is_ascii) {
       return length;
     } else if constexpr (can_do_ascii_optimize) {
-      if (is_ascii_str(str.ptr(), length)) {
+      if (is_ascii_str(str.ptr(), std::min<int64_t>(length, str.length()))) {
         return length;
       } else {
         return charpos_optimized(coll_type, str.ptr(), str.length(), length);
@@ -1779,7 +1779,7 @@ public:
                                             int64_t &total_width)
   {
     int ret = OB_SUCCESS;
-    if (is_ascii || (can_do_ascii_optimize(coll_type) && is_ascii_str(str, max_width))) {
+    if (is_ascii || (can_do_ascii_optimize(coll_type) && is_ascii_str(str, std::min<int64_t>(max_width, str_length)))) {
       char_pos = total_width = max_width;
     } else {
       ret = ObCharset::max_display_width_charpos(

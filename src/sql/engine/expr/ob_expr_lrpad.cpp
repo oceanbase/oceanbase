@@ -817,7 +817,8 @@ int ObExprBaseLRpad::calc_mysql_pad_expr_vector(const ObExpr &expr,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is NULL", K(ret));
     } else {
-      if (!ob_is_text_tc(expr.datum_meta_.type_) &&
+      if (expr.is_batch_result() &&
+          !ob_is_text_tc(expr.datum_meta_.type_) &&
           !ob_is_text_tc(expr.args_[0]->datum_meta_.type_) &&
           !ob_is_text_tc(expr.args_[2]->datum_meta_.type_) &&
           expr.args_[1]->is_static_const_ &&
@@ -1264,7 +1265,7 @@ int ObExprBaseLRpad::calc_mysql_vector_optimized(const ObExpr &expr,
   } else {
     // get context
     int64_t length = len_vec->get_int(0);
-    int64_t buffer_size = length * mbmaxlen;
+    int64_t buffer_size = std::min(max_result_size, length * mbmaxlen);
     ObExecContext &exec_ctx = ctx.exec_ctx_;
     uint64_t pad_id = static_cast<uint64_t>(expr.expr_ctx_id_);
     if (NULL == (pad_ctx = static_cast<ObExprLRPadContext *>(exec_ctx.get_expr_op_ctx(pad_id)))) {
@@ -1947,12 +1948,12 @@ int ObExprBaseLRpad::get_padding_info_oracle_vector(const ObCollationType &cs,
     int64_t total_width = 0;
     if (remain_width > 0 && remain_size > 0) {
       if (OB_FAIL(ObCharsetStringHelper::fast_display_charpos(cs,
-                                                                     str_pad.ptr(),
-                                                                     std::min<int64_t>(str_pad.length(), remain_size),
-                                                                     remain_width,
-                                                                     false,
-                                                                     prefix_size,
-                                                                     total_width))) {
+                                                              str_pad.ptr(),
+                                                              std::min<int64_t>(str_pad.length(), remain_size),
+                                                              remain_width,
+                                                              false,
+                                                              prefix_size,
+                                                              total_width))) {
         LOG_WARN("Failed to get max display width", K(ret), K(str_text), K(remain_width));
       } else if (remain_width != total_width && remain_size != prefix_size) {
         pad_space = true;
@@ -1979,7 +1980,8 @@ int ObExprBaseLRpad::calc_oracle_pad_expr_vector(const ObExpr &expr,
   } else if (OB_FAIL(expr.eval_vector_param_value(ctx, skip, bound))) {
     LOG_WARN("eval param value failed", K(ret));
   } else {
-    if (!ob_is_text_tc(expr.datum_meta_.type_) &&
+    if (expr.is_batch_result() &&
+        !ob_is_text_tc(expr.datum_meta_.type_) &&
         !ob_is_text_tc(expr.args_[0]->datum_meta_.type_) &&
         (expr.arg_cnt_ == 2 || !ob_is_text_tc(expr.args_[2]->datum_meta_.type_)) &&
         expr.args_[1]->is_static_const_ && !expr.args_[1]->get_vector(ctx)->has_null() &&
@@ -2391,7 +2393,7 @@ int ObExprBaseLRpad::calc_oracle_vector_optimized(const ObExpr &expr,
     ObExecContext &exec_ctx = ctx.exec_ctx_;
     uint64_t pad_id = static_cast<uint64_t>(expr.expr_ctx_id_);
     if (NULL == (pad_ctx = static_cast<ObExprLRPadContext *>(exec_ctx.get_expr_op_ctx(pad_id)))) {
-      int64_t buffer_size = len_int * mbmaxlen;
+      int64_t buffer_size = std::min(max_result_size, len_int * mbmaxlen);
       if (OB_FAIL(init_pad_ctx(expr, ctx, exec_ctx, pad_id, str_pad, len_int, buffer_size, false, pad_ctx))) {
         LOG_WARN("failed to init pad ctx", K(ret));
       }
