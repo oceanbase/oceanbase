@@ -637,6 +637,7 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
     ObTransService *txs = NULL;
     uint64_t tenant_id = session->get_effective_tenant_id();
     const common::ObString &trace_info = session->get_ob_trace_info();
+    ObAuditRecordData &audit_record = session->get_raw_audit_record();
     if (OB_FAIL(get_tx_service(session, txs))) {
       LOG_ERROR("fail to get trans service", K(ret), K(tenant_id));
     } else if (is_rollback) {
@@ -661,6 +662,8 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
             di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
           }
           callback->handin();
+        } else {
+          audit_record.exec_timestamp_.executor_end_ts_ = tx_ptr->get_commit_start_time();
         }
       }
     } else {
@@ -668,7 +671,6 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
       if (OB_FAIL(txs->commit_tx(*tx_ptr, expire_ts, &trace_info))) {
         LOG_WARN("sync commit tx fail", K(ret), K(expire_ts), KPC(tx_ptr));
       }
-      ObAuditRecordData &audit_record = session->get_raw_audit_record();
       audit_record.exec_timestamp_.commit_t_ = tx_ptr->get_trans_commit_time();
     }
   }

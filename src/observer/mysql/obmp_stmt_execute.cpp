@@ -1335,7 +1335,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
-      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_, async_resp_used);
       audit_record.exec_timestamp_.update_stage_time();
 
       if (enable_perf_event && !THIS_THWORKER.need_retry()
