@@ -1109,6 +1109,30 @@ def check_sys_table_progressive_merge_round(query_cur):
       else:
         check_sys_table_progressive_merge_round_by_tenant(result[0], query_cur)
 
+def check_shared_storage(query_cur):
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    if min_cluster_version < get_version("4.4.2.0"):
+      sql = """select count(*) from GV$OB_PARAMETERS  where name='ob_startup_mode' and value='shared_storage'"""
+      (desc, results) = query_cur.exec_query(sql)
+      if len(results) != 1:
+        fail_list.append('ob_startup_mode is not sync')
+      elif len(results[0]) != 1:
+        fail_list.append('column cnt not match')
+      else:
+        if int(results[0][0]) != 0:
+          fail_list.append('shared storage cluster less than 4.4.2.0 is not allowed to upgrade to current version')
+        else:
+          logging.info('current startup mode is {}'.format(results[0][0]))
+
+
 # 开始升级前的检查
 def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
   try:
@@ -1156,6 +1180,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_
       check_enable_logonly_replica(cur, query_cur)
       check_enable_record_trace_id(cur, query_cur)
       check_sys_table_progressive_merge_round(query_cur)
+      check_shared_storage(query_cur)
       check_fail_list()
       modify_server_permanent_offline_time(cur)
     except Exception as e:
