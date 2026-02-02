@@ -4282,11 +4282,12 @@ struct ParamFlag
                 is_boolean_(false),
                 is_batch_parameter_(0),
                 ignore_scale_check_(false),
+                need_strict_type_match_(false),
                 reserved_(0)
   { }
   TO_STRING_KV(K_(need_to_check_type), K_(need_to_check_bool_value),
                K_(expected_bool_value), K_(is_pl_mock_default_param), K_(need_to_check_extend_type), K_(is_batch_parameter),
-               K_(ignore_scale_check));
+               K_(ignore_scale_check), K_(need_strict_type_match));
   void reset();
 
   static uint32_t flag_offset_bits() { return offsetof(ParamFlag, flag_) * 8; }
@@ -4311,7 +4312,8 @@ struct ParamFlag
     uint8_t extend_flag_;
     struct {
       uint8_t ignore_scale_check_ : 1; //TRUE if plan cache can reuse by different scale numbers, FALSE otherwise
-      uint8_t reserved_ : 7;
+      uint8_t need_strict_type_match_ : 1; //TRUE if need strict type match (for pl null param)
+      uint8_t reserved_ : 6;
     };
   };
   OB_UNIS_VERSION_V(1);
@@ -4377,6 +4379,8 @@ public:
 
   OB_INLINE void set_ignore_scale_check(bool flag) { flag_.ignore_scale_check_ = flag; }
   OB_INLINE bool ignore_scale_check() const { return flag_.ignore_scale_check_; }
+  OB_INLINE void set_need_strict_type_match(bool flag) { flag_.need_strict_type_match_ = flag; }
+  OB_INLINE bool need_strict_type_match() const { return flag_.need_strict_type_match_; }
 
   OB_INLINE void set_raw_text_info(int32_t pos, int32_t len)
   {
