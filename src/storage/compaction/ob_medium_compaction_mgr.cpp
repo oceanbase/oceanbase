@@ -779,8 +779,12 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
           || is_mv_refresh_or_restore_remote_tablet) {
         schedule_scn = info->medium_snapshot_;
         compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
-        // co_major_merge_strategy will be decided later based on current sstable format
-        info->get_co_major_merge_strategy(co_major_merge_strategy);
+        if (info->storage_schema_.is_row_store()) {
+          co_major_merge_strategy.reset();
+        } else {
+          // co_major_merge_strategy will be decided later based on current sstable format
+          info->get_co_major_merge_strategy(co_major_merge_strategy);
+        }
         merge_reason = (ObAdaptiveMergePolicy::AdaptiveMergeReason)info->medium_merge_reason_;
       }
       break; // found one unfinish medium info, loop end
