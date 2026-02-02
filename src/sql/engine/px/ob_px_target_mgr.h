@@ -74,7 +74,7 @@ typedef common::ObLinkHashMap<ObPxTenantInfo, ObPxResInfo, ObPxInfoAlloc> ObPxIn
 class ObPxGlobalResGather
 {
 public:
-  ObPxGlobalResGather(ObPxRpcFetchStatResponse &result) : result_(result) {}
+  ObPxGlobalResGather(ObPxRpcFetchStatResponse &result) : result_(result){}
   ~ObPxGlobalResGather() {}
   int operator()(hash::HashMapPair<ObAddr, ServerTargetUsage> &entry)
   {
@@ -114,11 +114,16 @@ public:
   int set_parallel_servers_target(uint64_t tenant_id, int64_t parallel_servers_target);
   int get_parallel_servers_target(uint64_t tenant_id, int64_t &parallel_servers_target);
   int get_parallel_session_count(uint64_t tenant_id, int64_t &parallel_session_count);
+  int inc_realtime_px_task_cnt(uint64_t tenant_id);
+  int dec_realtime_px_task_cnt(uint64_t tenant_id);
+  int get_realtime_px_task_cnt(uint64_t tenant_id, int64_t &px_task_cnt);
 
   // for rpc
   int is_leader(uint64_t tenant_id,  bool &is_leader);
   int get_version(uint64_t tenant_id, uint64_t &version);
-  int update_peer_target_used(uint64_t tenant_id, const ObAddr &server, int64_t peer_used, uint64_t version);
+  int update_peer_target_used(uint64_t tenant_id, const ObAddr &server,
+                              int64_t peer_used, uint64_t version);
+  int set_peer_realtime_target_used(uint64_t tenant_id, const ObAddr &server, int64_t realtime_target_used);
   int gather_global_target_usage(uint64_t tenant_id, ObPxGlobalResGather &gather);
   int reset_leader_statistics(uint64_t tenant_id);
   
@@ -126,11 +131,13 @@ public:
   int apply_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map,
                    int64_t wait_time_us, int64_t session_target, int64_t req_cnt,
                    int64_t &admit_count, uint64_t &admit_version);
-  int release_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map, uint64_t admit_version);
+  int release_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map,
+                    uint64_t admit_version);
 
   // for virtual_table iter
   int get_all_tenant(common::ObSEArray<uint64_t, 4> &tenant_array);
   int get_all_target_info(uint64_t tenant_id, common::ObIArray<ObPxTargetInfo> &target_info_array);
+  int get_enable_px_dop_dynamic_scaling(uint64_t tenant_id, bool &enable_px_dop_dynamic_scaling);
 private:
   bool is_inited_;
   bool is_running_;

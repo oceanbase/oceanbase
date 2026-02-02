@@ -368,7 +368,7 @@ int ObDfoWorkerAssignment::get_dfos_worker_count(const ObIArray<ObDfo*> &dfos,
       LOG_WARN("dfo edges expect to have parent", KPC(parent), KPC(child), K(ret));
     } else {
       int64_t child_assigned = get_minimal ? 1 : child->get_assigned_worker_count();
-      int64_t parent_assigned = get_minimal ? 1 : parent->get_assigned_worker_count();
+      int64_t parent_assigned = parent->is_root_dfo() ? 0 : (get_minimal ? 1 : parent->get_assigned_worker_count());
       int64_t assigned = parent_assigned + child_assigned;
       // 局部右深树的场景，depend_sibling 和当前 child dfo 都会被调度
       /* Why need extra flag has_depend_sibling_? Why not use NULL != depend_sibling_?
@@ -397,7 +397,7 @@ int ObDfoWorkerAssignment::get_dfos_worker_count(const ObIArray<ObDfo*> &dfos,
       assigned += max_depend_sibling_assigned_worker;
       if (assigned > total_assigned) {
         total_assigned = assigned;
-        LOG_TRACE("update total assigned", K(idx), K(get_minimal), K(parent_assigned),
+        LOG_TRACE("update total assigned", KPC(parent), K(idx), K(get_minimal), K(parent_assigned),
                 K(child_assigned), K(max_depend_sibling_assigned_worker), K(total_assigned));
       }
     }

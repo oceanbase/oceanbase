@@ -29,6 +29,7 @@
 #include "storage/direct_load/ob_direct_load_mem_define.h"
 #include "storage/ddl/ob_cg_row_tmp_file.h"
 #include "observer/table_load/ob_table_load_empty_insert_tablet_ctx_manager.h"
+#include "sql/engine/px/ob_px_target_mgr.h"
 
 namespace oceanbase
 {
@@ -534,7 +535,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         LOG_WARN("fail to get all leader info", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::get_memory_limit(memory_limit))) {
         LOG_WARN("fail to get memory_limit", K(ret));
-      } else if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(tenant_id, SYS_VAR_PARALLEL_SERVERS_TARGET, parallel_servers_target))) {
+      } else if (OB_FAIL(OB_PX_TARGET_MGR.get_parallel_servers_target(tenant_id, parallel_servers_target))) {
         LOG_WARN("fail read tenant variable", KR(ret), K(tenant_id));
       } else {
         bool include_cur_addr = false;

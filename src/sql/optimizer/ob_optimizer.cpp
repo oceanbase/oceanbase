@@ -19,6 +19,7 @@
 #include "src/share/stat/ob_opt_stat_manager.h"
 #include "src/sql/engine/px/ob_dfo_scheduler.h"
 #include "share/ob_license_utils.h"
+#include "sql/engine/px/ob_px_target_mgr.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -1277,8 +1278,7 @@ int ObOptimizer::set_auto_dop_params(const ObSQLSessionInfo &session)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
     } else if (allowed_get_session_parallel_param(session) &&
-               OB_FAIL(ObSchemaUtils::get_tenant_int_variable(session.get_effective_tenant_id(),
-                                                              SYS_VAR_PARALLEL_SERVERS_TARGET,
+               OB_FAIL(OB_PX_TARGET_MGR.get_parallel_servers_target(session.get_effective_tenant_id(),
                                                               parallel_servers_target))) {
       LOG_WARN("fail read tenant variable", K(ret), K(session.get_effective_tenant_id()));
     } else {

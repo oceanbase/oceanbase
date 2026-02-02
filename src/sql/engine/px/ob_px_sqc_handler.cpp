@@ -15,6 +15,9 @@
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "observer/omt/ob_tenant.h"
+#include "sql/engine/px/ob_px_target_mgr.h"
+
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -103,7 +106,7 @@ int ObPxSqcHandler::pre_acquire_px_worker(int64_t &reserved_thread_count)
   int64_t max_thread_count = sqc_init_args_->sqc_.get_max_task_count();
   int64_t min_thread_count = sqc_init_args_->sqc_.get_min_task_count();
     // 提前在租户中预留线程数，用于 px worker 执行
-  ObPxSubAdmission::acquire(max_thread_count, min_thread_count, reserved_px_thread_count_);
+  ObPxSubAdmission::acquire(max_thread_count, min_thread_count, tenant_min_cpu_, tenant_id_, reserved_px_thread_count_);
   reserved_px_thread_count_ = reserved_px_thread_count_ < min_thread_count ? 0 : reserved_px_thread_count_;
   if (OB_FAIL(notifier_->set_expect_worker_count(reserved_px_thread_count_))) {
     LOG_WARN("failed to set expect worker count", K(ret), K(reserved_px_thread_count_));
@@ -114,7 +117,7 @@ int ObPxSqcHandler::pre_acquire_px_worker(int64_t &reserved_thread_count)
   if (OB_SUCC(ret)) {
     if (reserved_px_thread_count_ < max_thread_count &&
         reserved_px_thread_count_ >= min_thread_count) {
-      LOG_INFO("Downgrade px thread allocation",
+      LOG_INFO("Downgrade px thread allocation due to config _max_px_workers_per_cpu",
               K_(reserved_px_thread_count),
               K(max_thread_count),
               K(min_thread_count),
@@ -202,6 +205,17 @@ int ObPxSqcHandler::init()
     exec_ctx_->set_sqc_handler(this);
   }
 
+  if (OB_SUCC(ret)) {
+    oceanbase::omt::ObTenant *tenant = nullptr;
+    oceanbase::omt::ObThWorker *worker = nullptr;
+    if (nullptr == (worker = THIS_THWORKER_SAFE)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Oooops! can't find tenant. Unexpected!", K(tenant_id_));
+    } else if (nullptr == (tenant = worker->get_tenant())) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Oooops! can't find tenant. Unexpected!", KP(worker));
+    } else {
+      tenant_min_cpu_ = tenant->unit_min_cpu();
+    }
+  }
 #ifdef ERRSIM
   int errsim_code = EventTable::EN_PX_SQC_HANDLER_INIT_FAILED;
   if (OB_SUCC(ret) && errsim_code != OB_SUCCESS) {
@@ -434,6 +448,75 @@ void ObPxSqcHandler::check_interrupt()
   }
 }
 
+int64_t ObPxSqcHandler::dop_scaling_by_load(int64_t dop, int64_t low_water, int64_t high_water,
+  int64_t realtime_task_cnt)
+{
+  int64_t final_dop = dop;
+  if (realtime_task_cnt >= high_water) {
+    final_dop = 1;
+  } else if (realtime_task_cnt + dop <= low_water) {
+    // do nothing.
+  } else {
+    int64_t low_water_remain = low_water - realtime_task_cnt;
+    int64_t high_water_remain = high_water - realtime_task_cnt;
+    int64_t delta = high_water - low_water;
+    // the part below low_water will not be decreased.
+    int64_t safe_part = max(low_water_remain, 0);
+    final_dop = safe_part;
+    int64_t exceed_start = max(realtime_task_cnt, low_water);
+    int64_t exceed_end = min(realtime_task_cnt + dop, high_water);
+    if (exceed_end > exceed_start) {
+      // each dop between exceed_start and exceed_end should be decreased and they have different retention rate.
+      // retention_rate(x) = 1 - (x - low_water) / delta
+      // ∫[a,b] (1 - (x - low_water) / delta) dx
+      //   = (b - a) - [(x - low_water)²/(2*delta)]|[a,b]
+      //   = (b - a) - [(b - low_water)² - (a - low_water)²] / (2*delta)
+      int64_t a = exceed_start;
+      int64_t b = exceed_end;
+      int64_t a_offset = a - low_water;
+      int64_t b_offset = b - low_water;
+      double retained = (double)(b - a) -
+                          ((double)(b_offset * b_offset - a_offset * a_offset)) / (2.0 * delta);
+      int64_t scaled_exceed_part = (int64_t)(retained + 0.5);
+      scaled_exceed_part = max(scaled_exceed_part, 1);
+      final_dop += scaled_exceed_part;
+    }
+    final_dop = max(final_dop, 1);
+  }
+  LOG_TRACE("[PX DOP SCALING] check dop scaling by load", K(low_water), K(high_water),
+            K(realtime_task_cnt), K(dop), K(final_dop));
+  return final_dop;
+}
+
+int ObPxSqcHandler::dop_scaling_by_load(int64_t &dop)
+{
+  int ret = OB_SUCCESS;
+  bool enable_px_dop_dynamic_scaling = false;
+  if (OB_FAIL(OB_PX_TARGET_MGR.get_enable_px_dop_dynamic_scaling(tenant_id_, enable_px_dop_dynamic_scaling))) {
+    LOG_WARN("get tenant enable_px_dop_dynamic_scaling failed", K(ret), K(tenant_id_));
+  } else if (enable_px_dop_dynamic_scaling) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    int64_t realtime_task_cnt = 0;
+    if (OB_UNLIKELY(!tenant_config.is_valid() || 0 == tenant_min_cpu_)) {
+      // do nothing.
+    } else if (OB_FAIL(OB_PX_TARGET_MGR.get_realtime_px_task_cnt(tenant_id_, realtime_task_cnt))) {
+      LOG_WARN("get realtime task cnt failed", K(ret));
+    } else {
+      int64_t target_task_count = 0;
+      if (OB_FAIL(OB_PX_TARGET_MGR.get_parallel_servers_target(tenant_id_, target_task_count))) {
+        LOG_WARN("get parallel servers target failed", K(ret));
+      } else {
+        int64_t px_target_low_watermark = tenant_config->px_target_low_watermark;
+        int64_t px_target_high_watermark = tenant_config->px_target_high_watermark;
+        int64_t low_water = (int64_t)((double)target_task_count * px_target_low_watermark / 100.0);
+        int64_t high_water = (int64_t)((double)target_task_count * px_target_high_watermark / 100.0);
+        dop = dop_scaling_by_load(dop, low_water, high_water, realtime_task_cnt);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPxSqcHandler::task_need_regeneration_for_external_table(ObGranulePump &pump, bool &need_regeneration)
 {
   int ret = OB_SUCCESS;
@@ -466,11 +549,17 @@ int ObPxSqcHandler::thread_count_auto_scaling(int64_t &reserved_px_thread_count)
    * the max thread cnt should be less than ranges cnt.
    */
   int64_t range_cnt = 0;
-  int64_t temp_cnt = reserved_px_thread_count;
+  int64_t origin_thread_cnt = reserved_px_thread_count;
+  int64_t thread_cnt_after_scaling_by_load = 0;
   if (OB_ISNULL(sub_coord_) || OB_ISNULL(sqc_init_args_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subcoord is null", K(ret));
+  } else if (OB_FAIL(dop_scaling_by_load(reserved_px_thread_count))) {
+    LOG_WARN("dop scaling by load failed", K(ret));
+  } else if (FALSE_IT(thread_cnt_after_scaling_by_load = reserved_px_thread_count)) {
+  } else if (reserved_px_thread_count <= 1 || !sqc_init_args_->sqc_.is_single_tsc_leaf_dfo()) {
   } else {
+    int64_t temp_cnt = reserved_px_thread_count;
     ObGranulePump &pump = sub_coord_->get_sqc_ctx().gi_pump_;
     bool need_regeneration = false;
     if (reserved_px_thread_count <= 1 ||
@@ -489,16 +578,18 @@ int ObPxSqcHandler::thread_count_auto_scaling(int64_t &reserved_px_thread_count)
       LOG_WARN("range cnt equal 0", K(ret));
     } else {
       reserved_px_thread_count = min(reserved_px_thread_count, range_cnt);
+    }
+  }
+  if (origin_thread_cnt > reserved_px_thread_count) {
+    if (OB_SUCC(ret)) {
+      sqc_init_args_->sqc_.set_task_count(reserved_px_thread_count);
       reserved_px_thread_count_ = reserved_px_thread_count;
-      if (temp_cnt > reserved_px_thread_count) {
-        LOG_TRACE("sqc px worker auto-scaling worked", K(temp_cnt), K(range_cnt), K(reserved_px_thread_count));
-      }
       if (OB_FAIL(notifier_->set_expect_worker_count(reserved_px_thread_count))) {
         LOG_WARN("failed to set expect worker count", K(ret), K(reserved_px_thread_count_));
-      } else {
-        sqc_init_args_->sqc_.set_task_count(reserved_px_thread_count);
       }
     }
+    LOG_INFO("[PX DOP SCALING] sqc px worker auto-scaling worked", K(origin_thread_cnt),
+              K(thread_cnt_after_scaling_by_load), K(reserved_px_thread_count));
   }
   return ret;
 }

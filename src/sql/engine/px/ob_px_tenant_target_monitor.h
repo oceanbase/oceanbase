@@ -84,7 +84,7 @@ private:
   // 思考：各个 follower 能不能直接汇报本机保存的 local_target_used_ 呢？理论上是可以的，但是 leader 端
   // 汇总起来比较麻烦，它需要遍历所有 follower 的值并求和。汇报“增量”则可以避免这个求和操作。
   //
-  int64_t peer_target_used_;     // leader 视角的数据：各个 follower 汇报上来的 target 使用量汇总成 peer_target_used_
+  int64_t peer_target_used_;     // leader 视角的数据：各个 follower 汇报上来的 target 使用量汇总成 peer_target_used_，或节点发来的实时的target_used.
   int64_t local_target_used_;    // follower 视角数据：本地记录的资源消耗数量，这个量里面可能有部分尚未汇报给 leader
   int64_t report_target_used_;   // follower 视角数据：已经上报给 leader 的数量，使得 leader 汇总后能有一个尽量精确的全局视图
 
@@ -127,7 +127,9 @@ public:
   int refresh_statistics(bool need_refresh_all);
   bool is_leader();
   uint64_t get_version();
-  int update_peer_target_used(const ObAddr &server, int64_t peer_used, uint64_t version);
+  int update_peer_target_used(const ObAddr &server,
+                              int64_t peer_used, uint64_t version, bool is_leader);
+  int set_peer_realtime_target_used(const ObAddr &server, int64_t realtime_target_used);
   int get_global_target_usage(const hash::ObHashMap<ObAddr, ServerTargetUsage> *&global_target_usage);
   // if role is follower and find that its version is different with leader's
   // call this function to reset statistics, the param version is from the leader.
@@ -145,6 +147,10 @@ public:
   // for virtual_table iter
   int get_all_target_info(common::ObIArray<ObPxTargetInfo> &target_info_array);
   static uint64_t get_server_index(uint64_t version);
+  void inc_realtime_px_task_cnt() { ATOMIC_INC(&realtime_px_task_cnt_); }
+  void dec_realtime_px_task_cnt() { ATOMIC_DEC(&realtime_px_task_cnt_); }
+  int64_t get_realtime_px_task_cnt() { return ATOMIC_LOAD(&realtime_px_task_cnt_); }
+  bool enable_px_dop_dynamic_scaling() const { return enable_px_dop_dynamic_scaling_; }
 
   TO_STRING_KV(K_(is_init), K_(tenant_id), K_(server), K_(dummy_cache_leader), K_(role));
 
@@ -155,6 +161,85 @@ private:
   int refresh_dummy_location();
   int query_statistics(ObAddr &leader);
   uint64_t get_new_version();
+
+  struct ReportLocalUsedOp
+  {
+  public:
+    ReportLocalUsedOp(ObPxRpcFetchStatArgs& args) : args_(args) {};
+    virtual ~ReportLocalUsedOp() {};
+    int operator() (common::hash::HashMapPair<ObAddr, ServerTargetUsage> &entry);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ReportLocalUsedOp);
+    ObPxRpcFetchStatArgs &args_;
+  };
+
+  struct UpdatePeerUsedOp
+  {
+  public:
+    UpdatePeerUsedOp(int64_t peer_used, bool is_leader) : peer_used_(peer_used), is_leader_(is_leader) {};
+    virtual ~UpdatePeerUsedOp() {};
+    void operator() (common::hash::HashMapPair<ObAddr, ServerTargetUsage> &entry);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(UpdatePeerUsedOp);
+    int64_t peer_used_;
+    bool is_leader_;
+  };
+
+  struct SetPeerUsedOp
+  {
+  public:
+    SetPeerUsedOp(int64_t realtime_target_used) : realtime_target_used_(realtime_target_used) {};
+    virtual ~SetPeerUsedOp() {};
+    void operator() (common::hash::HashMapPair<ObAddr, ServerTargetUsage> &entry);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(SetPeerUsedOp);
+    int64_t realtime_target_used_;
+  };
+
+  struct ApplyLocalTargetOp
+  {
+  public:
+    ApplyLocalTargetOp(int64_t acquired_cnt, bool is_leader) : acquired_cnt_(acquired_cnt), is_leader_(is_leader) {};
+    virtual ~ApplyLocalTargetOp() {};
+    void operator() (common::hash::HashMapPair<ObAddr, ServerTargetUsage> &entry);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ApplyLocalTargetOp);
+    int64_t acquired_cnt_;
+    bool is_leader_;
+  };
+
+  struct ReleaseLocalTargetOp
+  {
+  public:
+    ReleaseLocalTargetOp(int64_t acquired_cnt, bool is_leader) : acquired_cnt_(acquired_cnt), is_leader_(is_leader) {};
+    virtual ~ReleaseLocalTargetOp() {};
+    void operator() (common::hash::HashMapPair<ObAddr, ServerTargetUsage> &entry);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ReleaseLocalTargetOp);
+    int64_t acquired_cnt_;
+    bool is_leader_;
+  };
+
+  struct GetTargetInfoOp
+  {
+  public:
+    GetTargetInfoOp(common::ObIArray<ObPxTargetInfo> &target_info_array, ObAddr server, uint64_t tenant_id,
+                    bool leader, uint64_t version, int64_t parallel_servers_target, int64_t parallel_session_count)
+      : target_info_array_(target_info_array), server_(server), tenant_id_(tenant_id), leader_(leader),
+        version_(version), parallel_servers_target_(parallel_servers_target),
+        parallel_session_count_(parallel_session_count) {};
+    virtual ~GetTargetInfoOp() {};
+    int operator() (common::hash::HashMapPair<ObAddr, ServerTargetUsage> &entry);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(GetTargetInfoOp);
+    common::ObIArray<ObPxTargetInfo> &target_info_array_;
+    ObAddr server_;
+    uint64_t tenant_id_;
+    bool leader_;
+    uint64_t version_;
+    int64_t parallel_servers_target_;
+    int64_t parallel_session_count_;
+  };
 
 private:
   static const int64_t SERVER_ID_SHIFT = 48;
@@ -185,6 +270,8 @@ private:
   ObPxTargetCond target_cond_;
   bool print_debug_log_;
   bool need_send_refresh_all_;
+  bool enable_px_dop_dynamic_scaling_;
+  int64_t realtime_px_task_cnt_;
 };
 
 }

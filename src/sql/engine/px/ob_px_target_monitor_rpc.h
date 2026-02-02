@@ -43,9 +43,11 @@ class ObPxRpcFetchStatArgs {
 public:
   ObPxRpcFetchStatArgs() : tenant_id_(OB_INVALID_ID), follower_version_(OB_INVALID_ID),
     addr_target_array_(), need_refresh_all_(false) {}
-  ObPxRpcFetchStatArgs(uint64_t tenant_id, uint64_t ver, uint64_t refresh_all) :
+  ObPxRpcFetchStatArgs(uint64_t tenant_id, uint64_t ver, uint64_t refresh_all,
+                       bool enable_px_dop_dynamic_scaling, ObAddr &addr) :
     tenant_id_(tenant_id), follower_version_(ver),
-    addr_target_array_(), need_refresh_all_(refresh_all) {}
+    addr_target_array_(), need_refresh_all_(refresh_all),
+    addr_(addr) {}
   ~ObPxRpcFetchStatArgs() { }
 
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -65,7 +67,7 @@ public:
     return ret;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(follower_version));
+  TO_STRING_KV(K_(tenant_id), K_(follower_version), K_(addr_target_array));
 public:
   uint64_t tenant_id_;
   // Check if the version_ of the follower and the leader match. 
@@ -104,8 +106,7 @@ public:
     }
     return ret;
   }
-
-  TO_STRING_KV(K_(status), K_(tenant_id), K_(leader_version));
+  TO_STRING_KV(K_(status), K_(tenant_id), K_(leader_version), K_(addr_target_array));
 public:
   // Used to notify the follower of the results of this report,
   // such as success, need to roll back (timeout/exception), not master

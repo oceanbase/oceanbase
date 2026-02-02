@@ -15,6 +15,7 @@
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 #include "sql/optimizer/ob_storage_estimator.h"
+#include "sql/engine/px/ob_px_target_mgr.h"
 
 using namespace oceanbase::common;
 
@@ -404,9 +405,9 @@ int ObAdaptiveAutoDop::calculate_tsc_auto_dop(const ObIArray<ObBatchEstTasks *> 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
     } else if (sql_ctx->session_info_->is_user_session()
-               && OB_FAIL(ObSchemaUtils::get_tenant_int_variable(
+               && OB_FAIL(OB_PX_TARGET_MGR.get_parallel_servers_target(
                     sql_ctx->session_info_->get_effective_tenant_id(),
-                    SYS_VAR_PARALLEL_SERVERS_TARGET, parallel_servers_target))) {
+                    parallel_servers_target))) {
       LOG_WARN("fail read tenant variable", K(ret),
                K(sql_ctx->session_info_->get_effective_tenant_id()));
     } else {

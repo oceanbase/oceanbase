@@ -9711,6 +9711,10 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       }
     } else if (0 == STRCMP(item->name_.ptr(), _TRANSFER_TASK_TABLET_COUNT_THRESHOLD)) {
       ret = check_transfer_task_tablet_count_threshold_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), PX_TARGET_LOW_WATERMARK)) {
+      ret = check_px_target_low_watermark(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), PX_TARGET_HIGH_WATERMARK)) {
+      ret = check_px_target_high_watermark(*item);
     } else if (0 == STRCMP(item->name_.ptr(), ZONE_DEPLOY_MODE)) {
       ret = check_zone_deploy_mode_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), ENABLE_GTS_STANDALONE)) {
@@ -9940,6 +9944,42 @@ int ObRootService::check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &ite
   } else if (value > GCONF.data_disk_write_limit_percentage) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, warn_log);
+  }
+  return ret;
+}
+
+int ObRootService::check_px_target_low_watermark(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  int64_t value = ObConfigIntParser::get(item.value_.ptr(), is_valid);
+  if (OB_UNLIKELY(!is_valid)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(item.value_));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(item.exec_tenant_id_));
+    if (tenant_config.is_valid() && OB_UNLIKELY(value > tenant_config->px_target_high_watermark)) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Set px_target_low_watermark higher than high water");
+    }
+  }
+  return ret;
+}
+
+int ObRootService::check_px_target_high_watermark(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  int64_t value = ObConfigIntParser::get(item.value_.ptr(), is_valid);
+  if (OB_UNLIKELY(!is_valid)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(item.value_));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(item.exec_tenant_id_));
+    if (tenant_config.is_valid() && OB_UNLIKELY(value < tenant_config->px_target_low_watermark)) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Set px_target_high_watermark lower than low water");
+    }
   }
   return ret;
 }
@@ -11012,6 +11052,8 @@ int ObRootService::set_config_after_bootstrap_()
     LOG_WARN("push _update_all_columns_for_trigger failed", KR(ret));
   } else if (OB_FAIL(configs.push_back({"_enable_spf_batch_rescan", "true"}))) {
     LOG_WARN("push _enable_spf_batch_rescan failed", KR(ret));
+  } else if (OB_FAIL(configs.push_back({"_enable_px_adaptive_dop", "true"}))) {
+    LOG_WARN("push _enable_px_adaptive_dop failed", KR(ret));
   } else if (OB_FAIL(configs.push_back({"_enable_das_batch_rescan_flag", "15"}))) {
     LOG_WARN("push _enable_das_batch_rescan_flag failed", KR(ret));
   } else {

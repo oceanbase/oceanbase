@@ -1043,6 +1043,8 @@ private:
   int check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSetConfigItem &item);
   int check_enable_database_sharding_none_(obrpc::ObAdminSetConfigItem &item);
   int check_default_table_organization_(obrpc::ObAdminSetConfigItem &item);
+  int check_px_target_low_watermark(obrpc::ObAdminSetConfigItem &item);
+  int check_px_target_high_watermark(obrpc::ObAdminSetConfigItem &item);
   int check_default_table_store_format_(obrpc::ObAdminSetConfigItem &item);
   int check_compaction_low_thread_score_(obrpc::ObAdminSetConfigItem &item);
   int start_ddl_service_();

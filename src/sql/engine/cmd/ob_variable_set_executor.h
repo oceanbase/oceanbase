@@ -122,6 +122,9 @@ private:
                                     common::ObMySQLProxy &sql_proxy,
                                     const ObValidatePasswordCtx &password_ctx);
   int is_support(const share::ObSetVar &set_var);
+  int sync_update_px_target_workers_per_cpu(ObExecContext &ctx,
+                                            uint64_t tenant_id,
+                                            int64_t parallel_servers_target);
   int do_set_names(ObExecContext &ctx, ObSetNamesStmt &stmt);
   int check_protected_sys_variable(ObSQLSessionInfo *session,
                                    const share::ObSetVar &set_var,

@@ -32,6 +32,9 @@
 #include "share/ob_scheduled_manage_dynamic_partition.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
+#include "share/ob_unit_table_operator.h"                         // ObUnitTableOperator
+#include "share/schema/ob_schema_utils.h"                         // ObSchemaUtils
+#include "share/system_variable/ob_sys_var_class_type.h"          // SYS_VAR_PARALLEL_SERVERS_TARGET
 #include "share/ob_global_stat_proxy.h"
 #include "share/compaction/ob_schedule_daily_maintenance_window.h"
 
@@ -2295,7 +2298,6 @@ int ObUpgradeFor4410Processor::post_upgrade_for_scheduled_trigger_dump_data_dict
   }
   return ret;
 }
-
 /* =========== 4410 upgrade processor end ============= */
 
 /* =========== 4420 upgrade processor start ============= */
@@ -2468,6 +2470,67 @@ int ObUpgradeFor4420Processor::grant_priv(const ObPrivSet user_priv_set,
 /* =========== 4420 upgrade processor end ============= */
 
 /* =========== 4510 upgrade processor start ============= */
+
+int ObUpgradeFor4510Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_set_paralllel_target_())) {
+    LOG_WARN("fail to post upgrade set parallel target", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4510Processor::post_upgrade_for_set_paralllel_target_()
+{
+  int ret = OB_SUCCESS;
+  int64_t parallel_servers_target = 0;
+  double min_cpu = 0.0;
+  double px_target_workers_per_cpu = 0.0;
+  ObArray<ObUnitConfig> unit_configs;
+  ObUnitTableOperator unit_operator;
+
+  if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), K_(tenant_id));
+  } else if (!is_user_tenant(tenant_id_) && !is_sys_tenant(tenant_id_)) {
+    LOG_INFO("not user or sys tenant, ignore", K_(tenant_id));
+  } else if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(
+              tenant_id_,
+              SYS_VAR_PARALLEL_SERVERS_TARGET,
+              parallel_servers_target))) {
+    LOG_WARN("fail to get parallel_servers_target", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(unit_operator.init(*sql_proxy_))) {
+    LOG_WARN("fail to init unit operator", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(unit_operator.get_unit_configs_by_tenant(tenant_id_, unit_configs))) {
+    LOG_WARN("fail to get unit configs by tenant", KR(ret), K_(tenant_id));
+  } else {
+    for (int64_t i = 0; i < unit_configs.count(); i++) {
+      min_cpu = max(min_cpu, unit_configs.at(i).min_cpu());
+    }
+    if (OB_UNLIKELY(min_cpu <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid min_cpu", K(ret), K_(tenant_id), K(min_cpu));
+    } else {
+      px_target_workers_per_cpu = static_cast<double>(parallel_servers_target) / min_cpu;
+      ObSqlString sql;
+      int64_t affected_rows = 0;
+
+      if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET px_target_workers_per_cpu = %.2f",
+                          px_target_workers_per_cpu))) {
+        LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id), K(px_target_workers_per_cpu));
+      } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to execute sql", KR(ret), K_(tenant_id), K(sql));
+      } else {
+        LOG_INFO("set px_target_workers_per_cpu for tenant upgrade",
+                  K_(tenant_id), K(parallel_servers_target), K(min_cpu),
+                  K(px_target_workers_per_cpu), K(affected_rows));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObUpgradeFor4510Processor::finish_upgrade()
 {

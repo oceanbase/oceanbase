@@ -74,7 +74,8 @@ int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
   do {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check query status", K(ret));
-    } else if (OB_FAIL(OB_PX_TARGET_MGR.apply_target(tenant_id, worker_map, wait_time_us, session_target, req_cnt, admit_cnt, admission_version))) {
+    } else if (OB_FAIL(OB_PX_TARGET_MGR.apply_target(tenant_id, worker_map, wait_time_us,
+                      session_target, req_cnt, admit_cnt, admission_version))) {
       LOG_WARN("apply target failed", K(ret), K(tenant_id), K(req_cnt));
     } else if (0 != admit_cnt) {
       exec_ctx.set_admission_version(admission_version);
@@ -219,23 +220,18 @@ void ObPxAdmission::exit_query_admission(ObSQLSessionInfo &session,
 
 // 供给 SQC 端使用的 Admission 模块
 // 每个租户一个资源池
-void ObPxSubAdmission::acquire(int64_t max, int64_t min, int64_t &acquired_cnt)
+void ObPxSubAdmission::acquire(int64_t max, int64_t min, int64_t tenant_min_cpu,
+                               uint64_t tenant_id, int64_t &acquired_cnt)
 {
   UNUSED(min);
-  oceanbase::omt::ObTenant *tenant = nullptr;
-  oceanbase::omt::ObThWorker *worker = nullptr;
   int64_t upper_bound = 1;
-  if (nullptr == (worker = THIS_THWORKER_SAFE)) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Oooops! can't find tenant. Unexpected!", K(max), K(min));
-  } else if (nullptr == (tenant = worker->get_tenant())) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Oooops! can't find tenant. Unexpected!", KP(worker), K(max), K(min));
-  } else {
-    oceanbase::omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant->id()));
+  if (OB_LIKELY(tenant_min_cpu > 0)) {
+    oceanbase::omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (!tenant_config.is_valid()) {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "get tenant config failed, use default cpu_quota_concurrency");
-      upper_bound = tenant->unit_min_cpu() * 4;
+      upper_bound = tenant_min_cpu * 4;
     } else {
-      upper_bound = tenant->unit_min_cpu() * tenant_config->_max_px_workers_per_cpu;
+      upper_bound = tenant_min_cpu * tenant_config->_max_px_workers_per_cpu;
     }
   }
   acquired_cnt = std::min(max, upper_bound);

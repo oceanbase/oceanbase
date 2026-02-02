@@ -2302,6 +2302,16 @@ void ObTenant::check_parallel_servers_target()
   int64_t val = 0;
   if (is_virtual_tenant_id(id_)) {
     // Except for system rentals, internal tenants do not allocate px threads
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0) {
+    ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
+    if (tenant_config.is_valid()) {
+      val = static_cast<int64_t>(unit_min_cpu_ * tenant_config->px_target_workers_per_cpu + 0.5);
+    } else {
+      val = unit_min_cpu_ * 4;
+    }
+    if (OB_FAIL(OB_PX_TARGET_MGR.set_parallel_servers_target(id_, val))) {
+      LOG_WARN("set parallel_servers_target failed", K(ret), K(id_), K(val));
+    }
   } else if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(
               id_,
               SYS_VAR_PARALLEL_SERVERS_TARGET,

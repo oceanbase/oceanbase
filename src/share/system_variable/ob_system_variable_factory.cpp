@@ -12,6 +12,11 @@
 
 #define USING_LOG_PREFIX SQL_SESSION
 #include "share/system_variable/ob_system_variable_factory.h"
+#include "src/observer/omt/ob_tenant_config_mgr.h"
+#include "share/ob_server_struct.h"
+#include "src/sql/engine/expr/ob_expr_operator.h"
+#include "src/sql/session/ob_basic_session_info.h"
+
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -21201,6 +21206,54 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
   if (OB_FAIL(ret) && sys_var_ptr != nullptr) {
     sys_var_ptr->~ObBasicSysVar();
     sys_var_ptr = NULL;
+  }
+  return ret;
+}
+
+int ObSysVarParallelServersTarget::inner_to_select_obj(common::ObIAllocator &allocator,
+                                                       const sql::ObBasicSessionInfo &session,
+                                                       common::ObObj &select_obj) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  double min_cpu = 0.0;
+  double max_cpu = 0.0;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
+      tenant_config.is_valid() &&
+      NULL != GCTX.omt_ &&
+      OB_SUCC(GCTX.omt_->get_tenant_cpu(tenant_id, min_cpu, max_cpu))) {
+    int64_t val = static_cast<int64_t>(min_cpu * tenant_config->px_target_workers_per_cpu + 0.5);
+    select_obj.set_int(val);
+  } else {
+    ret = ObIntSysVar::inner_to_select_obj(allocator, session, select_obj);
+  }
+  return ret;
+}
+
+int ObSysVarParallelServersTarget::inner_to_show_str(common::ObIAllocator &allocator,
+                                const sql::ObBasicSessionInfo &session,
+                                common::ObString &show_str) const
+{
+  int ret = OB_SUCCESS;
+  ObObj value;
+  if (OB_FAIL(inner_to_select_obj(allocator, session, value))) {
+    LOG_WARN("inner to select obj failed", K(ret));
+  } else {
+    const ObObj *res_obj = NULL;
+    const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(&session);
+    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, ObCharset::get_system_collation());
+    EXPR_CAST_OBJ_V2(ObVarcharType, value, res_obj);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(res_obj)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys var casted obj ptr is NULL", K(ret), K(value), K(get_name()));
+    } else if (OB_UNLIKELY(ObVarcharType != res_obj->get_type())) {
+      LOG_WARN("sys var casted obj is not ObVarcharType",
+              K(ret), K(value), K(*res_obj), K(get_name()));
+    } else {
+      show_str = res_obj->get_varchar();
+    }
   }
   return ret;
 }

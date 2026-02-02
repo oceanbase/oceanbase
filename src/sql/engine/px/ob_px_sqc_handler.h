@@ -76,7 +76,7 @@ public:
     node_sequence_id_(0), has_interrupted_(false),
     part_ranges_spin_lock_(common::ObLatchIds::PX_TENANT_TARGET_LOCK),
     is_session_query_locked_(false),
-    sqc_metrics_() {
+    sqc_metrics_(), tenant_min_cpu_(0) {
   }
   ~ObPxSqcHandler() = default;
   static constexpr const char *OP_LABEL = ObModIds::ObModIds::OB_SQL_SQC_HANDLER;
@@ -137,6 +137,8 @@ public:
   int64_t get_rpc_level() { return rpc_level_; }
   void set_rpc_level(int64_t level) { rpc_level_ = level; }
   void set_node_sequence_id(uint64_t node_sequence_id) { node_sequence_id_ = node_sequence_id; }
+  int dop_scaling_by_load(int64_t &reserved_px_thread_count);
+  static int64_t dop_scaling_by_load(int64_t dop, int64_t low_water, int64_t high_water, int64_t realtime_task_cnt);
   int thread_count_auto_scaling(int64_t &reserved_px_thread_count);
   bool has_interrupted() const { return has_interrupted_; }
   const Ob2DArray<ObPxTabletRange> &get_partition_ranges() const { return part_ranges_; }
@@ -183,6 +185,7 @@ private:
   SpinRWLock part_ranges_spin_lock_;
   bool is_session_query_locked_;
   ObPxSqcMetrics sqc_metrics_;
+  int64_t tenant_min_cpu_;
 };
 
 }

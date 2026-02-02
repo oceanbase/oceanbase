@@ -1081,6 +1081,12 @@ public:
   ObSysVarParallelServersTarget() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARALLEL_SERVERS_TARGET; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(148); }
+  virtual int inner_to_select_obj(common::ObIAllocator &allocator,
+                                  const sql::ObBasicSessionInfo &session,
+                                  common::ObObj &select_obj) const override;
+  virtual int inner_to_show_str(common::ObIAllocator &allocator,
+                                const sql::ObBasicSessionInfo &session,
+                                common::ObString &show_str) const override;
 };
 class ObSysVarObEarlyLockRelease : public ObBoolSysVar
 {
