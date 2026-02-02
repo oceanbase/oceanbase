@@ -481,6 +481,8 @@ DEFINE_ERROR(OB_MIGRATE_TX_DATA_NOT_CONTINUES, -4408, -1, "HY000", "migrate tx d
 DEFINE_ERROR(OB_INVALID_ZERO_DATE, -4409, -1, "HY000", "invalid zero date in no_zero_date mode");
 DEFINE_ERROR(OB_LS_NOT_IN_LEARNER_LIST, -4410, -1, "HY000", "ls not in learner list");
 DEFINE_ERROR(OB_MEMORY_LEAK, -4411, -1, "HY000", "observer has memory leak");
+DEFINE_ERROR(OB_OUT_OF_MAX_EXECUTION_TIME, -4412, ER_QUERY_TIMEOUT, "HY000", "Query execution was interrupted, maximum statement execution time exceeded. maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again");
+DEFINE_ERROR(OB_ERR_MAX_EXECUTION_TIME_TRUNCATED, -4413, WARN_DATA_TRUNCATED, "01000", "Max execution time is truncated to the range [-1, 4294967295]");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // 通用错误码值域[-4000, -4500)，含sstable等

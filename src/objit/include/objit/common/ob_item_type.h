@@ -3044,6 +3044,8 @@ typedef enum ObItemType
   T_GROUP_COMMIT = 4967,
 
   T_ALTER_VIEW_COMPILE = 4968,
+
+  T_MAX_EXECUTION_TIME = 4969,    // for max_execution_time hint
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
