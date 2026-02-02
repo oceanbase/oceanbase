@@ -137,6 +137,7 @@ public:
   // check macro block id valid
   virtual bool is_valid(const MacroBlockId &file_id) const { return false; }
   virtual bool has_effective_tablet_id() const { return false; }
+  virtual bool is_shared_tablet_sub_meta() const { return is_shared() && is_tablet_meta(); }
 #ifdef OB_BUILD_SHARED_STORAGE
   // path format reverse, macro id to local path
   virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
@@ -993,7 +994,6 @@ public:
   virtual ~ObSharedTabletSubMetaType() {}
   virtual bool is_tablet_meta() const { return true; }
   virtual bool is_shared() const { return true; }
-  virtual bool is_direct_read() const { return true; }
   virtual bool is_direct_write() const { return true; }
   virtual bool is_overwrite() const { return true; }
   virtual bool is_path_include_inner_tablet() const { return true; }
@@ -1001,11 +1001,20 @@ public:
   virtual bool has_effective_tablet_id() const { return true; }
 
 #ifdef OB_BUILD_SHARED_STORAGE
+  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
+                                   const MacroBlockId &file_id, const uint64_t tenant_id,
+                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
   virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
                                     const MacroBlockId &file_id, const char *object_storage_root_dir,
                                     const uint64_t cluster_id, const uint64_t tenant_id,
                                     const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;
   virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;
+  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
+                             const MacroBlockId &file_id, const uint64_t tenant_id,
+                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
+  virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
+                                const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;
   virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;
 
 #endif

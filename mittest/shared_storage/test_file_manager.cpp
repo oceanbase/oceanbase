@@ -184,7 +184,7 @@ void TestFileManager::TearDownTestCase()
 
 void TestFileManager::get_macro_block_scatter_dir_size(int64_t &scatter_dir_size)
 {
-  // scatter dirs of private data/meta macro, shared mini/minor/major/inc_major macro, external table file
+  // scatter dirs of private data/meta macro, shared mini/minor/major/inc_major macro, shared_tablet_sub_meta, external table file
   scatter_dir_size = 0;
   ObIODFileStat statbuf;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
@@ -206,6 +206,15 @@ void TestFileManager::get_macro_block_scatter_dir_size(int64_t &scatter_dir_size
               sizeof(scatter_dir_path), "%s/%02lX", dir_path, i));
     ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(scatter_dir_path, statbuf));
     scatter_dir_size += (statbuf.size_ * 4); // mini + minor + major + inc_major, thus multiply with 4
+  }
+  dir_path[0] ='\0';
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_tablet_sub_meta_cache_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID()));
+  for (int64_t i = 0; i < ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM; ++i) {
+    scatter_dir_path[0] = '\0';
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(scatter_dir_path,
+              sizeof(scatter_dir_path), "%s/%02lX", dir_path, i));
+    ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(scatter_dir_path, statbuf));
+    scatter_dir_size += statbuf.size_;
   }
   dir_path[0] ='\0';
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_external_table_file_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID()));
@@ -537,12 +546,28 @@ TEST_F(TestFileManager, test_path_convert)
   inc_file_id.set_third_id(1); // set op_id = 1
 
   // 74. SHARED_TABLET_SUB_META
-  // user_tablet : cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/tablet_meta/data/op_id_data_seq
+  // local cache test: user_tablet : tenant_id_epoch_id/shared_tablet_sub_meta_cache/scatter_id/t%ldrs%ldop%ldseq%ld
+  inc_file_id.set_second_id(200001);
+  inc_file_id.set_third_id(4294967297); // op_id = 1, data_seq = 1
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_TABLET_SUB_META, true/*is_in_local*/, false/*is_inner_tablet*/, "1_0/shared_tablet_sub_meta_cache/E7/t200001rs0op1seq1.T76");
+  // local cache test: inner_tablet : tenant_id_epoch_id/shared_tablet_sub_meta_cache/ls/ls_id/tablet_name_op%ldseq%ld
+  inc_file_id.set_second_id(49401); // TX_CTX
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_TABLET_SUB_META, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_tablet_sub_meta_cache/ls/1001/TX_CTX_op1seq1.T76");
+  inc_file_id.set_second_id(49402); // TX_DATA
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_TABLET_SUB_META, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_tablet_sub_meta_cache/ls/1001/TX_DATA_op1seq1.T76");
+  inc_file_id.set_second_id(49403); // TX_LOCK
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  CHECK_INC_MACRO_ID_TO_PATH(SHARED_TABLET_SUB_META, true/*is_in_local*/, true/*is_inner_tablet*/, "1_0/shared_tablet_sub_meta_cache/ls/1001/TX_LOCK_op1seq1.T76");
+
+  // remote path test: user_tablet : cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/meta/op_id_data_seq
   inc_file_id.set_second_id(200001);
   inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
   inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
   CHECK_INC_MACRO_ID_TO_PATH(SHARED_TABLET_SUB_META, false/*is_in_local*/, false/*is_inner_tablet*/, "cluster_1/tenant_1/tablet/200001/0/meta/op1seq1.T76");
-  // inner_tablet : cluster_id/tenant_id/ls/ls_id/tablet_name/tablet_meta/data/op_id_data_seq
+  // remote path test: inner_tablet : cluster_id/tenant_id/ls/ls_id/tablet_name/meta/op_id_data_seq
   inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
   inc_file_id.set_second_id(49401); // TX_CTX
   inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
@@ -740,12 +765,28 @@ TEST_F(TestFileManager, test_remote_path_to_macro_id)
   inc_file_id.set_third_id(1); // set op_id = 1
 
   // 76. SHARED_TABLET_SUB_META
-  // user_tablet : cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/tablet_meta/data/op_id_data_seq
+  // local path to macro_id test: user_tablet : tenant_id_epoch_id/shared_tablet_sub_meta_cache/scatter_id/t%ldrs%ldop%ldseq%ld
+  inc_file_id.set_second_id(200001);
+  inc_file_id.set_third_id(4294967297); // op_id = 1, data_seq = 1
+  inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(true/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
+  // local path to macro_id test: inner_tablet : tenant_id_epoch_id/shared_tablet_sub_meta_cache/ls/ls_id/tablet_name_op%ldseq%ld
+  inc_file_id.set_second_id(49401); // TX_CTX
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(true/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
+  inc_file_id.set_second_id(49402); // TX_DATA
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(true/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
+  inc_file_id.set_second_id(49403); // TX_LOCK
+  inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
+  check_path_to_macro_id(true/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
+
+  // remote path to macro_id test: user_tablet : cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/meta/op_id_data_seq
   inc_file_id.set_second_id(200001);
   inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
   inc_file_id.set_ss_fourth_id(false/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
   check_path_to_macro_id(false/*is_local_cache*/, ObStorageObjectType::SHARED_TABLET_SUB_META, inc_file_id);
-  // inner_tablet : cluster_id/tenant_id/ls/ls_id/tablet_name/tablet_meta/data/op_id_data_seq
+  // remote path to macro_id test: inner_tablet : cluster_id/tenant_id/ls/ls_id/tablet_name/meta/op_id_data_seq
   inc_file_id.set_third_id(4294967297); // op_id = 1, macro_seq = 1
   inc_file_id.set_second_id(49401); // TX_CTX
   inc_file_id.set_ss_fourth_id(true/*is_inner_tablet*/, 1001/*ls_id*/, 0/*reorganization_scn*/);
@@ -949,6 +990,14 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   shared_minor_ls_dir_size = statbuf.size_;
   expected_disk_size += statbuf.size_;
   dir_path[0] ='\0';
+  int64_t shared_tablet_sub_meta_ls_dir_size = 0;
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_shared_tablet_sub_meta_cache_dir(dir_path, sizeof(dir_path),
+            MTL_ID(), MTL_EPOCH_ID()));
+  ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_path + STRLEN(dir_path), sizeof(dir_path), "/ls"));
+  ASSERT_EQ(OB_SUCCESS, ObIODeviceLocalFileOp::stat(dir_path, statbuf));
+  shared_tablet_sub_meta_ls_dir_size = statbuf.size_;
+  expected_disk_size += statbuf.size_;
+  dir_path[0] ='\0';
   int64_t scatter_dir_size = 0;
   get_macro_block_scatter_dir_size(scatter_dir_size);
   expected_disk_size += scatter_dir_size;
@@ -970,7 +1019,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   calibrate_res.reset();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_macro_block_disk_space(start_calc_size_time_s, calibrate_res));
   get_macro_block_scatter_dir_size(scatter_dir_size);
-  ASSERT_EQ(shared_mini_ls_dir_size + shared_minor_ls_dir_size + scatter_dir_size, calibrate_res.total_file_size_);
+  ASSERT_EQ(shared_mini_ls_dir_size + shared_minor_ls_dir_size + shared_tablet_sub_meta_ls_dir_size + scatter_dir_size, calibrate_res.total_file_size_);
 }
 
 TEST_F(TestFileManager, test_tmp_file_operator)
