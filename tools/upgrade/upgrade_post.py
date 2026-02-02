@@ -3234,8 +3234,10 @@
 #  result = {
 #    'snap_cnt': None,  # 使用None表示字段不存在，与0区分
 #    'incr_cnt': None,
+#    'vbitmap_cnt': None,
 #    'has_snap_cnt': False,
-#    'has_incr_cnt': False
+#    'has_incr_cnt': False,
+#    'has_vbitmap_cnt': False
 #  }
 #  try:
 #    # sync_info字段格式在不同版本格式不一致
@@ -3244,6 +3246,7 @@
 #    # IVF索引: 没有snap_cnt和incr_cnt字段
 #    snap_match = re.search(r'\"?snap_cnt\"?[:=]\s*(\d+)', sync_info_str)
 #    incr_match = re.search(r'\"?incr_cnt\"?[:=]\s*(\d+)', sync_info_str)
+#    vbitmap_match = re.search(r'\"?vbitmap_cnt\"?[:=]\s*(\d+)', sync_info_str)
 #    
 #    if snap_match:
 #      result['snap_cnt'] = int(snap_match.group(1))
@@ -3251,6 +3254,9 @@
 #    if incr_match:
 #      result['incr_cnt'] = int(incr_match.group(1))
 #      result['has_incr_cnt'] = True
+#    if vbitmap_match:
+#      result['vbitmap_cnt'] = int(vbitmap_match.group(1))
+#      result['has_vbitmap_cnt'] = True
 #  except Exception as e:
 #    logging.exception('Failed to parse sync_info string: %s', sync_info_str)
 #    raise MyError('Failed to parse sync_info, this may indicate data corruption or version incompatibility: {0}'.format(str(e)))
@@ -3396,6 +3402,15 @@
 #    min_incr = min(incr_cnts)
 #    incr_diff = max_incr - min_incr
 #
+#    # 检查是否所有副本都有 vbitmap_cnt 字段
+#    has_vbitmap = all(r['sync_info'].get('has_vbitmap_cnt', False) for r in replicas)
+#    if has_vbitmap:
+#      vbitmap_cnts = [r['sync_info']['vbitmap_cnt'] for r in replicas]
+#      max_vbitmap = max(vbitmap_cnts) if vbitmap_cnts else 0
+#    else:
+#      vbitmap_cnts = []
+#      max_vbitmap = 0
+#
 #    # incr条件1: 差距小于阈值，直接通过
 #    if incr_diff < INCR_DIFF_THRESHOLD1:
 #      if incr_diff_sum + incr_diff <= INCR_MAX_SUM:
@@ -3408,7 +3423,8 @@
 #    if tablet_id not in incr_history[tenant_id]:
 #      incr_history[tenant_id][tablet_id] = {
 #        'incr_cnts_history': [],  # 记录每轮所有副本的incr_cnt值
-#        'diff_history': []        # 记录每轮的差距
+#        'diff_history': [],        # 记录每轮的差距
+#        'vbitmap_history': []      # 记录每轮所有副本的vbitmap_cnt值
 #      }
 #
 #    history = incr_history[tenant_id][tablet_id]
@@ -3416,24 +3432,43 @@
 #    # 添加当前轮次的数据，只保留最近3轮数据
 #    history['incr_cnts_history'].append(tuple(incr_cnts))
 #    history['diff_history'].append(incr_diff)
+#    if has_vbitmap:
+#      history['vbitmap_history'].append(tuple(vbitmap_cnts))
 #
 #    if len(history['incr_cnts_history']) > 3:
 #      history['incr_cnts_history'] = history['incr_cnts_history'][-3:]
 #    if len(history['diff_history']) > 3:
 #      history['diff_history'] = history['diff_history'][-3:]
+#    if len(history['vbitmap_history']) > 6:
+#      history['vbitmap_history'] = history['vbitmap_history'][-6:]
 #
-#    # incr 条件2: 连续3轮差距都 < 阈值，且每轮扩大不超过阈值
+#    # 增量不再快速扩大：连续两轮，每轮扩大都不超过阈值
 #    if len(history['diff_history']) >= 3:
 #      recent_diffs = history['diff_history'][-3:]
 #      d1, d2, d3 = recent_diffs
-#      if d3 < INCR_DIFF_THRESHOLD2 and not (d2 > d1 + INCR_MAX_EXPANSION and d3 > d2 + INCR_MAX_EXPANSION):
-#        if incr_diff_tablets < INCR_MAX_TABLETS and incr_diff_sum + d3 <= INCR_MAX_SUM:
+#      not_expanding = d2 <= d1 + INCR_MAX_EXPANSION and d3 <= d2 + INCR_MAX_EXPANSION
+#
+#      # incr条件: 差距 < 阈值 且增量不再快速扩大
+#      incr_condition = d3 < INCR_DIFF_THRESHOLD2 and not_expanding
+#      # bitmap条件: 每轮内所有副本的vbitmap_cnt都相等 >= 6轮 且增量不再快速扩大
+#      bitmap_condition = False
+#      if has_vbitmap and max_vbitmap > 0 and len(history['vbitmap_history']) >= 6 and not_expanding:
+#        if all(len(set(tuple_val)) == 1 for tuple_val in history['vbitmap_history']):
+#          bitmap_condition = True
+#
+#      if incr_condition:
+#        if incr_diff_tablets < INCR_MAX_TABLETS and incr_diff_sum + incr_diff <= INCR_MAX_SUM:
 #          incr_diff_tablets += 1
-#          incr_diff_sum += d3
+#          incr_diff_sum += incr_diff
 #          logging.info("Tenant %d Tablet %d: incr_cnt diff < %d for 3 rounds and not expanding too fast (diff_history=%s), mark as loaded",
 #                       tenant_id, tablet_id, INCR_DIFF_THRESHOLD2, recent_diffs)
 #          loaded_tablets += 1
 #          continue
+#      elif bitmap_condition:
+#        logging.info("Tenant %d Tablet %d: vbitmap_cnt equal for 6 rounds and not expanding too fast, mark as loaded",
+#                     tenant_id, tablet_id)
+#        loaded_tablets += 1
+#        continue
 #
 #    #检查不通过加入pending_list，继续检查下一个tablet
 #    pending_list.append({
@@ -3484,7 +3519,7 @@
 #    logging.info('No vector index found, skip vector index loading check')
 #  
 #  if need_check == 1:
-#    wait_timeout = set_default_timeout_by_tenant(query_cur, timeout, 300, 1200)
+#    wait_timeout = set_default_timeout_by_tenant(query_cur, timeout, 300, 900)
 #    max_times = int(wait_timeout / 10)
 #    times = max_times
 #    start_time = time.time()
