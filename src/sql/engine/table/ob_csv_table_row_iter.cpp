@@ -351,7 +351,7 @@ int ObCSVTableRowIterator::load_next_buf()
   do {
     char *next_load_pos = NULL;
     int64_t next_buf_len = 0;
-    if (file_reader_.eof()) {
+    if (file_reader_.eof() || state_.already_read_size_ >= state_.bounded_end_pos_ - state_.bounded_start_pos_) {
       if (OB_FAIL(open_next_file())) {
         //do not print log
       } else {
