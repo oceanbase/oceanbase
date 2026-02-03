@@ -253,7 +253,7 @@ int ObPxDistTransmitOp::do_transmit()
         }
         break;
       }
-       case ObPQDistributeMethod::RANGE: {
+      case ObPQDistributeMethod::RANGE: {
         if (OB_FAIL(do_range_dist())) {
           LOG_WARN("do broadcast distribution failed",  K(ret));
         }

@@ -4712,6 +4712,7 @@ int ObStaticEngineCG::generate_basic_transmit_spec(
     spec.need_null_aware_shuffle_ = op.need_null_aware_shuffle();
     spec.is_rollup_hybrid_ = op.is_rollup_hybrid();
     spec.is_wf_hybrid_ = op.is_wf_hybrid();
+    spec.use_scatter_channel_for_pkey_hash_ = op.use_scatter_channel_for_pkey_hash();
     spec.sample_type_ = op.get_sample_type();
     spec.repartition_table_id_ = op.get_repartition_table_id();
     OZ(check_rollup_distributor(&spec));

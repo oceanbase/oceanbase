@@ -131,6 +131,11 @@ public:
 
   // for window function adaptive pushdown
   bool is_wf_hybrid_;
+
+  // for pkey hash: use scatter channel or use default affinitied channel
+  // scatter channel: rows of partition can be distributed to any worker of all workers
+  // affinitied channel: rows of partition can be distributed to any worker of one worker group
+  bool use_scatter_channel_for_pkey_hash_;
 };
 
 class ObTransmitOp : public ObOperator

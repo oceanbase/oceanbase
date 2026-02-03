@@ -479,7 +479,8 @@ struct ObExchangeInfo
     parallel_(ObGlobalHint::UNSET_PARALLEL),
     server_cnt_(0),
     server_list_(),
-    hidden_pk_expr_(NULL)
+    hidden_pk_expr_(NULL),
+    use_scatter_channel_for_pkey_hash_(false)
   {
     repartition_table_id_ = 0;
   }
@@ -546,6 +547,10 @@ struct ObExchangeInfo
   // Hidden primary key expression for PDML heap table insert scenario.
   // Needs to be passed through exchange but not used for hash calculation.
   ObRawExpr *hidden_pk_expr_;
+  // for pkey hash: use scatter channel or use default affinitied channel
+  // scatter channel: rows of partition can be distributed to any worker of all workers
+  // affinitied channel: rows of partition can be distributed to any worker of one worker group
+  bool use_scatter_channel_for_pkey_hash_;
 
   TO_STRING_KV(K_(is_remote),
                K_(is_task_order),
@@ -574,7 +579,8 @@ struct ObExchangeInfo
                K_(server_cnt),
                K_(server_list),
                K_(is_ordered_agg),
-               K_(hidden_pk_expr));
+               K_(hidden_pk_expr),
+               K_(use_scatter_channel_for_pkey_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };

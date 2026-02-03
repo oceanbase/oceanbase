@@ -601,6 +601,7 @@ int ObLogExchange::set_exchange_info(const ObExchangeInfo &exch_info)
       need_null_aware_shuffle_ = exch_info.need_null_aware_shuffle_;
       calc_part_id_expr_ = exch_info.calc_part_id_expr_;
       is_wf_hybrid_ = exch_info.is_wf_hybrid_;
+      use_scatter_channel_for_pkey_hash_ = exch_info.use_scatter_channel_for_pkey_hash_;
       if (is_wf_hybrid_) {
         wf_hybrid_aggr_status_expr_ = exch_info.wf_hybrid_aggr_status_expr_;
         if (OB_FAIL(wf_hybrid_pby_exprs_cnt_array_.assign(

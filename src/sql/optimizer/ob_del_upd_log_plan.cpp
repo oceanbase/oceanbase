@@ -569,7 +569,6 @@ int ObDelUpdLogPlan::calculate_table_location(const ObDelUpdStmt &stmt,
   }
   return ret;
 }
-
 int ObDelUpdLogPlan::compute_exchange_info_for_pdml_del_upd(const ObShardingInfo &source_sharding,
                                                             const ObTablePartitionInfo &target_table_partition,
                                                             const IndexDMLInfo &index_dml_info,
@@ -608,17 +607,27 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_del_upd(const ObShardingInfo
     }
     bool can_use_random = !get_stmt()->is_merge_stmt() && !need_duplicate_date &&
           get_optimizer_context().is_pdml_heap_table() && !is_index_maintenance;
+    share::schema::ObPartitionFuncType part_func_type = source_sharding.get_part_func_type();
+    bool use_scatter_channel_for_pkey_hash = !(share::schema::PARTITION_FUNC_TYPE_HASH == part_func_type
+                            || share::schema::PARTITION_FUNC_TYPE_KEY == part_func_type
+                            || share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type);
     if (share::schema::PARTITION_LEVEL_ONE == part_level) {
       exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_ONE_LEVEL;
-      exch_info.dist_method_ = can_use_random
-                                ? ObPQDistributeMethod::PARTITION_RANDOM
-                                : ObPQDistributeMethod::PARTITION_HASH;
+      if (can_use_random)
+        exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_RANDOM;
+      else {
+        exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+        exch_info.use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
+      }
       LOG_TRACE("partition level is one, use pkey reshuffle method");
     } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
       exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_TWO_LEVEL;
-      exch_info.dist_method_ = can_use_random
-                                ? ObPQDistributeMethod::PARTITION_RANDOM
-                                : ObPQDistributeMethod::PARTITION_HASH;
+      if (can_use_random)
+        exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_RANDOM;
+      else {
+        exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+        exch_info.use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
+      }
       LOG_TRACE("partition level is two, use pkey reshuffle method");
     } else if (share::schema::PARTITION_LEVEL_ZERO == part_level) {
       exch_info.repartition_type_ = OB_REPARTITION_NO_REPARTITION;
@@ -723,8 +732,12 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
       exch_info.repartition_table_name_ = index_dml_info.index_name_;
       exch_info.slice_count_ = target_sharding.get_part_cnt();
     }
+    share::schema::ObPartitionFuncType part_func_type = target_sharding.get_part_func_type();
+    bool use_scatter_channel_for_pkey_hash = !(share::schema::PARTITION_FUNC_TYPE_HASH == part_func_type
+                            || share::schema::PARTITION_FUNC_TYPE_KEY == part_func_type
+                            || share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type);
+
     if (share::schema::PARTITION_LEVEL_ONE == part_level) {
-      // pdml op对应的表是分区表，分区内并行处理，使用pkey random shuffle方式
       exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_ONE_LEVEL;
       if ((!get_stmt()->is_merge_stmt() || 
            !static_cast<const ObMergeStmt*>(get_stmt())->has_update_clause()) &&
@@ -735,9 +748,9 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_RANGE;
       } else {
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+        exch_info.use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
       }
     } else if (share::schema::PARTITION_LEVEL_TWO == part_level) {
-      // pdml op对应的表是分区表，分区内并行处理，使用pkey random shuffle方式
       exch_info.repartition_type_ = OB_REPARTITION_ONE_SIDE_TWO_LEVEL;
       if ((!get_stmt()->is_merge_stmt() || 
            !static_cast<const ObMergeStmt*>(get_stmt())->has_update_clause()) &&
@@ -748,9 +761,9 @@ int ObDelUpdLogPlan::compute_exchange_info_for_pdml_insert(const ObShardingInfo 
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_RANGE;
       } else {
         exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
+        exch_info.use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
       }
     } else if (share::schema::PARTITION_LEVEL_ZERO == part_level) {
-      // pdml op对应的表是非分区表，分区内并行处理，使用random shuffle方式
       exch_info.repartition_type_ = OB_REPARTITION_NO_REPARTITION;
       if ((!get_stmt()->is_merge_stmt() || 
            !static_cast<const ObMergeStmt*>(get_stmt())->has_update_clause()) &&

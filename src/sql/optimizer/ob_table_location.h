@@ -774,6 +774,8 @@ public:
   bool is_non_partition_optimized() const { return is_non_partition_optimized_; }
 
   share::schema::ObPartitionLevel get_part_level() const { return part_level_; }
+  share::schema::ObPartitionFuncType get_part_func_type() const { return part_type_; }
+  share::schema::ObPartitionFuncType get_subpart_func_type() const { return subpart_type_; }
 
   const stmt::StmtType &get_stmt_type() const { return stmt_type_; }
   int replace_ref_table_id(const uint64_t index_table_id, ObExecContext &exec_ctx);

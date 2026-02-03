@@ -194,6 +194,7 @@ int ObExchangeInfo::assign(const ObExchangeInfo &other)
     sample_type_ = other.sample_type_;
     parallel_ = other.parallel_;
     server_cnt_ = other.server_cnt_;
+    use_scatter_channel_for_pkey_hash_ = other.use_scatter_channel_for_pkey_hash_;
   }
   return ret;
 }

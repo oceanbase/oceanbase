@@ -58,6 +58,7 @@ public:
       unmatch_row_dist_method_(ObPQDistributeMethod::LOCAL),
       null_row_dist_method_(ObNullDistributeMethod::NONE),
       slave_mapping_type_(SlaveMappingType::SM_NONE),
+      use_scatter_channel_for_pkey_hash_(false),
       gi_info_(),
       px_batch_op_(NULL),
       px_batch_op_id_(OB_INVALID_ID),
@@ -167,6 +168,11 @@ public:
 
   void set_wf_hybrid(bool is_wf_hybrid) { is_wf_hybrid_ = is_wf_hybrid; }
   bool is_wf_hybrid() { return is_wf_hybrid_; }
+  void set_use_scatter_channel_for_pkey_hash(bool use_scatter_channel_for_pkey_hash)
+  {
+    use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
+  }
+  bool use_scatter_channel_for_pkey_hash() const { return use_scatter_channel_for_pkey_hash_; }
   void set_wf_hybrid_aggr_status_expr(ObRawExpr *wf_hybrid_aggr_status_expr)
   {
     wf_hybrid_aggr_status_expr_ = wf_hybrid_aggr_status_expr;
@@ -283,6 +289,7 @@ private:
   ObPQDistributeMethod::Type unmatch_row_dist_method_;
   ObNullDistributeMethod::Type null_row_dist_method_;
   SlaveMappingType slave_mapping_type_;
+  bool use_scatter_channel_for_pkey_hash_;
 
   //granule info
   ObAllocGIInfo gi_info_;

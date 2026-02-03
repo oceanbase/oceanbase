@@ -639,8 +639,8 @@ private:
 
 
   // ----------------- for pdml -------------------------------------
-  // for child with ObPQDistributeMethod::Type::PARTITION_RANDOM
-  static int build_pkey_random_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+  // for PARTITION_RANDOM and PARTITION_HASH with likely_data_skew_
+  static int build_pkey_scatter_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
 
   // for child with ObPQDistributeMethod::Type::PARTITION_HASH or PARTITION_RANGE
   static int build_pkey_affinitized_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
