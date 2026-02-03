@@ -2061,7 +2061,9 @@ int ObIndexBuilder::generate_schema(
       }
     }
     if (OB_SUCC(ret)) {
-      if (data_schema.is_append_only_merge_engine()) {
+      if (share::schema::is_vec_index(arg.index_type_) || share::schema::is_fts_index(arg.index_type_)) {
+        schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
+      } else if (data_schema.is_append_only_merge_engine()) {
         // index should inherit the append_only merge engine type of the data table
         schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY);
       } else if (data_schema.is_delete_insert_merge_engine()) {

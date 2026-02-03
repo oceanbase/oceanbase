@@ -125,6 +125,9 @@ int ObCompactionTTLService::execute(
       task_status = ObTTLTaskStatus::OB_TTL_TASK_PENDING;
       LOG_WARN("[COMPACTION TTL] schema version is not the same, exist DDL after check meta table", KR(ret),
         K(schema_version_before_trans), KPC(latest_data_table_schema));
+    } else if (latest_data_table_schema->is_delete_insert_merge_engine() && (latest_data_table_schema->get_simple_index_infos().count() > 0 || latest_data_table_schema->has_lob_aux_table())) {
+      task_status = ObTTLTaskStatus::OB_TTL_TASK_SKIP;
+      LOG_INFO("[COMPACTION TTL] index table count is greater than 0, skip trigger ttl", KR(ret), KPC(latest_data_table_schema));
     } else if (OB_FAIL(ObTTLFilterInfoHelper::generate_ttl_filter_info(
         *latest_data_table_schema, ttl_filter_arg_.ttl_filter_info_))) {
       LOG_WARN("failed to prepare ttl filter info", KR(ret));
