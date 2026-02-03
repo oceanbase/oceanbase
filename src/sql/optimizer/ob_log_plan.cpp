@@ -16480,7 +16480,8 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
       need_further_sort = table_scan->is_distributed() || table_scan->get_table_partition_info()->get_table_location().is_partitioned()
                         || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                         && (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0))
-                        || vc_info.is_hnsw_bq_scan();
+                        || vc_info.is_hnsw_bq_scan()
+                        || vc_info.is_ipivf_refine_scan();
       if (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
           && table_scan->get_filter_exprs().count() == 0
           && table_scan->get_pushdown_filter_exprs().count() == 0) {

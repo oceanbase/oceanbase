@@ -2274,7 +2274,7 @@ int ObPluginVectorIndexUtils::get_split_snapshot_prefix(
     if (OB_FAIL(get_prefix(src, split_item, dst))) {
       LOG_WARN("fail to split snapshot prefix");
     }
-  } else if (index_type == VIAT_IPIVF) {
+  } else if (index_type == VIAT_IPIVF || index_type == VIAT_IPIVF_SQ) {
     ObString split_item("_ipivf_");
     if (OB_FAIL(get_prefix(src, split_item, dst))) {
       LOG_WARN("fail to split ipivf snapshot prefix");

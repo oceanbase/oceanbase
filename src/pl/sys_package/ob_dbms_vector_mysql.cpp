@@ -174,6 +174,7 @@ FUNCTION index_vector_memory_advisor (
     IN     idx_parameters     LONGTEXT DEFAULT NULL,
     IN     max_tablet_vectors BIGINT UNSIGNED DEFAULT 0)
 RETURN VARCHAR(65535);
+NOTE: for sparse vector index, dim_count is the average length of sparse vectors.
 */
 int ObDBMSVectorMySql::index_vector_memory_advisor(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
 {
@@ -219,7 +220,7 @@ int ObDBMSVectorMySql::index_vector_memory_advisor(ObPLExecCtx &ctx, ParamStore 
     } else {
       ObStringBuffer res_buf(allocator);
       uint64_t tablet_count = ceil(num_vectors / max_tablet_vectors);
-      if (OB_FAIL(get_estimate_memory_str(index_param, num_vectors, max_tablet_vectors, tablet_count, res_buf))) {
+      if (OB_FAIL(get_estimate_memory_str(index_param, num_vectors, max_tablet_vectors, tablet_count, res_buf, dim_count))) {
         LOG_WARN("failed to get estimate memory string");
       } else {
         result.set_varchar(res_buf.ptr(), res_buf.length());
@@ -373,8 +374,19 @@ int ObDBMSVectorMySql::index_vector_memory_estimate(ObPLExecCtx &ctx, ParamStore
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("allocator is null", K(ret));
     } else {
+      uint32_t avg_sparse_length = 0;
+      if (index_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF ||
+          index_param.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ) {
+        if (OB_FAIL(sample_sparse_vectors_and_calc_avg_length(
+                *exec_ctx, database_name, table_name, column_name, num_vectors, avg_sparse_length))) {
+          LOG_WARN("failed to sample sparse vectors and calculate average length", K(ret));
+          avg_sparse_length = 0;
+          ret = OB_SUCCESS;
+        }
+      }
+
       ObStringBuffer res_buf(allocator);
-      if (OB_FAIL(get_estimate_memory_str(index_param, num_vectors, tablet_max_num_vectors, tablet_count, res_buf))) {
+      if (OB_FAIL(get_estimate_memory_str(index_param, num_vectors, tablet_max_num_vectors, tablet_count, res_buf, avg_sparse_length))) {
         LOG_WARN("failed to get estimate memory string");
       } else {
         result.set_varchar(res_buf.ptr(), res_buf.length());
@@ -402,7 +414,8 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
   if (idx_type_str.case_compare("HNSW") == 0
       || idx_type_str.case_compare("HNSW_SQ") == 0
       || idx_type_str.case_compare("HNSW_BQ") == 0
-      || idx_type_str.case_compare("SINDI") == 0) {
+      || idx_type_str.case_compare("SINDI") == 0
+      || idx_type_str.case_compare("SINDI_SQ") == 0) {
     idx_type = ObVectorIndexType::VIT_HNSW_INDEX;
   } else if (idx_type_str.case_compare("IVF_FLAT") == 0
              || idx_type_str.case_compare("IVF_SQ8") == 0
@@ -438,9 +451,10 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
   } else if (index_param.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ
              && ObCharset::locate(CS_TYPE_UTF8MB4_GENERAL_CI, param_str.ptr(), param_str.length(), "REFINE_TYPE", 11, 1) <= 0
              && OB_FALSE_IT(index_param.refine_type_ = common::obvsag::QuantizationType::SQ8)) {
-  } else if (OB_UNLIKELY(dim_count == 0 || dim_count > MAX_DIM_LIMITED)) {
+  } else if ((index_param.type_ != ObVectorIndexAlgorithmType::VIAT_IPIVF && index_param.type_ != ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ) &&
+            OB_UNLIKELY(dim_count == 0 || dim_count > MAX_DIM_LIMITED)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("vector index dim equal to 0 or larger than 4096 is not supported", K(ret));
+    LOG_WARN("vector index dim equal to 0 or larger than 4096 is not supported", K(ret), K(index_param.type_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec index dim equal to 0 or larger than 4096 is");
   } else {
     index_param.dim_ = dim_count;
@@ -453,7 +467,8 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
                                                uint64_t num_vectors,
                                                uint64_t tablet_max_num_vectors,
                                                uint64_t tablet_count,
-                                               ObStringBuffer &res_buf)
+                                               ObStringBuffer &res_buf,
+                                               uint32_t avg_sparse_length)
 {
   int ret = OB_SUCCESS;
   const static double VEC_MEMORY_HOLD_FACTOR = 1.2;
@@ -518,14 +533,15 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
       }
       break;
     }
-    case ObVectorIndexAlgorithmType::VIAT_IPIVF: {
+    case ObVectorIndexAlgorithmType::VIAT_IPIVF:
+    case ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ: {
       uint64_t estimate_mem = 0;
       uint64_t max_tablet_estimate_mem = 0;
-      if (OB_FAIL(ObVectorIndexUtil::estimate_sparse_memory(num_vectors, index_param, estimate_mem))) {
-        LOG_WARN("failed to estimate sparse vector index memory", K(num_vectors), K(index_param));
+      if (OB_FAIL(ObVectorIndexUtil::estimate_sparse_memory(num_vectors, index_param, estimate_mem, avg_sparse_length))) {
+        LOG_WARN("failed to estimate sparse vector index memory", K(num_vectors), K(index_param), K(avg_sparse_length));
       } else if (OB_FAIL(ObVectorIndexUtil::estimate_sparse_memory(
-                     tablet_max_num_vectors, index_param, max_tablet_estimate_mem))) {
-        LOG_WARN("failed to estimate sparse vector index memory", K(tablet_max_num_vectors), K(index_param));
+                     tablet_max_num_vectors, index_param, max_tablet_estimate_mem, avg_sparse_length))) {
+        LOG_WARN("failed to estimate sparse vector index memory", K(tablet_max_num_vectors), K(index_param), K(avg_sparse_length));
       } else if (OB_FALSE_IT(estimate_mem = ceil(
                                  (estimate_mem + max_tablet_estimate_mem) * VEC_MEMORY_HOLD_FACTOR))) {  // multiple 1.2
       } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), estimate_mem))) {
@@ -573,6 +589,106 @@ int ObDBMSVectorMySql::print_mem_size(uint64_t mem_size, ObStringBuffer &res_buf
       LOG_WARN("failed to append to buffer", K(ret));
     }
   }
+  return ret;
+}
+
+int ObDBMSVectorMySql::sample_sparse_vectors_and_calc_avg_length(
+    sql::ObExecContext &exec_ctx,
+    const ObString &database_name,
+    const ObString &table_name,
+    const ObString &column_name,
+    uint64_t num_vectors,
+    uint32_t &avg_sparse_length)
+{
+  int ret = OB_SUCCESS;
+  avg_sparse_length = 0;
+  const uint64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
+
+  if (num_vectors == 0) {
+    avg_sparse_length = 0;
+  } else {
+    const uint64_t TARGET_SAMPLE_COUNT = 100;
+    const uint64_t FIXED_SAMPLE_SEED = 12345;
+    uint64_t total_length = 0;
+    uint64_t valid_sample_count = 0;
+    ObArenaAllocator tmp_alloc("SparseVecSample", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+
+    // Calculate sample percentage to get approximately TARGET_SAMPLE_COUNT samples
+    // Add buffer to account for NULL values and ensure enough samples
+    double sample_percent = (TARGET_SAMPLE_COUNT * 100.0 / num_vectors) * 1.5;
+    if (sample_percent >= 100.0) {
+      sample_percent = 99.9;
+    }
+
+    ObSqlString query_string;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+
+      // Use SAMPLE syntax with fixed seed for consistent results
+      if (OB_FAIL(query_string.assign_fmt(
+              "SELECT `%.*s` FROM `%.*s`.`%.*s` SAMPLE(%.2f) SEED(%lu) "
+              "WHERE `%.*s` IS NOT NULL "
+              "LIMIT %lu",
+              column_name.length(), column_name.ptr(),
+              database_name.length(), database_name.ptr(),
+              table_name.length(), table_name.ptr(),
+              sample_percent,
+              FIXED_SAMPLE_SEED,
+              column_name.length(), column_name.ptr(),
+              TARGET_SAMPLE_COUNT))) {
+        LOG_WARN("assign sql string failed", K(ret), K(database_name), K(table_name), K(column_name));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
+        LOG_WARN("read record failed", K(ret), K(tenant_id), K(query_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), K(tenant_id), K(query_string));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          ObObj vec_obj;
+          ObString blob_data;
+          const int64_t col_idx = 0;
+
+          if (OB_FAIL(result->get_obj(col_idx, vec_obj))) {
+            LOG_WARN("failed to get vector object", K(ret));
+          } else if (vec_obj.is_null()) {
+            continue;
+          } else if (FALSE_IT(blob_data = vec_obj.get_string())) {
+          } else if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(
+                      &tmp_alloc,
+                      ObLongTextType,
+                      CS_TYPE_BINARY,
+                      true,
+                      blob_data))) {
+            LOG_WARN("fail to get real data", K(ret), K(blob_data));
+          } else if (blob_data.length() < sizeof(uint32_t)) {
+            continue;
+          } else {
+            // Sparse vector format: first 4 bytes is length, followed by (key, value) pairs
+            uint32_t length = *(uint32_t *)(blob_data.ptr());
+            total_length += length;
+            valid_sample_count++;
+          }
+        }
+
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (valid_sample_count > 0) {
+        avg_sparse_length = static_cast<uint32_t>(total_length / valid_sample_count);
+        LOG_INFO("sample sparse vectors and calculate average length",
+                 K(TARGET_SAMPLE_COUNT), K(valid_sample_count), K(avg_sparse_length),
+                 K(num_vectors), K(sample_percent));
+      } else {
+        avg_sparse_length = 0;
+        LOG_WARN("no valid samples found, use default avg_sparse_length", K(TARGET_SAMPLE_COUNT));
+      }
+    }
+  }
+
   return ret;
 }
 

@@ -393,6 +393,22 @@ void free_hnswsq_array_data(ObVectorIndexMemData *&memdata, ObIAllocator *alloca
     allocator->free(memdata->extra_info_buf_);
     memdata->extra_info_buf_ = nullptr;
   }
+  // for sparse vector (ipivf_sq)
+  if (OB_NOT_NULL(memdata->lens_array_)) {
+    memdata->lens_array_->~ObArray();
+    allocator->free(memdata->lens_array_);
+    memdata->lens_array_ = nullptr;
+  }
+  if (OB_NOT_NULL(memdata->dims_array_)) {
+    memdata->dims_array_->~ObArray();
+    allocator->free(memdata->dims_array_);
+    memdata->dims_array_ = nullptr;
+  }
+  if (OB_NOT_NULL(memdata->vals_array_)) {
+    memdata->vals_array_->~ObArray();
+    allocator->free(memdata->vals_array_);
+    memdata->vals_array_ = nullptr;
+  }
 }
 
 int try_free_memdata_resource(ObVectorIndexRecordType type,
@@ -628,7 +644,8 @@ int ObPluginVectorIndexAdaptor::param_deserialize(char *ptr, int32_t length,
       case VIAT_HGRAPH:
       case VIAT_HNSW_SQ:
       case VIAT_HNSW_BQ:
-      case VIAT_IPIVF: {
+      case VIAT_IPIVF:
+      case VIAT_IPIVF_SQ: {
         int64_t param_pos = 0;
         ObVectorIndexParam *hnsw_param = nullptr;
         if (OB_ISNULL(hnsw_param = static_cast<ObVectorIndexParam *>
@@ -669,7 +686,8 @@ int ObPluginVectorIndexAdaptor::get_dim(int64_t &dim)
       type_ == VIAT_HNSW_SQ ||
       type_ == VIAT_HGRAPH ||
       type_ == VIAT_HNSW_BQ ||
-      type_ == VIAT_IPIVF) {
+      type_ == VIAT_IPIVF ||
+      type_ == VIAT_IPIVF_SQ) {
     ObVectorIndexParam *param = nullptr;
     if (OB_ISNULL(param = static_cast<ObVectorIndexParam*>(algo_data_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -691,7 +709,8 @@ int ObPluginVectorIndexAdaptor::get_extra_info_actual_size(int64_t &extra_info_a
      type_ == VIAT_HNSW_SQ ||
      type_ == VIAT_HGRAPH ||
      type_ == VIAT_HNSW_BQ ||
-     type_ == VIAT_IPIVF) {
+     type_ == VIAT_IPIVF ||
+     type_ == VIAT_IPIVF_SQ) {
     ObVectorIndexParam *param = nullptr;
     if (OB_ISNULL(param = static_cast<ObVectorIndexParam*>(algo_data_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -713,7 +732,8 @@ int ObPluginVectorIndexAdaptor::get_hnsw_param(ObVectorIndexParam *&param)
       type_ == VIAT_HNSW_SQ ||
       type_ == VIAT_HNSW_BQ ||
       type_ == VIAT_HGRAPH ||
-      type_ == VIAT_IPIVF) {
+      type_ == VIAT_IPIVF ||
+      type_ == VIAT_IPIVF_SQ) {
     if (OB_ISNULL(param = static_cast<ObVectorIndexParam*>(algo_data_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get param.", K(ret));
@@ -853,11 +873,14 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type, ObVe
     if (!incr_data_->is_inited()) {
       if (OB_FAIL(incr_data_->mem_ctx_->init(parent_mem_ctx_, all_vsag_use_mem_, tenant_id_))) {
         LOG_WARN("failed to init incr data mem ctx.", K(ret));
-      } else if (param->type_ == VIAT_IPIVF) {
+      } else if (param->type_ == VIAT_IPIVF || param->type_ == VIAT_IPIVF_SQ) {
+        ObVectorIndexAlgorithmType build_type = enforce_type == VIAT_MAX ? param->type_ : enforce_type;
+        // Note. ipivf_sq must use ipivf to build incr index.
+        build_type = build_type == VIAT_IPIVF_SQ ? VIAT_IPIVF : build_type;
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
         lib::ObLightBacktraceGuard light_backtrace_guard(false);
         if (OB_FAIL(obvectorutil::create_index(incr_data_->index_,
-                                                      param->type_,
+                                                      build_type,
                                                       DATATYPE_SPARSE,
                                                       VEC_INDEX_ALGTH[param->dist_algorithm_],
                                                       param->refine_,
@@ -1018,7 +1041,7 @@ int ObPluginVectorIndexAdaptor::init_snap_data_without_lock(ObVectorIndexAlgorit
       if (is_sparse_vector_index_type()) {
         const char* DATATYPE_SPARSE = "sparse";
         if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
-                                               param->type_,
+                                               build_type,
                                                DATATYPE_SPARSE,
                                                VEC_INDEX_ALGTH[param->dist_algorithm_],
                                                param->refine_,
@@ -1069,15 +1092,34 @@ int ObPluginVectorIndexAdaptor::init_hnswsq_mem_data()
     } else if (OB_ISNULL(snap_data_->vid_array_ = OB_NEWx(ObVecIdxVidArray, allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory for vid array fail", K(ret));
-    } else if (OB_ISNULL(snap_data_->vec_array_ = OB_NEWx(ObVecIdxVecArray, allocator_))) {
+    } else if (!is_sparse_vector_index_type() && OB_ISNULL(snap_data_->vec_array_ = OB_NEWx(ObVecIdxVecArray, allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory for vector array fail", K(ret));
     } else if (OB_ISNULL(snap_data_->extra_info_buf_ = OB_NEWx(ObVecExtraInfoBuffer, allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory for vector array fail", K(ret));
-    } else {
+    } else if (is_sparse_vector_index_type()) {
+      // for sparse vector (ipivf_sq)
+      if (OB_ISNULL(snap_data_->lens_array_ = OB_NEWx(ObVecIdxLensArray, allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory for lens array fail", K(ret));
+      } else if (OB_ISNULL(snap_data_->dims_array_ = OB_NEWx(ObVecIdxDimsArray, allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory for dims array fail", K(ret));
+      } else if (OB_ISNULL(snap_data_->vals_array_ = OB_NEWx(ObVecIdxValsArray, allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory for vals array fail", K(ret));
+      } else {
+        snap_data_->lens_array_->set_attr(ObMemAttr(tenant_id_, "VecIdxIPIVFSQ"));
+        snap_data_->dims_array_->set_attr(ObMemAttr(tenant_id_, "VecIdxIPIVFSQ"));
+        snap_data_->vals_array_->set_attr(ObMemAttr(tenant_id_, "VecIdxIPIVFSQ"));
+      }
+    }
+    if (OB_SUCC(ret)) {
       snap_data_->vid_array_->set_attr(ObMemAttr(tenant_id_, "VecIdxHNSWSQ"));
-      snap_data_->vec_array_->set_attr(ObMemAttr(tenant_id_, "VecIdxHNSWSQ"));
+      if (!is_sparse_vector_index_type()) {
+        snap_data_->vec_array_->set_attr(ObMemAttr(tenant_id_, "VecIdxHNSWSQ"));
+      }
       snap_data_->set_inited();
     }
     if (OB_FAIL(ret)) {
@@ -1857,6 +1899,9 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
   int64_t dim = 0;
   int64_t extra_info_actual_size = 0;
   ObVectorIndexParam *param = nullptr;
+  uint32_t *lens = nullptr;
+  uint32_t *dims = nullptr;
+  float *vals = nullptr;
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
   if (OB_ISNULL(snap_data_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1881,9 +1926,6 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid data.", K(ret));
       } else {
-        uint32_t *lens = nullptr;
-        uint32_t *dims = nullptr;
-        float *vals = nullptr;
         if (is_sparse_vector_index_type()) {
           parse_sparse_vector((char*)vectors, num, sparse_byte_lens, &tmp_allocator, &lens, &dims, &vals);
         }
@@ -1907,7 +1949,7 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
           }
         }
       }
-    } else if (param->type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ || param->type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ) {
+    } else if (param->type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ || param->type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ || param->type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ) {
       if (OB_FAIL(init_hnswsq_mem_data())) {
         LOG_WARN("init hnswsq snap index failed.", K(ret));
       } else if (num == 0 || OB_ISNULL(vectors)) {
@@ -1916,8 +1958,13 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid data.", K(ret));
       } else {
+        if (is_sparse_vector_index_type()) {
+          if (OB_FAIL(parse_sparse_vector((char*)vectors, num, sparse_byte_lens, &tmp_allocator, &lens, &dims, &vals))) {
+            LOG_WARN("failed to parse sparse vector.", K(ret));
+          }
+        }
         char *extra_info_buf = nullptr;
-        if (OB_NOT_NULL(extra_objs) && extra_column_count > 0 && param->extra_info_actual_size_ > 0 &&
+        if (OB_SUCC(ret) && OB_NOT_NULL(extra_objs) && extra_column_count > 0 && param->extra_info_actual_size_ > 0 &&
             OB_FAIL(ObVecExtraInfo::extra_infos_to_buf(tmp_allocator, extra_objs, extra_column_count,
                                                        param->extra_info_actual_size_, num, extra_info_buf))) {
           LOG_WARN("failed to encode extra info.", K(ret), K(param->extra_info_actual_size_));
@@ -1926,28 +1973,70 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
             // directly write into index
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
             lib::ObLightBacktraceGuard light_backtrace_guard(false);
-            if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
-              LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
+            if (is_sparse_vector_index_type()) {
+              if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, lens, dims, vals, vids, num, extra_info_buf))) {
+                LOG_WARN("failed to add sparse index.", K(ret), K(dim), K(num));
+              } else {
+                LOG_DEBUG("HgraphIndex add into ipivf_sq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
+              }
             } else {
-              LOG_DEBUG("HgraphIndex add into hnswsq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
+              if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
+                LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
+              } else {
+                LOG_DEBUG("HgraphIndex add into hnswsq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
+              }
             }
           } else {
             TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
             if (OB_ISNULL(snap_data_->index_)) {
               // snap_data_->vid_array_ may be released by other thread.
-              if (OB_ISNULL(snap_data_->vid_array_) || OB_ISNULL(snap_data_->vec_array_) || (OB_NOT_NULL(extra_info_buf) && OB_ISNULL(snap_data_->extra_info_buf_))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("get null array pointer", K(ret), K(snap_data_->vid_array_), K(snap_data_->vec_array_), K(snap_data_->extra_info_buf_));
+              if (is_sparse_vector_index_type()) {
+                if (OB_ISNULL(snap_data_->vid_array_) || OB_ISNULL(snap_data_->lens_array_) ||
+                    OB_ISNULL(snap_data_->dims_array_) || OB_ISNULL(snap_data_->vals_array_) ||
+                    (OB_NOT_NULL(extra_info_buf) && OB_ISNULL(snap_data_->extra_info_buf_))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("get null array pointer for sparse vector", K(ret), K(snap_data_->vid_array_),
+                          K(snap_data_->lens_array_), K(snap_data_->dims_array_), K(snap_data_->vals_array_),
+                          K(snap_data_->extra_info_buf_));
+                }
+              } else {
+                if (OB_ISNULL(snap_data_->vid_array_) || OB_ISNULL(snap_data_->vec_array_) ||
+                    (OB_NOT_NULL(extra_info_buf) && OB_ISNULL(snap_data_->extra_info_buf_))) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("get null array pointer", K(ret), K(snap_data_->vid_array_), K(snap_data_->vec_array_), K(snap_data_->extra_info_buf_));
+                }
               }
-              // frist: write into cache
+              // first: write into cache
               for (int i = 0; OB_SUCC(ret) && i < num; i++) {
                 if (OB_FAIL(snap_data_->vid_array_->push_back(vids[i]))) {
                   LOG_WARN("failed to push back into vid array", K(ret));
                 }
               }
-              for (int i = 0; OB_SUCC(ret) && i < num * dim; i++) {
-                if (OB_FAIL(snap_data_->vec_array_->push_back(vectors[i]))) {
-                  LOG_WARN("failed to push back into vector array", K(ret));
+              if (is_sparse_vector_index_type()) {
+                // for sparse vector (ipivf_sq)
+                if (OB_SUCC(ret) && OB_NOT_NULL(lens) && OB_NOT_NULL(dims) && OB_NOT_NULL(vals)) {
+                  uint32_t total_length = 0;
+                  for (int i = 0; OB_SUCC(ret) && i < num; i++) {
+                    total_length += lens[i];
+                  }
+                  for (int i = 0; OB_SUCC(ret) && i < num; i++) {
+                    if (OB_FAIL(snap_data_->lens_array_->push_back(lens[i]))) {
+                      LOG_WARN("failed to push back into lens array", K(ret));
+                    }
+                  }
+                  for (int i = 0; OB_SUCC(ret) && i < total_length; i++) {
+                    if (OB_FAIL(snap_data_->dims_array_->push_back(dims[i]))) {
+                      LOG_WARN("failed to push back into dims array", K(ret));
+                    } else if (OB_FAIL(snap_data_->vals_array_->push_back(vals[i]))) {
+                      LOG_WARN("failed to push back into vals array", K(ret));
+                    }
+                  }
+                }
+              } else {
+                for (int i = 0; OB_SUCC(ret) && i < num * dim; i++) {
+                  if (OB_FAIL(snap_data_->vec_array_->push_back(vectors[i]))) {
+                    LOG_WARN("failed to push back into vector array", K(ret));
+                  }
                 }
               }
               if (OB_SUCC(ret) && OB_NOT_NULL(extra_info_buf)) {
@@ -1957,7 +2046,7 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
               }
               LOG_INFO("HgraphIndex add into cache array success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]), KPC(snap_data_->vid_array_));
 
-              // second: construct hnsw+sq index
+              // second: construct hnsw+sq index or ipivf+sq index
               ObVecIdxVidArray *vids_array = snap_data_->vid_array_;
               if (OB_SUCC(ret) && OB_NOT_NULL(vids_array)
                   && vids_array->count() > VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD
@@ -1973,10 +2062,18 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
                  At this point, thread a should call add_index to write the data; otherwise, the data will be lost. */
               lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
               lib::ObLightBacktraceGuard light_backtrace_guard(false);
-              if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
-                LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
+              if (is_sparse_vector_index_type()) {
+                if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, lens, dims, vals, vids, num, extra_info_buf))) {
+                  LOG_WARN("failed to add sparse index.", K(ret), K(dim), K(num));
+                } else {
+                  LOG_INFO("HgraphIndex add into ipivf_sq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
+                }
               } else {
-                LOG_INFO("HgraphIndex add into hnswsq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
+                if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
+                  LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
+                } else {
+                  LOG_INFO("HgraphIndex add into hnswsq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
+                }
               }
             }
           } // end for No sq index was built
@@ -1996,9 +2093,13 @@ int ObPluginVectorIndexAdaptor::build_hnswsq_index(ObVectorIndexParam *param)
 {
   INIT_SUCC(ret);
   const char* const DATATYPE_FLOAT32 = "float32";
+  const char* const DATATYPE_SPARSE = "sparse";
   ObVecIdxVidArray *vid_array = snap_data_->vid_array_;
   ObVecIdxVecArray *vec_array = snap_data_->vec_array_;
   ObVecExtraInfoBuffer *extra_info_buf = snap_data_->extra_info_buf_;
+  ObVecIdxLensArray *lens_array = snap_data_->lens_array_;
+  ObVecIdxDimsArray *dims_array = snap_data_->dims_array_;
+  ObVecIdxValsArray *vals_array = snap_data_->vals_array_;
   if (OB_ISNULL(ATOMIC_LOAD(&(snap_data_->index_)))) {
     if (OB_NOT_NULL(ATOMIC_LOAD(&(snap_data_->index_)))) {
       // do nothing
@@ -2009,7 +2110,20 @@ int ObPluginVectorIndexAdaptor::build_hnswsq_index(ObVectorIndexParam *param)
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
       lib::ObLightBacktraceGuard light_backtrace_guard(false);
       if (OB_FAIL(ret)) {
-      }else if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
+      } else if (is_sparse_vector_index_type()) {
+        if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
+                                               param->type_,
+                                               DATATYPE_SPARSE,
+                                               VEC_INDEX_ALGTH[param->dist_algorithm_],
+                                               param->refine_,
+                                               param->ob_sparse_drop_ratio_build_,
+                                               param->window_size_,
+                                               snap_data_->mem_ctx_,
+                                               param->extra_info_actual_size_))) {
+          LOG_WARN("failed to create sparse vsag index.", K(ret), K(snap_data_->index_), KPC(param));
+        }
+      } else {
+        if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
                                              param->type_,
                                              DATATYPE_FLOAT32,
                                              VEC_INDEX_ALGTH[param->dist_algorithm_],
@@ -2022,14 +2136,30 @@ int ObPluginVectorIndexAdaptor::build_hnswsq_index(ObVectorIndexParam *param)
                                              param->refine_type_,
                                              param->bq_bits_query_,
                                              param->bq_use_fht_))) {
-        LOG_WARN("failed to create vsag index.", K(ret), K(snap_data_->index_), KPC(param));
-      } else if (OB_FAIL(obvectorutil::build_index(snap_data_->index_,
-                                                   vec_array->get_data(),
-                                                   vid_array->get_data(),
-                                                   param->dim_,
-                                                   vid_array->count(),
-                                                   extra_info_buf->ptr()))) {
-        LOG_WARN("failed to build vsag index.", K(ret), K(snap_data_->index_), KPC(param));
+          LOG_WARN("failed to create vsag index.", K(ret), K(snap_data_->index_), KPC(param));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (is_sparse_vector_index_type()) {
+          if (OB_FAIL(obvectorutil::build_index(snap_data_->index_,
+                                                 lens_array->get_data(),
+                                                 dims_array->get_data(),
+                                                 vals_array->get_data(),
+                                                 vid_array->get_data(),
+                                                 vid_array->count(),
+                                                 extra_info_buf->ptr()))) {
+            LOG_WARN("failed to build sparse vsag index.", K(ret), K(snap_data_->index_), KPC(param));
+          }
+        } else {
+          if (OB_FAIL(obvectorutil::build_index(snap_data_->index_,
+                                                 vec_array->get_data(),
+                                                 vid_array->get_data(),
+                                                 param->dim_,
+                                                 vid_array->count(),
+                                                 extra_info_buf->ptr()))) {
+            LOG_WARN("failed to build vsag index.", K(ret), K(snap_data_->index_), KPC(param));
+          }
+        }
       }
       if (OB_SUCC(ret)) {
         snap_data_->set_inited();
@@ -2221,6 +2351,59 @@ int ObPluginVectorIndexAdaptor::copy_meta_info(ObPluginVectorIndexAdaptor &other
   return ret;
 }
 
+int ObPluginVectorIndexAdaptor::create_and_build_sparse_index_from_arrays(ObVectorIndexParam *param)
+{
+  INIT_SUCC(ret);
+  const char* const DATATYPE_SPARSE = "sparse";
+  ObVecIdxVidArray *vid_array = snap_data_->vid_array_;
+  ObVecIdxLensArray *lens_array = snap_data_->lens_array_;
+  ObVecIdxDimsArray *dims_array = snap_data_->dims_array_;
+  ObVecIdxValsArray *vals_array = snap_data_->vals_array_;
+  ObVecExtraInfoBuffer *extra_info_buf = snap_data_->extra_info_buf_;
+
+  if (OB_ISNULL(vid_array) || OB_ISNULL(lens_array) || OB_ISNULL(dims_array) || OB_ISNULL(vals_array)) {
+    // null data
+  } else if (OB_ISNULL(param)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(param), KP(snap_data_));
+  } else {
+    ObVectorIndexAlgorithmType build_type = VIAT_IPIVF;
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+    lib::ObLightBacktraceGuard light_backtrace_guard(false);
+    if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
+                                           build_type,
+                                           DATATYPE_SPARSE,
+                                           VEC_INDEX_ALGTH[param->dist_algorithm_],
+                                           param->refine_,
+                                           param->ob_sparse_drop_ratio_build_,
+                                           param->window_size_,
+                                           snap_data_->mem_ctx_,
+                                           param->extra_info_actual_size_))) {
+      LOG_WARN("failed to create sparse vsag index.", K(ret), K(snap_data_->index_), KPC(param));
+    } else if (OB_FAIL(obvectorutil::add_index(snap_data_->index_,
+                                               lens_array->get_data(),
+                                               dims_array->get_data(),
+                                               vals_array->get_data(),
+                                               vid_array->get_data(),
+                                               vid_array->count(),
+                                               extra_info_buf->ptr()))) {
+      LOG_WARN("failed to add sparse vsag index.", K(ret), K(snap_data_->index_), KPC(param));
+    } else {
+      LOG_INFO("IPIVF build index success", K(ret), K(vid_array->count()));
+      snap_data_->set_inited();
+    }
+    if (OB_FAIL(ret)) {
+      free_memdata_resource(VIRT_SNAP, snap_data_, get_allocator(), tenant_id_);
+      if (snap_data_->mem_ctx_->is_inited()) {
+        snap_data_->mem_ctx_->~ObVsagMemContext();
+      }
+    }
+    free_hnswsq_array_data(snap_data_, get_allocator());
+  }
+
+  return ret;
+}
+
 int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
 {
   INIT_SUCC(ret);
@@ -2241,6 +2424,10 @@ int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
     TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
     if (OB_FAIL(snap_data_->mem_ctx_->init(parent_mem_ctx_, all_vsag_use_mem_, tenant_id_))) {
       LOG_WARN("failed to init incr data mem ctx.", K(ret));
+    } else if (is_sparse_vector_index_type()) {
+      if (OB_FAIL(create_and_build_sparse_index_from_arrays(param))) {
+        LOG_WARN("failed to create and build sparse index from arrays.", K(ret));
+      }
     } else if (OB_ISNULL(vid_array) || OB_ISNULL(vec_array)) {
       // do nothing :maybe null data
     } else {
@@ -3334,6 +3521,12 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
     lib::ObLightBacktraceGuard light_backtrace_guard(false);
     TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
+    int64_t *valid_vid = nullptr;
+    int64_t valid_vid_count = 0;
+    if (OB_NOT_NULL(ifilter.valid_vid_)) {
+      valid_vid = ifilter.valid_vid_->get_data();
+      valid_vid_count = ifilter.valid_vid_->count();
+    }
     if (is_sparse_vector_index_type() && is_mem_data_init_atomic(VIRT_INC) &&
       OB_FAIL(obvectorutil::knn_search(get_incr_index(),
                                          sparse_lens[0],
@@ -3351,7 +3544,9 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
                                          ifilter.is_range_filter(), // use_inner_id_filter
                                          valid_ratio,
                                          &ctx->search_allocator_,
-                                         query_cond->extra_column_count_ > 0))) {
+                                         query_cond->extra_column_count_ > 0,
+                                         valid_vid,
+                                         valid_vid_count))) {
       LOG_WARN("knn search delta failed.", K(ret), K(dim));
     } else if (!is_sparse_vector_index_type() && !is_incr_search_with_iter_ctx && is_mem_data_init_atomic(VIRT_INC)) {
       if (OB_FAIL(obvectorutil::knn_search(get_incr_index(),
@@ -3451,7 +3646,14 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     ifilter.is_snap_ = true;
     dfilter.is_snap_ = true;
     bool is_pre_filter = ctx->is_prefilter_valid();
-
+    int64_t *valid_vid = nullptr;
+    int64_t valid_vid_count = 0;
+    if (!is_pre_filter && dfilter.is_empty()) {
+      // do nothing
+    } else if (OB_NOT_NULL(dfilter.valid_vid_)) {
+      valid_vid = dfilter.valid_vid_->get_data();
+      valid_vid_count = dfilter.valid_vid_->count();
+    }
     if (is_sparse_vector_index_type() && is_mem_data_init_atomic(VIRT_SNAP) &&
       OB_FAIL(obvectorutil::knn_search(get_snap_index(),
                                          sparse_lens[0],
@@ -3469,7 +3671,9 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
                                          dfilter.is_range_filter(), // use_inner_id_filter
                                          valid_ratio,
                                          &ctx->search_allocator_,
-                                         query_cond->extra_column_count_ > 0))) {
+                                         query_cond->extra_column_count_ > 0,
+                                         valid_vid,
+                                         valid_vid_count))) {
       LOG_WARN("knn search delta failed.", K(ret), K(dim));
     } else if (!is_sparse_vector_index_type() && !is_snap_search_with_iter_ctx && is_mem_data_init_atomic(VIRT_SNAP)) {
       if (OB_FAIL(obvectorutil::knn_search(get_snap_index(),
@@ -4033,6 +4237,21 @@ int ObPluginVectorIndexAdaptor::try_init_snap_data(ObVectorIndexAlgorithmType ac
       }
     } else if (actual_type == VIAT_HNSW || actual_type == VIAT_HGRAPH) {
       // actual create hnsw index
+      if (OB_FAIL(init_snap_data_without_lock(actual_type))) {
+        LOG_WARN("failed to init snap mem data", K(ret), K(type_));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get serialize type invalid", K(ret), K(actual_type), K(type_));
+    }
+  } else if (type_ == VIAT_IPIVF_SQ) {
+    if (actual_type == VIAT_IPIVF_SQ) {
+      // actual create ipivf sq index
+      if (OB_FAIL(init_snap_data_without_lock())) {
+        LOG_WARN("failed to init snap mem data", K(ret), K(type_));
+      }
+    } else if (actual_type == VIAT_IPIVF) {
+      // actual create ipivf index
       if (OB_FAIL(init_snap_data_without_lock(actual_type))) {
         LOG_WARN("failed to init snap mem data", K(ret), K(type_));
       }
@@ -4616,6 +4835,9 @@ void ObHnswBitmapFilter::reset()
       }
     }
   }
+  if (OB_NOT_NULL(valid_vid_) && OB_NOT_NULL(allocator_)) {
+    OB_DELETEx(ObVecIdxVidArray, allocator_, valid_vid_);
+  }
   // reset members
   type_ = FilterType::BYTE_ARRAY;
   capacity_ = 0;
@@ -4718,6 +4940,16 @@ int ObHnswBitmapFilter::init(const int64_t &min, const int64_t &max)
       }
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is nullptr for sparse vector index", K(ret));
+  } else if (OB_ISNULL(valid_vid_ = OB_NEWx(ObVecIdxVidArray, allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc valid_vid_ array", K(ret));
+  } else {
+    valid_vid_->set_attr(ObMemAttr(tenant_id_, "VecIdxIPIVF"));
+  }
   return ret;
 }
 
@@ -4760,6 +4992,21 @@ int ObHnswBitmapFilter::init(void *adaptor, double selectivity, const ObIArray<c
         tmp_objs_[i].set_meta_type(rowkey_exprs.at(i)->obj_meta_); // set meta
       }
       valid_cnt_ = extra_info_actual_size;
+      // init valid_vid_ for sparse vector index
+      if (OB_NOT_NULL(adaptor_)) {
+        ObPluginVectorIndexAdaptor *sparse_adaptor = static_cast<ObPluginVectorIndexAdaptor*>(adaptor_);
+        if (sparse_adaptor->is_sparse_vector_index_type()) {
+          if (OB_ISNULL(allocator_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("allocator is nullptr for sparse vector index", K(ret));
+          } else if (OB_ISNULL(valid_vid_ = OB_NEWx(ObVecIdxVidArray, allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc valid_vid_ array", K(ret));
+          } else {
+            valid_vid_->set_attr(ObMemAttr(tenant_id_, "VecIdxIPIVF"));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -4822,6 +5069,12 @@ int ObHnswBitmapFilter::add(int64_t id)
   } else if (type_ == FilterType::SIMPLE_RANGE) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("simple range not support add", K(ret));
+  }
+  // add valid id for sparse vector index
+  if (OB_SUCC(ret) && OB_NOT_NULL(valid_vid_)) {
+    if (OB_FAIL(valid_vid_->push_back(id))) {
+      LOG_WARN("failed to push back vid to valid_vid_", K(ret), K(id));
+    }
   }
   return ret;
 }

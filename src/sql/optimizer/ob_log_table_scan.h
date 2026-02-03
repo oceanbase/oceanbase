@@ -291,11 +291,13 @@ struct ObVecIndexInfo
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ ||
-           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF;
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ;
   }
   inline bool is_ipivf_vec_scan() const
   {
-    return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF;
+    return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ;
   }
   inline bool is_spiv_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_SPIV; }
   inline bool is_ivf_vec_scan() const
@@ -308,6 +310,7 @@ struct ObVecIndexInfo
   inline bool is_ivf_sq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8; }
   inline bool is_ivf_pq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ; }
   inline bool is_hnsw_bq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
+  inline bool is_ipivf_refine_scan() const { return (vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF || vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ) && vector_index_param_.refine_; }
   inline bool vec_index_with_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_PRE
                                                     || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_
                                                     || ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_; }

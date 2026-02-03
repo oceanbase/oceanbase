@@ -526,6 +526,8 @@ int ObHNSWIndexRowIterator::get_next_row(
       LOG_WARN("fail to build bq vec snapshot key str", K(ret), K_(index_type));
     } else if (index_type_ == VIAT_IPIVF && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_ipivf_data_part%05ld", tablet_id_.id(), snapshot_version_, cur_row_pos_))) {
       LOG_WARN("fail to build ipivf vec snapshot key str", K(ret), K_(index_type));
+    } else if (index_type_ == VIAT_IPIVF_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_ipivf_sq_data_part%05ld", tablet_id_.id(), snapshot_version_, cur_row_pos_))) {
+      LOG_WARN("fail to build ipivf_sq vec snapshot key str", K(ret), K_(index_type));
     } else {
       current_row_.storage_datums_[vector_key_col_idx_].set_string(key_str, key_pos);
     }
@@ -1196,7 +1198,7 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
         if (!tenant_config.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail get tenant_config", KR(ret), K(adp->get_tenant_id()));
-        } else if (OB_FAIL(adp->renew_single_snap_index((type == VIAT_HNSW_BQ || type == VIAT_IPIVF)
+        } else if (OB_FAIL(adp->renew_single_snap_index((type == VIAT_HNSW_BQ || type == VIAT_IPIVF || type == VIAT_IPIVF_SQ)
             || (tenant_config->vector_index_memory_saving_mode && (type == VIAT_HNSW || type == VIAT_HNSW_SQ || type == VIAT_HGRAPH))))) {
           LOG_WARN("fail to renew single snap index", K(ret));
         }

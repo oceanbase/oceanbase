@@ -47,8 +47,16 @@ private:
                                      uint64_t num_vectors,
                                      uint64_t tablet_max_num_vectors,
                                      uint64_t tablet_count,
-                                     ObStringBuffer &res_buf);
+                                     ObStringBuffer &res_buf,
+                                     uint32_t avg_sparse_length = 0);
   static int print_mem_size(uint64_t mem_size, ObStringBuffer &res_buf);
+  static int sample_sparse_vectors_and_calc_avg_length(
+      sql::ObExecContext &exec_ctx,
+      const ObString &database_name,
+      const ObString &table_name,
+      const ObString &column_name,
+      uint64_t num_vectors,
+      uint32_t &avg_sparse_length);
 };
 
 } // namespace pl

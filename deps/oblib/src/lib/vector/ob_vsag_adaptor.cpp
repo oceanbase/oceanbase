@@ -118,8 +118,7 @@ public:
                const VidFallbackFunc &vid_fallback_func,
                const ExinfoFallbackFunc &exinfo_fallback_func)
       : valid_ratio_(valid_ratio), vid_fallback_func_(vid_fallback_func),
-        exinfo_fallback_func_(exinfo_fallback_func){};
-
+        exinfo_fallback_func_(exinfo_fallback_func), valid_vid_(nullptr), valid_vid_count_(0) {};
   ~ObVasgFilter() {}
 
   bool CheckValid(int64_t id) const override { return !vid_fallback_func_(id); }
@@ -130,10 +129,26 @@ public:
 
   float ValidRatio() const override { return valid_ratio_; }
 
+  void GetValidIds(const int64_t **valid_ids, int64_t &count) const override {
+    count = 0;
+    *valid_ids = nullptr;
+    if (OB_NOT_NULL(valid_vid_) && valid_vid_count_ != 0) {
+      *valid_ids = valid_vid_;
+      count = valid_vid_count_;
+    }
+  }
+
+  void set_valid_vid(int64_t *valid_vid, int64_t valid_vid_count) {
+    valid_vid_ = valid_vid;
+    valid_vid_count_ = valid_vid_count;
+  }
+
 private:
   float valid_ratio_;
   VidFallbackFunc vid_fallback_func_;
   ExinfoFallbackFunc exinfo_fallback_func_;
+  int64_t *valid_vid_;
+  int64_t valid_vid_count_;
 };
 
 class HnswIndexHandler {
@@ -191,7 +206,7 @@ public:
                  const int64_t *&ids, int64_t &result_size, float valid_ratio,
                  int index_type, FilterInterface *bitmap, bool reverse_filter,
                  bool need_extra_info, const char *&extra_infos,
-                 void *allocator, float distance_threshold = FLT_MAX);
+                 void *allocator, float distance_threshold = FLT_MAX, int64_t *valid_vids = nullptr, int64_t valid_vids_count = 0);
   int knn_search(const vsag::DatasetPtr &query, int64_t topk,
                  const std::string &parameters, const float *&dist,
                  const int64_t *&ids, int64_t &result_size, float valid_ratio,
@@ -286,22 +301,13 @@ int HnswIndexHandler::cal_distance_by_id(uint32_t len, uint32_t *dims, float *va
   sparse.vals_ = vals;
   DatasetPtr query = vsag::Dataset::Make();
   query->NumElements(1)->SparseVectors(&sparse)->Owner(false);
-  float *dist_tmp = (float*)allocator_->Allocate(count * sizeof(float));
-  if (OB_ISNULL(dist_tmp)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for cal_distance", K(ret), K(count));
+  tl::expected<DatasetPtr, Error> result = index_->CalDistanceById(query, ids, count);
+  if (result.has_value()) {
+    result.value()->Owner(false);
+    dist = result.value()->GetDistances();
+  } else {
+    ret = vsag_errcode2ob(result.error().type);
   }
-  // TODO(ningxin.ning): support CalcDistanceById in sparse vector
-  for (int i = 0; i < count && OB_SUCC(ret); ++i) {
-    // tl::expected<float, Error> result = index_->CalcDistanceById(query, ids[i]);
-    // if (result.has_value()) {
-    //   dist_tmp[i] = result.value();
-    // } else {
-    //   ret = vsag_errcode2ob(result.error().type);
-    // }
-    dist_tmp[i] = 0.1;
-  }
-  dist = dist_tmp;
   return ret;
 }
 
@@ -389,20 +395,7 @@ int HnswIndexHandler::get_vid_bound(int64_t &min_vid, int64_t &max_vid)
 uint64_t HnswIndexHandler::estimate_memory(const uint64_t row_count, const bool is_build)
 {
 
-  uint64_t size = 0;
-  if (IPIVF_TYPE == index_type_) {
-    // TODO(ningxin.ning): use vsag EstimateMemory
-    size += 2 * sizeof(int64_t) * row_count;
-    const uint64_t NON_ZERO_NUM = 120;
-    size += NON_ZERO_NUM * row_count * sizeof(float) * 2;
-    if (use_reorder_) {
-      size *= 2;
-    }
-    const uint64_t MAX_DIM_LIMIT = 500000;
-    size += sizeof(std::vector<float>) * 2 * MAX_DIM_LIMIT;
-  } else {
-    size = index_->EstimateMemory(row_count);
-  }
+  uint64_t size = index_->EstimateMemory(row_count);
   if (HNSW_BQ_TYPE == index_type_ && is_build) {
     if (QuantizationType::SQ8 == refine_type_) {
       size += (row_count * dim_ * sizeof(uint8_t));
@@ -416,16 +409,12 @@ uint64_t HnswIndexHandler::estimate_memory(const uint64_t row_count, const bool 
 int HnswIndexHandler::immutable_optimize()
 {
   int ret = OB_SUCCESS;
-  if (index_type_ == IPIVF_TYPE) {
-    // TODO(ningxin.ning): support SetImmutable for ipivf
+  tl::expected<void, Error> res = index_->SetImmutable();
+  if (res.has_value()) {
+    LOG_INFO("[OBVSAG] set immutable success", KPC(this));
   } else {
-    tl::expected<void, Error> res = index_->SetImmutable();
-    if (res.has_value()) {
-      LOG_INFO("[OBVSAG] set immutable success", KPC(this));
-    } else {
-      ret = vsag_errcode2ob(res.error().type);
-      LOG_WARN("[OBVSAG] index set immutable error", K(ret), K(res.error().type));
-    }
+    ret = vsag_errcode2ob(res.error().type);
+    LOG_WARN("[OBVSAG] index set immutable error", K(ret), K(res.error().type));
   }
 
   return ret;
@@ -438,7 +427,7 @@ int HnswIndexHandler::knn_search(const vsag::DatasetPtr &query, int64_t topk,
                                  int index_type, FilterInterface *bitmap,
                                  bool reverse_filter, bool need_extra_info,
                                  const char *&extra_infos, void *allocator,
-                                 float distance_threshold)
+                                 float distance_threshold, int64_t *valid_vids, int64_t valid_vids_count)
 {
   int ret = OB_SUCCESS;
   VidFallbackFunc vid_filter(bitmap, reverse_filter);
@@ -448,7 +437,10 @@ int HnswIndexHandler::knn_search(const vsag::DatasetPtr &query, int64_t topk,
   vsag::Allocator *vsag_allocator = nullptr;
   if (allocator != nullptr) vsag_allocator = static_cast<vsag::Allocator *>(allocator);
   tl::expected<std::shared_ptr<vsag::Dataset>, vsag::Error> result;
-  if (index_type_ == IPIVF_TYPE) {
+  if (index_type_ == IPIVF_TYPE || index_type_ == IPIVF_SQ_TYPE) {
+    if (bitmap != nullptr && OB_NOT_NULL(valid_vids)) {
+      vsag_filter->set_valid_vid(valid_vids, valid_vids_count);
+    }
     result = index_->KnnSearch(query, topk, parameters, bitmap == nullptr ? nullptr : vsag_filter);
   } else {
     vsag::SearchParam search_param(false, parameters,
@@ -581,7 +573,8 @@ const char* get_index_type_str(uint8_t create_type)
       res = "hgraph";
       break;
     }
-    case IPIVF_TYPE: {
+    case IPIVF_TYPE:
+    case IPIVF_SQ_TYPE: {
       res = "sindi";
       break;
     }
@@ -750,7 +743,7 @@ int construct_vsag_create_param(
 
 int construct_vsag_sindi_create_param(uint8_t create_type, const char *dtype, const char *metric,
     void *allocator, int extra_info_size, bool use_reorder, float doc_prune_ratio, int window_size,
-    char *result_param_str)
+    char *result_param_str, uint32_t avg_doc_term_length=120)
 {
   int ret = OB_SUCCESS;
   const char *index_type_str = "index_param";
@@ -758,9 +751,17 @@ int construct_vsag_sindi_create_param(uint8_t create_type, const char *dtype, co
 
   int64_t pos = 0;
   int64_t buff_size = 0;
+  // to reduce memory usage, implementing reorder on the OB side, currently not using vsag's reorder
+  use_reorder = false;
   // TODO(ningxin.ning): adapt vsag serial with seek
   const bool deserialize_without_footer = true;
   const bool deserialize_without_buffer = true;
+  bool use_quantization = create_type == IPIVF_TYPE ? false : true;
+  const uint32_t term_id_limit = 500000;
+  const uint32_t DEFAULT_AVG_DOC_TERM_LENGTH = 120;
+  if (avg_doc_term_length == 0) {
+    avg_doc_term_length = DEFAULT_AVG_DOC_TERM_LENGTH;
+  }
   if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos, "{\"dtype\":\"%s\"", dtype))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(dtype));
   } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos, ",\"metric_type\":\"%s\"", metric))) {
@@ -781,11 +782,19 @@ int construct_vsag_sindi_create_param(uint8_t create_type, const char *dtype, co
   } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
                                  ",\"deserialize_without_footer\":%s",
                                  (deserialize_without_footer ? "true": "false")))) {
-    LOG_WARN("failed to fill result_param_str", K(ret), K(extra_info_size));
+    LOG_WARN("failed to fill result_param_str", K(ret), K(deserialize_without_footer));
   } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
                                  ",\"deserialize_without_buffer\":%s",
                                  (deserialize_without_buffer ? "true": "false")))) {
-    LOG_WARN("failed to fill result_param_str", K(ret), K(extra_info_size));
+    LOG_WARN("failed to fill result_param_str", K(ret), K(deserialize_without_buffer));
+  } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
+                                 ",\"use_quantization\":%s",
+                                 use_quantization ? "true" : "false"))) {
+    LOG_WARN("failed to fill result_param_str", K(ret), K(use_quantization));
+  } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos, ",\"term_id_limit\":%d", term_id_limit))) {
+    LOG_WARN("failed to fill result_param_str", K(ret), K(term_id_limit));
+  } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos, ",\"avg_doc_term_length\":%d", avg_doc_term_length))) {
+    LOG_WARN("failed to fill result_param_str", K(ret), K(avg_doc_term_length));
   } else if (OB_FAIL(databuff_printf(result_param_str, buf_len, pos, "}}"))) {
     LOG_WARN("failed to fill result_param_str", K(ret));
   }
@@ -851,6 +860,7 @@ int construct_vsag_sindi_search_param(float query_prune_ratio, uint64_t n_candid
   int64_t pos = 0;
   int64_t buff_size = 0;
   int64_t buf_len = 1024;
+  bool use_term_lists_heap_insert = false;
   if (OB_FAIL(databuff_printf(result_param_str,
                         buf_len,
                         pos,
@@ -860,6 +870,12 @@ int construct_vsag_sindi_search_param(float query_prune_ratio, uint64_t n_candid
                         buf_len,
                         pos,
                         "\"query_prune_ratio\":%f", query_prune_ratio))) {
+    LOG_WARN("failed to fill result_param_str", K(ret), K(index_type_str));
+  }  else if (OB_FAIL(databuff_printf(result_param_str,
+                 buf_len,
+                 pos,
+                 ",\"use_term_lists_heap_insert\":%s",
+                 use_term_lists_heap_insert ? "true" : "false"))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(index_type_str));
   } else if (OB_FAIL(databuff_printf(result_param_str,
                         buf_len,
@@ -934,7 +950,7 @@ int create_index(VectorIndexPtr &index_handler,
 }
 
 int create_index(VectorIndexPtr &index_handler, IndexType index_type, const char *dtype, const char *metric,
-    bool use_reorder, float doc_prune_ratio, int window_size, void *allocator, int extra_info_size /* = 0*/)
+    bool use_reorder, float doc_prune_ratio, int window_size, void *allocator, int extra_info_size /* = 0*/, uint32_t avg_doc_term_length /*= 120 */)
 {
   int ret = OB_SUCCESS;
   if (dtype == nullptr || metric == nullptr) {
@@ -960,7 +976,8 @@ int create_index(VectorIndexPtr &index_handler, IndexType index_type, const char
             use_reorder,
             doc_prune_ratio,
             window_size,
-            result_param_str))) {
+            result_param_str,
+            avg_doc_term_length))) {
       LOG_WARN("construct_vsag_create_param fail", K(ret), K(index_type));
     } else {
       const std::string input_json_str(result_param_str);
@@ -1190,14 +1207,8 @@ int get_vid_bound(VectorIndexPtr &index_handler,
   } else {
     HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
     const IndexType index_type = static_cast<IndexType>(hnsw->get_index_type());
-    if (index_type == IPIVF_TYPE) {
-      // TODO(ningxin.ning): support get_vid_bound for ipivf
-      min_vid = 0;
-      max_vid = 0;
-    } else {
-      if (OB_FAIL(hnsw->get_vid_bound(min_vid, max_vid))) {
-        LOG_WARN("[OBVSAG] get vid bound error happend", K(ret));
-      }
+    if (OB_FAIL(hnsw->get_vid_bound(min_vid, max_vid))) {
+      LOG_WARN("[OBVSAG] get vid bound error happend", K(ret));
     }
   }
   return ret;
@@ -1291,7 +1302,8 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
 int knn_search(obvsag::VectorIndexPtr &index_handler, uint32_t len, uint32_t *dims, float *vals, int64_t topk,
     const float *&result_dist, const int64_t *&result_ids, const char *&extra_infos, int64_t &result_size,
     float query_prune_ratio, int64_t n_candidate, void *invalid, bool reverse_filter,
-    bool is_extra_info_filter, float valid_ratio, void *allocator, bool need_extra_info)
+    bool is_extra_info_filter, float valid_ratio, void *allocator, bool need_extra_info,
+    int64_t *valid_vids, int64_t valid_vids_count)
 {
   int ret = OB_SUCCESS;
   if (index_handler == nullptr || dims == nullptr || vals == nullptr) {
@@ -1316,7 +1328,8 @@ int knn_search(obvsag::VectorIndexPtr &index_handler, uint32_t len, uint32_t *di
       query->NumElements(1)->SparseVectors(&sparse)->Owner(false);
       if (OB_FAIL(hnsw->knn_search(query, topk, input_json_string, result_dist, result_ids,
                             result_size, valid_ratio, index_type, bitmap,
-                            reverse_filter, need_extra_info, extra_infos, allocator))) {
+                            reverse_filter, need_extra_info, extra_infos, allocator,
+                            0, valid_vids, valid_vids_count))) {
         LOG_WARN("[OBVSAG] knn search error happend", K(ret), K(index_type), KCSTRING(result_param_str));
       }
     }
@@ -1371,7 +1384,7 @@ int fdeserialize(VectorIndexPtr &index_handler,
     int window_size = hnsw->get_window_size();
 
     char result_param_str[1024] = {0};
-    if ((IndexType)index_type == IndexType::IPIVF_TYPE) {
+    if ((IndexType)index_type == IndexType::IPIVF_TYPE || (IndexType)index_type == IndexType::IPIVF_SQ_TYPE) {
       if (OB_FAIL(construct_vsag_sindi_create_param(uint8_t(index_type),
               dtype,
               metric,

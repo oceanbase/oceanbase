@@ -164,7 +164,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
 {
   static constexpr float DEFAULT_REFINE_K = 4.0;
   static constexpr int DEFAULT_BQ_BITS_QUERY = 32;
-  static constexpr int DEFAULT_WINDOW_SIZE = 100000;
+  static constexpr int DEFAULT_WINDOW_SIZE = 60000;
 
   ObVectorIndexParam() :
     type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0),
@@ -311,7 +311,7 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
   inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
-  // TODO(ningxin.ning): add ipivf here?
+
   inline bool is_hnsw_vec_scan() const
   {
     return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
@@ -320,6 +320,13 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
            vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
   }
   inline bool is_hnsw_bq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
+
+  inline bool is_ipivf_scan() const
+  {
+    return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ;
+  }
+
   inline bool is_hybrid_index() const { return strlen(vector_index_param_.endpoint_) > 0; }
 
   inline bool is_ivf_vec_scan() const
@@ -869,7 +876,8 @@ public:
   static int estimate_sparse_memory(
       uint64_t num_vectors,
       const ObVectorIndexParam &param,
-      uint64_t &est_mem
+      uint64_t &est_mem,
+      uint32_t avg_sparse_length = 120
   );
   static int estimate_ivf_memory(uint64_t num_vectors,
                                  const ObVectorIndexParam &param,
@@ -923,6 +931,11 @@ public:
     return type == ObVectorIndexAlgorithmType::VIAT_IVF_FLAT ||
            type == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8 ||
            type == ObVectorIndexAlgorithmType::VIAT_IVF_PQ;
+  }
+
+  static bool is_ipivf_index_type(ObVectorIndexAlgorithmType type) {
+    return type == ObVectorIndexAlgorithmType::VIAT_IPIVF ||
+           type == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ;
   }
 
   static bool check_vector_index_memory(

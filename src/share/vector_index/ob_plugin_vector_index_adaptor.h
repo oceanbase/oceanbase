@@ -77,6 +77,9 @@ public:
 
 typedef common::ObArray<int64_t>  ObVecIdxVidArray;
 typedef common::ObArray<float>  ObVecIdxVecArray;
+typedef common::ObArray<uint32_t> ObVecIdxLensArray; // for sparse vector (ipivf_sq)
+typedef common::ObArray<uint32_t> ObVecIdxDimsArray; // for sparse vector (ipivf_sq)
+typedef common::ObArray<float> ObVecIdxValsArray; // for sparse vector (ipivf_sq)
 
 enum ObVectorIndexRecordType
 {
@@ -166,7 +169,8 @@ public:
                tmp_alloc_("extmpalloc", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
                extra_buffer_(nullptr),
                tmp_objs_(nullptr),
-               extra_in_rowkey_idxs_(nullptr) {}
+               extra_in_rowkey_idxs_(nullptr),
+               valid_vid_(nullptr) {}
   ~ObHnswBitmapFilter() {}
   void reset();
   int init(const int64_t &min, const int64_t &max);
@@ -197,6 +201,7 @@ public:
     extra_buffer_ = filter.extra_buffer_;
     tmp_objs_ = filter.tmp_objs_;
     extra_in_rowkey_idxs_ = filter.extra_in_rowkey_idxs_;
+    valid_vid_ = filter.valid_vid_;
   }
   void set_roaring_bitmap(roaring::api::roaring64_bitmap_t *bitmap) {
     type_ = FilterType::ROARING_BITMAP;
@@ -230,6 +235,7 @@ public:
   char *extra_buffer_;
   ObObj *tmp_objs_;
   const ObIArray<int64_t> *extra_in_rowkey_idxs_;
+  ObVecIdxVidArray *valid_vid_; // for sparse vector index
 };
 
 class ObVsagSearchAlloc : public vsag::Allocator
@@ -414,6 +420,9 @@ struct ObVectorIndexMemData
       vid_array_(nullptr),
       vec_array_(nullptr),
       extra_info_buf_(nullptr),
+      lens_array_(nullptr),
+      dims_array_(nullptr),
+      vals_array_(nullptr),
       mem_data_rwlock_(ObLatchIds::VECTOR_MEM_DATA),
       bitmap_rwlock_(ObLatchIds::VECTOR_BITMAP_LOCK),
       scn_(),
@@ -462,6 +471,9 @@ public:
   ObVecIdxVidArray *vid_array_; // for hnsw+sq
   ObVecIdxVecArray *vec_array_; // for hnsw+sq
   ObVecExtraInfoBuffer *extra_info_buf_; // for hnsw+sq
+  ObVecIdxLensArray *lens_array_; // for sparse vector (ipivf_sq)
+  ObVecIdxDimsArray *dims_array_; // for sparse vector (ipivf_sq)
+  ObVecIdxValsArray *vals_array_; // for sparse vector (ipivf_sq)
   TCRWLock mem_data_rwlock_;
   TCRWLock bitmap_rwlock_;
   SCN scn_;
@@ -759,6 +771,7 @@ public:
   int init_hnswsq_mem_data();
   int check_snap_hnswsq_index();
   int build_hnswsq_index(ObVectorIndexParam *param);
+  int create_and_build_sparse_index_from_arrays(ObVectorIndexParam *param);
   bool is_mem_data_init_atomic(ObVectorIndexRecordType type);
   int try_init_mem_data(ObVectorIndexRecordType type, ObVectorIndexAlgorithmType enforce_type = VIAT_MAX) {
     int ret = OB_SUCCESS;
@@ -859,7 +872,7 @@ public:
       is_sparse = false;
     } else {
       ObVectorIndexParam *param = static_cast<ObVectorIndexParam *>(algo_data_);
-      is_sparse = param->type_ == VIAT_IPIVF ? true : false;
+      is_sparse = (param->type_ == VIAT_IPIVF || param->type_ == VIAT_IPIVF_SQ) ? true : false;
     }
     return is_sparse;
   }

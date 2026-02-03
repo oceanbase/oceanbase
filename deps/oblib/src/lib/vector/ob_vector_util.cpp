@@ -117,7 +117,7 @@ int create_index(obvsag::VectorIndexPtr& index_handler, int index_type,
 }
 
 int create_index(obvsag::VectorIndexPtr &index_handler, int index_type, const char *dtype, const char *metric,
-    bool use_reorder, float doc_prune_ratio, int window_size, void *allocator, int extra_info_size /* 0 */)
+    bool use_reorder, float doc_prune_ratio, int window_size, void *allocator, int extra_info_size /* 0 */, uint32_t avg_doc_term_length /* 120 */)
 {
     INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -127,7 +127,7 @@ int create_index(obvsag::VectorIndexPtr &index_handler, int index_type, const ch
   LOG_INFO("vector index create params: ", K(index_type), KCSTRING(dtype), KCSTRING(metric), K(use_reorder), K(doc_prune_ratio), K(window_size), KP(allocator), K(extra_info_size));
   return obvsag::create_index(index_handler, static_cast<obvsag::IndexType>(index_type),
                                    dtype, metric, use_reorder, doc_prune_ratio, window_size,
-                                   allocator, extra_info_size);
+                                   allocator, extra_info_size, avg_doc_term_length);
 #endif
 }
 
@@ -293,7 +293,8 @@ int knn_search(obvsag::VectorIndexPtr index_handler, float* query_vector,int dim
 int knn_search(obvsag::VectorIndexPtr index_handler, uint32_t len, uint32_t *dims, float *vals, int64_t topk,
     const float *&result_dist, const int64_t *&result_ids, const char *&extra_info, int64_t &result_size, float query_prune_ratio, int64_t n_candidate,
     void *invalid, bool reverse_filter,
-    bool is_extra_info_filter, float valid_ratio, void *allocator, bool need_extra_info)
+    bool is_extra_info_filter, float valid_ratio, void *allocator, bool need_extra_info,
+    int64_t *valid_vids, int64_t valid_vids_count)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
@@ -303,7 +304,8 @@ int knn_search(obvsag::VectorIndexPtr index_handler, uint32_t len, uint32_t *dim
                                   result_dist, result_ids, extra_info, result_size,
                                   query_prune_ratio, n_candidate,
                                   invalid, reverse_filter, is_extra_info_filter,
-                                  valid_ratio, allocator, need_extra_info);
+                                  valid_ratio, allocator, need_extra_info,
+                                  valid_vids, valid_vids_count);
 #endif
 }
 

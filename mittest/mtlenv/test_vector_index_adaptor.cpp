@@ -1550,8 +1550,8 @@ TEST_F(TestVectorIndexAdaptor, test_sparse_vector_index_query)
   int64_t min_id = 1, max_id = custom_data.size();
   int64_t min, max;
   ASSERT_EQ(0, obvectorutil::get_vid_bound(index_handler, min, max));
-  // ASSERT_EQ(min_id, min);
-  // ASSERT_EQ(max_id, max);
+  ASSERT_EQ(min_id, min);
+  ASSERT_EQ(max_id, max);
   std::cout << "num vectors: " << index_size << ", min id: " << min << ", max id: " << max << std::endl;
 
   int query_len = 2;
@@ -1680,8 +1680,8 @@ TEST_F(TestVectorIndexAdaptor, test_sparse_vector_index_serial)
   int64_t min_id = 1, max_id = num_vectors;
   int64_t min, max;
   ASSERT_EQ(0, obvectorutil::get_vid_bound(index_handler, min, max));
-  // ASSERT_EQ(min_id, min);
-  // ASSERT_EQ(max_id, max);
+  ASSERT_EQ(min_id, min);
+  ASSERT_EQ(max_id, max);
   std::cout << "num vectors: " << index_size << ", min id: " << min << ", max id: " << max << std::endl;
 
   int query_len = 2;

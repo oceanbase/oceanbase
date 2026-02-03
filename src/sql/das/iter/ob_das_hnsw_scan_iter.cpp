@@ -2503,7 +2503,12 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
       LOG_WARN("failed to check can filter in hnsw.", K(ret));
     }
   } else if (is_ipivf() && need_filter()) {
-    query_cond_.query_limit_ = static_cast<int64_t>(std::ceil(query_cond_.query_limit_ * SPARSE_FIXED_MAGNIFICATION_RATIO));
+    uint64_t query_limit = limit_param_.limit_ + limit_param_.offset_;
+    uint64_t reorder_count = get_reorder_count(query_cond_.ef_search_, query_limit, search_param_);
+    query_cond_.query_limit_ = static_cast<int64_t>(std::ceil(query_limit * SPARSE_FIXED_MAGNIFICATION_RATIO));
+    if (query_cond_.query_limit_ < reorder_count) {
+      query_cond_.query_limit_ = reorder_count;
+    }
   }
   LOG_TRACE("vector index show post-filter query info", K(vec_index_type_), K(vec_idx_try_path_), K(simple_cmp_info_.inited_), KPC(simple_cmp_info_.filter_expr_),
   K(extra_column_count_), K(query_cond_.query_limit_), K(query_cond_.ef_search_));
@@ -2882,7 +2887,7 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
       uint64_t final_res_cnt = limit_param_.limit_ + limit_param_.offset_;
       int64_t extra_info_actual_size = 0;
 
-      if (is_hnsw_bq()) {
+      if (is_hnsw_bq() || is_ipivf()) {
         final_res_cnt = get_reorder_count(query_cond_.ef_search_, final_res_cnt, search_param_);
       }
 
@@ -3309,17 +3314,13 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     } else if (OB_FALSE_IT(query_cond.ef_search_ = ob_hnsw_ef_search)) {
     } else {
       uint64_t real_limit = limit_param_.limit_ + limit_param_.offset_;
-      uint64_t n_candidate = real_limit;
       // if selectivity_ == 1 means there is no filter
-      if (is_hnsw_bq()) {
+      if (is_hnsw_bq() || is_ipivf()) {
         // normally topK(real_limit) should be the same as ef_search for bq
         // but if topK is larger than ef_search, use topK
         real_limit = get_reorder_count(ob_hnsw_ef_search, real_limit, search_param_);
-      } else if (is_ipivf()) {
-        n_candidate = get_reorder_count(ob_hnsw_ef_search, real_limit, search_param_);
       }
       query_cond.query_limit_ = real_limit;
-      query_cond.n_candidate_ = n_candidate;
     }
 
     ObDatum *vec_datum = NULL;

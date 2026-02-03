@@ -350,7 +350,7 @@ private:
   int build_rowkey_vid_range();
   int init_rel_map(ObPluginVectorIndexAdaptor* adaptor);
   bool is_hnsw_bq() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;}
-  bool is_ipivf() const { return OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF;}
+  bool is_ipivf() const { return OB_NOT_NULL(vec_aux_ctdef_) && (vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF || vec_aux_ctdef_->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ);}
   bool need_save_distance_result() {
     return is_hybrid_ ? distance_calc_ != nullptr : (distance_calc_ != nullptr && !is_hnsw_bq());
   }

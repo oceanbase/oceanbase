@@ -84,7 +84,7 @@ public:
   inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline bool is_iter_filter() const
   {
-    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF
+    return (algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF || algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IPIVF_SQ)
                ? false
                : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_;
   }

@@ -2455,7 +2455,7 @@ int ObVecIndexAsyncTask::execute_exchange()
       LOG_WARN("fail to get snapshot", K(ret));
     } else if (OB_FAIL(exchange_snap_index_rows(*data_schema, *snapshot_schema, tx_desc, snapshot, timeout_us))) {
       LOG_WARN("fail to exchange snap index rows", K(ret), K(ctx_));
-    } else if (OB_FAIL(new_adapter_->renew_single_snap_index(new_adapter_->get_snap_index_type() == VIAT_HNSW_BQ || new_adapter_->get_snap_index_type() == VIAT_IPIVF))) {
+    } else if (OB_FAIL(new_adapter_->renew_single_snap_index(new_adapter_->get_snap_index_type() == VIAT_HNSW_BQ || new_adapter_->get_snap_index_type() == VIAT_IPIVF || new_adapter_->get_snap_index_type() == VIAT_IPIVF_SQ))) {
       LOG_WARN("fail to renew single snap index", K(ret));
     }
     /* Warning!!!
@@ -3444,7 +3444,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   } else if (OB_FALSE_IT(ctx_->task_status_.progress_info_.vec_opt_status_ = OB_VECTOR_ASYNC_OPT_SERIALIZE)) {
   } else if (OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
     LOG_WARN("failed to refresh snapshot index data", K(ret));
-  } else if (OB_FAIL(adaptor.renew_single_snap_index(adaptor.get_snap_index_type() == VIAT_HNSW_BQ || adaptor.get_snap_index_type() == VIAT_IPIVF))) {
+  } else if (OB_FAIL(adaptor.renew_single_snap_index(adaptor.get_snap_index_type() == VIAT_HNSW_BQ || adaptor.get_snap_index_type() == VIAT_IPIVF || adaptor.get_snap_index_type() == VIAT_IPIVF_SQ))) {
     LOG_WARN("fail to renew single snap index", K(ret));
   }
   /* Warning!!!
@@ -3626,6 +3626,8 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
                 LOG_WARN("fail to build bq vec snapshot key str", K(ret), K(index_type));
               } else if (index_type == VIAT_IPIVF && OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_ipivf_data_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
                 LOG_WARN("fail to build ipivf vec snapshot key str", K(ret), K(index_type));
+              } else if (index_type == VIAT_IPIVF_SQ && OB_FAIL(databuff_printf(key_str, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%lu_ipivf_sq_data_part%05ld", adaptor.get_snap_tablet_id().id(), ctx_->task_status_.target_scn_.get_val_for_inner_table_field(), row_id))) {
+                LOG_WARN("fail to build ipivf_sq vec snapshot key str", K(ret), K(index_type));
               } else if (OB_ISNULL(key_str)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected nullptr key_str", K(ret), KP(key_str));
