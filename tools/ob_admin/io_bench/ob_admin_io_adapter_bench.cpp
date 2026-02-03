@@ -63,7 +63,9 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
     lib::set_memory_limit(MEMORY_LIMIT);
     lib::set_tenant_memory_limit(500, MEMORY_LIMIT);
     GMEMCONF.reload_config(GCONF);
+#ifdef ENABLE_500_MEMORY_LIMIT
     GMEMCONF.set_500_tenant_limit(0);
+#endif
     OB_LOGGER.set_log_level("INFO");
 
     ObTenantBase *tenant_base = new ObTenantBase(OB_SERVER_TENANT_ID);
