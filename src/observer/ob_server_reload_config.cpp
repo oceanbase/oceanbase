@@ -309,6 +309,8 @@ int ObServerReloadConfig::operator()()
     } else if (OB_TMP_FAIL(SERVER_STORAGE_META_SERVICE.get_reserved_size(reserved_size))) {
       LOG_WARN("fail to get reserved size", KR(tmp_ret), K(reserved_size));
     } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.resize_local_device(
+        OB_STORAGE_OBJECT_MGR.get_total_macro_block_count()
+            * OB_STORAGE_OBJECT_MGR.get_macro_block_size(),
         data_disk_size, data_disk_percentage, reserved_size))) {
       LOG_WARN("fail to resize file", KR(tmp_ret),
           K(data_disk_size), K(data_disk_percentage), K(reserved_size));
