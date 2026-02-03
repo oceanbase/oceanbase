@@ -266,7 +266,7 @@ int ObCGRowFileWriterOp::init(const ObTabletID &tablet_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("there are invalid arguments", K(ret), K(tablet_id), K(slice_idx), K(max_batch_size));
   } else if (OB_UNLIKELY(nullptr == get_dag() ||
-                         share::ObDagType::DAG_TYPE_DDL != get_dag()->get_type())) {
+                         share::ObDagType::DAG_TYPE_DDL_INDEPENDENT != get_dag()->get_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the dag is null or dag type is not ddl dag", K(ret), KP(get_dag()));
   } else {
@@ -477,7 +477,7 @@ int ObBatchDatumRowsWriteOp::init(const ObTabletID &tablet_id, const int64_t sli
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("there are invalid arguments", K(ret), K(tablet_id), K(slice_idx));
   } else if (OB_UNLIKELY(nullptr == get_dag() ||
-                         share::ObDagType::DAG_TYPE_DDL != get_dag()->get_type())) {
+                         share::ObDagType::DAG_TYPE_DDL_INDEPENDENT != get_dag()->get_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the dag is null or dag type is not ddl dag", K(ret), KP(get_dag()));
   } else {

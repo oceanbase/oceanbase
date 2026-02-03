@@ -32,7 +32,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
 ObDDLIndependentDag::ObDDLIndependentDag()
-  : ObIndependentDag(share::ObDagType::DAG_TYPE_DDL),
+  : ObIndependentDag(share::ObDagType::DAG_TYPE_DDL_INDEPENDENT),
     is_inited_(false),
     arena_(ObMemAttr(MTL_ID(), "ddl_dag")),
     direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
