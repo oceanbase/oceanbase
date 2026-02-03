@@ -8226,7 +8226,8 @@ def_table_schema(
     ('target_scn', 'int'),
     ('ret_code', 'int'),
     ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN'),
-    ('progress_info', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true', 'NULL')
+    ('progress_info', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true', 'NULL'),
+    ('task_info', 'longtext', 'true', 'NULL')
   ],
 )
 
@@ -8249,7 +8250,8 @@ def_table_schema(
     ('status', 'int'),
     ('target_scn', 'int'),
     ('ret_code', 'int'),
-    ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN')
+    ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN'),
+    ('task_info', 'longtext', 'true', 'NULL')
   ],
 )
 
@@ -43825,7 +43827,8 @@ def_table_schema(
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
-      progress_info as PROGRESS_INFO
+      progress_info as PROGRESS_INFO,
+      task_info as TASK_INFO
   FROM oceanbase.__all_vector_index_task
 """.replace("\n", " ")
 )
@@ -43894,7 +43897,8 @@ def_table_schema(
       task_type as TASK_TYPE,
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
-      trace_id as TRACE_ID
+      trace_id as TRACE_ID,
+      task_info as TASK_INFO
   FROM oceanbase.__all_vector_index_task_history
 """.replace("\n", " ")
 )
