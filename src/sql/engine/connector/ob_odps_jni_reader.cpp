@@ -855,7 +855,7 @@ int ObOdpsJniReader::get_odps_tunnel_partition_size(
       LOG_WARN("faild to get the partition row count method", K(ret));
     } else {
       ObString temp_str;
-      jstring j_partition_spec;
+      jstring j_partition_spec = nullptr;
       // Note: should transfer ObString to c_style
       if (OB_ISNULL(partition_spec) || 0 == partition_spec.length()) {
         // Means current table is with empty
@@ -879,7 +879,9 @@ int ObOdpsJniReader::get_odps_tunnel_partition_size(
         } else {
           row_count = static_cast<int64_t>(result);
         }
-        // Note: release resource
+      }
+      // Note: release resource outside of condition to avoid memory leak
+      if (nullptr != j_partition_spec) {
         env->DeleteLocalRef(j_partition_spec);
       }
     }
@@ -1113,8 +1115,8 @@ int ObOdpsJniReader::get_odps_tunnel_partition_row_count(
       LOG_WARN("faild to get the partition row count method", K(ret));
     } else {
       ObString temp_str;
-      jstring j_partition_spec;
-      jstring j_session_id;
+      jstring j_partition_spec = nullptr;
+      jstring j_session_id = nullptr;
       // Note: should transfer ObString to c_style
       if (OB_ISNULL(partition_spec) || 0 == partition_spec.length()) {
         // Means current table is with empty
@@ -1143,8 +1145,12 @@ int ObOdpsJniReader::get_odps_tunnel_partition_row_count(
         } else {
           row_count = static_cast<int64_t>(result);
         }
-        // Note: release resource
+      }
+      // Note: release resource outside of condition to avoid memory leak
+      if (nullptr != j_partition_spec) {
         env->DeleteLocalRef(j_partition_spec);
+      }
+      if (nullptr != j_session_id) {
         env->DeleteLocalRef(j_session_id);
       }
     }
@@ -1185,8 +1191,8 @@ int ObOdpsJniReader::get_odps_tunnel_partition_row_count_for_given_session_id(
       LOG_WARN("faild to get the partition row count method", K(ret));
     } else {
       ObString temp_str;
-      jstring j_partition_spec;
-      jstring j_session_id;
+      jstring j_partition_spec = nullptr;
+      jstring j_session_id = nullptr;
 
       // Note: should transfer ObString to c_style
       if (OB_ISNULL(partition_spec) || 0 == partition_spec.length()) {
@@ -1220,8 +1226,13 @@ int ObOdpsJniReader::get_odps_tunnel_partition_row_count_for_given_session_id(
         } else {
           row_count = static_cast<int64_t>(result);
         }
-        // Note: release resource
+      }
+      // Note: release resource outside of condition to avoid memory leak
+      if (nullptr != j_partition_spec) {
         env->DeleteLocalRef(j_partition_spec);
+      }
+      if (nullptr != j_session_id) {
+        env->DeleteLocalRef(j_session_id);
       }
     }
   }
