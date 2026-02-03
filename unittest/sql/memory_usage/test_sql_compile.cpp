@@ -25,6 +25,7 @@
 #include "../optimizer/ob_mock_opt_stat_manager.h"
 
 using namespace oceanbase::obrpc;
+using namespace oceanbase::lib;
 namespace test
 {
 const char* SQL_DIR = "sql";
@@ -42,9 +43,7 @@ public:
   int optimize(ObDMLStmt *&stmt, ObLogPlan *&logical_plan, MemoryUsage &memory_usage);
 private:
   int parse_memory_usage_from_result(const char* file_path, ObIArray<MemoryUsage>& memory_usages);
-  int is_memory_usage_same(const MemoryUsage& current, const MemoryUsage& baseline,
-                          const int64_t mem_diff_threshold,
-                          bool &is_equal, bool &is_same);
+  int is_memory_usage_equal(const MemoryUsage& current, const MemoryUsage& baseline, bool &is_equal);
   void is_equal_memory_usage(const char* tmp_file, const char* result_file, ObIArray<MemoryUsage>& tmp_usages);
   int parse_table_line(const std::string& line, int64_t& parse_mem, int64_t& resolve_mem, int64_t& transform_mem, int64_t& optimize_mem, int64_t& total_mem);
   int64_t parse_table_field(const std::string& field);
@@ -82,6 +81,11 @@ void TestSQLCompile::test_sql_compile(const char *file_name_prefix)
   //construct the file name ./result/test_sql_compile_xxx.result  correct result file
   //construct the file name ./schema/test_sql_compile_xxx.schema  schema file
   int64_t sql_file_len = strlen(file_name_prefix);
+
+#ifndef NDEBUG
+  fprintf(stdout, "this case must run in release compile mode\n");
+  ASSERT_TRUE(false);
+#endif
   snprintf(file_name[0],
            strlen(SQL_DIR) + sql_file_len + sql_postfix_len + 4,
            "./%s/%s%s",
@@ -372,23 +376,16 @@ int TestSQLCompile::parse_memory_usage_from_result(const char* file_path, ObIArr
 // considering the memory usage will be greater than the result file occasionally
 // if the current memory usage satisfies the following condition, it is considered as same:
 // current >= baseline && current <= baseline + mem_diff_threshold
-int TestSQLCompile::is_memory_usage_same(const MemoryUsage& current, const MemoryUsage& baseline,
-                                         const int64_t mem_diff_threshold,
-                                         bool &is_equal, bool &is_same)
+int TestSQLCompile::is_memory_usage_equal(const MemoryUsage& current, const MemoryUsage& baseline,
+                                          bool &is_equal)
 {
   int ret = OB_SUCCESS;
   is_equal = true;
-  is_same = true;
   int64_t mem_diff = 0;
-#define CMP_MEM_USAGE(attr)                               \
-  if (is_same) {                                          \
-    mem_diff = current.attr##_ - baseline.attr##_;        \
-    if (mem_diff != 0) {                                  \
-      is_equal = false;                                   \
-    }                                                     \
-    if (mem_diff < 0 || mem_diff > mem_diff_threshold) {  \
-      is_same = false;                                    \
-    }                                                     \
+#define CMP_MEM_USAGE(attr)                             \
+  mem_diff = current.attr##_ - baseline.attr##_;        \
+  if (mem_diff != 0) {                                  \
+    is_equal = false;                                   \
   }
   CMP_MEM_USAGE(total_mem_used)
   CMP_MEM_USAGE(parse_mem_used)
@@ -425,8 +422,6 @@ void TestSQLCompile::is_equal_memory_usage(const char* tmp_file, const char* res
     std::remove(tmp_file);
   } else {
     ObSEArray<MemoryUsage, 4> result_usages;
-    const int64_t MEM_DIFF_THRESHOLD = 3 * 1024; // 3KB
-    const int64_t CASE_DIFF_THRESHOLD = 2; // 2 cases
 
     if (OB_FAIL(parse_memory_usage_from_result(result_file, result_usages))) {
       LOG_WARN("failed to parse result file", K(ret), K(result_file));
@@ -438,23 +433,16 @@ void TestSQLCompile::is_equal_memory_usage(const char* tmp_file, const char* res
     }
 
     int64_t equal_cnt = 0;
-    int64_t same_cnt = 0;
     int64_t mismatch_cnt = 0;
     for (int64_t i = 0; i < tmp_usages.count(); ++i) {
       bool is_equal = false;
-      bool is_same = false;
-      if (OB_FAIL(is_memory_usage_same(tmp_usages.at(i), result_usages.at(i), MEM_DIFF_THRESHOLD, is_equal, is_same))) {
+      if (OB_FAIL(is_memory_usage_equal(tmp_usages.at(i), result_usages.at(i), is_equal))) {
         LOG_WARN("failed to check if memory usage is same", K(ret), K(tmp_usages.at(i)), K(result_usages.at(i)));
       } else if (is_equal) {
         ++equal_cnt;
       } else {
-        if (is_same) {
-          ++same_cnt;
-          fprintf(stdout, "case %ld is similar to result file\n", i + 1);
-        } else {
-          ++mismatch_cnt;
-          fprintf(stdout, "case %ld is completely different from result file\n", i + 1);
-        }
+        ++mismatch_cnt;
+        fprintf(stdout, "case %ld mismatched with result file\n", i + 1);
         fprintf(stdout, "memory usage\n");
         fprintf(stdout, "-| %ld | %ld | %ld | %ld | %ld | %ld |\n", i + 1,
                         result_usages.at(i).parse_mem_used_, result_usages.at(i).resolve_mem_used_,
@@ -476,16 +464,35 @@ void TestSQLCompile::is_equal_memory_usage(const char* tmp_file, const char* res
       }
     }
 
-    fprintf(stdout, "Some case results are different, equal_cnt: %ld, same_cnt: %ld, mismatch_cnt: %ld\n", equal_cnt, same_cnt, mismatch_cnt);
-    if (0 == mismatch_cnt && same_cnt <= CASE_DIFF_THRESHOLD) {
-      fprintf(stdout, "The difference between current and result file can be ignored,\n");
-      fprintf(stdout, "you can still choose to\n");
-      fprintf(stdout, "sh accept_result.sh\n");
-    } else {
-      fprintf(stdout, "The result files mismatched, you can choose to\n");
-      fprintf(stdout, "sh accept_result.sh\n");
-      EXPECT_EQ(true, false);
-    }
+    fprintf(stdout, "Some case results mismatched, equal_cnt: %ld, mismatch_cnt: %ld\n", equal_cnt, mismatch_cnt);
+    fprintf(stdout,
+R"(
+########################################################
+#     _  _____ _____ _____ _   _ _____ ___ ___  _   _  #
+#    / \|_   _|_   _| ____| \ | |_   _|_ _/ _ \| \ | | #
+#   / _ \ | |   | | |  _| |  \| | | |  | | | | |  \| | #
+#  / ___ \| |   | | | |___| |\  | | |  | | |_| | |\  | #
+# /_/   \_\_|   |_| |_____|_| \_| |_| |___\___/|_| \_| #
+########################################################
+
+This case is stable, the failure CANNOT be ignored by retrying.
+You can execute the case in dev environment with the following commands:
+
+./build.sh release --init
+cd build_release/unittest/sql/memory_usage
+ob-make test_sql_compile
+./test_sql_compile
+
+If the result is expected, you can update the result file by executing the following command:
+sh accept_result.sh
+
+Otherwise, you need to analyze the memory usage with memory perf tool:
+sh generate_memory_perf.sh ${case_id}
+e.g.
+sh generate_memory_perf.sh tpcds_65
+
+)");
+    EXPECT_EQ(true, false);
   }
   ASSERT_EQ(OB_SUCCESS, ret);
 }
@@ -558,7 +565,6 @@ TEST_F(TestSQLCompile, parse_table_line)
   int ret = OB_SUCCESS;
   for(int32_t i = 0; i < clp.file_count; ++i){
     const char *file_name_prefix = clp.file_names_vector[i];
-    // const char *file_name_prefix = "test_sql_compile_many_partition.";
     char file_name[FILE_PATH_LEN];
     ObArenaAllocator allocator(ObModIds::TEST);
     ObSqlArray<MemoryUsage> memory_usages(allocator);
@@ -573,6 +579,37 @@ TEST_F(TestSQLCompile, parse_table_line)
 }
 
 }//end of namespace test
+
+// parallel memory allocation will make the result unstable
+void  __attribute__((constructor)) disable_parallel_memory_allocation()
+{
+  int32_t parallel = 1;
+  ObCtxAttrCenter &instance = ObCtxAttrCenter::instance();
+  for (int64_t i = 0; i < ObCtxIds::MAX_CTX_ID; ++i) {
+    instance.ctx_attr_[i].parallel_ = parallel;
+  }
+  ObMallocAllocator *allocator = ObMallocAllocator::get_instance();
+  if (allocator == NULL) {
+    return;
+  }
+  for (int64_t slot = 0; slot < ObMallocAllocator::PRESERVED_TENANT_COUNT; ++slot) {
+    ObTenantCtxAllocatorV2 **cur = &allocator->allocators_[slot];
+    while (NULL != *cur) {
+      int64_t tenant_id = (*cur)->get_tenant_id();
+      int32_t numa_count = (*cur)->count();
+      for (int64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
+        for (int32_t numa_id = 0; numa_id < numa_count; ++numa_id) {
+          ObTenantCtxAllocatorGuard ta = allocator->get_tenant_ctx_allocator(tenant_id, ctx_id, numa_id);
+          if (ta != NULL) {
+            ta->obj_mgr_.parallel_ = parallel;
+            ta->set_req_chunkmgr_parallel_(parallel);
+          }
+        }
+      }
+      cur = &(*cur)->get_next();
+    }
+  }
+}
 
 int main(int argc, char **argv)
 {
