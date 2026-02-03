@@ -50,7 +50,7 @@ int find_existing_parent_path(ObIAllocator &allocator, const char *path, char *&
     while (exist_path[0] != '\0' && access(exist_path, F_OK) != 0 && OB_SUCC(ret)) {
       char *last_slash = strrchr(exist_path, '/');
       if (OB_ISNULL(last_slash)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
         OB_LOG(WARN, "failed to find a existing parent path", KR(ret), K(path), K(exist_path));
       } else {
         *last_slash = '\0';
@@ -85,7 +85,7 @@ int check_is_local_disk(const ObString &path, bool &is_local_disk)
     OB_LOG(WARN, "failed to find an existing parent path", KR(ret), K(path));
   } else if (OB_FALSE_IT(stat_ret = statfs(exist_path, &stat))) {
   } else if (OB_UNLIKELY(stat_ret != 0)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
     OB_LOG(WARN, "failed to get file system stat, please make sure the path exists", KR(ret), K(path), K(stat_ret), K(exist_path));
   } else if (FALSE_IT(f_type = static_cast<int64_t>(stat.f_type))) {
   } else if (f_type == NFS_SUPER_MAGIC
