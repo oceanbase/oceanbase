@@ -1158,11 +1158,11 @@ int ObExprDateSub::calc_date_sub_vector(const ObExpr &expr,
   return vector_date_adjust<false>(expr, ctx, skip, bound);
 }
 
-template <typename MonthsVec>
+template <typename MonthType, typename MonthsVec>
 inline int get_months_num(MonthsVec *months, int64_t idx, int64_t &months_num)
 {
   int ret = OB_SUCCESS;
-  if constexpr (std::is_same_v<MonthsVec, NumberUniVec> || std::is_same_v<MonthsVec, NumberUniCVec>) {
+  if constexpr (std::is_same_v<MonthType, number::ObNumber>) {
     number::ObNumber months_nmb(months->get_number(idx));
     if (OB_FAIL(months_nmb.extract_valid_int64_with_trunc(months_num))) {
       LOG_WARN("fail to extract int64 from number", K(ret), K(months_nmb));
@@ -1269,7 +1269,7 @@ int vector_months_adjust(VECTOR_EVAL_FUNC_ARG_DECL)
       } else {
         IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
         int64_t months_num = 0;
-        if (OB_FAIL(get_months_num(months_vec, idx, months_num))) {
+        if (OB_FAIL((get_months_num<MonthType, MonthsVec>(months_vec, idx, months_num)))) {
           LOG_WARN("fail to get months num", K(ret));
         } else if (OB_FAIL((vector_months_adjust_inner<IN_TYPE, ResVec>(in_val, months_num, res_vec,
                                                                         need_check_date, mysql_date_sql_mode,
@@ -1288,7 +1288,7 @@ int vector_months_adjust(VECTOR_EVAL_FUNC_ARG_DECL)
       }
       IN_TYPE in_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
       int64_t months_num = 0;
-      if (OB_FAIL(get_months_num(months_vec, idx, months_num))) {
+      if (OB_FAIL((get_months_num<MonthType, MonthsVec>(months_vec, idx, months_num)))) {
         LOG_WARN("fail to get months num", K(ret));
       } else if (OB_FAIL((vector_months_adjust_inner<IN_TYPE, ResVec>(in_val, months_num, res_vec,
                                                                       need_check_date, mysql_date_sql_mode,
@@ -1323,7 +1323,7 @@ int ObExprMonthAdjust::calc_months_adjust_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     ObObjTypeClass res_tc = ob_obj_type_class(expr.datum_meta_.type_);
     const ObObjType month_type = expr.args_[1]->datum_meta_.type_;
 #define DEF_MONTHS_ADJUST_VECTOR(IN_TYPE, arg_type, res_type)\
-  if (ObIntType == month_type || ObUInt64Type == month_type) {\
+  if (ObIntType == month_type) {\
     if (VEC_UNIFORM == months_format) {\
       ret = vector_months_adjust<IN_TYPE, arg_type, int64_t, IntegerUniVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
     } else if (VEC_UNIFORM_CONST == months_format) {\
@@ -1338,6 +1338,10 @@ int ObExprMonthAdjust::calc_months_adjust_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       ret = vector_months_adjust<IN_TYPE, arg_type, number::ObNumber, NumberUniVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
     } else if (VEC_UNIFORM_CONST == months_format) {\
       ret = vector_months_adjust<IN_TYPE, arg_type, number::ObNumber, NumberUniCVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    } else if (VEC_DISCRETE == months_format) {\
+      ret = vector_months_adjust<IN_TYPE, arg_type, number::ObNumber, NumberDiscVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
+    } else if (VEC_CONTINUOUS == months_format) {\
+      ret = vector_months_adjust<IN_TYPE, arg_type, number::ObNumber, NumberContVec, res_type>(VECTOR_EVAL_FUNC_ARG_LIST);\
     } else {\
       ret = vector_months_adjust<IN_TYPE, ObVectorBase, number::ObNumber, ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);\
     }\
