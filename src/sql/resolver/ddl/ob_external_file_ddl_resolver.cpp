@@ -77,18 +77,33 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
   }
   // resolve other format value
   ff_ctx.reset();
-  for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
-    if (OB_ISNULL(format_node->children_[i])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_node->num_child_));
-    } else if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params, ff_ctx))) {
-      LOG_WARN("fail to resolve file format", K(ret));
+  if (OB_SUCC(ret)) {
+    if (ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
+      for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
+        if (OB_ISNULL(format_node->children_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed. get unexpected NULL ptr", KR(ret), K(format_node->num_child_));
+        } else if (OB_FAIL(ObResolverUtils::resolve_kafka_format(format_node->children_[i], format, params))) {
+          LOG_WARN("fail to resolve file format", KR(ret));
+        }
+      }
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
+        if (OB_ISNULL(format_node->children_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_node->num_child_));
+        } else if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params, ff_ctx))) {
+          LOG_WARN("fail to resolve file format", K(ret));
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
     bool is_valid = true;
     if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ && OB_FAIL(format.odps_format_.encrypt())) {
       LOG_WARN("failed to encrypt odps format", K(ret));
+    } else if (ObExternalFileFormat::KAFKA_FORMAT == format.format_type_ && OB_FAIL(format.kafka_format_.encrypt(*params.allocator_))) {
+      LOG_WARN("failed to encrypt kafka format", K(ret));
     } else if (OB_FAIL(ObDDLResolver::check_format_valid(format, is_valid))) {
       LOG_WARN("check format valid failed", K(ret));
     } else if (!is_valid) {

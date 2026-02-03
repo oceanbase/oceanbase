@@ -47,6 +47,7 @@ devdeps-apache-thrift-0.16.0-132025070909.el8.aarch64.rpm
 devdeps-mit-krb5-1.21.3-212025063015.el8.aarch64.rpm
 devdeps-cyrus-sasl-2.1.28-102025070115.el8.aarch64.rpm
 devdeps-python3-3.13.3-132025070111.el8.aarch64.rpm
+devdeps-kafka-2.12.1-52026012814.el8.aarch64.rpm
 
 [deps-el9]
 devdeps-apr-1.6.5-232023090616.el9.aarch64.rpm target=el9

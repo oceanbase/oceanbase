@@ -1154,6 +1154,9 @@ private:
                                   ObTableSchema &table_schema,
                                   common::ObIAllocator &allocator,
                                   uint64_t new_table_id);
+  int build_column_schemas_for_kafka(const ObExternalFileFormat &format,
+                                     ObTableSchema &table_schema,
+                                     common::ObIAllocator &allocator);
   int build_column_schemas(ObTableSchema& table_schema,
                                       ObExternalFileFormat &format,
                                       uint64_t new_table_id,

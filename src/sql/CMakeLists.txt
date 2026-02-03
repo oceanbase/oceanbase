@@ -306,6 +306,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_clone_executor.cpp
   engine/cmd/ob_role_cmd_executor.cpp
   engine/cmd/ob_routine_executor.cpp
+  engine/cmd/ob_routine_load_executor.cpp
   engine/cmd/ob_sequence_executor.cpp
   engine/cmd/ob_set_names_executor.cpp
   engine/cmd/ob_set_password_executor.cpp
@@ -1139,6 +1140,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_file_prefetch_buffer.cpp
   engine/table/ob_odps_jni_table_row_iter.cpp
   engine/table/ob_odps_table_utils.cpp
+  engine/table/ob_kafka_table_row_iter.cpp
   engine/table/ob_file_prebuffer.cpp
   engine/table/ob_ddl_block_sample_scan_op.cpp
 )
@@ -1392,6 +1394,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_load_data_stmt.cpp
   resolver/cmd/ob_location_utils_resolver.cpp
   resolver/cmd/ob_resource_resolver.cpp
+  resolver/cmd/ob_routine_load_resolver.cpp
   resolver/cmd/ob_set_names_resolver.cpp
   resolver/cmd/ob_set_transaction_resolver.cpp
   resolver/cmd/ob_show_resolver.cpp

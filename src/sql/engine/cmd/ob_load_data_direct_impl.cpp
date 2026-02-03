@@ -2353,7 +2353,7 @@ int ObLoadDataDirectImpl::init_execute_param()
   const ObLoadArgument &load_args = load_stmt_->get_load_arguments();
   const ObLoadDataHint &hint = load_stmt_->get_hints();
   ObDirectLoadOptimizerCtx *optimizer_ctx = load_stmt_->get_optimizer_ctx();
-  const ObIArray<ObLoadDataStmt::FieldOrVarStruct> &field_or_var_list =
+  const ObIArray<FieldOrVarStruct> &field_or_var_list =
     load_stmt_->get_field_or_var_list();
   ObSchemaGetterGuard *schema_guard = ctx_->get_sql_ctx()->schema_guard_;
   const ObTableSchema *table_schema = nullptr;

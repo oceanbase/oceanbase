@@ -1196,6 +1196,12 @@ ob_set_subtarget(ob_storage retrieval
   retrieval/ob_spiv_dim_iter.cpp
 )
 
+ob_set_subtarget(ob_storage routine_load
+  routine_load/ob_routine_load_table_operator.cpp
+  routine_load/ob_routine_load_dbms_sched_util.cpp
+  routine_load/ob_routine_load_consume_executor.cpp
+)
+
 ob_add_new_object_target(ob_storage ob_storage)
 
 target_link_libraries(ob_storage PUBLIC ob_base)

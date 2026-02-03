@@ -8725,7 +8725,35 @@ def_table_schema(
 )
 # 581: __all_sync_standby_dest
 # 582: __all_sync_standby_status
-# 583: __all_routine_load_job
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name    = '__all_routine_load_job',
+  table_id      = '583',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('job_id', 'int'),
+  ],
+  is_cluster_private = False,
+  in_tenant_space = True,
+  normal_columns = [
+    ('job_name', 'varchar:128', 'false'),
+    ('create_time', 'timestamp', 'false'),
+    ('pause_time', 'timestamp', 'true'),
+    ('end_time', 'timestamp', 'true'),
+    ('database_id', 'int', 'false'),
+    ('table_id', 'int', 'false'),
+    ('state', 'varchar:16', 'false'),
+    ('job_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false'),
+    ('progress', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+    ('lag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+    ('tmp_progress', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+    ('tmp_lag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+    ('last_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('last_ret_code', 'int', 'true'),
+    ('last_error_msg', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
+  ],
+)
 # 584: __all_ss_gc_reserved_snapshot
 # 585: __all_table_archive_history
 
@@ -17722,7 +17750,10 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12588: __all_virtual_routine_load_job
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12588',
+  table_name = '__all_virtual_routine_load_job',
+  keywords = all_def_keywords['__all_routine_load_job']))
 # 12589: __all_virtual_ss_macro_cache_info
 # 12590: __all_virtual_ss_local_cache_diagnose_info
 # 12591: __all_virtual_ddl_dag_monitor
@@ -18315,7 +18346,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15542', all_def_keyword
 # 15544: __all_virtual_macro_block_copy_task_progress
 # 15545: __all_virtual_macro_block_copy_task_history
 
-# 15546: __all_routine_load_job
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15546', all_def_keywords['__all_routine_load_job']))
 # 15547: idx_routine_load_job_name_real_agent
 # 15548: __all_virtual_ss_local_cache_diagnose_info
 
@@ -45834,8 +45865,75 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 21710: DBA_OB_ROUTINE_LOAD_JOB
-# 21711: CDB_OB_ROUTINE_LOAD_JOB
+def_table_schema(
+  owner           = 'wuyuefei.wyf',
+  table_name      = 'DBA_OB_ROUTINE_LOAD_JOBS',
+  table_id        = '21710',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT A.job_id AS JOB_ID,
+       A.job_name AS JOB_NAME,
+       A.create_time AS CREATE_TIME,
+       A.pause_time AS PAUSE_TIME,
+       A.end_time AS END_TIME,
+       B.database_name AS DATABASE_NAME,
+       A.database_id AS DATABASE_ID,
+       C.table_name AS TABLE_NAME,
+       A.table_id AS TABLE_ID,
+       A.state AS STATE,
+       A.job_properties AS JOB_PROPERTIES,
+       A.progress AS PROGRESS,
+       A.lag AS LAG,
+       A.tmp_progress AS TMP_PROGRESS,
+       A.tmp_lag AS TMP_LAG,
+       A.last_trace_id AS LAST_TRACE_ID,
+       A.last_ret_code AS LAST_RET_CODE,
+       A.last_error_msg AS LAST_ERROR_MSG
+FROM oceanbase.__all_routine_load_job A
+JOIN oceanbase.__all_database B ON A.database_id = B.database_id
+JOIN oceanbase.__all_table C ON A.table_id = C.table_id
+ORDER BY A.create_time
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'wuyuefei.wyf',
+  table_name      = 'CDB_OB_ROUTINE_LOAD_JOBS',
+  table_id        = '21711',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+SELECT A.tenant_id AS TENANT_ID,
+       A.job_id AS JOB_ID,
+       A.job_name AS JOB_NAME,
+       A.create_time AS CREATE_TIME,
+       A.pause_time AS PAUSE_TIME,
+       A.end_time AS END_TIME,
+       B.database_name AS DATABASE_NAME,
+       A.database_id AS DATABASE_ID,
+       C.table_name AS TABLE_NAME,
+       A.table_id AS TABLE_ID,
+       A.state AS STATE,
+       A.job_properties AS JOB_PROPERTIES,
+       A.progress AS PROGRESS,
+       A.lag AS LAG,
+       A.tmp_progress AS TMP_PROGRESS,
+       A.tmp_lag AS TMP_LAG,
+       A.last_trace_id AS LAST_TRACE_ID,
+       A.last_ret_code AS LAST_RET_CODE,
+       A.last_error_msg AS LAST_ERROR_MSG
+FROM oceanbase.__all_virtual_routine_load_job A
+JOIN oceanbase.__all_virtual_database B ON A.tenant_id = B.tenant_id AND A.database_id = B.database_id
+JOIN oceanbase.__all_virtual_table C ON A.tenant_id = C.tenant_id AND A.table_id = C.table_id
+ORDER BY A.create_time
+""".replace("\n", " ")
+)
 # 21712: GV$OB_SS_LOCAL_CACHE_DIAGNOSE
 # 21713: V$OB_SS_LOCAL_CACHE_DIAGNOSE
 # 21714: GV$OB_SINDI_INDEX_INFO
@@ -80648,7 +80746,43 @@ def_table_schema(
 """.replace("\n", " ")
 )
 # 28294: DBA_OB_SYNC_STANDBY_DEST
-# 28295: DBA_OB_ROUTINE_LOAD_JOB
+
+def_table_schema(
+    owner = 'wuyuefei.wyf',
+    table_name     = 'DBA_OB_ROUTINE_LOAD_JOBS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28295',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+SELECT A.job_id AS JOB_ID,
+       A.job_name AS JOB_NAME,
+       A.create_time AS CREATE_TIME,
+       A.pause_time AS PAUSE_TIME,
+       A.end_time AS END_TIME,
+       B.database_name AS DATABASE_NAME,
+       A.database_id AS DATABASE_ID,
+       C.table_name AS TABLE_NAME,
+       A.table_id AS TABLE_ID,
+       A.state AS STATE,
+       A.job_properties AS JOB_PROPERTIES,
+       A.progress AS PROGRESS,
+       A.lag AS LAG,
+       A.tmp_progress AS TMP_PROGRESS,
+       A.tmp_lag AS TMP_LAG,
+       A.last_trace_id AS LAST_TRACE_ID,
+       A.last_ret_code AS LAST_RET_CODE,
+       A.last_error_msg AS LAST_ERROR_MSG
+FROM SYS.ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT A
+JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B ON A.database_id = B.database_id
+JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C ON A.table_id = C.table_id
+ORDER BY A.create_time
+""".replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -81730,7 +81864,13 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_tablet_to_global_temporary_table'])
 
-# 101124: idx_routine_load_job_name
+def_sys_index_table(
+  index_name = 'idx_routine_load_job_name',
+  index_table_id = 101124,
+  index_columns = ['job_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  keywords = all_def_keywords['__all_routine_load_job'])
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
@@ -82646,5 +82786,15 @@ def_agent_index_table(
   real_table_name = '__all_tenant_objauth_mysql' ,
   real_index_name = 'idx_objauth_mysql_obj_name',
   keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_routine_load_job_name_real_agent',
+  index_table_id = 15547,
+  index_columns = ['job_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  real_table_name = '__all_routine_load_job' ,
+  real_index_name = 'idx_routine_load_job_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT_ORA'])
 # End Oracle Agent table Index
 ################################################################################

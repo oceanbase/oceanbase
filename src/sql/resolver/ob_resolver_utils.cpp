@@ -5003,6 +5003,8 @@ int ObResolverUtils::calc_file_column_idx(const ObString &column_name, uint64_t 
       PREFIX_LEN = str_length(N_EXTERNAL_FILE_POS);
     } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
       PREFIX_LEN = str_length(N_EXTERNAL_TABLE_COLUMN_ID);
+    } else if (column_name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX)) {
+      PREFIX_LEN = str_length(N_EXTERNAL_KAFKA_COLUMN_PREFIX);
     }
 
     if (column_name.length() <= PREFIX_LEN) {
@@ -5166,6 +5168,19 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
           LOG_WARN("fail to build external table file column expr", K(ret));
         }
       }
+    } else if (ObExternalFileFormat::KAFKA_FORMAT == format_type) {
+      if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", KR(ret));
+      } else if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
+                               real_exprs, OB_INVALID_ID, file_column_idx, q_name.col_name_))) {
+        ObExternalFileFormat temp_format;
+        temp_format.csv_format_.init_format(ObDataInFileStruct(), 0, CS_TYPE_UTF8MB4_BIN);
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_kafka(expr_factory, session_info,
+                                      OB_INVALID_ID, ObString(), q_name.col_name_, file_column_idx,
+                                      gen_col_schema, file_column_expr, temp_format))) {
+          LOG_WARN("fail to build external table file column expr", KR(ret));
+        }
+      }
     } else {
       if (OB_FAIL(ObResolverUtils::build_file_row_expr_for_parquet_orc(expr_factory,
                                                                        session_info,
@@ -5199,7 +5214,8 @@ bool ObResolverUtils::is_external_pseudo_column_name(const ObString &name)
          || name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX)
          || name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX)
          || name.prefix_match_ci(N_EXTERNAL_FILE_POS)
-         || name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID);
+         || name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)
+         || name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX);
 }
 
 bool ObResolverUtils::check_external_pseudo_column_is_valid(
@@ -5222,6 +5238,8 @@ bool ObResolverUtils::check_external_pseudo_column_is_valid(
   } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
     is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
                || ObExternalFileFormat::ORC_FORMAT == format_type;
+  } else if (column_name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX)) {
+    is_valid = ObExternalFileFormat::KAFKA_FORMAT == format_type;
   }
   return is_valid;
 }
@@ -5237,6 +5255,8 @@ ObResolverUtils::deduce_external_file_format_from_pseudo_column_name(const commo
   } else if (0 == name.case_compare(N_EXTERNAL_FILE_ROW)
              || name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
     type = ObExternalFileFormat::PARQUET_FORMAT;
+  } else if (name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX)) {
+    type = ObExternalFileFormat::KAFKA_FORMAT;
   }
   return type;
 }
@@ -5520,6 +5540,52 @@ int ObResolverUtils::build_file_column_expr_for_odps(ObRawExprFactory &expr_fact
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(file_column_expr->formalize(&session_info))) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else {
+      expr = file_column_expr;
+    }
+  }
+
+  return ret;
+}
+
+int ObResolverUtils::build_file_column_expr_for_kafka(ObRawExprFactory &expr_factory,
+                                                      const ObSQLSessionInfo &session_info,
+                                                      const uint64_t table_id,
+                                                      const common::ObString &table_name,
+                                                      const common::ObString &column_name,
+                                                      int64_t column_idx,
+                                                      const ObColumnSchemaV2 *column_schema,
+                                                      ObRawExpr *&expr,
+                                                      const ObExternalFileFormat &format)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *file_column_expr = nullptr;
+  ObItemType type = T_PSEUDO_EXTERNAL_FILE_COL;
+  if (OB_ISNULL(column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(type, file_column_expr))) {
+    LOG_WARN("create nextval failed", K(ret));
+  } else if (OB_ISNULL(file_column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    file_column_expr->set_expr_name(column_name);
+    file_column_expr->set_table_name(table_name);
+    file_column_expr->set_table_id(table_id);
+    file_column_expr->set_explicited_reference();
+    file_column_expr->set_column_idx(column_idx);
+    //ObVarcharType
+    file_column_expr->set_data_type(column_schema->get_data_type());
+    file_column_expr->set_collation_type(ObCharset::get_default_collation(format.csv_format_.cs_type_));
+    file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
+    file_column_expr->set_length(column_schema->get_data_length());
+    if (lib::is_oracle_mode()) {
+      file_column_expr->set_length_semantics(LS_BYTE);
+    }
+
+    if (OB_FAIL(file_column_expr->formalize(&session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else {
       expr = file_column_expr;
@@ -10208,6 +10274,138 @@ int ObResolverUtils::resolve_column_index_type(const ParseNode* node, ObExternal
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
         LOG_WARN("not support this format type", K(format.format_type_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_kafka_format(
+    const ParseNode *node,
+    ObExternalFileFormat &format,
+    ObResolverParams &params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node) || node->num_child_ < 1 || OB_ISNULL(node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", KR(ret));
+  } else {
+    switch (node->type_) {
+      case T_EXTERNAL_FILE_FORMAT_TYPE: {
+        //do nothing
+        break;
+      }
+      case T_EXTERNAL_FILE_FORMAT: {
+        ObResolverUtils::FileFormatContext ff_ctx;
+        for (int i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+          if (OB_ISNULL(node->children_[i])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get unexpected NULL ptr", K(ret), K(node->num_child_));
+          } else if (T_EXTERNAL_FILE_FORMAT_TYPE == node->children_[i]->type_) {
+            //do nothing
+            //TODO: 检查是否为"csv"
+          } else if (OB_FAIL(ObResolverUtils::resolve_file_format(node->children_[i], format, params, ff_ctx))) {
+            LOG_WARN("fail to resolve file format", KR(ret));
+          }
+        }
+        break;
+      }
+      case T_KAFKA_CUSTOM_PROPERTY: {
+        //TODO: 传入字符串大小写敏感
+        if (OB_UNLIKELY(2 != node->num_child_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected node num child for kafka custom property", KR(ret), K(node->num_child_));
+        } else {
+          ObString key = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+          ObString value = ObString(node->children_[1]->str_len_, node->children_[1]->str_value_).trim_space_only();
+          if (0 == key.compare(ObKAFKAGeneralFormat::KAFKA_TOPIC)) {
+            format.kafka_format_.topic_ = value;
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::KAFKA_PARTITIONS)) {
+            format.kafka_format_.partitions_ = value;
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::KAFKA_OFFSETS)) {
+            format.kafka_format_.offsets_ = value;
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::MAX_BATCH_INTERVAL)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert max_batch_interval string to int", KR(ret), K(value), K(integer_value));
+            } else {
+              format.kafka_format_.max_batch_interval_ = integer_value * 1000 * 1000L; //s -> us
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::MAX_BATCH_ROWS)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert max_batch_rows string to int", KR(ret), K(value), K(integer_value));
+            } else if (integer_value < 200000) {
+              ret = OB_OP_NOT_ALLOW;
+              LOG_WARN("max_batch_rows is too small", KR(ret), K(integer_value));
+            } else {
+              format.kafka_format_.max_batch_rows_ = integer_value;
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::MAX_BATCH_SIZE)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert max_batch_size string to int", KR(ret), K(value), K(integer_value));
+            } else if (integer_value < 100 * 1024 * 1024) {
+              ret = OB_OP_NOT_ALLOW;
+              LOG_WARN("max_batch_size is too small", KR(ret), K(integer_value));
+            } else {
+              format.kafka_format_.max_batch_size_ = integer_value;
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::JOB_ID)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert job_id string to int", KR(ret), K(value), K(integer_value));
+            } else {
+              format.kafka_format_.job_id_ = integer_value;
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::TABLE_ID)) {
+            bool valid = false;
+            int64_t integer_value = ObFastAtoi<int64_t>::atoi(value.ptr(), value.ptr() + value.length(), valid);
+            if (!valid) {
+              ret = OB_INVALID_DATA;
+              LOG_WARN("fail to convert table_id string to int", KR(ret), K(value), K(integer_value));
+            } else {
+              format.kafka_format_.insert_table_id_ = integer_value;
+            }
+          } else if (0 == key.compare(ObKAFKAGeneralFormat::COLUMN_LIST)) {
+            ObString remain_str = value;
+            ObString item_str;
+            while (OB_SUCC(ret) && !remain_str.empty()) {
+              item_str = remain_str.split_on(',').trim_space_only();
+              if (item_str.empty()) {
+                item_str = remain_str.trim_space_only();
+                remain_str.reset();
+              }
+              if (OB_SUCC(ret)) {
+                bool valid = false;
+                uint64_t integer_value = ObFastAtoi<uint64_t>::atoi(item_str.ptr(), item_str.ptr() + item_str.length(), valid);
+                if (!valid) {
+                  ret = OB_INVALID_DATA;
+                  LOG_WARN("fail to convert column_list string to int", KR(ret), K(item_str), K(integer_value));
+                } else if (OB_FAIL(format.kafka_format_.column_ids_.push_back(integer_value))) {
+                  LOG_WARN("fail to push back to array", KR(ret), K(integer_value));
+                }
+              }
+            }
+          } else {
+            if (OB_FAIL(format.kafka_format_.custom_properties_.push_back(std::make_pair(key, value)))) {
+              LOG_WARN("failed to push back custom property", KR(ret));
+            }
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid file format option", KR(ret), K(node->type_));
       }
     }
   }

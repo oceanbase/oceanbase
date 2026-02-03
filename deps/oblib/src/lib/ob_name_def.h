@@ -1120,6 +1120,7 @@
 #define N_SQL_MODE_CONVERT                  "sql_mode_convert"
 #define N_EXTERNAL_FILE_COLUMN_PREFIX       "metadata$filecol"
 #define N_EXTERNAL_TABLE_COLUMN_PREFIX      "external$tablecol"
+#define N_EXTERNAL_KAFKA_COLUMN_PREFIX      "external$kafkacol"
 #define N_PARTITION_LIST_COL                "metadata$partition_list_col"
 #define N_EXTERNAL_FILE_URL                 "metadata$fileurl"
 #define N_EXTERNAL_FILE_ROW                 "external$filerow"

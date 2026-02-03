@@ -165,6 +165,7 @@
 #include "sql/resolver/cmd/ob_trigger_storage_cache_resolver.h"
 #endif
 #include "sql/resolver/cmd/ob_sys_dispatch_call_resolver.h"
+#include "sql/resolver/cmd/ob_routine_load_resolver.h"
 
 namespace oceanbase
 {
@@ -1457,6 +1458,22 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_DROP_CCL_RULE: {
         REGISTER_STMT_RESOLVER(DropCCLRule);
+        break;
+      }
+      case T_CREATE_ROUTINE_LOAD: {
+        REGISTER_STMT_RESOLVER(CreateRoutineLoad);
+        break;
+      }
+      case T_PAUSE_ROUTINE_LOAD: {
+        REGISTER_STMT_RESOLVER(PauseRoutineLoad);
+        break;
+      }
+      case T_RESUME_ROUTINE_LOAD: {
+        REGISTER_STMT_RESOLVER(ResumeRoutineLoad);
+        break;
+      }
+      case T_STOP_ROUTINE_LOAD: {
+        REGISTER_STMT_RESOLVER(StopRoutineLoad);
         break;
       }
       default: {

@@ -2759,8 +2759,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             }
 
             if (OB_SUCC(ret)) {
+              //TODO: 其他地方检查ObExternalFileFormat::ODPS_FORMAT == format.format_type_
               if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ ||
-                  ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
+                  ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_ ||
+                  ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
                 if (OB_FAIL(arg.schema_.set_external_properties(format_str))) {
                   LOG_WARN("failed to set external properties", K(ret));
                 }
@@ -3264,6 +3266,19 @@ int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node,
         node_to_mark = node->children_[0];
         break;
       }
+      case ObItemType::T_KAFKA_CUSTOM_PROPERTY: {
+        if (OB_UNLIKELY(2 != node->num_child_
+                        || NULL == node->children_[1])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid parse node", KR(ret), K(node->num_child_));
+        } else {
+          ObString key = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+          if (ObKAFKAGeneralFormat::is_security_auth_param(key)) {
+            node_to_mark = node->children_[1];
+          }
+        }
+        break;
+      }
       default: {
         // do nothing
       }
@@ -3356,6 +3371,8 @@ int ObDDLResolver::check_format_valid(ObExternalFileFormat &format, bool &is_val
     }
   } else if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
     is_valid = true;
+  // } else if (ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
+  //   is_valid = true;
   } else {
     if (!format.csv_format_.line_term_str_.empty() && !format.csv_format_.field_term_str_.empty()) {
       if (0 == MEMCMP(format.csv_format_.field_term_str_.ptr(),

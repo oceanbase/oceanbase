@@ -180,6 +180,8 @@
 #include "sql/engine/cmd/ob_sensitive_rule_executor.h"
 #include "sql/resolver/cmd/ob_sys_dispatch_call_stmt.h"
 #include "sql/engine/cmd/ob_sys_dispatch_call_executor.h"
+#include "sql/resolver/cmd/ob_routine_load_stmt.h"
+#include "sql/engine/cmd/ob_routine_load_executor.h"
 
 namespace oceanbase
 {
@@ -1255,6 +1257,22 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_DROP_SENSITIVE_RULE:
       case stmt::T_ALTER_SENSITIVE_RULE: {
         DEFINE_EXECUTE_CMD(ObSensitiveRuleStmt, ObSensitiveRuleExecutor);
+        break;
+      }
+      case stmt::T_CREATE_ROUTINE_LOAD: {
+        DEFINE_EXECUTE_CMD(ObCreateRoutineLoadStmt, ObCreateRoutineLoadExecutor);
+        break;
+      }
+      case stmt::T_PAUSE_ROUTINE_LOAD: {
+        DEFINE_EXECUTE_CMD(ObPauseRoutineLoadStmt, ObPauseRoutineLoadExecutor);
+        break;
+      }
+      case stmt::T_RESUME_ROUTINE_LOAD: {
+        DEFINE_EXECUTE_CMD(ObResumeRoutineLoadStmt, ObResumeRoutineLoadExecutor);
+        break;
+      }
+      case stmt::T_STOP_ROUTINE_LOAD: {
+        DEFINE_EXECUTE_CMD(ObStopRoutineLoadStmt, ObStopRoutineLoadExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

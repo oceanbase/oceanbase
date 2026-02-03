@@ -468,8 +468,9 @@ int ObExternalTableUtils::prepare_single_scan_task_(const uint64_t tenant_id,
   const ObString &table_format_or_properties = das_ctdef.external_file_format_str_.str_;
   if (OB_SUCC(ret)) {
     if (is_external_object_id(table_id)) {
+      int64_t parallel = 1;
       if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
-                                            tenant_id, partition_ids, ctx, das_ctdef, file_urls))) {
+                                            tenant_id, partition_ids, ctx, das_ctdef, parallel, file_urls))) {
         LOG_WARN("failed to get mocked external table files", K(ret));
       }
     } else {

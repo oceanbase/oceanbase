@@ -718,6 +718,7 @@ public:
   static int all_tablet_to_global_temporary_table_schema(share::schema::ObTableSchema &table_schema);
   static int wr_sqlstat_v2_schema(share::schema::ObTableSchema &table_schema);
   static int all_lob_check_exception_result_schema(share::schema::ObTableSchema &table_schema);
+  static int all_routine_load_job_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -1275,6 +1276,7 @@ public:
   static int all_virtual_lob_check_exception_result_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_window_loop_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_routine_load_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1617,6 +1619,7 @@ public:
   static int all_virtual_sensitive_rule_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sensitive_column_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_window_loop_info_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_routine_load_job_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -2205,6 +2208,8 @@ public:
   static int cdb_ob_ttl_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tablet_replica_info_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_routine_load_jobs_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_routine_load_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -2746,6 +2751,7 @@ public:
   static int dba_ob_sensitive_rule_plainaccess_users_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_ttl_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_ttl_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_routine_load_jobs_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -3104,6 +3110,7 @@ public:
   static int all_tablet_to_global_temporary_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int wr_sqlstat_v2_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_lob_check_exception_result_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_routine_load_job_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3462,6 +3469,7 @@ public:
   static int all_tablet_to_global_temporary_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int wr_sqlstat_v2_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_lob_check_exception_result_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_routine_load_job_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_data_table_id_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_db_tb_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_tb_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
@@ -3548,6 +3556,7 @@ public:
   static int all_virtual_tenant_location_real_agent_ora_idx_location_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_user_id_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_obj_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_routine_load_job_real_agent_ora_idx_routine_load_job_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_mgr_ora_all_virtual_table_mgr_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_ora_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -3687,6 +3696,7 @@ public:
   static int all_ai_model_endpoint_idx_ai_model_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_tablet_to_global_temporary_table_idx_temp_table_id_session_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_tablet_to_global_temporary_table_idx_temp_session_id_table_id_schema(share::schema::ObTableSchema &table_schema);
+  static int all_routine_load_job_idx_routine_load_job_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_mgr_all_virtual_table_mgr_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_sstable_macro_info_all_virtual_tablet_sstable_macro_info_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -4073,6 +4083,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_tablet_to_global_temporary_table_schema,
   ObInnerTableSchema::wr_sqlstat_v2_schema,
   ObInnerTableSchema::all_lob_check_exception_result_schema,
+  ObInnerTableSchema::all_routine_load_job_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -4633,6 +4644,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_lob_check_exception_result_schema,
   ObInnerTableSchema::all_virtual_tablet_window_loop_info_schema,
   ObInnerTableSchema::all_virtual_tablet_replica_info_schema,
+  ObInnerTableSchema::all_virtual_routine_load_job_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -4975,6 +4987,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_sensitive_rule_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_sensitive_column_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_tablet_window_loop_info_ora_schema,
+  ObInnerTableSchema::all_virtual_routine_load_job_real_agent_ora_schema,
   NULL,};
 
 const schema_create_func virtual_table_index_schema_creators [] = {
@@ -5077,6 +5090,7 @@ const schema_create_func virtual_table_index_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tenant_location_real_agent_ora_idx_location_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_user_id_real_agent_schema,
   ObInnerTableSchema::all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_obj_name_real_agent_schema,
+  ObInnerTableSchema::all_virtual_routine_load_job_real_agent_ora_idx_routine_load_job_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_mgr_ora_all_virtual_table_mgr_i1_schema,
   ObInnerTableSchema::all_virtual_ash_ora_all_virtual_ash_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema,
@@ -5678,6 +5692,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::cdb_ob_ttl_task_history_schema,
   ObInnerTableSchema::gv_ob_tablet_replica_info_schema,
   ObInnerTableSchema::v_ob_tablet_replica_info_schema,
+  ObInnerTableSchema::dba_ob_routine_load_jobs_schema,
+  ObInnerTableSchema::cdb_ob_routine_load_jobs_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -6219,6 +6235,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_sensitive_rule_plainaccess_users_ora_schema,
   ObInnerTableSchema::dba_ob_ttl_tasks_ora_schema,
   ObInnerTableSchema::dba_ob_ttl_task_history_ora_schema,
+  ObInnerTableSchema::dba_ob_routine_load_jobs_ora_schema,
   NULL,};
 
 const schema_create_func core_index_table_schema_creators [] = {
@@ -6353,6 +6370,7 @@ const schema_create_func sys_index_table_schema_creators [] = {
   ObInnerTableSchema::all_ai_model_endpoint_idx_ai_model_name_schema,
   ObInnerTableSchema::all_tablet_to_global_temporary_table_idx_temp_table_id_session_id_schema,
   ObInnerTableSchema::all_tablet_to_global_temporary_table_idx_temp_session_id_table_id_schema,
+  ObInnerTableSchema::all_routine_load_job_idx_routine_load_job_name_schema,
   ObInnerTableSchema::all_tablet_reorganize_history_idx_tablet_his_table_id_dest_schema,
   NULL,};
 
@@ -6695,6 +6713,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID,
   OB_WR_SQLSTAT_V2_TID,
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_TID,
+  OB_ALL_ROUTINE_LOAD_JOB_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TID,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TID,
@@ -7348,6 +7367,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_ORA_TID,
+  OB_ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -7776,6 +7796,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_TTL_TASK_HISTORY_TID,
   OB_CDB_OB_TTL_TASKS_TID,
   OB_CDB_OB_TTL_TASK_HISTORY_TID,
+  OB_DBA_OB_ROUTINE_LOAD_JOBS_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -8317,6 +8338,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_ORA_TID,
   OB_DBA_OB_TTL_TASKS_ORA_TID,
   OB_DBA_OB_TTL_TASK_HISTORY_ORA_TID,
+  OB_DBA_OB_ROUTINE_LOAD_JOBS_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
   OB_ALL_TABLE_IDX_TB_NAME_TID,
@@ -8439,6 +8461,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_AI_MODEL_ENDPOINT_IDX_AI_MODEL_NAME_TID,
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_TABLE_ID_SESSION_ID_TID,
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_SESSION_ID_TABLE_ID_TID,
+  OB_ALL_ROUTINE_LOAD_JOB_IDX_ROUTINE_LOAD_JOB_NAME_TID,
   OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TID,
@@ -8526,6 +8549,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_IDX_LOCATION_NAME_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_USER_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_OBJ_NAME_REAL_AGENT_TID,
+  OB_ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT_ORA_IDX_ROUTINE_LOAD_JOB_NAME_REAL_AGENT_TID,
   OB_ALL_TABLE_AUX_LOB_META_TID,
   OB_ALL_COLUMN_AUX_LOB_META_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_META_TID,
@@ -8857,6 +8881,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_AUX_LOB_META_TID,
   OB_WR_SQLSTAT_V2_AUX_LOB_META_TID,
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_META_TID,
+  OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID,
@@ -9187,7 +9212,8 @@ const uint64_t tenant_space_tables [] = {
   OB_WR_ACTIVE_SESSION_HISTORY_V2_AUX_LOB_PIECE_TID,
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_AUX_LOB_PIECE_TID,
   OB_WR_SQLSTAT_V2_AUX_LOB_PIECE_TID,
-  OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_TID,  };
+  OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_TID,
+  OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_TID,
@@ -9927,6 +9953,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME,
   OB_WR_SQLSTAT_V2_TNAME,
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_TNAME,
+  OB_ALL_ROUTINE_LOAD_JOB_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME,
@@ -10580,6 +10607,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_TABLET_WINDOW_LOOP_INFO_ORA_TNAME,
+  OB_ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -11008,6 +11036,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_TTL_TASK_HISTORY_TNAME,
   OB_CDB_OB_TTL_TASKS_TNAME,
   OB_CDB_OB_TTL_TASK_HISTORY_TNAME,
+  OB_DBA_OB_ROUTINE_LOAD_JOBS_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -11549,6 +11578,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_ORA_TNAME,
   OB_DBA_OB_TTL_TASKS_ORA_TNAME,
   OB_DBA_OB_TTL_TASK_HISTORY_ORA_TNAME,
+  OB_DBA_OB_ROUTINE_LOAD_JOBS_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
   OB_ALL_TABLE_IDX_TB_NAME_TNAME,
@@ -11671,6 +11701,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_AI_MODEL_ENDPOINT_IDX_AI_MODEL_NAME_TNAME,
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_TABLE_ID_SESSION_ID_TNAME,
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_IDX_TEMP_SESSION_ID_TABLE_ID_TNAME,
+  OB_ALL_ROUTINE_LOAD_JOB_IDX_ROUTINE_LOAD_JOB_NAME_TNAME,
   OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TNAME,
@@ -11758,6 +11789,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_IDX_LOCATION_NAME_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_USER_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_OBJ_NAME_REAL_AGENT_TNAME,
+  OB_ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT_ORA_IDX_ROUTINE_LOAD_JOB_NAME_REAL_AGENT_TNAME,
   OB_ALL_TABLE_AUX_LOB_META_TNAME,
   OB_ALL_COLUMN_AUX_LOB_META_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_META_TNAME,
@@ -12089,6 +12121,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_AUX_LOB_META_TNAME,
   OB_WR_SQLSTAT_V2_AUX_LOB_META_TNAME,
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_META_TNAME,
+  OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TNAME,
@@ -12419,7 +12452,8 @@ const char* const tenant_space_table_names [] = {
   OB_WR_ACTIVE_SESSION_HISTORY_V2_AUX_LOB_PIECE_TNAME,
   OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_AUX_LOB_PIECE_TNAME,
   OB_WR_SQLSTAT_V2_AUX_LOB_PIECE_TNAME,
-  OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_TNAME,  };
+  OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_TNAME,
+  OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_CORE_META_TABLE_TID,
@@ -15877,6 +15911,14 @@ LOBMapping const lob_aux_table_mappings [] = {
     OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_TID,
     ObInnerTableSchema::all_lob_check_exception_result_aux_lob_meta_schema,
     ObInnerTableSchema::all_lob_check_exception_result_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_ROUTINE_LOAD_JOB_TID,
+    OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_META_TID,
+    OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_routine_load_job_aux_lob_meta_schema,
+    ObInnerTableSchema::all_routine_load_job_aux_lob_piece_schema
   },
 
 };

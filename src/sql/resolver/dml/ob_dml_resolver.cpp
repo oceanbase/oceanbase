@@ -5144,6 +5144,64 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ODPSType> &colum
   return ret;
 }
 
+//TODO: allocator可以去掉
+int ObDMLResolver::build_column_schemas_for_kafka(
+  const ObExternalFileFormat &format,
+  ObTableSchema &table_schema,
+  common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(NULL == session_info_
+                  || NULL == schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session_info_ or schema_checker_", KR(ret), KP(session_info_), KP(schema_checker_));
+  } else {
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    //TODO: use ObSimpleTableSchemaV2 ?
+    const ObTableSchema *insert_table_schema = nullptr;
+    uint64_t insert_table_id = format.kafka_format_.insert_table_id_;
+    if (OB_FAIL(schema_checker_->get_table_schema(tenant_id, insert_table_id, insert_table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(insert_table_id));
+    } else if (OB_ISNULL(insert_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", KR(ret), K(tenant_id), K(insert_table_id));
+    } else {
+      const ObIArray<uint64_t> &column_ids = format.kafka_format_.column_ids_;
+      ObSqlString temp_str;
+      ARRAY_FOREACH_N(column_ids, i, cnt) {
+        uint64_t column_id = column_ids.at(i);
+        const ObColumnSchemaV2 *insert_table_column_schema = insert_table_schema->get_column_schema(column_id);
+        if (OB_ISNULL(insert_table_column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null insert_table_column_schema", KR(ret), KP(insert_table_column_schema));
+        } else {
+          ObColumnSchemaV2 column_schema;
+          int64_t ob_max_varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                                                               OB_MAX_MYSQL_VARCHAR_LENGTH;
+          column_schema.set_table_id(table_schema.get_table_id());
+          column_schema.set_column_id(i + OB_END_RESERVED_COLUMN_ID_NUM);
+          column_schema.set_data_type(ObVarcharType);
+          column_schema.set_data_length(ob_max_varchar_len);
+          if (lib::is_oracle_mode()) {
+            column_schema.set_length_semantics(LS_BYTE);
+          }
+          if (OB_FAIL(column_schema.set_column_name(insert_table_column_schema->get_column_name()))) {
+            LOG_WARN("failed to set column name", KR(ret), K(insert_table_column_schema->get_column_name()));
+          } else if (OB_FAIL(temp_str.assign_fmt("%s%d", N_EXTERNAL_KAFKA_COLUMN_PREFIX, i + 1))) {
+            LOG_WARN("failed to assign fmt", KR(ret));
+          } else if (OB_FAIL(set_basic_column_properties(column_schema, temp_str.string()))) {
+            LOG_WARN("fail to set properties for column", KR(ret));
+          } else if (lib::is_oracle_mode() && OB_FAIL(set_upper_column_name(column_schema))) {
+            LOG_WARN("fail to set upper column name in oracle mode", K(ret));
+          } else if (OB_FAIL(table_schema.add_column(column_schema))) {
+            LOG_WARN("failed to add column", K(ret), K(column_schema));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 template <typename ODPSType>
 int ObDMLResolver::build_column_for_odps(const ODPSType &odps_column,
@@ -5827,6 +5885,15 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
       }
       break;
     }
+    case ObExternalFileFormat::FormatType::KAFKA_FORMAT:
+    {
+      if (OB_FAIL(build_column_schemas_for_kafka(format,
+                                                 table_schema,
+                                                 allocator))) {
+        LOG_WARN("failed to build column schemas for kafka", KR(ret));
+      }
+      break;
+    }
     default:
     {
       ret = OB_NOT_SUPPORTED;
@@ -5884,11 +5951,13 @@ int ObDMLResolver::set_basic_info_for_mocked_table(ObTableSchema &table_schema,
   if (OB_FAIL(ret)) {
   } else if(using_location_object) {
     if (ObExternalFileFormat::ODPS_FORMAT != format.format_type_ &&
+        ObExternalFileFormat::KAFKA_FORMAT != format.format_type_ &&
           OB_FAIL(ObDDLResolver::resolve_external_file_location_object(params_, table_schema, table_location, sub_path))) {
       LOG_WARN("failed to resolve external file location object", K(ret));
     }
   } else {
     if (ObExternalFileFormat::ODPS_FORMAT != format.format_type_ &&
+        ObExternalFileFormat::KAFKA_FORMAT != format.format_type_ &&
         OB_FAIL(ObDDLResolver::resolve_external_file_location(params_, table_schema, table_location))) {
       LOG_WARN("failed to resolve external file location", K(ret));
     }
@@ -5935,7 +6004,8 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
   }
   if (OB_SUCC(ret)) {
     if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ ||
-        ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
+        ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_ ||
+        ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
       if (OB_FAIL(table_schema.set_external_properties(format_str))) {
         LOG_WARN("failed to set external properties", K(ret));
       }
@@ -5960,21 +6030,23 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
     }
   }
 
-  for (int i = 0; OB_SUCC(ret) && i < format_properties_node->num_child_; ++i) {
-    ObString temp_masked_sql;
-    if (OB_ISNULL(format_properties_node->children_[i])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_properties_node->num_child_));
-    } else if (T_EXTERNAL_FILE_FORMAT_TYPE == format_properties_node->children_[i]->type_ ||
-                T_CHARSET == format_properties_node->children_[i]->type_) {
-    } else if (OB_FAIL(ObDDLResolver::mask_properties_sensitive_info(format_properties_node->children_[i],
-                                                                    format,
-                                                                    masked_sql,
-                                                                    &allocator,
-                                                                    temp_masked_sql))) {
-      LOG_WARN("failed to mask properties sensitive info", K(ret), K(i), K(format_properties_node->num_child_));
-    } else if (!temp_masked_sql.empty()) {
-      masked_sql = temp_masked_sql;
+  if (OB_SUCC(ret)) {
+    for (int i = 0; OB_SUCC(ret) && i < format_properties_node->num_child_; ++i) {
+      ObString temp_masked_sql;
+      if (OB_ISNULL(format_properties_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_properties_node->num_child_));
+      } else if (T_EXTERNAL_FILE_FORMAT_TYPE == format_properties_node->children_[i]->type_ ||
+                  T_CHARSET == format_properties_node->children_[i]->type_) {
+      } else if (OB_FAIL(ObDDLResolver::mask_properties_sensitive_info(format_properties_node->children_[i],
+                                                                      format,
+                                                                      masked_sql,
+                                                                      &allocator,
+                                                                      temp_masked_sql))) {
+        LOG_WARN("failed to mask properties sensitive info", K(ret), K(i), K(format_properties_node->num_child_));
+      } else if (!temp_masked_sql.empty()) {
+        masked_sql = temp_masked_sql;
+      }
     }
   }
 
@@ -5988,7 +6060,8 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
   ObString sub_path;
   bool using_location_object = false;
   if (OB_SUCC(ret)) {
-    if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+    if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_
+        || ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
       // do nothing
     } else {
       if (OB_ISNULL(location_node->children_[0])) {
@@ -11138,6 +11211,19 @@ int ObDMLResolver::resolve_external_table_generated_column(
                                         col.col_name_, file_column_idx, column_schema,
                                         real_ref_expr))) {
           LOG_WARN("fail to build external table file column expr", K(ret));
+        }
+      }
+    } else if (ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
+      if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", KR(ret));
+      } else if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
+                              pseudo_external_file_col_exprs_, table_item.table_id_, file_column_idx, col.col_name_))) {
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_kafka(
+                                        *params_.expr_factory_, *params_.session_info_,
+                                        table_item.table_id_, table_item.table_name_,
+                                        col.col_name_, file_column_idx, column_schema,
+                                        real_ref_expr, format))) {
+          LOG_WARN("fail to build external table file column expr", KR(ret));
         }
       }
     } else if (ObExternalFileFormat::PARQUET_FORMAT == format.format_type_ ||

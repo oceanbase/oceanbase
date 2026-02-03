@@ -433,6 +433,108 @@ int ObInnerTableSchema::v_ob_tablet_replica_info_schema(ObTableSchema &table_sch
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_routine_load_jobs_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_ROUTINE_LOAD_JOBS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_ROUTINE_LOAD_JOBS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT A.job_id AS JOB_ID,        A.job_name AS JOB_NAME,        A.create_time AS CREATE_TIME,        A.pause_time AS PAUSE_TIME,        A.end_time AS END_TIME,        B.database_name AS DATABASE_NAME,        A.database_id AS DATABASE_ID,        C.table_name AS TABLE_NAME,        A.table_id AS TABLE_ID,        A.state AS STATE,        A.job_properties AS JOB_PROPERTIES,        A.progress AS PROGRESS,        A.lag AS LAG,        A.tmp_progress AS TMP_PROGRESS,        A.tmp_lag AS TMP_LAG,        A.last_trace_id AS LAST_TRACE_ID,        A.last_ret_code AS LAST_RET_CODE,        A.last_error_msg AS LAST_ERROR_MSG FROM oceanbase.__all_routine_load_job A JOIN oceanbase.__all_database B ON A.database_id = B.database_id JOIN oceanbase.__all_table C ON A.table_id = C.table_id ORDER BY A.create_time )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_routine_load_jobs_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_CDB_OB_ROUTINE_LOAD_JOBS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_ROUTINE_LOAD_JOBS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT A.tenant_id AS TENANT_ID,        A.job_id AS JOB_ID,        A.job_name AS JOB_NAME,        A.create_time AS CREATE_TIME,        A.pause_time AS PAUSE_TIME,        A.end_time AS END_TIME,        B.database_name AS DATABASE_NAME,        A.database_id AS DATABASE_ID,        C.table_name AS TABLE_NAME,        A.table_id AS TABLE_ID,        A.state AS STATE,        A.job_properties AS JOB_PROPERTIES,        A.progress AS PROGRESS,        A.lag AS LAG,        A.tmp_progress AS TMP_PROGRESS,        A.tmp_lag AS TMP_LAG,        A.last_trace_id AS LAST_TRACE_ID,        A.last_ret_code AS LAST_RET_CODE,        A.last_error_msg AS LAST_ERROR_MSG FROM oceanbase.__all_virtual_routine_load_job A JOIN oceanbase.__all_virtual_database B ON A.tenant_id = B.tenant_id AND A.database_id = B.database_id JOIN oceanbase.__all_virtual_table C ON A.tenant_id = C.tenant_id AND A.table_id = C.table_id ORDER BY A.create_time )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

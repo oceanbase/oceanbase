@@ -376,7 +376,7 @@ END_P SET_VAR DELIMITER
         SS MI HH DD WK WW MM QQ YY MS NS S N H D M Q
         SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
         STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STDDEVSAMP STOPWORD_TABLE STORAGE_CACHE_POLICY STORAGE_CACHE_POLICY_EXECUTOR STRONG STSTOKEN
-        SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING STRIPE_SIZE
+        SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STREAM STRING STRIPE_SIZE
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SYS_COUNT_INROW SESSION_ALIAS
         SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER PARSE_HEADER IGNORE_LAST_EMPTY_COLUMN
@@ -615,6 +615,8 @@ END_P SET_VAR DELIMITER
 %type <node> vector_similarity_expr vector_similarity_metric
 %type <node> groupconcat_agg_func
 %type <node> create_sensitive_rule_stmt drop_sensitive_rule_stmt alter_sensitive_rule_stmt alter_sensitive_rule_action sensitive_rule_name sensitive_field_list sensitive_field sensitivity_protection_spec sensitivity_encryption_spec
+%type <node> create_routine_load_stmt load_properties load_property_list load_property opt_load_where_clause job_properties_expr job_property_list job_property
+%type <node> pause_routine_load_stmt resume_routine_load_stmt stop_routine_load_stmt
 
 %start sql_stmt
 %%
@@ -809,6 +811,10 @@ stmt:
   | create_sensitive_rule_stmt { $$ = $1; check_question_mark($$, result); }
   | drop_sensitive_rule_stmt { $$ = $1; check_question_mark($$, result); }
   | alter_sensitive_rule_stmt { $$ = $1; check_question_mark($$, result); }
+  | create_routine_load_stmt { $$ = $1; check_question_mark($$, result); }
+  | pause_routine_load_stmt { $$ = $1; check_question_mark($$, result); }
+  | resume_routine_load_stmt { $$ = $1; check_question_mark($$, result); }
+  | stop_routine_load_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -9925,6 +9931,15 @@ TYPE COMP_EQ STRING_VALUE
 | HTTP_KEEPALIVE_TIME COMP_EQ INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_HTTP_KEEPLIVE_TIME, 1, $3);
+}
+| STRING_VALUE COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_KAFKA_CUSTOM_PROPERTY, 2, $1, $3);
+}
+| format_expr
+{
+  dup_string($1, result, @1.first_column, @1.last_column);
+  $$ = $1;
 }
 ;
 
@@ -24292,6 +24307,137 @@ REMOVE FILES IN LOCATION USER_VARIABLE opt_sub_path opt_pattern
 }
 ;
 
+create_routine_load_stmt:
+CREATE ROUTINE LOAD relation_name ON relation_factor
+load_properties FROM STREAM '(' job_properties_expr ')'
+{
+  if (NULL != $11) {
+    dup_string($11, result, @11.first_column, @11.last_column);
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_ROUTINE_LOAD, 5,
+                           $4,                        /* job name */
+                           $6,                        /* table name */
+                           $7,                        /* load properties */
+                           $11                        /* job properties */);
+}
+;
+
+load_properties:
+load_property_list
+{
+  merge_nodes($$, result, T_LOAD_PROPERTIES, $1);
+}
+| /*empty*/
+{
+  $$ = NULL;
+}
+;
+
+load_property_list:
+load_property_list load_property
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+| load_property
+{
+  $$ = $1;
+}
+;
+
+load_property:
+PARALLEL COMP_EQ INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARALLEL, 1, $3);
+}
+| COLUMNS '(' field_or_vars_list ')'
+{
+  merge_nodes($$, result, T_COLUMN_LIST, $3);
+}
+| use_partition
+{
+  $$ = $1;
+}
+| IGNORE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_IGNORE);
+}
+| REPLACE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_REPLACE);
+}
+| opt_load_where_clause
+{
+  dup_string($1, result, @1.first_column, @1.last_column);
+  $$ = $1;
+}
+;
+
+opt_load_where_clause:
+WHERE opt_hint_value expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WHERE_CLAUSE, 2, $2, $3);
+}
+;
+
+job_properties_expr:
+job_property_list
+{
+  merge_nodes($$, result, T_EXTERNAL_PROPERTIES, $1);
+}
+;
+
+job_property_list:
+job_property
+{
+  $$ = $1;
+}
+| job_property_list opt_comma job_property
+{
+  (void) ($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+job_property:
+TYPE COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_FORMAT_TYPE, 1, $3);
+}
+| STRING_VALUE COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_KAFKA_CUSTOM_PROPERTY, 2, $1, $3);
+}
+| format_expr
+{
+  dup_string($1, result, @1.first_column, @1.last_column);
+  $$ = $1;
+}
+;
+
+pause_routine_load_stmt:
+PAUSE ROUTINE LOAD FOR relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PAUSE_ROUTINE_LOAD, 1,
+                           $5                        /* job name */);
+}
+;
+
+resume_routine_load_stmt:
+RESUME ROUTINE LOAD FOR relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RESUME_ROUTINE_LOAD, 1,
+                           $5                        /* job name */);
+}
+;
+
+stop_routine_load_stmt:
+STOP ROUTINE LOAD FOR relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_STOP_ROUTINE_LOAD, 1,
+                           $5                        /* job name */);
+}
+;
+
 /*===========================================================
  *
  *	mock stmt
@@ -27958,6 +28104,7 @@ ACCESS_INFO
 |       JSON_QUERY
 |       JSON_TABLE
 |       KEYWORD
+|       STREAM
 |       KEY_BLOCK_SIZE
 |       KEY_VERSION
 |       KEYTAB

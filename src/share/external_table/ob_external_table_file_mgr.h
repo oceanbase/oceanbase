@@ -326,6 +326,14 @@ public:
       ObIArray<int64_t> &partition_ids,
       sql::ObExecContext &ctx,
       const ObDASScanCtDef &das_ctdef,
+      const int64_t parallel,
+      ObIArray<ObExternalFileInfo> &external_files);
+
+  int build_external_files_for_kafka(
+      const uint64_t tenant_id,
+      const ObString &external_properties,
+      const int64_t parallel,
+      ObIAllocator &allocator,
       ObIArray<ObExternalFileInfo> &external_files);
 
   int get_external_files_by_part_id(

@@ -31,6 +31,8 @@
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/table/ob_iceberg_delete_bitmap_builder.h"
+#include "sql/engine/table/ob_kafka_table_row_iter.h"
+
 namespace oceanbase
 {
 namespace common {
@@ -601,6 +603,12 @@ int ObExternalTableAccessService::table_scan(
             LOG_TRACE("success to create plugin row iterator");
           }
           break;
+        case ObExternalFileFormat::KAFKA_FORMAT:
+          if (OB_ISNULL(row_iter = OB_NEWx(ObKAFKATableRowIterator, (scan_param.allocator_)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memory failed", KR(ret));
+          }
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
@@ -638,6 +646,7 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
       case ObExternalFileFormat::CSV_FORMAT:
       case ObExternalFileFormat::PARQUET_FORMAT:
       case ObExternalFileFormat::ORC_FORMAT:
+      case ObExternalFileFormat::KAFKA_FORMAT:
         result->reset();
         break;
       case ObExternalFileFormat::ODPS_FORMAT:

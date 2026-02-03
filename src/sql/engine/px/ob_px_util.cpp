@@ -256,6 +256,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
       } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
                                                             tenant_id, part_ids, ctx,
                                                             scan_ops.at(0)->tsc_ctdef_.scan_ctdef_,
+                                                            dfo.get_dop(),
                                                             ext_file_urls))) {
         LOG_WARN("fail to get mocked external table files", K(ret));
       }

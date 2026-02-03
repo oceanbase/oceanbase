@@ -23,23 +23,50 @@ class ObLoadDataStmt;
 struct ObDataInFileStruct;
 struct ObLoadArgument;
 
-class ObLoadDataResolver : public ObCMDResolver
+class ObLoadBaseResolver: public ObCMDResolver
+{
+public:
+  explicit ObLoadBaseResolver(ObResolverParams &params):
+            ObCMDResolver(params)
+  {
+  }
+  int check_trigger_constraint(const ObTableSchema *table_schema);
+  int resolve_field_or_var_list_node(
+      const ParseNode &node,
+      const common::ObNameCaseMode case_mode,
+      const ObString &database_name,
+      const uint64_t table_id,
+      ObIArray<FieldOrVarStruct> &field_or_var_list);
+  int resolve_field_node(
+      const ParseNode &node,
+      const common::ObNameCaseMode case_mode,
+      const ObString &database_name,
+      const uint64_t table_id,
+      ObIArray<FieldOrVarStruct> &field_or_var_list);
+  int resolve_user_vars_node(
+      const ParseNode &node,
+      ObIArray<FieldOrVarStruct> &field_or_var_list);
+  int resolve_empty_field_or_var_list_node(
+      const uint64_t table_id,
+      ObIArray<FieldOrVarStruct> &field_or_var_list);
+  int resolve_partitions(
+      const ParseNode &node,
+      const uint64_t table_id,
+      ObIArray<ObObjectID> &part_ids,
+      ObIArray<ObString> &part_names);
+};
+
+class ObLoadDataResolver : public ObLoadBaseResolver
 {
 public:
   explicit ObLoadDataResolver(ObResolverParams &params):
-        ObCMDResolver(params), current_scope_(T_LOAD_DATA_SCOPE)
+      ObLoadBaseResolver(params), current_scope_(T_LOAD_DATA_SCOPE)
   {
   }
   virtual ~ObLoadDataResolver()
   {
   }
   virtual int resolve(const ParseNode &parse_tree);
-  int resolve_field_node(const ParseNode &node, const common::ObNameCaseMode case_mode,
-                         ObLoadDataStmt &load_stmt);
-  int resolve_user_vars_node(const ParseNode &node, ObLoadDataStmt &load_stmt);
-  int resolve_field_or_var_list_node(const ParseNode &node, const common::ObNameCaseMode case_mode,
-                                     ObLoadDataStmt &load_stmt);
-  int resolve_empty_field_or_var_list_node(ObLoadDataStmt &load_stmt);
   int resolve_set_clause(const ParseNode &node, const common::ObNameCaseMode case_mode,
                                   ObLoadDataStmt &load_stmt);
   int resolve_each_set_node(const ParseNode &node, const common::ObNameCaseMode case_mode,
@@ -61,9 +88,7 @@ public:
 
   int resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *node);
   int local_infile_enabled(bool &enabled) const;
-  int resolve_partitions(const ParseNode &node, ObLoadDataStmt &load_stmt);
 
-  int check_trigger_constraint(const ObTableSchema *table_schema);
   int check_collection_sql_type(const ObTableSchema *table_schema);
 private:
   int pattern_match(const ObString& str, const ObString& pattern, bool &matched);

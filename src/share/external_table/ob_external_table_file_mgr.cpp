@@ -30,6 +30,7 @@
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/scan/task.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "sql/engine/table/ob_kafka_table_row_iter.h"
 
 namespace oceanbase
 {
@@ -601,6 +602,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
     ObIArray<int64_t> &partition_ids,
     sql::ObExecContext &ctx,
     const ObDASScanCtDef &das_ctdef,
+    const int64_t parallel,
     ObIArray<ObExternalFileInfo> &external_files)
 {
   int ret = OB_SUCCESS;
@@ -785,9 +787,76 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
       file.content_digest_ = basic_file_infos.at(i).content_digest_;
       OZ (external_files.push_back(file));
     }
+  } else if (ObExternalFileFormat::FormatType::KAFKA_FORMAT == external_table_type) { //kafka
+    if (OB_FAIL(build_external_files_for_kafka(tenant_id, das_ctdef.external_file_format_str_.str_,
+                                    parallel, ctx.get_allocator(), external_files))) {
+      LOG_WARN("fail to build_external_files_for_kafka", KR(ret), K(tenant_id), K(das_ctdef.external_file_format_str_.str_), K(parallel));
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported table format", K(ret), K(external_table_type));
+  }
+  return ret;
+}
+
+int ObExternalTableFileManager::build_external_files_for_kafka(
+    const uint64_t tenant_id,
+    const ObString &external_properties,
+    const int64_t parallel,
+    ObIAllocator &ctx_allocator,
+    ObIArray<ObExternalFileInfo> &external_files)
+{
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat format;
+  ObArenaAllocator allocator;
+  if (OB_FAIL(format.load_from_string(external_properties, allocator))) {
+    LOG_WARN("fail to load from properties string", KR(ret), K(external_properties));
+  } else if (OB_UNLIKELY(ObExternalFileFormat::FormatType::KAFKA_FORMAT != format.format_type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected format_type_", KR(ret), K(format.format_type_));
+  } else {
+    const ObString &partitions_str = format.kafka_format_.partitions_;
+    const ObString &offsets_str = format.kafka_format_.offsets_;
+    ObSEArray<int32_t, 8> partition_arr;
+    ObSEArray<int64_t, 8> offset_arr;
+    bool is_datetime = false;
+    if (OB_FAIL(ObKAFKATableRowIterator::split_partitions(partitions_str, partition_arr))) {
+      LOG_WARN("fail to split partitions", KR(ret), K(partitions_str));
+    } else if (OB_FAIL(ObKAFKATableRowIterator::split_offsets(offsets_str, offset_arr, is_datetime))) {
+      LOG_WARN("fail to split offsets", KR(ret), K(offsets_str));
+    } else if (OB_UNLIKELY(partition_arr.count() != offset_arr.count()
+                           || partition_arr.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected partition_arr or offset_arr", KR(ret), K(partition_arr), K(offset_arr));
+    } else {
+      const int64_t buf_len = 64;
+      const int64_t partition_count = partition_arr.count();
+      const int64_t effective_parallel = (parallel > 0) ? parallel : 1;
+      int64_t partitions_per_worker = (partition_count + effective_parallel - 1) / effective_parallel;
+      if (0 == partitions_per_worker) {
+        partitions_per_worker = 1;
+      }
+      ARRAY_FOREACH_N(partition_arr, i, cnt) {
+        ObExternalFileInfo file;
+        char *buf = NULL;
+        int64_t pos = 0;
+        if (OB_ISNULL(buf = reinterpret_cast<char *>(ctx_allocator.alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc mem", KR(ret), K(buf_len));
+        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d:%ld", partition_arr.at(i), offset_arr.at(i)))) {
+          LOG_WARN("failed to printf", KR(ret), K(buf_len), K(pos));
+        } else {
+          file.file_url_.assign_ptr(buf, pos);
+          file.file_id_ = (i / partitions_per_worker) + 1;
+          file.file_addr_ = GCTX.self_addr();
+          if (OB_FAIL(external_files.push_back(file))) {
+            LOG_WARN("failed to push back", KR(ret));
+          }
+        }
+      }
+      LOG_INFO("build external files for kafka", KR(ret), K(partition_count), K(effective_parallel),
+                K(external_files));
+    }
   }
   return ret;
 }

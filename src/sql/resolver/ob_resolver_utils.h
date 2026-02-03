@@ -851,6 +851,16 @@ public:
     int64_t column_idx,
     const ObColumnSchemaV2 *generated_column,
     ObRawExpr *&expr);
+  static int build_file_column_expr_for_kafka(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const common::ObString &table_name,
+    const common::ObString &column_name,
+    int64_t column_idx,
+    const ObColumnSchemaV2 *column_schema,
+    ObRawExpr *&expr,
+    const ObExternalFileFormat &format);
   static int build_file_column_expr_for_csv(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
@@ -923,6 +933,9 @@ public:
                                  ObExternalFileFormat &format,
                                  ObResolverParams &params,
                                  FileFormatContext &ff_ctx);
+  static int resolve_kafka_format(const ParseNode *node,
+                                  ObExternalFileFormat &format,
+                                  ObResolverParams &params);
   static int resolve_file_compression_format(const ParseNode *node,
                                              ObExternalFileFormat &format,
                                              ObResolverParams &params);

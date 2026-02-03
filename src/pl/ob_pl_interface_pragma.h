@@ -69,6 +69,7 @@
 #include "pl/sys_package/ob_utl_smtp.h"
 #include "pl/sys_package/ob_utl_http.h"
 #include "pl/sys_package/ob_dbms_plsql_code_coverage.h"
+#include "pl/sys_package/ob_dbms_routine_load.h"
 #include "pl/sys_package/ob_dbms_lob_manager.h"
 #endif
 #include "pl/sys_package/ob_dbms_xplan.h"
@@ -91,6 +92,7 @@
 #include "pl/sys_package/ob_dbms_xprofile.h"
 #include "pl/sys_package/ob_dbms_data_dict.h"
 #include "pl/sys_package/ob_dbms_python.h"
+#include "pl/sys_package/ob_dbms_routine_load_mysql.h"
 #include "pl/sys_package/ob_dbms_lob_manager.h"
 #include "pl/sys_package/ob_dbms_daily_maintenance.h"
 
@@ -977,6 +979,11 @@ DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_GET_SQL, ObDB
 
 #undef DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE
   // end of dbms_hybrid_search
+
+  INTERFACE_DEF(INTERFACE_DBMS_ROUTINE_LOAD_MYSQL_CONSUME_KAFKA, "DBMS_ROUTINE_LOAD_MYSQL_CONSUME_KAFKA", (ObDBMSRoutineLoadMysql::consume_kafka))
+#ifdef OB_BUILD_ORACLE_PL
+  INTERFACE_DEF(INTERFACE_DBMS_ROUTINE_LOAD_ORACLE_CONSUME_KAFKA, "DBMS_ROUTINE_LOAD_ORACLE_CONSUME_KAFKA", (ObDBMSRoutineLoad::consume_kafka))
+#endif
 
   // start of dbms_daily_maintenance
   INTERFACE_DEF(INTERFACE_DBMS_DAILY_MAINTENANCE_TRIGGER_WINDOW_COMPACTION, "DBMS_DAILY_MAINTENANCE_TRIGGER_WINDOW_COMPACTION", (ObDBMSDailyMaintenance::trigger_window_compaction_proc))

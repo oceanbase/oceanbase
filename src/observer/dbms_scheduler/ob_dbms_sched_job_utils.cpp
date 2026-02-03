@@ -709,9 +709,9 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
       LOG_WARN("add interval_ts column failed", KR(ret), K(job_info.interval_ts_));
     }
   } else if (0 == job_attribute_name.case_compare("job_action") && !from_pl_set_attr) {
-    if (OB_FAIL(dml.add_column("job_action", job_attribute_value.get_string()))) {
+    if (OB_FAIL(dml.add_column("job_action", ObHexEscapeSqlStr(job_attribute_value.get_string())))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
-    } else if (OB_FAIL(dml.add_column("what", job_attribute_value.get_string()))) {
+    } else if (OB_FAIL(dml.add_column("what", ObHexEscapeSqlStr(job_attribute_value.get_string())))) {
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     }
   } else if (0 == job_attribute_name.case_compare("max_run_duration") || 0 == job_attribute_name.case_compare("duration")) {

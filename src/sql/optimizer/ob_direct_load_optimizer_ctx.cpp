@@ -167,10 +167,10 @@ int ObDirectLoadOptimizerCtx::init_direct_load_ctx(ObExecContext *exec_ctx, ObLo
           LOG_WARN("fail to get user column ids", KR(ret));
         }
       } else {
-        const ObIArray<ObLoadDataStmt::FieldOrVarStruct> &field_or_var_list =
+        const ObIArray<FieldOrVarStruct> &field_or_var_list =
           stmt.get_field_or_var_list();
         for (int64_t i = 0; i < field_or_var_list.count(); ++i) {
-          const ObLoadDataStmt::FieldOrVarStruct &field_or_var_struct = field_or_var_list.at(i);
+          const FieldOrVarStruct &field_or_var_struct = field_or_var_list.at(i);
           if (OB_UNLIKELY(!field_or_var_struct.is_table_column_)) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("var is not supported", KR(ret), K(field_or_var_struct), K(i),

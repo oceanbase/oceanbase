@@ -1269,6 +1269,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"skip_index_level", SKIP_INDEX_LEVEL},
   {"INCONSISTENT", INCONSISTENT},
   {"INDIVIDUAL", INDIVIDUAL},
+  {"stream", STREAM},
   {"ai_split_document", AI_SPLIT_DOCUMENT},
 };
 
