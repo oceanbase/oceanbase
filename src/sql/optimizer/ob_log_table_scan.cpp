@@ -2504,14 +2504,15 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
           }
         }
       }
-    } else if (is_index_scan()) {
-      bool is_vec_post_scan = !vc_info.get_vec_index_name().empty()
+    } else if (is_index_scan() || !vc_info.get_vec_index_name().empty()) {
+      const bool is_vec_post_scan = !vc_info.get_vec_index_name().empty()
           && (vc_info.vec_type_ == VEC_INDEX_POST_WITHOUT_FILTER || vc_info.adaptive_try_path_ == VEC_INDEX_ITERATIVE_FILTER || vc_info.adaptive_try_path_ == VEC_INDEX_POST_FILTER);
+      const bool need_print_index = is_index_scan() && !is_vec_post_scan;
       if (OB_FAIL(BUF_PRINTF("%s", LEFT_BRACKET))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (!is_vec_post_scan && OB_FAIL(BUF_PRINTF("%.*s", index_name.length(), index_name.ptr()))) {
+      } else if (need_print_index && OB_FAIL(BUF_PRINTF("%.*s", index_name.length(), index_name.ptr()))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (!vc_info.get_vec_index_name().empty() && ((!is_vec_post_scan && OB_FAIL(BUF_PRINTF(",")))
+      } else if (!vc_info.get_vec_index_name().empty() && ((need_print_index && OB_FAIL(BUF_PRINTF(",")))
                 || OB_FAIL(BUF_PRINTF("%.*s", vc_info.get_vec_index_name().length(), vc_info.get_vec_index_name().ptr())))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (is_descending_direction(get_scan_direction()) &&
