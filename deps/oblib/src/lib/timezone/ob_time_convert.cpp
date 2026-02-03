@@ -6959,8 +6959,11 @@ int ObTimeConverter::date_add_nmonth_for_mysql(ObTime &ob_time, const int64_t nm
     int64_t total_month = ob_time.parts_[DT_YEAR] * MONTHS_PER_YEAR + ob_time.parts_[DT_MON] + nmonth;
     int64_t year = static_cast<int32_t>((total_month - 1) / MONTHS_PER_YEAR);
     int64_t month = static_cast<int32_t>((total_month - 1) % MONTHS_PER_YEAR + 1);
-    if (year < DT_PART_MIN[DT_YEAR]
-        || year > DT_PART_MAX[DT_YEAR] ) {
+    if ( total_month - 1 < 0 ) {
+      ret = OB_DATETIME_FUNCTION_OVERFLOW;
+      LOG_WARN("datetime value is out of range", K(ret), K(year));
+    } else if (year < DT_PART_MIN[DT_YEAR]
+               || year > DT_PART_MAX[DT_YEAR] ) {
       ret = OB_DATETIME_FUNCTION_OVERFLOW;
       LOG_WARN("datetime value is out of range", K(ret), K(year));
     } else {

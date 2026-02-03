@@ -510,7 +510,10 @@ int ObExprMonthAdjust::calc_months_adjust(const ObExpr &expr, ObEvalCtx &ctx, Ob
 
       res_ob_time = ori_ob_time;
       if (OB_SUCC(ret) && !has_set_value) {
-        if (lib::is_oracle_mode()) {
+        if (OB_UNLIKELY(ObTimeConverter::ZERO_DATE == ori_ob_time.parts_[DT_DATE])) {
+          expr_datum.set_null();
+          has_set_value = true;
+        } else if (lib::is_oracle_mode()) {
           if (OB_FAIL(ObTimeConverter::date_add_nmonth_for_oracle(res_ob_time, months_int, true, !need_check_date))) {
             LOG_WARN("fail to date add nmonth", K(ret));
           }
@@ -523,8 +526,6 @@ int ObExprMonthAdjust::calc_months_adjust(const ObExpr &expr, ObEvalCtx &ctx, Ob
             } else {
               LOG_WARN("fail to date add nmonth", K(ret));
             }
-          } else if (OB_FAIL(ObTimeConverter::validate_datetime(res_ob_time, mysql_date_sql_mode))) {
-            LOG_WARN("fail to validate datetime", K(ret), K(res_ob_time));
           }
         }
       }
@@ -649,7 +650,8 @@ int ObExprMonthsAdd::calc_result_type2(ObExprResType &type,
   } else if (ObDateTimeType == type1.get_type() || ObTimestampType == type1.get_type()) {
     type.set_datetime();
     type1.set_calc_type(ObDateTimeType);
-  } else if (ObMySQLDateTimeType == type1.get_type() || ObDateType == type1.get_type() || ObMySQLDateType == type1.get_type()) {
+  } else if (ObMySQLDateTimeType == type1.get_type() || ObDateType == type1.get_type()
+             || ObMySQLDateType == type1.get_type() || ObTimeType == type1.get_type()) {
     type.set_type(type1.get_type());
   } else if (ob_is_string_tc(type1.get_type()) || ob_is_int_tc(type1.get_type())) {
     type.set_datetime();
