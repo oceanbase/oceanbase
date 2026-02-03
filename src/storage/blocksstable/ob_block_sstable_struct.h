@@ -168,6 +168,8 @@ struct ObMicroBlockId
   {
     return macro_id_ == other.macro_id_ && offset_ == other.offset_ && size_ == other.size_;
   }
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return common::OB_SUCCESS; }
   TO_STRING_KV(K_(macro_id), K_(offset), K_(size));
   MacroBlockId macro_id_;
   int32_t offset_;

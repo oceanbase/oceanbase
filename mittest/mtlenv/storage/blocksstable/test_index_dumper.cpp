@@ -192,7 +192,7 @@ TEST_F(TestIndexDumper, test_deep_copy_micro)
 
   ObMicroBlockDesc original_micro_block;
   ObMicroBlockDesc dst_micro_block;
-  ASSERT_EQ(OB_SUCCESS, micro_writer->build_micro_block_desc_in_unittest(original_micro_block));
+  ASSERT_EQ(OB_SUCCESS, micro_writer->build_micro_block_desc(original_micro_block));
   ASSERT_EQ(OB_SUCCESS, data_macro_meta.end_key_.deep_copy(original_micro_block.last_rowkey_, allocator_));
 
   ASSERT_EQ(OB_SUCCESS, original_micro_block.deep_copy(allocator_, dst_micro_block));

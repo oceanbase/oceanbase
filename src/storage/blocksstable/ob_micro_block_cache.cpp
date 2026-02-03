@@ -128,10 +128,12 @@ uint64_t ObMicroBlockCacheKey::hash() const
   uint64_t hash = static_cast<uint64_t>(mode_);
   hash = murmurhash(&tenant_id_, sizeof(tenant_id_), hash);
   if (is_logic_key()) {
-    hash = murmurhash(&logic_micro_id_, sizeof(logic_micro_id_), hash);
+    uint64_t logic_micro_id_hash = logic_micro_id_.hash();
+    hash = murmurhash(&logic_micro_id_hash, sizeof(logic_micro_id_hash), hash);
     hash = murmurhash(&data_checksum_, sizeof(data_checksum_), hash);
   } else {
-    hash = murmurhash(&block_id_, sizeof(block_id_), hash);
+    uint64_t block_id_hash = block_id_.hash();
+    hash = murmurhash(&block_id_hash, sizeof(block_id_hash), hash);
   }
   return hash;
 }

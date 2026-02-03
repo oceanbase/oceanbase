@@ -3169,6 +3169,10 @@ void ObMacroBlockWriter::gen_logic_macro_id(ObLogicMacroBlockId &logic_macro_id)
   logic_macro_id.column_group_idx_ = data_store_desc_->get_table_cg_idx();
   logic_macro_id.data_seq_.macro_data_seq_ = macro_seq_generator_->get_current();
   logic_macro_id.tablet_id_ = data_store_desc_->get_tablet_id().id();
+  if (!data_store_desc_->is_major_or_meta_merge_type() || data_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_5_1_0) {
+    logic_macro_id.is_mds_ = is_mds_merge(data_store_desc_->get_merge_type());
+    logic_macro_id.merge_type_ = (uint8_t)data_store_desc_->get_merge_type();
+  }
 }
 
 }//end namespace blocksstable
