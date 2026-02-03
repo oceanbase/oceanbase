@@ -1603,7 +1603,7 @@ int ObBasicTabletMergeCtx::try_update_storage_schema(ObStorageSchema &new_schema
   } else {
     const ObTableSchema &table_schema = static_cast<const ObTableSchema &>(*schema);
     if (new_schema.is_column_info_simplified() &&
-        OB_FAIL(new_schema.update_column_info(table_schema))) {
+        OB_FAIL(new_schema.update_column_info(table_schema, static_param_.data_version_))) {
       LOG_WARN("failed to update column info", K(new_schema), K(schema));
     }
   }
