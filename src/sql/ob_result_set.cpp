@@ -1333,7 +1333,9 @@ int ObResultSet::init_cmd_exec_context(ObExecContext &exec_ctx)
     exec_ctx.set_output_row(new(buf)ObNewRow());
     exec_ctx.set_field_columns(&field_columns_);
     int64_t plan_timeout = 0;
-    if (OB_FAIL(my_session_.get_query_timeout(plan_timeout))) {
+    if (is_pl_stmt(stmt_type_)) {
+      // skip here, will set in ObPLContext::init
+    } else if (OB_FAIL(my_session_.get_query_timeout(plan_timeout))) {
       LOG_WARN("fail to get query timeout", K(ret));
     } else {
       int64_t start_time = my_session_.get_query_start_time();

@@ -7453,6 +7453,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       }
       if (OB_SUCC(ret)) {
         WITH_CONTEXT(spi_result.get_memory_ctx()) {
+          spi_result.get_result_set()->set_stmt_type(static_cast<stmt::StmtType>(type));
           if (exec_params.count() <= 0 && !sql.empty()) {
             spi_result.get_result_set()->set_user_sql(true);
 #ifdef ERRSIM
@@ -7467,7 +7468,6 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     false /* is_dynamic_sql*/,
                                                     true /* try_paramlize */), K(sql), K(ps_sql), K(exec_params));
           } else {
-            spi_result.get_result_set()->set_stmt_type(static_cast<stmt::StmtType>(type));
 #ifdef ERRSIM
             OX (ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS);
 #endif
