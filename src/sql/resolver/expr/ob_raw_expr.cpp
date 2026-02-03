@@ -2225,6 +2225,20 @@ void ObColumnRefRawExpr::set_column_attr(const ObString &table_name,
   column_name_.assign_ptr(column_name.ptr(), column_name.length());
 }
 
+void ObColumnRefRawExpr::set_table_item_info(const TableItem &table_item)
+{
+  set_table_id(table_item.table_id_);
+  set_table_name(table_item.get_table_name());
+  set_database_name(table_item.database_name_);
+  if (table_item.alias_name_.empty()) {
+    set_synonym_db_name(table_item.synonym_db_name_);
+    set_synonym_name(table_item.synonym_name_);
+  } else {
+    set_from_alias_table(true);
+    set_table_alias_name();
+  }
+}
+
 uint64_t ObColumnRefRawExpr::hash_internal(uint64_t seed) const
 {
   seed = common::do_hash(table_id_, seed);

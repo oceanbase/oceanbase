@@ -2847,20 +2847,11 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
           col_expr->set_data_type(ObLobType);
         }
       }
-      if (table_item.alias_name_.empty()) {
-        col_expr->set_synonym_db_name(table_item.synonym_db_name_);
-        col_expr->set_synonym_name(table_item.synonym_name_);
-      }
-      col_expr->set_column_attr(table_item.get_table_name(), col_schema->get_column_name_str());
-      col_expr->set_from_alias_table(!table_item.alias_name_.empty());
-      col_expr->set_database_name(table_item.database_name_);
-      //column maybe from alias table, so must reset ref id by table id from table_item
-      col_expr->set_ref_id(table_item.table_id_, col_schema->get_column_id());
+      col_expr->set_table_item_info(table_item);
+      col_expr->set_column_id(col_schema->get_column_id());
+      col_expr->set_column_name(col_schema->get_column_name_str());
       col_expr->set_unique_key_column(is_uni);
       col_expr->set_mul_key_column(is_mul);
-      if (!table_item.alias_name_.empty()) {
-        col_expr->set_table_alias_name();
-      }
       bool is_lob_column = is_lob_storage(col_schema->get_data_type());
       col_expr->set_lob_column(is_lob_column);
       column_item.expr_ = col_expr;
@@ -12511,16 +12502,12 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
   CK (OB_LIKELY(table_item.is_function_table()));
   OZ (params_.expr_factory_->create_raw_expr(T_REF_COLUMN, col_expr));
   CK (OB_NOT_NULL(col_expr));
-  OX (col_expr->set_ref_id(table_item.table_id_, column_id));
   OX (result_type.set_meta(meta_type));
   OX (result_type.set_accuracy(accuracy));
   OX (col_expr->set_result_type(result_type));
-  if (table_item.get_object_name().empty()) {
-    OX (col_expr->set_column_name(column_name));
-  } else {
-    OX (col_expr->set_column_attr(table_item.get_object_name(), column_name));
-  }
-  OX (col_expr->set_database_name(table_item.database_name_));
+  OX (col_expr->set_column_id(column_id));
+  OX (col_expr->set_column_name(column_name));
+  OX (col_expr->set_table_item_info(table_item));
   if (OB_SUCC(ret) && ob_is_enumset_tc(col_expr->get_data_type())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support enum set in table function", K(ret));
@@ -13001,18 +12988,12 @@ int ObDMLResolver::generate_json_table_output_column_item(TableItem *table_item,
   CK (OB_LIKELY(table_item->is_json_table()));
   OZ (params_.expr_factory_->create_raw_expr(T_REF_COLUMN, col_expr));
   CK (OB_NOT_NULL(col_expr));
-  OX (col_expr->set_ref_id(table_item->table_id_, column_id));
   OX (result_type.set_meta(data_type.get_meta_type()));
   OX (result_type.set_accuracy(data_type.get_accuracy()));
   OX (col_expr->set_result_type(result_type));
-  if (OB_FAIL(ret)) {
-  } else if (table_item->get_object_name().empty()) {
-    OX (col_expr->set_column_name(column_name));
-  } else {
-    OX (col_expr->set_column_attr(table_item->get_object_name(), column_name));
-  }
-
-  OX (col_expr->set_database_name(table_item->database_name_));
+  OX (col_expr->set_column_id(column_id));
+  OX (col_expr->set_column_name(column_name));
+  OX (col_expr->set_table_item_info(*table_item));
   if (OB_FAIL(ret)) {
   } else if (lib::is_oracle_mode() && ob_is_enumset_tc(col_expr->get_data_type())) {
     ret = OB_NOT_SUPPORTED;
@@ -13937,17 +13918,13 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
         } else {
           //because of view table, generated table item may be has database_name and table name,
           //also alias name maybe be empty
-          col_expr->set_ref_id(table_item.table_id_, i + OB_APP_MIN_COLUMN_ID);
           col_expr->set_result_type(select_expr->get_result_type());
           if (table_item.is_view_table_ && col_expr->get_result_type().is_string_type() && CS_LEVEL_EXPLICIT != col_expr->get_collation_level()) {
             col_expr->set_collation_level(CS_LEVEL_IMPLICIT);
           }
-          col_expr->set_column_attr(table_item.get_table_name(), ref_select_item.alias_name_);
-          col_expr->set_database_name(table_item.database_name_);
-          if (table_item.alias_name_.empty()) {
-            col_expr->set_synonym_db_name(table_item.synonym_db_name_);
-            col_expr->set_synonym_name(table_item.synonym_name_);
-          }
+          col_expr->set_column_id(i + OB_APP_MIN_COLUMN_ID);
+          col_expr->set_column_name(ref_select_item.alias_name_);
+          col_expr->set_table_item_info(table_item);
           //set enum_set_values
           if (ob_is_geometry(select_expr->get_data_type()) && !select_expr->is_column_ref_expr()) {
             col_expr->set_srs_id(OB_DEFAULT_COLUMN_SRS_ID);

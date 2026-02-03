@@ -9639,18 +9639,23 @@ int ObRawExprUtils::build_empty_rowid_expr(ObRawExprFactory &expr_factory,
 {
   int ret = OB_SUCCESS;
   ObColumnRefRawExpr *col_expr = NULL;
-  OZ(expr_factory.create_raw_expr(T_REF_COLUMN, col_expr));
-  CK(OB_NOT_NULL(col_expr));
-  col_expr->set_ref_id(table_item.table_id_, OB_INVALID_ID);
-  col_expr->set_data_type(ObURowIDType);
-  col_expr->set_table_name(table_item.table_name_);
-  col_expr->set_column_name(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME);
+  if (OB_FAIL(expr_factory.create_raw_expr(T_REF_COLUMN, col_expr))) {
+    LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_ISNULL(col_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("col_expr is null", K(ret));
+  } else {
+    col_expr->set_data_type(ObURowIDType);
+    col_expr->set_table_item_info(table_item);
+    col_expr->set_column_id(OB_INVALID_ID);
+    col_expr->set_column_name(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME);
 
-  ObAccuracy accuracy;
-  accuracy.set_length(OB_MAX_USER_ROW_KEY_LENGTH);
-  accuracy.set_precision(-1);
-  col_expr->set_accuracy(accuracy);
-  rowid_expr = col_expr;
+    ObAccuracy accuracy;
+    accuracy.set_length(OB_MAX_USER_ROW_KEY_LENGTH);
+    accuracy.set_precision(-1);
+    col_expr->set_accuracy(accuracy);
+    rowid_expr = col_expr;
+  }
   return ret;
 }
 
