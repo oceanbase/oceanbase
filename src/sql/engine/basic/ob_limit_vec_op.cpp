@@ -231,17 +231,17 @@ int ObLimitVecOp::inner_get_next_batch(const int64_t max_row_cnt)
         // keep fetching until a different value is found
         batch_cnt = min(max_row_cnt, MY_SPEC.max_batch_size_);
         bool keep_iterating = false;
-        uint32_t matched_row_count = 0;
+        uint32_t valid_batch_size = 0;
         if (OB_FAIL(child_->get_next_batch(batch_cnt, child_brs))) {
           LOG_WARN("child_op failed to get next row", K(ret), K(limit_), K(batch_cnt),
                    K(child_brs->size_));
-        } else if (OB_FAIL(compare_value_in_batch(keep_iterating, child_brs, matched_row_count))) {
+        } else if (OB_FAIL(compare_value_in_batch(keep_iterating, child_brs, valid_batch_size))) {
           LOG_WARN("failed to is row order by item value equal", K(ret));
         }
         brs_.copy(child_brs);
         if (!keep_iterating) {
           brs_.end_ = true;
-          brs_.size_ = matched_row_count;
+          brs_.size_ = valid_batch_size;
         }
         output_cnt_ += brs_.size_;
       } else {
@@ -284,10 +284,11 @@ int ObLimitVecOp::inner_get_next_batch(const int64_t max_row_cnt)
 // batch version for is_row_order_by_item_value_equal
 int ObLimitVecOp::compare_value_in_batch(bool &keep_iterating,
                                       const ObBatchRows * brs,
-                                      uint32_t &row_count_matched)
+                                      uint32_t &valid_batch_size)
 {
   int ret = OB_SUCCESS;
   keep_iterating = true;
+  uint32_t row_count_matched = 0;
   if (MY_SPEC.sort_columns_.empty()) {
     // %sort_columns_ is empty if order by const value, set is_equal to true directly.
     // pre_sort_columns_.compact_row_ is NULL here.
@@ -325,6 +326,8 @@ int ObLimitVecOp::compare_value_in_batch(bool &keep_iterating,
       }
       if (keep_iterating) {
         row_count_matched++;
+      } else {
+        valid_batch_size = row_idx;
       }
     }
     compare_vectors_.reuse();
