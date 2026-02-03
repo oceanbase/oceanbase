@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_inet.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "common/ob_target_specific.h"
 
@@ -727,10 +728,14 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(MAX_IP_ADDR_LENGTH));
       } else {
         bool is_ip_format_invalid = false;
-        ObString num_val = text.get_string();
+        ObString num_val;
         ObString ip_str(MAX_IP_ADDR_LENGTH, 0, buf);
-        if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_) ||
-            num_val.length() == 0) {
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, num_val))) {
+          LOG_WARN("fail to get string from text", K(ret));
+        } else if ((!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)
+                    && !ob_is_binary(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)
+                    && !ob_is_blob(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_))
+                   || num_val.length() == 0) {
           is_ip_format_invalid = true;
           LOG_WARN("ip format invalid", K(ret), K(text));
         } else if (OB_FAIL(ObExprInetCommon::ip_to_str(num_val, is_ip_format_invalid, ip_str))) {
@@ -738,6 +743,7 @@ int ObExprInet6Ntoa::calc_inet6_ntoa(const ObExpr& expr, ObEvalCtx& ctx, ObDatum
         } else if (!is_ip_format_invalid) {
           expr_datum.set_string(ip_str);
         }
+
         if (OB_SUCC(ret) && is_ip_format_invalid) {
           uint64_t cast_mode = 0;
           ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
@@ -818,9 +824,11 @@ int ObExprInet6Ntoa::inet6_ntoa_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   }
 
   bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null();
-  const bool is_varbinary = ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_);
+  const bool is_valid_type = ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+                            || ob_is_binary(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+                            || ob_is_blob(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_);
 
-  if (!is_varbinary) {
+  if (!is_valid_type) {
     for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
       res_vec->set_null(idx);
     }
@@ -829,10 +837,12 @@ int ObExprInet6Ntoa::inet6_ntoa_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       if (eval_flags.at(idx)) {
         continue;
       } else {
-        ObString num_val = arg_vec->get_string(idx);
+        ObString num_val;
         bool is_ip_format_invalid = false;
         ObString ip_str;
-        if (OB_FAIL(inet6_ntoa_vector_inner(expr, num_val, ip_str, is_ip_format_invalid, ctx, idx))) {
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
+          LOG_WARN("fail to get string from vector", K(ret));
+        } else if (OB_FAIL(inet6_ntoa_vector_inner(expr, num_val, ip_str, is_ip_format_invalid, ctx, idx))) {
           LOG_WARN("fail to execute inet6_ntoa_vector_inner", K(ret));
         } else if (is_ip_format_invalid) {
           if (CM_IS_WARN_ON_FAIL(cast_mode)) {
@@ -854,11 +864,13 @@ int ObExprInet6Ntoa::inet6_ntoa_vector(VECTOR_EVAL_FUNC_ARG_DECL)
         res_vec->set_null(idx);
         continue;
       } else {
-        ObString num_val = arg_vec->get_string(idx);
+        ObString num_val;
         bool is_ip_format_invalid = false;
         ObString ip_str;
-        if (OB_FAIL(inet6_ntoa_vector_inner(expr, num_val, ip_str, is_ip_format_invalid, ctx, idx))) {
-          LOG_WARN("fail to execute inet6_ntoa_vector_inner", K(ret));
+        if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
+          LOG_WARN("fail to get string from vector", K(ret));
+        } else if (OB_FAIL(inet6_ntoa_vector_inner(expr, num_val, ip_str, is_ip_format_invalid, ctx, idx))) {
+            LOG_WARN("fail to execute inet6_ntoa_vector_inner", K(ret));
         } else if (is_ip_format_invalid) {
           if (CM_IS_WARN_ON_FAIL(cast_mode)) {
             res_vec->set_null(idx);
@@ -1339,12 +1351,16 @@ int ObExprIsIpv4Mapped::calc_is_ipv4_mapped(const ObExpr& expr, ObEvalCtx& ctx, 
     LOG_WARN("is_ipv4_mapped expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
+    ObString m_text;
     if (text.is_null()) {
       expr_datum.set_int(0);
-    } else if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)) {
+    } else if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)
+               && !ob_is_binary(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)
+               && !ob_is_blob(expr.args_[0]->datum_meta_.type_,expr.args_[0]->datum_meta_.cs_type_)) {
       expr_datum.set_int(0);
+    } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, m_text))) {
+      LOG_WARN("fail to get string from text", K(ret));
     } else {
-      ObString m_text = text.get_string();
       is_ipv4_mapped(expr_datum, m_text);
     }
   }
@@ -1386,9 +1402,11 @@ int ObExprIsIpv4Mapped::is_ipv4_mapped_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null();
-  const bool is_varbinary = ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_);
-
-  if (!is_varbinary) {
+  const bool is_valid_type = ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+                             || ob_is_binary(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+                             || ob_is_blob(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_);
+  ObString num_val;
+  if (!is_valid_type) {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       res_vec->set_int(idx, 0);
     }
@@ -1396,11 +1414,10 @@ int ObExprIsIpv4Mapped::is_ipv4_mapped_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (eval_flags.at(idx)) {
         continue;
-      } else {
-        ObString num_val = arg_vec->get_string(idx);
-        if (OB_FAIL(is_ipv4_mapped_vector_inner<ResVec>(num_val, res_vec, idx))) {
-          LOG_WARN("fail to execute is_ipv4_mapped_vector_inner", K(ret));
-        }
+      } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
+        LOG_WARN("fail to get string from vector", K(ret));
+      } else if (OB_FAIL(is_ipv4_mapped_vector_inner<ResVec>(num_val, res_vec, idx))) {
+        LOG_WARN("fail to execute is_ipv4_mapped_vector_inner", K(ret));
       }
     }
   } else {
@@ -1410,11 +1427,10 @@ int ObExprIsIpv4Mapped::is_ipv4_mapped_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       } else if (arg_vec->is_null(idx)) {
         res_vec->set_int(idx, 0);
         continue;
-      } else {
-        ObString num_val = arg_vec->get_string(idx);
-        if (OB_FAIL(is_ipv4_mapped_vector_inner<ResVec>(num_val, res_vec, idx))) {
-          LOG_WARN("fail to execute is_ipv4_mapped_vector_inner", K(ret));
-        }
+      } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
+        LOG_WARN("fail to get string from vector", K(ret));
+      } else if (OB_FAIL(is_ipv4_mapped_vector_inner<ResVec>(num_val, res_vec, idx))) {
+        LOG_WARN("fail to execute is_ipv4_mapped_vector_inner", K(ret));
       }
     }
   }
@@ -1481,12 +1497,16 @@ int ObExprIsIpv4Compat::calc_is_ipv4_compat(const ObExpr& expr, ObEvalCtx& ctx, 
     LOG_WARN("is_ipv4_compat expr eval param value failed", K(ret));
   } else {
     ObDatum& text = expr.locate_param_datum(ctx, 0);
+    ObString m_text;
     if (text.is_null()) {
       expr_datum.set_int(0);
-    } else if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)) {
+    } else if (!ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+               && !ob_is_binary(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+               && !ob_is_blob(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)) {
       expr_datum.set_int(0);
+    } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, &text, m_text))) {
+      LOG_WARN("fail to get string from text", K(ret));
     } else {
-      ObString m_text = text.get_string();
       is_ipv4_compat(expr_datum, m_text);
     }
   }
@@ -1528,9 +1548,11 @@ int ObExprIsIpv4Compat::is_ipv4_compat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null();
-  const bool is_varbinary = ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_);
-
-  if (!is_varbinary) {
+  const bool is_valid_type = ob_is_varbinary_type(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+                             || ob_is_binary(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_)
+                             || ob_is_blob(expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.cs_type_);
+  ObString num_val;
+  if (!is_valid_type) {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       res_vec->set_int(idx, 0);
     }
@@ -1538,11 +1560,10 @@ int ObExprIsIpv4Compat::is_ipv4_compat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (eval_flags.at(idx)) {
         continue;
-      } else {
-        ObString num_val = arg_vec->get_string(idx);
-        if (OB_FAIL(is_ipv4_compat_vector_inner<ResVec>(num_val, res_vec, idx))) {
-          LOG_WARN("fail to execute is_ipv4_compat_vector_inner", K(ret));
-        }
+      } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
+        LOG_WARN("fail to get string from vector", K(ret));
+      } else if (OB_FAIL(is_ipv4_compat_vector_inner<ResVec>(num_val, res_vec, idx))) {
+        LOG_WARN("fail to execute is_ipv4_compat_vector_inner", K(ret));
       }
     }
   } else {
@@ -1552,11 +1573,10 @@ int ObExprIsIpv4Compat::is_ipv4_compat_vector(VECTOR_EVAL_FUNC_ARG_DECL)
       } else if (arg_vec->is_null(idx)) {
         res_vec->set_int(idx, 0);
         continue;
-      } else {
-        ObString num_val = arg_vec->get_string(idx);
-        if (OB_FAIL(is_ipv4_compat_vector_inner<ResVec>(num_val, res_vec, idx))) {
-          LOG_WARN("fail to execute is_ipv4_compat_vector_inner", K(ret));
-        }
+      } else if (OB_FAIL(ObTextStringHelper::get_string(expr, ctx.tmp_alloc_, 0, idx, arg_vec, num_val))) {
+        LOG_WARN("fail to get string from vector", K(ret));
+      } else if (OB_FAIL(is_ipv4_compat_vector_inner<ResVec>(num_val, res_vec, idx))) {
+        LOG_WARN("fail to execute is_ipv4_compat_vector_inner", K(ret));
       }
     }
   }
