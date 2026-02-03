@@ -1349,7 +1349,7 @@ int ObBasicTabletMergeCtx::build_update_table_store_param(
 #ifdef ERRSIM
     if (EN_COMPACTION_REFRESH_MULTI_VERSION_START && is_major_merge_type(merge_type)) {
       param.multi_version_start_ = static_param_.version_range_.snapshot_version_;
-      FLOG_INFO("ERRSIM EN_COMPACTION_REFRESH_MULTI_VERSION_START", KR(ret), K(param.multi_version_start_));
+      FLOG_INFO("ERRSIM EN_COMPACTION_REFRESH_MULTI_VERSION_START", KR(ret), K(static_param_), K(param.multi_version_start_));
     }
 #endif
   }
@@ -1755,9 +1755,10 @@ int ObBasicTabletMergeCtx::check_need_create_compaction_filter(
     if (OB_ISNULL(table = tables_handle.get_table(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is null", KR(ret), K(i));
-    } else if (OB_ISNULL(sstable = static_cast<const ObSSTable *>(table))) {
+    } else if (OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table is not sstable", KR(ret), K(i));
+      LOG_WARN("table is not sstable", KR(ret), K(i), KPC(table));
+    } else if (FALSE_IT(sstable = static_cast<const ObSSTable *>(table))) {
     } else if ((sstable->get_row_count() > 0) && (sstable->get_min_merged_trans_version() <= filter_max_version)) {
       need_flag = true;
       FLOG_INFO("need to create compaction filter", K(ret), K(filter_max_version), KPC(sstable),
@@ -1796,9 +1797,10 @@ int ObBasicTabletMergeCtx::init_sstable_op()
     } else if (OB_ISNULL(table = tables_handle.get_table(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is null", KR(ret), K(i));
-    } else if (OB_ISNULL(sstable = static_cast<const ObSSTable *>(table))) {
+    } else if (OB_UNLIKELY(!table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table is not sstable", KR(ret), K(i));
+      LOG_WARN("table is not sstable", KR(ret), K(i), KPC(table));
+    } else if (FALSE_IT(sstable = static_cast<const ObSSTable *>(table))) {
     } else if (sstable->is_empty()) {
       sstable_op.set_sstable_op(ObMergeSSTableOp::SSTABLE_OP_EMPTY);
     } else if (OB_FAIL(check_sstable_filtered(

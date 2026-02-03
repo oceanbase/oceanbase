@@ -619,7 +619,6 @@ int ObPartitionMergePolicy::get_recycle_version_for_minor(
   storage::ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
-  return ret;
   if (result.handle_.get_count() >= OB_MINOR_PARALLEL_SSTABLE_CNT_TRIGGER) {
     // not recycle rows for parallel minor merge
   } else if (OB_FAIL(tablet.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {

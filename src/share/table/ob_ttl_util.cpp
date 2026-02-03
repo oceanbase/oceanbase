@@ -981,7 +981,7 @@ int ObTTLUtil::replace_ttl_task(uint64_t tenant_id,
   } else if (data_version >= DATA_VERSION_4_5_1_0 && OB_FAIL(sql.append(", ls_id"))) {
     LOG_WARN("fail to append ls_id", K(ret));
   } else if (OB_FAIL(sql.append_fmt(", row_key) VALUE (now(), now(), %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, "
-     "%ld, %ld, %ld, %ld, ", tname, tenant_id, task.table_id_, task.tablet_id_, task.task_id_,
+     "%ld, %ld, %ld, %ld, ", tenant_id, task.table_id_, task.tablet_id_, task.task_id_,
      task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_, task.ttl_del_cnt_,
     task.max_version_del_cnt_, task.scan_cnt_, static_cast<int64_t>(task.task_type_)))) {
     LOG_WARN("fail to append row_key", K(ret));

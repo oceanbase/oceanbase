@@ -170,7 +170,7 @@ public:
            : MAX_ROW_STORE;
   }
 
-  TO_STRING_KV(KP_(buf), K_(size), KP_(extra_buf), K_(extra_size), K_(type), K_(micro_header));
+  TO_STRING_KV(KP_(buf), K_(size), KP_(extra_buf), K_(extra_size), K_(type), KP_(micro_header));
 
   const char *buf_;
   int64_t size_;
