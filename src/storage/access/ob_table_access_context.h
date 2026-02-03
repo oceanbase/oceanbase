@@ -68,6 +68,7 @@ struct ObTableScanStoreStat
   OB_INLINE void reset()
   {
     MEMSET(this, 0, sizeof(ObTableScanStoreStat));
+    in_bf_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     in_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     in_fuse_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
   }
@@ -81,9 +82,9 @@ struct ObTableScanStoreStat
     empty_read_cnt_ = 0;
     rowkey_prefix_ = 0;
     in_bf_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
-    in_fuse_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     in_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     in_fuse_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
+    out_row_cnt_ = 0;
     major_sstable_read_row_cnt_ = 0;
     minor_sstable_read_row_cnt_ = 0;
     memstore_read_row_cnt_ = 0;
@@ -136,6 +137,7 @@ public:
   int64_t in_bf_cache_threshold_;
   int64_t in_fuse_row_cache_threshold_;
   int64_t in_row_cache_threshold_;
+  int64_t out_row_cnt_;
   int64_t major_sstable_read_row_cnt_;
   int64_t minor_sstable_read_row_cnt_;
   int64_t memstore_read_row_cnt_;
