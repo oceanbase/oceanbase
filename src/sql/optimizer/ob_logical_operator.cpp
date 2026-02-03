@@ -6370,8 +6370,8 @@ int ObLogicalOperator::check_in_px_scope_pre(AllocBloomFilterContext &ctx)
   // once a px coordinator is found, set in px to true
   if (LOG_EXCHANGE == get_type()) {
     const ObLogExchange *op = static_cast<const ObLogExchange *>(this);
-    if (!ctx.in_px_scope_ && op->is_px_coord()) {
-      ctx.previous_px_scope_ = ctx.in_px_scope_;
+    if (op->is_px_coord()) {
+      ctx.previous_px_scopes_.push_back(ctx.in_px_scope_);
       ctx.in_px_scope_ = true;
     }
   }
@@ -6384,8 +6384,14 @@ int ObLogicalOperator::check_in_px_scope_post(AllocBloomFilterContext &ctx)
   // reset to parent's px scope mark
   if (LOG_EXCHANGE == get_type()) {
     const ObLogExchange *op = static_cast<const ObLogExchange *>(this);
-    if (ctx.in_px_scope_ && op->is_px_coord()) {
-      ctx.in_px_scope_ = ctx.previous_px_scope_;
+    if (op->is_px_coord()) {
+      if (ctx.previous_px_scopes_.count() > 0) {
+        ctx.in_px_scope_ = ctx.previous_px_scopes_.at(ctx.previous_px_scopes_.count() - 1);
+        ctx.previous_px_scopes_.remove(ctx.previous_px_scopes_.count() - 1);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("px scope not exists", K(ret));
+      }
     }
   }
   return ret;

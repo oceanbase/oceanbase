@@ -8032,7 +8032,7 @@ int ObSelectLogPlan::create_range_list_dist_win_func(ObLogicalOperator *top,
                                                      pby_prefix,
                                                      top,
                                                      win_func_helper.need_qualify_filter_ ? &win_func_helper.qualify_filters_ : NULL,
-                                                     0))) {
+                                                     (use_part_topn || use_topn) ? win_func_helper.origin_sort_card_ : 0))) {
     LOG_WARN("failed to allocate window function as top", K(ret));
   } else if (OB_FAIL(all_plans.push_back(CandidatePlan(top)))) {
     LOG_WARN("failed to push back", K(ret));

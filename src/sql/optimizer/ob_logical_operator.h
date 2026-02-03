@@ -426,12 +426,12 @@ class AllocBloomFilterContext
 {
 public:
   TO_STRING_KV(K_(filter_id));
-  AllocBloomFilterContext() : filter_id_(0), in_px_scope_(false), previous_px_scope_(true) {};
+  AllocBloomFilterContext() : filter_id_(0), in_px_scope_(false), previous_px_scopes_() {};
   ~AllocBloomFilterContext() = default;
   int64_t filter_id_;
 
   bool in_px_scope_;
-  bool previous_px_scope_;
+  common::ObSEArray<bool, 8> previous_px_scopes_;
 };
 
 struct ObExchangeInfo
