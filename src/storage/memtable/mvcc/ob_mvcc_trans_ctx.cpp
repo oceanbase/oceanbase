@@ -1958,7 +1958,7 @@ int ObMvccRowCallback::wakeup_row_waiter_if_need_()
   if (NULL != tnode_
     && (tnode_->is_committed() || tnode_->is_aborted()) // tnode trans end
     && !tnode_->is_elr() // no need for elr trx
-    && tnode_->next_ == NULL // latest trans node
+    && (tnode_->next_ == NULL) // latest trans node
     && (tnode_->prev_ == NULL || (tnode_->prev_->is_committed() // pre node status should be decided
                                || tnode_->prev_->is_aborted()
                                || tnode_->prev_->is_elr()))) {
