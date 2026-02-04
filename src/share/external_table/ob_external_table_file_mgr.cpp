@@ -2105,6 +2105,13 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
         }
       }
     }
+    if (OB_NOT_NULL(GCTX.sql_proxy_) && OB_NOT_NULL(conn)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = GCTX.sql_proxy_->close(conn, ret))) {
+        SHARE_LOG(WARN, "failed to close connection", K(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      }
+    }
   }
   return ret;
 }
