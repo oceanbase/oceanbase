@@ -296,6 +296,10 @@ int ObDBMSSchedTimeUtil::calc_expr(int64_t start_date, int64_t &next_date, int64
   if (UNKNOWN_FREQ == freq_type_ || 0 >= interval_num_) {
     next_date = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
     ret = OB_NOT_SUPPORTED;
+  } else if (start_date < 0 || start_date > ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE ||
+             base_date < 0 || base_date > ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE ||
+             return_date_after < 0 || return_date_after > ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE) {
+    ret = OB_NOT_SUPPORTED;
   } else if (is_first_time_ && !has_by_clause_) {
     next_date = start_date;
   } else {
@@ -588,14 +592,28 @@ bool ObDBMSSchedTimeUtil::find_month()
   return found;
 }
 
+bool ObDBMSSchedTimeUtil::should_continue_loop(int &loop_count, int &ret_code)
+{
+  bool ret = true;
+  const int MAX_LOOP_COUNT = freq_type_ == SECONDLY ? 100000 : 10000;
+  ++loop_count;
+  if (loop_count > MAX_LOOP_COUNT) {
+    ret = false;
+    ret_code = OB_ERR_UNEXPECTED;
+    LOG_ERROR("loop count exceeded limit", K(ret_code), K(loop_count), K(MAX_LOOP_COUNT));
+  }
+  return ret;
+}
+
 int ObDBMSSchedTimeUtil::hand_yearly()
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  int loop_count = 0;
   time_t find_time = mktime(&next_time_);
   struct tm old_next_time = *localtime(&find_time);
   if (interval_type_bitset_.has_member(BYYEARDAY)) {
-    while (!found && find_time < (time_t)(ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE / 1000000LL)) {
+    while (!found && find_time < (time_t)(ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE / 1000000LL) && should_continue_loop(loop_count, ret)) {
       found = find_year_day();
       if (found) {
         found = find_hour();
@@ -616,7 +634,7 @@ int ObDBMSSchedTimeUtil::hand_yearly()
       }
     }
   } else {
-    while (!found && find_time < (time_t)(ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE / 1000000LL)) { // 未指定byyearday则按照bymonth
+    while (!found && find_time < (time_t)(ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE / 1000000LL) && should_continue_loop(loop_count, ret)) { // 未指定byyearday则按照bymonth
       found = find_month();
       if (found) {
         found = find_month_day();
@@ -650,9 +668,10 @@ int ObDBMSSchedTimeUtil::hand_monthly()
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  int loop_count = 0;
   time_t find_time = mktime(&next_time_);
   struct tm old_next_time = *localtime(&find_time);
-  while (!found) {
+  while (!found && should_continue_loop(loop_count, ret)) {
     found = find_month_day();
     if (found) {
       found = find_hour();
@@ -679,9 +698,10 @@ int ObDBMSSchedTimeUtil::hand_weekly()
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  int loop_count = 0;
   time_t find_time = mktime(&next_time_);
   struct tm old_next_time = *localtime(&find_time);
-  while (!found) {
+  while (!found && should_continue_loop(loop_count, ret)) {
     found = find_day();
     if (found) {
       found = find_hour();
@@ -709,9 +729,10 @@ int ObDBMSSchedTimeUtil::hand_daily()
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  int loop_count = 0;
   time_t find_time = mktime(&next_time_);
   struct tm old_next_time = *localtime(&find_time);
-  while (!found) {
+  while (!found && should_continue_loop(loop_count, ret)) {
     found = find_hour();
     if (found) {
       found = find_minute();
@@ -735,9 +756,10 @@ int ObDBMSSchedTimeUtil::hand_hourly()
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  int loop_count = 0;
   time_t find_time = mktime(&next_time_);
   struct tm old_next_time = *localtime(&find_time);
-  while (!found) {
+  while (!found && should_continue_loop(loop_count, ret)) {
     found = find_minute();
     if (found) {
       found = find_second();
@@ -758,9 +780,10 @@ int ObDBMSSchedTimeUtil::hand_minutely()
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  int loop_count = 0;
   time_t find_time = mktime(&next_time_);
   struct tm old_next_time = *localtime(&find_time);
-  while (!found) {
+  while (!found && should_continue_loop(loop_count, ret)) {
     found = find_second();
     // 修正进位
     if (!found && next_time_.tm_min != old_next_time.tm_min) {
@@ -778,8 +801,9 @@ int ObDBMSSchedTimeUtil::hand_minutely()
 int ObDBMSSchedTimeUtil::hand_secondly()
 {
   int ret = OB_SUCCESS;
+  int loop_count = 0;
   time_t find_time = mktime(&next_time_);
-  while (find_time <= mktime(&return_time_after_)) {
+  while (find_time <= mktime(&return_time_after_) && should_continue_loop(loop_count, ret)) {
     next_time_.tm_sec += interval_num_;
     find_time = mktime(&next_time_);
   }
