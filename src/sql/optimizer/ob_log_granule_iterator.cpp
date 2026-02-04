@@ -258,7 +258,7 @@ int ObLogGranuleIterator::check_adaptive_task_splitting(ObLogTableScan *tsc)
     } else if (!tsc->get_pushdown_aggr_exprs().empty()
                || !tsc->get_pushdown_groupby_columns().empty()) {
       // not support for aggregate/group by push down
-    } else if (tsc->get_index_back()) {
+    } else if (tsc->get_index_back() || tsc->has_func_lookup()) {
       // not support for index back
     } else if (tsc->is_tsc_with_domain_id()) {
       // not support for access domain id in full text index
