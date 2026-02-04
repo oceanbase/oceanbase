@@ -2450,6 +2450,7 @@ private:
     DEF_SYS_VAR_BIT_ENUM(collation_database, 61)
     DEF_SYS_VAR_BIT_ENUM(plsql_optimize_level, 62)
     DEF_SYS_VAR_BIT_ENUM(ob_enable_pl_async_commit, 63)
+    DEF_SYS_VAR_BIT_ENUM(json_float_full_precision, 64)
 
     BIT_MAX_POSITION = 128  // max position is 128 now
   };
