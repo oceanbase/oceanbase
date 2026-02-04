@@ -403,38 +403,41 @@ int ObPLRouter::try_extract_sql_transpiler_expr(const ObPLFunctionAST &func_ast,
   int ret = OB_SUCCESS;
 
   success = false;
-  return_stmt = nullptr;
+  if ( STANDALONE_FUNCTION == func_ast.get_proc_type()
+       || PACKAGE_FUNCTION == func_ast.get_proc_type()) {
+    return_stmt = nullptr;
 
-  const ObPLStmtBlock *body = func_ast.get_body();
+    const ObPLStmtBlock *body = func_ast.get_body();
 
-  CK (OB_NOT_NULL(body));
-  CK (PL_BLOCK == body->get_type());
+    CK (OB_NOT_NULL(body));
+    CK (PL_BLOCK == body->get_type());
 
-  // check structure contains only one return statement
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (0 < func_ast.get_routine_table().get_count()) {
-    // do nothing
-  } else if (1 == body->get_child_size()) {
-    const ObPLStmt *child_stmt = body->get_child_stmt(0);
-
-    CK (OB_NOT_NULL(child_stmt));
-
+    // check structure contains only one return statement
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (PL_BLOCK == child_stmt->get_type()) {
-      const ObPLStmtBlock *child_block = static_cast<const ObPLStmtBlock *>(child_stmt);
-      const ObPLStmt *grandchild = nullptr;
+    } else if (0 < func_ast.get_routine_table().get_count()) {
+      // do nothing
+    } else if (1 == body->get_child_size()) {
+      const ObPLStmt *child_stmt = body->get_child_stmt(0);
 
-      if (1 == child_block->get_child_size()
-            && OB_NOT_NULL(grandchild = child_block->get_child_stmt(0))
-            && PL_RETURN == grandchild->get_type()) {
-        return_stmt = static_cast<const ObPLReturnStmt*>(grandchild);
+      CK (OB_NOT_NULL(child_stmt));
+
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (PL_BLOCK == child_stmt->get_type()) {
+        const ObPLStmtBlock *child_block = static_cast<const ObPLStmtBlock *>(child_stmt);
+        const ObPLStmt *grandchild = nullptr;
+
+        if (1 == child_block->get_child_size()
+              && OB_NOT_NULL(grandchild = child_block->get_child_stmt(0))
+              && PL_RETURN == grandchild->get_type()) {
+          return_stmt = static_cast<const ObPLReturnStmt*>(grandchild);
+          success = true;
+        }
+      } else if (PL_RETURN == child_stmt->get_type()) {
+        return_stmt = static_cast<const ObPLReturnStmt*>(child_stmt);
         success = true;
       }
-    } else if (PL_RETURN == child_stmt->get_type()) {
-      return_stmt = static_cast<const ObPLReturnStmt*>(child_stmt);
-      success = true;
     }
   }
 
@@ -470,6 +473,8 @@ int ObPLRouter::check_expr_sql_transpiler_eligible(const ObRawExpr &expr, bool &
   if (expr.has_flag(IS_PL_UDF) || expr.has_flag(CNT_PL_UDF)) {
     eligible = false;
   } else if (ObRawExpr::EXPR_PL_QUERY_REF == expr.get_expr_class()) {
+    eligible = false;
+  } else if (T_OP_GET_PACKAGE_VAR == expr.get_expr_type()) {
     eligible = false;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && eligible && i < expr.get_param_count(); ++i) {
