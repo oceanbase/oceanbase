@@ -609,14 +609,15 @@ int ObMPStmtExecute::after_process(int error_code)
 
 int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc, sql::ObSQLSessionInfo &session)
 {
-  return store_params_value_to_str(alloc, session, params_, params_value_, params_value_len_);
+  return store_params_value_to_str(alloc, session, params_, params_value_, params_value_len_, true);
 }
 
 int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc,
                                                sql::ObSQLSessionInfo &session,
                                                ParamStore *params,
                                                char *&params_value,
-                                               int64_t &params_value_len)
+                                               int64_t &params_value_len,
+                                               bool print_sql_audit)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -631,11 +632,13 @@ int ObMPStmtExecute::store_params_value_to_str(ObIAllocator &alloc,
       params_value = NULL;
       params_value_len = 0;
       break;
+    } else if (OB_UNLIKELY(print_sql_audit && param.is_lob_storage())) {
+      OZ (param.print_varchar_literal(params_value, length, pos, alloc, TZ_INFO(&session)));
     } else {
       OZ (param.print_sql_literal(params_value, length, pos, alloc, TZ_INFO(&session)));
-      if (i != params->count() - 1) {
-        OZ (databuff_printf(params_value, length, pos, alloc, ","));
-      }
+    }
+    if (i != params->count() - 1) {
+      OZ (databuff_printf(params_value, length, pos, alloc, ","));
     }
   }
   if (OB_FAIL(ret)) {
