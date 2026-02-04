@@ -248,7 +248,7 @@ int ObEmbeddingTask::init(const ObString &model_url,
     LOG_WARN("failed to assign input chunks", K(ret), K(input_chunks));
   } else if (OB_FAIL(init_curl_handler(model_url, user_key, http_timeout_us))) {
     LOG_WARN("failed to init curl handler", K(ret), K(model_url), K(user_key));
-  } else if (OB_FAIL(task_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  } else if (OB_FAIL(task_cond_.init(ObWaitEventIds::EMBEDDING_TASK_COND_WAIT))) {
     LOG_WARN("failed to init completion cond", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, model_url, model_url_))) {
     LOG_WARN("failed to copy model_url", K(ret));

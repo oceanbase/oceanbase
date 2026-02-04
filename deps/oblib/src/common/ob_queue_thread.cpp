@@ -119,7 +119,7 @@ int ObCond::timedwait(const int64_t time_us)
 
 S2MQueueThread::S2MQueueThread() : thread_num_(0),
                                    thread_conf_iter_(0),
-                                   thread_conf_lock_(ObLatchIds::DEFAULT_DRW_LOCK),
+                                   thread_conf_lock_(ObLatchIds::S2M_QUEUE_THREAD_LOCK),
                                    queued_num_(),
                                    queue_rebalance_(false)
 {

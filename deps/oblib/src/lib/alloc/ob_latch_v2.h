@@ -83,7 +83,7 @@ inline uint32_t ObLatchMutexV2::get_wid()
 namespace lib {
 class ObMutexV2 {
 public:
-  explicit ObMutexV2(uint32_t latch_id = common::ObLatchIds::DEFAULT_MUTEX)
+  explicit ObMutexV2(uint32_t latch_id)
     : latch_(), latch_id_(latch_id)
   {
   }

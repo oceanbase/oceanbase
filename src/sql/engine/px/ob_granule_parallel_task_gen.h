@@ -345,7 +345,7 @@ public:
         lock_for_global_tasks_collect_(common::ObLatchIds::GI_ONE_STAGE_PARALLEL_TASK_GEN_LOCK),
         global_task_results_(), stage_cond_() {
           global_task_results_.set_attr(common::ObMemAttr(MTL_ID(), MEM_ATTR_EXT_TASK_GEN));
-          stage_cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT);
+          stage_cond_.init(common::ObWaitEventIds::GI_PARALLEL_TASK_STAGE_COND);
         }
 
   GIOneStageParallelTaskGen(int64_t tsc_op_id, uint64_t gi_attri_flag,
@@ -355,7 +355,7 @@ public:
         generating_thread_count_(0), lock_for_global_tasks_collect_(common::ObLatchIds::GI_ONE_STAGE_PARALLEL_TASK_GEN_LOCK), global_task_results_(),
         stage_cond_() {
           global_task_results_.set_attr(common::ObMemAttr(MTL_ID(), MEM_ATTR_EXT_TASK_GEN));
-          stage_cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT);
+          stage_cond_.init(common::ObWaitEventIds::GI_PARALLEL_TASK_STAGE_COND);
         }
   virtual ~GIOneStageParallelTaskGen();
   virtual int gen_task_parallel(ObExecContext &exec_ctx, ObGranuleIteratorOp *gi_op, ObTaskGenContext *ctx) override;

@@ -73,7 +73,7 @@ TEST(ObThreadCond, normal)
   cond.destroy();
 
   //repeatedly init
-  ret = cond.init(ObWaitEventIds::DEFAULT_COND_WAIT);
+  ret = cond.init(ObWaitEventIds::UNITEST_COND_WAIT);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   //empty signal
@@ -103,7 +103,7 @@ TEST(ObThreadCond, stress)
 {
   int ret = OB_SUCCESS;
   ObThreadCond cond;
-  ret = cond.init(ObWaitEventIds::DEFAULT_COND_WAIT);
+  ret = cond.init(ObWaitEventIds::UNITEST_COND_WAIT);
   ASSERT_EQ(OB_SUCCESS, ret);
   TestThreadCondStress wait_stress(cond, true);
   TestThreadCondStress sig_stress(cond, false);

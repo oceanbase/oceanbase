@@ -80,7 +80,7 @@ WAIT_EVENT_DEF(TRANS_SET_VIOLATION_RETRY, 14006, "retry: transaction set violati
 // condition wait has one parameter e.g. address of the condition variable
 WAIT_EVENT_DEF(IO_QUEUE_COND_WAIT, 15066, "io queue condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(LATCH_WAIT_QUEUE_LOCK_WAIT, 15084, "latch wait queue lock wait", "address", "number", "tries", CONCURRENCY, true, true)
-WAIT_EVENT_DEF(DEFAULT_COND_WAIT, 15101, "default condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(DEFAULT_COND_WAIT, 15101, "default condition wait", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(DEFAULT_SLEEP, 15102, "sleep wait", "sleep_interval", "caller bt", "", IDLE, true, true)
 WAIT_EVENT_DEF(CLOG_WRITER_COND_WAIT, 15103, "clog writer condition wait", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(IO_CONTROLLER_COND_WAIT, 15104, "io controller condition wait", "address", "", "", CONCURRENCY, true, true)
@@ -201,6 +201,16 @@ WAIT_EVENT_DEF(MULTI_FIXED_QUEUE_COND_WAIT, 18254, "multi fixed queue cond wait"
 WAIT_EVENT_DEF(HJ_SHARED_TABLE_INFO_COND_WAIT, 18255, "hash join shared table info cond wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(OB_HASH_TABLE_SHARED_TABLE_INFO_COND, 18256, "hash table shared table info cond wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(OB_LOG_MINER_ANALYZER_COND, 18257, "log miner analyzer cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(MEMORY_DUMP_COND_WAIT, 18258, "memory dump cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(COND_WAIT_FOR_BASE_CLASS, 18259, "cond wait for base class", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(LOG_COMPRESSOR_COND_WAIT, 18260, "log compressor cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(ADD_INTERVAL_PARTITION_COND_WAIT, 18261, "add interval partition cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(SCHEMA_GETTER_COND_WAIT, 18262, "schema getter cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(EMBEDDING_TASK_COND_WAIT, 18263, "embedding task cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(GI_TASK_REBALANCER_COND_WAIT, 18264, "gi task rebalancer cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(PX_SQC_ASYNC_PROXY_COND_WAIT, 18265, "px sqc async proxy cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(ODPS_PARTITION_DOWNLOADER_COND_WAIT, 18266, "odps partition downloader cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(GI_PARALLEL_TASK_STAGE_COND, 18267, "gi parallel task stage cond", "address", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)

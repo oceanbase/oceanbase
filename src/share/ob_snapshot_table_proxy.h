@@ -85,7 +85,7 @@ class ObSnapshotTableProxy
 {
   static const int64_t BATCH_OP_SIZE = 256;
 public:
-  ObSnapshotTableProxy() : lock_(ObLatchIds::DEFAULT_MUTEX), last_event_ts_(0) {}
+  ObSnapshotTableProxy() : lock_(ObLatchIds::SNAPSHOT_TABLE_PROXY_LOCK), last_event_ts_(0) {}
   virtual ~ObSnapshotTableProxy() {}
 
   int add_snapshot(

@@ -207,7 +207,7 @@ int ObSchemaGetterController::init(ObMultiVersionSchemaService *schema_service)
     LOG_WARN("failed to create constructing keys set", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < COND_SLOT_NUM; i++) {
-      if (OB_FAIL(cond_slot_[i].init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+      if (OB_FAIL(cond_slot_[i].init(ObWaitEventIds::SCHEMA_GETTER_COND_WAIT))) {
         LOG_WARN("init cond fail", KR(ret));
       }
     }

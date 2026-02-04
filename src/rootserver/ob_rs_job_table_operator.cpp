@@ -499,7 +499,7 @@ int ObRsJobTableOperator::alloc_job_id(int64_t &job_id)
 {
   int ret = OB_SUCCESS;
   if (ATOMIC_LOAD(&max_job_id_) < 0) {
-    ObLatchWGuard guard(latch_, ObLatchIds::DEFAULT_MUTEX);
+    ObLatchWGuard guard(latch_, ObLatchIds::RS_JOB_ID_ALLOC_LOCK);
     if (max_job_id_ < 0) {
       int64_t max_job_id = 0;
       int64_t row_count = 0;

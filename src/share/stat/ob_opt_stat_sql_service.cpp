@@ -211,7 +211,7 @@ namespace common
 {
 
 ObOptStatSqlService::ObOptStatSqlService()
-    : inited_(false), mysql_proxy_(nullptr), mutex_(ObLatchIds::DEFAULT_MUTEX), config_(nullptr)
+    : inited_(false), mysql_proxy_(nullptr), mutex_(ObLatchIds::OPT_STAT_SQL_SERVICE_LOCK), config_(nullptr)
 {
 }
 

@@ -275,7 +275,7 @@ int ObMockObjectManager::write_object(
 void ObMockObjectManager::inject_err_to_object_type(ObInjectErrKey err_key,
                                                     ObInjectedErr *err)
 {
-  ObLatchWGuard guard(map_lock_, common::ObLatchIds::DEFAULT_SPIN_RWLOCK);
+  ObLatchWGuard guard(map_lock_, common::ObLatchIds::TEST_LATCH_LOCK);
   inject_err_map[err_key] = err;
   LOG_INFO("inject err to object type", K(err_key), KPC(err));
   if (inject_err_map.find(err_key) != inject_err_map.end()) {
@@ -307,7 +307,7 @@ int ObMockObjectManager::inject_err_(ObMockSSReq *req)
   }
   err_key = process_point_;
   if (inject_err_map.find(err_key) != inject_err_map.end()) {
-    ObLatchWGuard guard(map_lock_, common::ObLatchIds::DEFAULT_SPIN_RWLOCK);
+    ObLatchWGuard guard(map_lock_, common::ObLatchIds::TEST_LATCH_LOCK);
     ObInjectedErr *injected_err = inject_err_map[err_key];
     LOG_INFO("find injected err", K(err_key), KPC(injected_err));
     req->injected_err_ = inject_err_map[err_key];

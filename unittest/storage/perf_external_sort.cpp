@@ -183,7 +183,7 @@ int TestParallelSortMergeThread::init(const int64_t task_cnt, ObIArray<int64_t> 
   task_cnt_ = task_cnt;
   sort_column_indexes_ = sort_column_indexes;
   row_generate_ = row_generate;
-  if (OB_FAIL(cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  if (OB_FAIL(cond_.init(ObWaitEventIds::UNITEST_COND_WAIT))) {
     STORAGE_LOG(WARN, "fail to init condition", K(ret));
   }
   return ret;

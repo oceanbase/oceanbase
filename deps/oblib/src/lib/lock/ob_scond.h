@@ -36,16 +36,10 @@ public:
   int wait(uint32_t key, int64_t timeout) {
     int ret = OB_SUCCESS;
     if (timeout > 0 && get_key() == key) {
-      if (ObWaitEventIds::DEFAULT_COND_WAIT != event_no_) {
-        ObWaitEventGuard guard(event_no_, timeout / 1000, reinterpret_cast<int64_t>(this), 0, 0, true);
-        ATOMIC_FAA(&n_waiters_, 1);
-        ret = futex_.wait(key, timeout);
-        ATOMIC_FAA(&n_waiters_, -1);
-      } else {
-        ATOMIC_FAA(&n_waiters_, 1);
-        ret = futex_.wait(key, timeout);
-        ATOMIC_FAA(&n_waiters_, -1);
-      }
+      ObWaitEventGuard guard(event_no_, timeout / 1000, reinterpret_cast<int64_t>(this), 0, 0, true);
+      ATOMIC_FAA(&n_waiters_, 1);
+      ret = futex_.wait(key, timeout);
+      ATOMIC_FAA(&n_waiters_, -1);
     }
 
     return ret;

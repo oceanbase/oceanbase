@@ -170,7 +170,7 @@ int ObDedupQueue::init(const int64_t thread_num /*= DEFAULT_THREAD_NUM*/,
                K(total_mem_limit), K(hold_mem_limit), K(page_size), K(tenant_id));
   } else if (OB_FAIL(task_queue_sync_.init(ObWaitEventIds::DEDUP_QUEUE_COND_WAIT))) {
     COMMON_LOG(WARN, "fail to init task queue sync cond, ", K(ret));
-  } else if (OB_FAIL(work_thread_sync_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+  } else if (OB_FAIL(work_thread_sync_.init(ObWaitEventIds::DEDUP_QUEUE_COND_WAIT))) {
     COMMON_LOG(WARN, "fail to init work thread sync cond, ", K(ret));
   } else {
     thread_name_ = thread_name;

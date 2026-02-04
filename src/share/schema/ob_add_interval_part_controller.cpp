@@ -120,7 +120,7 @@ int ObAddIntervalPartitionController::init()
     LOG_WARN("failed to create constructing keys set", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < COND_SLOT_NUM; i++) {
-      if (OB_FAIL(cond_slots_[i].init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+      if (OB_FAIL(cond_slots_[i].init(ObWaitEventIds::ADD_INTERVAL_PARTITION_COND_WAIT))) {
         LOG_WARN("init cond fail", KR(ret));
       }
     }

@@ -116,7 +116,7 @@ public:
     constructor = nullptr;
     find_class_method = nullptr;
 
-    ObLatchMutexGuard guard(std::get<0>(cached_class_loader), ObLatchIds::DEFAULT_SPIN_LOCK);
+    ObLatchMutexGuard guard(std::get<0>(cached_class_loader), ObLatchIds::UDF_LOADER_CLASS_LOCK);
 
     if (OB_ISNULL(std::get<1>(cached_class_loader))) {
       jclass loader_class = nullptr;

@@ -3063,7 +3063,7 @@ int ObOdpsPartitionDownloaderMgr::get_or_create_odps_downloader(
       if (OB_ISNULL(temp_downloader = OB_NEWx(OdpsPartitionDownloader, &fifo_alloc_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory", K(ret), K(sizeof(OdpsPartitionDownloader)));
-      } else if (OB_FAIL(temp_downloader->tunnel_ready_cond_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
+      } else if (OB_FAIL(temp_downloader->tunnel_ready_cond_.init(ObWaitEventIds::ODPS_PARTITION_DOWNLOADER_COND_WAIT))) {
         LOG_WARN("failed to init tunnel condition variable", K(ret));
       } else if (OB_FAIL(odps_mgr_map_.set_refactored(part_id, reinterpret_cast<int64_t>(temp_downloader), 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/))) {
         if (OB_HASH_EXIST == ret) {

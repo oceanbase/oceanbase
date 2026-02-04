@@ -75,7 +75,8 @@ public:
   // Constructor.
   // Usage I: To build a lock from nothing.
   // Non-lock bits are init to default value.
-  ObSmallSpinLock(uint32_t latch_id = common::ObLatchIds::DEFAULT_MUTEX) : lock_() { init(); }
+  // TODO(roland.qk):use template parameter to pass latch_id
+  ObSmallSpinLock(uint32_t latch_id = common::ObLatchIds::LATCH_WAIT_QUEUE_LOCK) : lock_() { init(); }
   // No virtual so no virtual function table.
   ~ObSmallSpinLock() { }
 
