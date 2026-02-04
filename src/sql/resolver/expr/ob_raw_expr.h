@@ -72,6 +72,7 @@ class ObLogicalOperator;
 class ObInListInfo;
 extern ObRawExpr *USELESS_POINTER;
 struct ObExprEqualCheckContext;
+struct TableItem;
 
 // If is_stack_overflow is true, the printing will not continue
 #ifndef DEFINE_VIRTUAL_TO_STRING_CHECK_STACK_OVERFLOW
@@ -2681,9 +2682,11 @@ public:
   uint64_t &get_column_id();
   void set_ref_id(uint64_t table_id, uint64_t column_id);
   void set_table_id(uint64_t table_id);
+  void set_column_id(uint64_t column_id);
   void set_hidden_id(uint64_t hidden_id);
   void set_column_attr(const common::ObString &table_name,
                        const common::ObString &column_name);
+  void set_table_item_info(const TableItem &table_item);
   inline void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   inline common::ObString &get_table_name() { return table_name_; }
   inline const common::ObString &get_table_name() const { return table_name_; }
@@ -2834,6 +2837,11 @@ inline void ObColumnRefRawExpr::set_table_id(uint64_t table_id)
 inline uint64_t ObColumnRefRawExpr::get_table_id() const
 {
   return table_id_;
+}
+
+inline void ObColumnRefRawExpr::set_column_id(uint64_t column_id)
+{
+  column_id_ = column_id;
 }
 
 inline uint64_t ObColumnRefRawExpr::get_column_id() const
