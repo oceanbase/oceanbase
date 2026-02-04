@@ -1648,7 +1648,8 @@ int ObGroupByPushDownPlanRewriter::build_count_expr_for_join(ObGroupByPushdownCo
   bool right_transformed = right_result.is_materialized_;
   if (!ctx.need_count_) {
     // do nothing
-  } else if (OB_UNLIKELY(!left_ctx.need_count_ || !right_ctx.need_count_)) {
+  } else if (OB_UNLIKELY((left_transformed && !left_ctx.need_count_)
+                         || (right_transformed && !right_ctx.need_count_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected not need count", K(ret));
   } else if ((left_transformed && OB_ISNULL(left_result.count_expr_))
