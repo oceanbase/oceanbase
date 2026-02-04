@@ -1091,6 +1091,7 @@ typedef enum ObItemType
   T_FUN_COLLECT_FILE_LIST = 2097,
   T_FUN_SYS_PARSE_DATE_TIME = 2098,
   T_FUN_SYS_COUNT_INROW = 2099,
+  T_FUN_WINDOW_FUNNEL = 2100,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -1114,6 +1115,8 @@ typedef enum ObItemType
   T_PSEUDO_EXTERNAL_FILE_URL = 3043,
   T_PSEUDO_DDL_SLICE_ID = 3044,
   T_PSEUDO_HIDDEN_CLUSTERING_KEY = 3045,
+  T_PSEUDO_WINDOW_FUNNEL_TIME = 3046,
+  T_PSEUDO_WINDOW_FUNNEL_EVENT_IDX = 3047,
   T_WINDOW_FUNCTION = 3151,
   T_WIN_GENERALIZED_WINDOW = 3152,
   T_WIN_NEW_GENERALIZED_WINDOW = 3153,
@@ -3223,7 +3226,8 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_ANY || \
                          (op) == T_FUN_ARBITRARY || \
                          (op) == T_FUN_SYS_COUNT_INROW || \
-                         ((op) >= T_FUN_CK_GROUPCONCAT && (op) <= T_FUN_CK_UNIQ))
+                         ((op) >= T_FUN_CK_GROUPCONCAT && (op) <= T_FUN_CK_UNIQ) || \
+                         (op) == T_FUN_WINDOW_FUNNEL)
 
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
