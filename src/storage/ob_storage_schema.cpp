@@ -569,7 +569,7 @@ int ObStorageSchema::init(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_str(input_schema))) {
     STORAGE_LOG(WARN, "failed to generate string", K(ret), K(input_schema));
-  } else if (OB_FAIL(generate_column_array(input_schema, tenant_data_version > DATA_VERSION_4_3_5_2 /*need_trim_default_val*/))) {
+  } else if (OB_FAIL(generate_column_array(input_schema, tenant_data_version))) {
     STORAGE_LOG(WARN, "failed to generate column array", K(ret), K(input_schema), K(tenant_data_version));
   } else if (generate_cs_replica_cg_array) {
     if (OB_FAIL(ObStorageSchema::generate_cs_replica_cg_array())) {
