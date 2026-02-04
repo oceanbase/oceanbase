@@ -184,12 +184,16 @@ int ObSqlMemMgrProcessor::update_used_mem_size(int64_t used_size)
   if (OB_NOT_NULL(op_monitor_info_)) {
     op_monitor_info_->update_memory(delta_size);
   }
-  if (delta_size > 0) {
-    if (OB_NOT_NULL(sql_mem_mgr_) && OB_NOT_NULL(mem_callback_)) {
-      mem_callback_->alloc(delta_size);
+  if (OB_NOT_NULL(sql_mem_mgr_) && OB_NOT_NULL(mem_callback_)) {
+    total_alloc_size_ += delta_size;
+    if (OB_UNLIKELY(total_alloc_size_ < 0)) {
+      LOG_ERROR("total_alloc_size_ is less than 0",
+                K(total_alloc_size_), "free_size", delta_size, K(used_size),
+                "profile_mem_used", profile_.mem_used_);
     }
-  } else {
-    if (OB_NOT_NULL(sql_mem_mgr_) && OB_NOT_NULL(mem_callback_)) {
+    if (delta_size > 0) {
+      mem_callback_->alloc(delta_size);
+    } else {
       mem_callback_->free(-delta_size);
     }
   }
