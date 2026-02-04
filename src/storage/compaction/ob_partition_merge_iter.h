@@ -384,6 +384,9 @@ protected:
                                         const int64_t multi_version_col,
                                         int &cmp_ret);
   bool need_recycle_mv_row() const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  bool need_recycle_mv_row_for_ss() const;
+#endif
   int skip_ghost_row();
   int compact_old_row();
 private:

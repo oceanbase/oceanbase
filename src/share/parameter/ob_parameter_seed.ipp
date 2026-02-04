@@ -990,6 +990,10 @@ DEF_INT(row_compaction_update_limit, OB_CLUSTER_PARAMETER, "6", "[1, 6400]",
         "maximum update count before trigger row compaction. "
         "Range: [1, 6400]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_sslog_table_row_level_gc, OB_TENANT_PARAMETER, "True",
+         "enable row-level gc recycle version for sslog table in shared storage mode. "
+         "When disabled, multi_version_start is used as fallback. The default value is True.",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(ignore_replay_checksum_error, OB_CLUSTER_PARAMETER, "True",
          "specifies whether error raised from the memtable replay checksum validation can be ignored. "
          "Value: True:ignored; False: not ignored",

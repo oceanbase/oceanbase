@@ -16,6 +16,10 @@
 #include "storage/compaction/ob_mview_compaction_util.h"
 #include "storage/compaction/ob_i_compaction_filter.h"
 #include "observer/ob_inner_sql_result.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "share/inner_table/ob_sslog_table_schema.h"
+#include "close_modules/shared_storage/storage/incremental/garbage_collector/ob_sslog_row_recycle_version_queryer.h"
+#endif
 
 namespace oceanbase
 {
@@ -1953,12 +1957,20 @@ int ObPartitionMinorRowMergeIter::next()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpceted null current row", K(ret), K(*this));
     }
-  } else if (need_recycle_mv_row()) {
-    if (OB_FAIL(compact_old_row())) {
-      LOG_WARN("Failed to compact_old_row", K(ret));
+  } else {
+    bool need_recycle = false;
+#ifdef OB_BUILD_SHARED_STORAGE
+    need_recycle = need_recycle_mv_row_for_ss();
+#else
+    need_recycle = need_recycle_mv_row();
+#endif
+    if (need_recycle) {
+      if (OB_FAIL(compact_old_row())) {
+        LOG_WARN("Failed to compact_old_row", K(ret));
+      }
+    } else if (OB_FAIL(try_make_committing_trans_compacted())) {
+      LOG_WARN("Failed to make committing trans compacted", K(ret), K(*this));
     }
-  } else if (OB_FAIL(try_make_committing_trans_compacted())) {
-    LOG_WARN("Failed to make committing trans compacted", K(ret), K(*this));
   }
   if (OB_SUCC(ret) && curr_row_ != nullptr) {
     LOG_DEBUG("ObPartitionMinorRowMergeIter::next", K(ret), K_(rowkey_state), KPC_(curr_row), K(*this));
@@ -2087,6 +2099,31 @@ bool ObPartitionMinorRowMergeIter::need_recycle_mv_row() const
   LOG_TRACE("need recycle mv row", K(need_recycle), KPC(curr_row_));
   return need_recycle;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+bool ObPartitionMinorRowMergeIter::need_recycle_mv_row_for_ss() const
+{
+  bool need_recycle = false;
+  if (OB_ALL_SSLOG_TABLE_TID == tablet_id_.id()) {
+    // sslog table is not MOW table, do not need to check delete_insert_merge and is_ha_compeleted
+    if (nullptr != curr_row_ && !curr_row_->is_uncommitted_row() && !curr_row_->is_last_multi_version_row()) {
+      const int64_t commit_version = -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int();
+      int64_t recycle_version = access_context_.trans_version_range_.multi_version_start_;
+      int64_t row_recycle_version = -1;
+      int tmp_ret = ObSSLogRowRecycleVersionQueryer::get_row_recycle_version(curr_row_, row_recycle_version);
+      if (OB_SUCCESS == tmp_ret && row_recycle_version >= 0 && row_recycle_version > recycle_version) {
+        recycle_version = row_recycle_version;
+      }
+      if (commit_version <= recycle_version) {
+        need_recycle = true;
+      }
+    }
+  } else {
+    need_recycle = need_recycle_mv_row();
+  }
+  return need_recycle;
+}
+#endif
 
 /*
  *ObPartitionMinorMacroMergeIter
