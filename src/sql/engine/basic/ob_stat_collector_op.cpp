@@ -31,7 +31,10 @@ OB_SERIALIZE_MEMBER((ObStatCollectorSpec, ObOpSpec),
                     sort_exprs_,
                     sort_collations_,
                     sort_cmp_funs_,
-                    type_);
+                    type_,
+                    sort_exprs_inverted_,
+                    sort_collations_inverted_,
+                    sort_cmp_funs_inverted_);
 
 ObStatCollectorOp::ObStatCollectorOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(ctx_, spec, input),

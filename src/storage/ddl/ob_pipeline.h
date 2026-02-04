@@ -56,6 +56,7 @@ public:
     BATCH_DATUM_ROWS,
     DIRECT_LOAD_ROW_ARRAY,
     TASK_BATCH_INFO,
+    DDL_SORT_CHUNK_ARRAY,
     MAX_TYPE
   };
 public:

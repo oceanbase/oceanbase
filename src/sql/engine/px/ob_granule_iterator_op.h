@@ -204,6 +204,7 @@ public:
   ObPxRFStaticInfo px_rf_info_;
   bool hash_part_;
   bool enable_adaptive_task_splitting_;
+  ObExpr *ddl_slice_id_expr_; // for DDL slice_id pseudo column
 };
 
 class ObGranuleIteratorOp : public ObOperator

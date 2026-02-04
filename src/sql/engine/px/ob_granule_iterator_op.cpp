@@ -371,7 +371,8 @@ OB_SERIALIZE_MEMBER((ObGranuleIteratorSpec, ObOpSpec),
                     repart_pruning_tsc_idx_,
                     px_rf_info_,
                     hash_part_,
-                    enable_adaptive_task_splitting_);
+                    enable_adaptive_task_splitting_,
+                    ddl_slice_id_expr_);
 
 ObGranuleIteratorSpec::ObGranuleIteratorSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
 : ObOpSpec(alloc, type),
@@ -389,7 +390,8 @@ ObGranuleIteratorSpec::ObGranuleIteratorSpec(ObIAllocator &alloc, const ObPhyOpe
   repart_pruning_tsc_idx_(OB_INVALID_ID),
   px_rf_info_(),
   hash_part_(false),
-  enable_adaptive_task_splitting_(false)
+  enable_adaptive_task_splitting_(false),
+  ddl_slice_id_expr_(NULL)
 {}
 
 ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)

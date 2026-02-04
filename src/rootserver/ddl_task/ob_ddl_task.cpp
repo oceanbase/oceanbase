@@ -145,7 +145,7 @@ int ObDDLSliceInfo::deep_copy(const ObDDLSliceInfo &other, ObIAllocator &allocat
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLSliceInfo, part_ranges_, autoinc_range_interval_);
+OB_SERIALIZE_MEMBER(ObDDLSliceInfo, part_ranges_, autoinc_range_interval_, inverted_part_ranges_);
 
 ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
                                                  const int64_t parallelism,

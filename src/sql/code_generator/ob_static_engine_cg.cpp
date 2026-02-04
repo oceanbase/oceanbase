@@ -4547,6 +4547,12 @@ int ObStaticEngineCG::generate_spec(ObLogGranuleIterator &op, ObGranuleIteratorS
     }
   }
 
+  if (OB_SUCC(ret) && OB_NOT_NULL(op.get_ddl_slice_id_expr())) {
+    if (OB_FAIL(generate_rt_expr(*op.get_ddl_slice_id_expr(), spec.ddl_slice_id_expr_))) {
+      LOG_WARN("generate ddl slice id expr failed", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     spec.enable_adaptive_task_splitting_ = op.enable_adaptive_task_splitting();
     spec.hash_part_ = op.is_hash_part();

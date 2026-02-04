@@ -114,6 +114,9 @@ int ObLogGranuleIterator::allocate_expr_post(ObAllocExprContext &ctx)
   } else if (NULL != tablet_id_expr_ &&
             OB_FAIL(get_plan()->get_optimizer_context().get_all_exprs().append(tablet_id_expr_))) {
     LOG_WARN("failed to append expr", K(ret));
+  } else if (NULL != slice_id_expr_ &&
+            OB_FAIL(get_plan()->get_optimizer_context().get_all_exprs().append(slice_id_expr_))) {
+    LOG_WARN("failed to append expr", K(ret));
   }
   return ret;
 }

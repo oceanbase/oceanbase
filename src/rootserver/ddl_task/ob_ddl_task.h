@@ -137,6 +137,7 @@ public:
 public:
   static const int64_t AUTOINC_RANGE_INTERVAL = 10000;
   common::Ob2DArray<sql::ObPxTabletRange> part_ranges_;
+  common::Ob2DArray<sql::ObPxTabletRange> inverted_part_ranges_;  // inverted ranges for FTS
   int64_t autoinc_range_interval_;
 };
 
