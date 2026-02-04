@@ -534,6 +534,8 @@ public:
   int delete_from_all_temp_table(common::ObISQLClient &sql_client,
                                  const uint64_t tenant_id,
                                  const uint64_t table_id);
+  int truncate_table_stats_info(ObISQLClient &sql_client,
+                                const ObTableSchema &table_schema);
   int update_single_column_group(ObISQLClient &sql_client,
                                  const ObTableSchema &new_table_schema,
                                  const ObColumnGroupSchema &ori_cg_schema,

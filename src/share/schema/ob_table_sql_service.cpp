@@ -5946,6 +5946,19 @@ int ObTableSqlService::delete_from_all_monitor_modified(ObISQLClient &sql_client
   return ret;
 }
 
+int ObTableSqlService::truncate_table_stats_info(ObISQLClient &sql_client,
+                                                 const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(delete_from_all_monitor_modified(sql_client,
+                                               table_schema.get_tenant_id(),
+                                               table_schema.get_table_id(),
+                                               NULL))) {
+    LOG_WARN("delete from all monitor modified failed", KR(ret), K(table_schema));
+  }
+  return ret;
+}
+
 int ObTableSqlService::batch_add_column_groups_for_create_table(ObISQLClient &sql_client,
                                                                 const ObIArray<ObTableSchema> &tables)
 {
