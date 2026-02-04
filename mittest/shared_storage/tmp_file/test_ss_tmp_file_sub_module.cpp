@@ -111,6 +111,7 @@ TEST_F(TestSSTmpFileSubModule, test_reboot_gc)
   }
 
   // mock init
+  sleep(3);
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().remove_mgr_.get_first_tmp_file_id_());
   ASSERT_NE(before_init_fd, -1);
   ASSERT_EQ(before_init_fd + 1, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().remove_mgr_.first_tmp_file_id_);
