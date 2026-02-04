@@ -79,8 +79,7 @@ OB_DEF_SERIALIZE(ObAggrInfo)
               absent_on_null_,
               returning_type_,
               with_unique_keys_,
-              max_disuse_param_expr_,
-              has_ignore_null_
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ENCODE(*dll_udf_);
@@ -109,6 +108,7 @@ OB_DEF_SERIALIZE(ObAggrInfo)
   }
   OB_UNIS_ENCODE(enable_fast_bypass_);
   OB_UNIS_ENCODE(is_statistic_agg_);
+  OB_UNIS_ENCODE(has_ignore_null_);
   return ret;
 }
 
@@ -143,8 +143,7 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
               absent_on_null_,
               returning_type_,
               with_unique_keys_,
-              max_disuse_param_expr_,
-              has_ignore_null_
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     CK(NULL != alloc_);
@@ -197,6 +196,7 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
   }
   OB_UNIS_DECODE(enable_fast_bypass_);
   OB_UNIS_DECODE(is_statistic_agg_);
+  OB_UNIS_DECODE(has_ignore_null_);
   return ret;
 }
 
@@ -231,8 +231,7 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
               absent_on_null_,
               returning_type_,
               with_unique_keys_,
-              max_disuse_param_expr_,
-              has_ignore_null_
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ADD_LEN(*dll_udf_);
@@ -258,6 +257,7 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
   }
   OB_UNIS_ADD_LEN(enable_fast_bypass_);
   OB_UNIS_ADD_LEN(is_statistic_agg_);
+  OB_UNIS_ADD_LEN(has_ignore_null_);
   return len;
 }
 
