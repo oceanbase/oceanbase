@@ -901,7 +901,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(const OpParallelRul
     path->op_parallel_rule_ = op_parallel_rule;
     path->parallel_ = final_parallel;
     path->server_cnt_ = path->server_list_.count();
-    path->available_parallel_ = ObGlobalHint::DEFAULT_PARALLEL;
+    path->available_parallel_ = std::max(parallel, final_parallel);
   }
   return ret;
 }
