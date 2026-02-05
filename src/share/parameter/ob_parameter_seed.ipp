@@ -3160,7 +3160,7 @@ DEF_BOOL(_enable_data_based_sqc_dop, OB_TENANT_PARAMETER, "True",
         "Assign sqc dop based on data size.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_inc_major_direct_load, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_enable_inc_major_direct_load, OB_TENANT_PARAMETER, "True",
         "Specifies whether enable inc major direct load",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_restore_emergency_inc_major_sstable_threshold, OB_TENANT_PARAMETER, "48", "[2,64]",
