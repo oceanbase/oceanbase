@@ -132,8 +132,8 @@ public:
     if (!scp_tenant_created) {
       // Increase MAX_TST after start() to override the default 100ms setting
       // This extends lease interval from 400ms to 2s, reducing lease expiration issues
-      oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
       ObSimpleClusterTestBase::SetUp();
+      oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
       OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8));
       OK(get_tenant_id(run_ctx.tenant_id_));
       ASSERT_NE(0, run_ctx.tenant_id_);
@@ -594,11 +594,11 @@ void ObPrereadMetaMacroTest::wait_preread_task_finish()
   while ((preread_cache_mgr.preread_queue_.size() != 0) ||
          (preread_task.segment_files_.count() != 0) ||
          (preread_task.async_read_list_.get_curr_total() != 0) ||
-         (preread_task.async_write_list_.get_curr_total() != 0)) {
-    sleep(1);
-    FLOG_INFO("[TEST] try to wait preread task finish", K(preread_cache_mgr.preread_queue_.size()),
-        K(preread_task.segment_files_.count()), K(preread_task.async_read_list_.get_curr_total()),
-        K(preread_task.async_write_list_.get_curr_total()));
+         (preread_task.free_list_.get_curr_total() != preread_task.max_pre_read_parallelism_)) {
+          sleep(1);
+          FLOG_INFO("[TEST] try to wait preread task finish", K(preread_cache_mgr.preread_queue_.size()),
+            K(preread_task.segment_files_.count()), K(preread_task.async_read_list_.get_curr_total()),
+            K(preread_task.free_list_.get_curr_total()));
   }
   FLOG_INFO("[TEST] wait preread task finish end", K(preread_task));
 }

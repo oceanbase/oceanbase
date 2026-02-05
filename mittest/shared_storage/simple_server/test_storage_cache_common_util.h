@@ -65,6 +65,7 @@ public:
   {
     if (!scp_tenant_created) {
       ObSimpleClusterTestBase::SetUp();
+      oceanbase::palf::election::MAX_TST = 500 * 1000;  // 500ms, lease interval = 4 * 500ms = 2s
       OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8, "3G"));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
