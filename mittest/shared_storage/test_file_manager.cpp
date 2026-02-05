@@ -951,6 +951,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   ASSERT_EQ(tablet_id, tablet_dirs.at(0));
 
   // test 8: test calc_private_macro_disk_space
+  usleep(3000 * 1000); // sleep 3 seconds to wait file system meta update
   ObCalibrateDiskSpaceResult calibrate_res;
   int64_t expected_disk_size = write_io_size;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
@@ -1002,7 +1003,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   get_macro_block_scatter_dir_size(scatter_dir_size);
   expected_disk_size += scatter_dir_size;
 
-  ob_usleep(2000*1000);
+  ob_usleep(3000 * 1000);
   int64_t start_calc_size_time_s = ObTimeUtility::current_time_s();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_macro_block_disk_space(start_calc_size_time_s, calibrate_res));
   ASSERT_EQ(expected_disk_size, calibrate_res.total_file_size_);
@@ -1014,7 +1015,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_data_tablet_id_private_transfer_epoch_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*transfer_seq*/));
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.delete_tablet_data_tablet_id_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id));
   // step 11: test calc_private_macro_disk_space after delete file
-  ob_usleep(2000*1000);
+  ob_usleep(3000 * 1000);
   start_calc_size_time_s = ObTimeUtility::current_time_s();
   calibrate_res.reset();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_macro_block_disk_space(start_calc_size_time_s, calibrate_res));
