@@ -8756,6 +8756,8 @@ def_table_schema(
 )
 # 584: __all_ss_gc_reserved_snapshot
 # 585: __all_table_archive_history
+# 586: __all_java_policy
+# 587: __all_java_policy_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17759,6 +17761,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12591: __all_virtual_ddl_dag_monitor
 # 12592: __all_virtual_vector_segment_info
 # 12593: __all_virtual_sql_group_commit_stat
+# 12594: __all_virtual_java_policy
+# 12595: __all_virtual_java_policy_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -18351,6 +18355,9 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15546', all_def_ke
 # 15547: idx_routine_load_job_name_real_agent
 # 15548: __all_virtual_ss_local_cache_diagnose_info
 # 15549: __all_virtual_sql_group_commit_stat
+# 15550: __all_external_resource
+# 15551: __all_java_policy
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -45941,6 +45948,8 @@ ORDER BY A.create_time
 # 21715: V$OB_SINDI_INDEX_INFO
 # 21716: GV$OB_HNSW_INDEX_SEGMENT_INFO
 # 21717: V$OB_HNSW_INDEX_SEGMENT_INFO
+# 21718: DBA_JAVA_POLICY
+# 21719: USER_JAVA_POLICY
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -68583,6 +68592,10 @@ def_table_schema(
     ORDER BY type, name, line;
 """.replace("\n", " ")
 )
+
+# 25319: DBA_JAVA_POLICY
+# 25320: USER_JAVA_POLICY
+
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
