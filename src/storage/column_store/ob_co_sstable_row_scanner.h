@@ -187,6 +187,12 @@ private:
   {
     return T_PSEUDO_GROUP_ID == e->type_;
   }
+  OB_INLINE bool has_rows_filter() const
+  {
+    // switch context maybe make rows_filter_ is not nullptr, but filter_ is nullptr
+    return rows_filter_ != nullptr && rows_filter_->filter_ != nullptr;
+  }
+
 protected:
   ObSSTableRowScanner<ObCOPrefetcher> *row_scanner_;
   int32_t range_idx_;
