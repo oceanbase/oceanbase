@@ -582,6 +582,11 @@ int ObMPChangeUser::reset_session_for_change_user(sql::ObSQLSessionInfo *session
 
       // 10.7 memory context for dbms_session.create_context
       session->destory_mem_context();
+
+      // 10.8 reset query level info (affected_rows, found_rows)
+      // Reset to initial values. Proxy will clear old query info after changeuser.
+      session->set_affected_rows(-1);
+      session->set_found_rows(1);
     }
   }
 

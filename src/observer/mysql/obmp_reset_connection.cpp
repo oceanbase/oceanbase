@@ -233,6 +233,11 @@ int ObMPResetConnection::process()
 
       // 10.8 clean mem context for context (dbms_session.create_context)
       session->destory_mem_context();
+
+      // 10.9 reset query level info (affected_rows, found_rows)
+      // Reset to initial values. Proxy will clear old query info after resetconn.
+      session->set_affected_rows(-1);
+      session->set_found_rows(1);
     }
 
 
