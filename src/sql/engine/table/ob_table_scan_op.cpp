@@ -156,6 +156,8 @@ int ObTableScanCtDef::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
   if (is_new_query_range) {
     OB_UNIS_ENCODE(pre_range_graph_);
   }
+  OB_UNIS_ENCODE(hint_enabled_caches_);
+  OB_UNIS_ENCODE(hint_disabled_caches_);
   return ret;
 }
 
@@ -194,6 +196,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   if (is_new_query_range) {
     OB_UNIS_ADD_LEN(pre_range_graph_);
   }
+  OB_UNIS_ADD_LEN(hint_enabled_caches_);
+  OB_UNIS_ADD_LEN(hint_disabled_caches_);
   return len;
 }
 
@@ -276,6 +280,8 @@ int ObTableScanCtDef::deserialize(const char *buf, const int64_t data_len, int64
       if (is_new_query_range) {
         OB_UNIS_DECODE(pre_range_graph_);
       }
+      OB_UNIS_DECODE(hint_enabled_caches_);
+      OB_UNIS_DECODE(hint_disabled_caches_);
     }
 
     pos = pos_orig + len;

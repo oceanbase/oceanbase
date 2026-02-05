@@ -173,7 +173,9 @@ public:
       global_index_rowkey_exprs_(allocator),
       pre_range_graph_(allocator),
       attach_spec_(allocator_, &scan_ctdef_),
-      flags_(0)
+      flags_(0),
+      hint_enabled_caches_(0),
+      hint_disabled_caches_(0)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -249,6 +251,8 @@ public:
       uint64_t reserved_                     : 59;
     };
   };
+  uint8_t hint_enabled_caches_;
+  uint8_t hint_disabled_caches_;
 };
 
 struct ObTableScanRtDef

@@ -3049,6 +3049,10 @@ typedef enum ObItemType
   T_ALTER_VIEW_COMPILE = 4968,
 
   T_MAX_EXECUTION_TIME = 4969,    // for max_execution_time hint
+
+  // for cache hint
+  T_CACHE_HINT = 4970,
+  T_NOCACHE_HINT = 4971,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
