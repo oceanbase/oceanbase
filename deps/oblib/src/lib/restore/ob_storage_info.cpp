@@ -128,6 +128,7 @@ ObObjectStorageInfo::ObObjectStorageInfo()
     is_assume_role_mode_(false),
     enable_worm_(false)
 {
+  region_[0] = '\0';
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
   access_key_[0] = '\0';
@@ -143,9 +144,11 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 
 void ObObjectStorageInfo::reset()
 {
-  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
   checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+  addressing_model_ = ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
+  region_[0] = '\0';
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
   access_key_[0] = '\0';
