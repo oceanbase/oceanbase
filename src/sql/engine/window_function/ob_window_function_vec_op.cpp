@@ -2116,7 +2116,7 @@ int ObWindowFunctionVecOp::calc_bypass_pushdown_rows_of_wf(WinFuncColExpr &wf,
   return ret;
 }
 
-int ObWindowFunctionVecOp::collect_sp_partial_results()
+int __attribute__((noinline)) ObWindowFunctionVecOp::collect_sp_partial_results()
 {
   int ret = OB_SUCCESS;
   WinFuncColExpr &wf_col = *wf_list_.get_last();
@@ -3543,7 +3543,7 @@ private:
   const ObWindowFunctionVecSpec &spec_;
 };
 
-int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, ObEvalCtx &eval_ctx) const
+int __attribute__((noinline)) ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, ObEvalCtx &eval_ctx) const
 {
   int ret = OB_SUCCESS;
   lib::ob_sort(msg_ctx.infos_.begin(), msg_ctx.infos_.end(), __pby_oby_sort_op(*this));

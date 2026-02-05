@@ -355,7 +355,7 @@ private:
   int get_last_input_row_of_prev_batch(const ObCompactRow *&last_row);
 
   // for single partition parallel execution, collect partition aggr results and do merging.
-  int collect_sp_partial_results();
+  int collect_sp_partial_results()  __attribute__((noinline));
 
   int collect_wf_res_row(const int64_t batch_idx, const int64_t stored_row_idx, ObCompactRow *&res_row);
 
