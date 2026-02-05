@@ -1430,10 +1430,9 @@ int ObBlockManager::mark_tablet_block(
                   ->is_empty_shell()) { // empty shell may don't have macro info
     ObArenaAllocator allocator("MarkTabletBlock");
     ObTabletMacroInfo *macro_info = nullptr;
-    bool in_memory = true;
     ObMacroInfoIterator macro_iter;
     if (OB_FAIL(tablet->load_macro_info(0 /* ls_epoch in shared_storage */,
-                                        allocator, macro_info, in_memory))) {
+                                        allocator, macro_info))) {
       LOG_WARN("fail to load macro info", K(ret));
     } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
       LOG_WARN("fail to init macro iterator", K(ret), KPC(macro_info));
@@ -1453,7 +1452,7 @@ int ObBlockManager::mark_tablet_block(
         LOG_WARN("fail to mark macro id", K(ret), K(block_info));
       }
     }
-    if (OB_NOT_NULL(macro_info) && !in_memory) {
+    if (OB_NOT_NULL(macro_info)) {
       macro_info->reset();
     }
   }

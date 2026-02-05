@@ -3325,26 +3325,32 @@ int ObTablet::parse_meta_addr(const ObMetaDiskAddr &addr, ObIArray<MacroBlockId>
   return ret;
 }
 
+// @param ls_epoch: Only needs to be non-zero when reading from shared storage private directory
 int ObTablet::load_macro_info(
     const int64_t ls_epoch,
     ObArenaAllocator &allocator,
-    ObTabletMacroInfo *&tablet_macro_info,
-    bool &in_memory) const
+    ObTabletMacroInfo *&tablet_macro_info) const
 {
   int ret = OB_SUCCESS;
-  in_memory = false;
   if (macro_info_addr_.is_none_object()) {
     // return a macro_info with cnt_ = 0;
     // default construct param: EMPTY_LIST_ENTRY_BLOCK
-    tablet_macro_info = static_cast<ObTabletMacroInfo*>(allocator.alloc(sizeof(ObTabletMacroInfo)));
-    new (tablet_macro_info)ObTabletMacroInfo();
+    void *macro_info_buf = nullptr;
+    if (OB_ISNULL(macro_info_buf = allocator.alloc(sizeof(ObTabletMacroInfo)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory for tablet macro info", K(ret));
+    } else {
+      tablet_macro_info = new (macro_info_buf) ObTabletMacroInfo();
+      tablet_macro_info->is_owned_by_tablet_ = false;
+    }
+
   } else if (macro_info_addr_.is_memory_object()) { // MEM
     if (OB_ISNULL(macro_info_addr_.ptr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet macro info ptr is null", K(ret), K_(macro_info_addr));
     } else {
       tablet_macro_info = macro_info_addr_.ptr_;
-      in_memory = true;
+      tablet_macro_info->is_owned_by_tablet_ = true;
     }
   } else if (macro_info_addr_.is_disk_object()) { // BLOCK, RAW_BLOCK
     char *buf = nullptr;
@@ -3360,6 +3366,8 @@ int ObTablet::load_macro_info(
     } else if (FALSE_IT(tablet_macro_info = new (macro_info_buf) ObTabletMacroInfo)) {
     } else if (OB_FAIL(tablet_macro_info->deserialize(allocator, buf, buf_len, pos))) {
       LOG_WARN("fail to deserialize tablet macro info", K(ret), K(buf_len), K(pos));
+    } else {
+      tablet_macro_info->is_owned_by_tablet_ = false;
     }
   } else {
     ret = OB_NOT_SUPPORTED;
@@ -3412,12 +3420,11 @@ int ObTablet::inc_ref_with_aggregated_info()
   } else {
     ObArenaAllocator allocator("IncMacroRef", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTabletMacroInfo *macro_info = nullptr;
-    bool in_memory = true;
     bool inc_tablet_ref = false;
     bool inc_other_ref = false;
     ObMacroInfoIterator info_iter;
 
-    if (OB_FAIL(load_macro_info(0/* ls_epoch in shared_storage */, allocator, macro_info, in_memory))) {
+    if (OB_FAIL(load_macro_info(0/* ls_epoch in shared_storage */, allocator, macro_info))) {
       LOG_WARN("fail to load macro info", K(ret));
     } else if (OB_FAIL(info_iter.init(ObTabletMacroType::MAX, *macro_info))) {
       LOG_WARN("fail to init macro info iterator", K(ret), KPC(macro_info));
@@ -3439,7 +3446,7 @@ int ObTablet::inc_ref_with_aggregated_info()
         }
       }
     }
-    if (OB_NOT_NULL(macro_info) && !in_memory) {
+    if (OB_NOT_NULL(macro_info)) {
       macro_info->reset();
     }
   }
@@ -3693,9 +3700,8 @@ void ObTablet::dec_ref_with_aggregated_info()
   } else {
     ObArenaAllocator allocator("DecMacroRef", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTabletMacroInfo *macro_info = nullptr;
-    bool in_memory = true;
     ObMacroInfoIterator info_iter;
-    if (OB_FAIL(load_macro_info(0/* ls_epoch in shared_storage */, allocator, macro_info, in_memory))) {
+    if (OB_FAIL(load_macro_info(0/* ls_epoch in shared_storage */, allocator, macro_info))) {
       LOG_WARN("fail to load macro info", K(ret));
     } else if (OB_FAIL(info_iter.init(ObTabletMacroType::MAX, *macro_info))) {
       LOG_WARN("fail to init macro info iterator", K(ret), KPC(macro_info));
@@ -3703,7 +3709,7 @@ void ObTablet::dec_ref_with_aggregated_info()
       dec_addr_ref_cnt(tablet_addr_);
       dec_ref_with_macro_iter(info_iter);
     }
-    if (OB_NOT_NULL(macro_info) && !in_memory) {
+    if (OB_NOT_NULL(macro_info)) {
       macro_info->reset();
     }
 

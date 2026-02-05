@@ -87,7 +87,7 @@ int ObBlockInfoSet::init(
 ObTabletMacroInfo::ObTabletMacroInfo()
   : entry_block_(ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK),
     meta_block_info_arr_(), data_block_info_arr_(), shared_meta_block_info_arr_(),
-    shared_data_block_info_arr_(), is_inited_(false)
+    shared_data_block_info_arr_(), is_inited_(false), is_owned_by_tablet_(false)
 {
 }
 
@@ -98,12 +98,19 @@ ObTabletMacroInfo::~ObTabletMacroInfo()
 
 void ObTabletMacroInfo::reset()
 {
-  entry_block_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
-  meta_block_info_arr_.reset();
-  data_block_info_arr_.reset();
-  shared_meta_block_info_arr_.reset();
-  shared_data_block_info_arr_.reset();
-  is_inited_ = false;
+  // Only reset if not owned by tablet (i.e., newly allocated/deserialized object).
+  // If owned by tablet, this is a shallow copy and must not be reset to avoid corrupting
+  // the original object in tablet's memory buffer. Destructor calls reset() for consistency;
+  // when is_owned_by_tablet_ is true, reset() no-ops and leaves pointers as-is (buffer is being freed anyway).
+  if (!is_owned_by_tablet_) {
+    entry_block_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
+    meta_block_info_arr_.reset();
+    data_block_info_arr_.reset();
+    shared_meta_block_info_arr_.reset();
+    shared_data_block_info_arr_.reset();
+    is_inited_ = false;
+    is_owned_by_tablet_ = false;  // Reset flag for consistency
+  }
 }
 
 int ObTabletMacroInfo::init(
@@ -155,6 +162,7 @@ int ObTabletMacroInfo::init(
   }
   if (OB_SUCC(ret)) {
     is_inited_ = true;
+    is_owned_by_tablet_ = false;  // init() creates a new object, not owned by tablet
   } else if (!is_inited_) {
     reset();
   }
@@ -372,6 +380,7 @@ int ObTabletMacroInfo::deserialize(ObArenaAllocator &allocator, const char *buf,
   if (OB_SUCC(ret)) {
     pos += size;
     is_inited_ = true;
+    is_owned_by_tablet_ = false;  // deserialize() creates a new object from allocator, not owned by tablet
   }
   return ret;
 }
@@ -444,6 +453,7 @@ int ObTabletMacroInfo::deep_copy(char *buf, const int64_t buf_len, ObTabletMacro
     if (OB_SUCC(ret)) {
       dest_obj = tablet_macro_info;
       dest_obj->is_inited_ = is_inited_;
+      dest_obj->is_owned_by_tablet_ = false;  // deep_copy() produces a copy; if placed in tablet buffer, caller sets true
     }
   }
   return ret;

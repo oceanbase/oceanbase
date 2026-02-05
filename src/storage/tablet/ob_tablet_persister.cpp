@@ -224,7 +224,6 @@ int ObSSTransferSrcTabletBlockInfo::init(const ObTablet &src_tablet)
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "SrcTabletBlocks"));
   const int64_t shared_block_bucket_num = ObBlockInfoSet::SHARED_BLOCK_BUCKET_NUM;
-  bool in_memory = true;
   ObTabletMacroInfo *macro_info = nullptr;
   ObMacroInfoIterator macro_iter;
 
@@ -236,8 +235,7 @@ int ObSSTransferSrcTabletBlockInfo::init(const ObTablet &src_tablet)
     LOG_WARN("invalid src tablet", K(ret), K(src_tablet));
   } else if (OB_FAIL(src_tablet.load_macro_info(/* ls_epoch */0,
                                                 allocator,
-                                                macro_info,
-                                                in_memory))) {
+                                                macro_info))) {
     LOG_WARN("failed to load macro info", K(ret), K(src_tablet));
   } else if (OB_ISNULL(macro_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -269,7 +267,7 @@ int ObSSTransferSrcTabletBlockInfo::init(const ObTablet &src_tablet)
     }
   }
 
-  if (OB_NOT_NULL(macro_info) && !in_memory) {
+  if (OB_NOT_NULL(macro_info)) {
     macro_info->reset();
   }
 
@@ -893,7 +891,6 @@ int ObTabletPersister::persist_major_sstable_linked_block_if_large(
   ObTabletSpaceUsage space_usage;
   ObSArray<MacroBlockId> shared_meta_id_arr;
   total_write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "TblMetaWriCtx", DEFAULT_CTX_ID));
-  bool in_memory = false;
 
   if (OB_UNLIKELY(!old_tablet.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -916,7 +913,6 @@ int ObTabletPersister::persist_major_sstable_linked_block_if_large(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate tablet macro info memory", K(ret));
     } else if (FALSE_IT(macro_info = new (buf) ObTabletMacroInfo())) {
-    } else if (FALSE_IT(in_memory = false)) {
     } else if (OB_FAIL(persister.multi_stats_.acquire_stats("persist_and_transform_tablet", time_stats))) {
      LOG_WARN("fail to acquire time stats", K(ret));
     } else if (OB_FAIL(persister.persist_and_fill_tablet(old_tablet, linked_writer, total_write_ctxs, new_tablet,
@@ -934,7 +930,7 @@ int ObTabletPersister::persist_major_sstable_linked_block_if_large(
     }
   } else if (OB_FAIL(persister.multi_stats_.acquire_stats("persist_and_transform_only_tablet_meta", time_stats))) {
     LOG_WARN("fail to acquire time stats", K(ret));
-  } else if (OB_FAIL(old_tablet.load_macro_info(param.ls_epoch_, persister.allocator_, macro_info, in_memory))) {
+  } else if (OB_FAIL(old_tablet.load_macro_info(param.ls_epoch_, persister.allocator_, macro_info))) {
     LOG_WARN("fail to fetch macro info", K(ret));
   } else if (FALSE_IT(time_stats->click("load_macro_info"))) {
   } else if (OB_FAIL(persister.modify_and_fill_tablet(old_tablet, modifier, new_tablet))) {
@@ -962,9 +958,8 @@ int ObTabletPersister::persist_major_sstable_linked_block_if_large(
       persister.print_time_stats(*time_stats, 20_ms, 1_s);
     }
   }
-  if (OB_NOT_NULL(macro_info) && !in_memory) {
-    macro_info->~ObTabletMacroInfo();
-    macro_info = nullptr;
+  if (OB_NOT_NULL(macro_info)) {
+    macro_info->reset();
   }
   return ret;
 }

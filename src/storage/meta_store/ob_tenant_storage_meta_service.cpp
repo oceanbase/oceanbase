@@ -676,12 +676,11 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("talbet is invalid", K(ret), K(tablet), K(tablet_addr));
   } else {
-    bool in_memory = true;
     ObTabletMacroInfo *macro_info = nullptr;
     storage::ObMacroInfoIterator macro_iter;
     storage::ObTabletBlockInfo block_info;
 
-    if (OB_FAIL(tablet.load_macro_info(ls_epoch, allocator, macro_info, in_memory))) {
+    if (OB_FAIL(tablet.load_macro_info(ls_epoch, allocator, macro_info))) {
       LOG_WARN("fail to load macro info", K(ret));
     } else if (OB_FAIL(macro_iter.init(ObTabletMacroType::MAX, *macro_info))) {
       LOG_WARN("fail to init macro iterator", K(ret), KPC(macro_info));
@@ -722,7 +721,7 @@ int ObTenantStorageMetaService::inner_get_blocks_for_tablet_(
           tmp_print_arr.reuse();
         }
       }
-      if (OB_NOT_NULL(macro_info) && !in_memory) {
+      if (OB_NOT_NULL(macro_info)) {
         macro_info->reset();
       }
     }

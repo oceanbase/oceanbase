@@ -331,11 +331,11 @@ public:
   // fetch_$member: member may exist in memory or disk, if in memory, get it directly, if in disk,
   //                read from disk then put into kv cache, and return kv cache handle for caller
   int fetch_table_store(ObTabletMemberWrapper<ObTabletTableStore> &wrapper) const;
+  // @param ls_epoch: Only needs to be non-zero when reading from shared storage private directory
   int load_macro_info(
       const int64_t ls_epoch,
       common::ObArenaAllocator &allocator,
-      ObTabletMacroInfo *&tablet_macro_info,
-      bool &in_memory) const;
+      ObTabletMacroInfo *&tablet_macro_info) const;
   int load_storage_schema(
       common::ObIAllocator &allocator,
       ObStorageSchema *&storage_schema) const;
