@@ -112,6 +112,44 @@ int ObDBMSVectorMySql::rebuild_index(ObPLExecCtx &ctx, ParamStore &params, ObObj
   return ret;
 }
 
+
+/*
+PROCEDURE set_attribute (
+    IN      IDX_NAME                VARCHAR(65535),                      ---- 索引名
+    IN      TABLE_NAME              VARCHAR(65535),                      ---- 表名
+    IN      ATTRIBUTE               VARCHAR(65535),                      ---- 修改名
+    IN      VALUE                   VARCHAR(65535),                      ---- 修改值
+);
+*/
+int ObDBMSVectorMySql::set_attribute(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0);
+  CK(OB_LIKELY(4 == params.count()));
+  if (!params.at(0).is_varchar()
+      || !params.at(1).is_varchar()
+      || !params.at(2).is_varchar()
+      || !params.at(3).is_varchar()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument set attribute", KR(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObVectorRebuildIndexArg rebuild_arg;
+    ObVectorRefreshIndexExecutor rebuild_executor;
+    rebuild_arg.idx_name_ = params.at(0).get_varchar();
+    rebuild_arg.table_name_ = params.at(1).get_varchar();
+    rebuild_arg.attribute_ = params.at(2).get_varchar();
+    rebuild_arg.value_ = params.at(3).get_varchar();
+
+    if (OB_FAIL(rebuild_executor.set_attribute(ctx, rebuild_arg))) {
+      LOG_WARN("fail to execute refresh index", KR(ret), K(rebuild_arg));
+    }
+  }
+  return ret;
+}
+
 int ObDBMSVectorMySql::refresh_index_inner(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
 {
   UNUSED(result);

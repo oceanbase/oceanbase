@@ -5370,7 +5370,8 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
 
 int ObVectorIndexUtil::add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                             const uint64_t vidx_table_id,
-                                            const common::ObString &exec_env)
+                                            const common::ObString &exec_env,
+                                            const uint64_t paralellism)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObVectorIndexSchedJobUtils::add_vector_index_refresh_job(
@@ -5381,7 +5382,8 @@ int ObVectorIndexUtil::add_dbms_vector_jobs(common::ObISQLClient &sql_client, co
   } else if (OB_FAIL(ObVectorIndexSchedJobUtils::add_vector_index_rebuild_job(
                       sql_client, tenant_id,
                       vidx_table_id,
-                      exec_env))) {
+                      exec_env,
+                      paralellism))) {
     LOG_WARN("fail to add vector index rebuild job", KR(ret), K(tenant_id), K(vidx_table_id), K(exec_env));
   }
   return ret;

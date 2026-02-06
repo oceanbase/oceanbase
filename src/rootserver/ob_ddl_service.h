@@ -177,7 +177,8 @@ public:
                               const bool is_table_empty,
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
-                              share::schema::ObTableSchema &index_schema);
+                              share::schema::ObTableSchema &index_schema,
+                              const int64_t create_vec_index_parallel = 0);
   // check whether the foreign key related table is executing offline ddl, creating index, and constrtaint task.
   // And ddl should be refused if the foreign key related table is executing above ddl.
   int check_fk_related_table_ddl(
@@ -1341,7 +1342,8 @@ int check_will_be_having_domain_index_operation(
                             share::schema::ObSchemaGetterGuard &schema_guard,
                             const bool need_check_tablet_cnt,
                             const uint64_t tenant_data_version,
-                            const bool is_table_empty);
+                            const bool is_table_empty,
+                            const int64_t create_vec_index_parallel = 0);
   int create_tablets_in_trans_(common::ObIArray<share::schema::ObTableSchema> &table_schemas,
                               ObDDLOperator &ddl_operator,
                               ObMySQLTransaction &trans,
