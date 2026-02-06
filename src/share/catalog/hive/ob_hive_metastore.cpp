@@ -504,7 +504,7 @@ int ObHiveMetastoreClient::release()
       // Mark as not in use only after successful return
       LOG_TRACE("client released back to pool", K(ret), K(hold_client_id));
     } else {
-      LOG_WARN("client is null which would be released in the pool",
+      LOG_TRACE("client is null which would be released in the pool",
                K(ret),
                K(tenant_id),
                K(catalog_id),

@@ -471,7 +471,10 @@ int ObExternalTableFileManager::get_external_files_from_cache(
   ObExprRegexContext regexp_ctx;
   ObExternalPathFilter file_path_filter(regexp_ctx, allocator);
   CK(OB_NOT_NULL(ctx.get_my_session()));
-  const ObString &access_info = table_schema->get_external_file_location_access_info();
+  ObString access_info;
+  CK (OB_NOT_NULL(ctx.get_sql_ctx()));
+  CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
+  OZ(ObExternalTableUtils::get_external_file_location_access_info(*table_schema, *(ctx.get_sql_ctx()->schema_guard_), access_info));
   const ObString &pattern = table_schema->get_external_file_pattern();
   if (OB_FAIL(ctx.get_my_session()->get_regexp_session_vars(regexp_vars))) {
     LOG_WARN("failed to get regexp vars", K(ret));
@@ -2604,10 +2607,14 @@ int ObExternalTableFileManager::get_partitions_info_from_filesystem(
     // ignore
   } else if (location.prefix_match(OB_HDFS_PREFIX) || location.prefix_match(OB_FILE_PREFIX)) {
     ObSEArray<ObString, 4> dir_urls;
+    ObString access_info;
+    CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()));
+    CK (OB_NOT_NULL(exec_ctx.get_sql_ctx()->schema_guard_));
+    OZ(ObExternalTableUtils::get_external_file_location_access_info(table_schema, *(exec_ctx.get_sql_ctx()->schema_guard_), access_info));
     if (OB_FAIL(get_dirs_with_spec_level(allocator,
                                          location,
                                          key_nums,
-                                         table_schema.get_external_file_location_access_info(),
+                                         access_info,
                                          dir_urls,
                                          modify_times))) {
       LOG_WARN("failed to get dirs with spec level", K(ret), K(location), K(key_nums));
