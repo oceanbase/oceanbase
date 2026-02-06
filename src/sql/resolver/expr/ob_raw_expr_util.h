@@ -1403,7 +1403,6 @@ public:
   */
   static int create_null_safe_equal_expr(ObRawExprFactory &expr_factory,
                                          const ObSQLSessionInfo *session_info,
-                                         const bool is_mysql_mode,
                                          ObRawExpr *left_expr,
                                          ObRawExpr *right_expr,
                                          ObRawExpr *&expr);
