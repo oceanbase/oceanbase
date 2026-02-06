@@ -20,6 +20,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "lib/hash/ob_hashset.h"
 #include "share/ob_ls_id.h"
 #include "share/backup/ob_backup_struct.h"
 #include "storage/backup/ob_backup_data_struct.h"
@@ -109,18 +110,28 @@ struct ObBackupTabletCtx final {
   ~ObBackupTabletCtx();
   void reuse();
   void print_ctx();
-  bool is_finished() const;
-  TO_STRING_KV(K_(total_tablet_meta_count), K_(finish_tablet_meta_count),
-      K_(reused_macro_block_count), K_(total_minor_macro_block_count),
-      K_(finish_minor_macro_block_count), K_(total_major_macro_block_count),
-      K_(finish_major_macro_block_count), K_(opened_rebuilder_count), K_(closed_rebuilder_count), K_(is_all_loaded));
+  bool is_macro_block_backup_finished() const;
+  bool can_release() const;
+  TO_STRING_KV(K_(total_tablet_meta_count), K_(total_minor_macro_block_count),
+      K_(total_major_macro_block_count), K_(total_ddl_other_block_count), K_(total_prepare_count),
+      K_(finish_tablet_meta_count), K_(finish_minor_macro_block_count),
+      K_(finish_major_macro_block_count), K_(finish_ddl_other_block_count), K_(finish_prepare_count),
+      K_(reused_macro_block_count), K_(opened_rebuilder_count), K_(closed_rebuilder_count),
+      K_(is_all_loaded));
+  // total counts
   int64_t total_tablet_meta_count_;
-  int64_t finish_tablet_meta_count_;
-  int64_t reused_macro_block_count_;
   int64_t total_minor_macro_block_count_;
-  int64_t finish_minor_macro_block_count_;
   int64_t total_major_macro_block_count_;
+  int64_t total_ddl_other_block_count_;
+  int64_t total_prepare_count_;
+  // finish counts
+  int64_t finish_tablet_meta_count_;
+  int64_t finish_minor_macro_block_count_;
   int64_t finish_major_macro_block_count_;
+  int64_t finish_ddl_other_block_count_;
+  int64_t finish_prepare_count_;
+  // other
+  int64_t reused_macro_block_count_;
   int64_t opened_rebuilder_count_;
   int64_t closed_rebuilder_count_;
   bool is_all_loaded_;
@@ -138,8 +149,7 @@ public:
   int init(const uint64_t tenant_id, const int64_t backup_set_id, const share::ObLSID &ls_id,
       const share::ObBackupDataType &backup_data_type);
   int prepare_tablet_sstables(const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
-      const storage::ObTabletHandle &tablet_handle, const common::ObIArray<storage::ObSSTableWrapper> &sstable_array,
-      const int64_t total_tablet_meta_count);
+      const storage::ObTabletHandle &tablet_handle, const common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
   int mark_items_pending(
       const share::ObBackupDataType &backup_data_type, const common::ObIArray<ObBackupProviderItem> &items);
   int mark_items_reused(const share::ObBackupDataType &backup_data_type,
@@ -151,38 +161,52 @@ public:
   int add_finished_tablet_meta_count(const common::ObTabletID &tablet_id);
   int add_opened_rebuilder_count(const common::ObTabletID &tablet_id);
   int add_closed_rebuilder_count(const common::ObTabletID &tablet_id);
-  int check_can_release_tablet(const common::ObTabletID &tablet_id, bool &can_release);
+  int check_can_release_tablet(const common::ObTabletID &tablet_id, bool &can_release, bool &already_released);
   int get_tablet_stat(const common::ObTabletID &tablet_id, ObBackupTabletCtx *&ctx);
   int free_tablet_stat(const common::ObTabletID &tablet_id);
+  // Try to free tablet stat if it can be released.
+  // Returns:
+  //   - succ_freed: true if tablet stat was freed successfully in this call
+  //   - stat_not_exist: true if tablet stat not found (already freed by another thread)
+  int try_free_tablet_stat(const common::ObTabletID &tablet_id, bool &succ_freed, bool &stat_not_exist);
   int print_tablet_stat() const;
   void set_backup_data_type(const share::ObBackupDataType &backup_data_type);
   void reuse();
   void reset();
+  void report_leak_event(const int64_t task_id) const;
+  int64_t get_unreleased_count() const { return tablet_id_set_.size(); }
 
 private:
   int get_tablet_stat_(const common::ObTabletID &tablet_id, const bool create_if_not_exist, ObBackupTabletCtx *&stat);
   int do_with_stat_when_pending_(const ObBackupProviderItem &item);
   int do_with_stat_when_reused_(const ObBackupProviderItem &item, const ObBackupDeviceMacroBlockId &physical_id);
   int do_with_stat_when_finish_(const ObBackupProviderItem &item, const ObBackupDeviceMacroBlockId &physical_id);
-  int alloc_stat_(ObBackupTabletCtx *&stat);
-  void free_stat_(ObBackupTabletCtx *&stat);
+  int alloc_stat_(const common::ObTabletID &tablet_id, ObBackupTabletCtx *&stat);
+  void free_stat_(const common::ObTabletID &tablet_id, ObBackupTabletCtx *&stat);
   void report_event_(const common::ObTabletID &tablet_id, const ObBackupTabletCtx &tablet_ctx);
+  int add_tablet_to_tracker_(const common::ObTabletID &tablet_id);
+  int remove_tablet_from_tracker_(const common::ObTabletID &tablet_id);
 
 private:
   typedef common::hash::ObHashMap<common::ObTabletID, ObBackupTabletCtx *> ObBackupTabletCtxMap;
+  typedef common::hash::ObHashSet<common::ObTabletID> TabletIdSet;
   struct PrintTabletStatOp {
     int operator()(common::hash::HashMapPair<common::ObTabletID, ObBackupTabletCtx *> &entry);
   };
   static const int64_t DEFAULT_BUCKET_COUNT = 1000;
+  static const int64_t DEFAULT_TRACKER_BUCKET_COUNT = 1000;
 
 private:
   bool is_inited_;
-  lib::ObMutex mutex_;
+  mutable lib::ObMutex mutex_;
   uint64_t tenant_id_;
   int64_t backup_set_id_;
   share::ObLSID ls_id_;
   ObBackupTabletCtxMap stat_map_;
   share::ObBackupDataType backup_data_type_;
+  TabletIdSet tablet_id_set_;
+  int64_t total_alloc_count_;
+  int64_t total_free_count_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletStat);
 };
 
@@ -362,7 +386,7 @@ public:
   ObBackupTabletProvider();
   virtual ~ObBackupTabletProvider();
   int init(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, ObLSBackupCtx &ls_backup_ctx,
-      ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy);
+      ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy, const int64_t batch_size);
   virtual void reset() override;
   virtual void reuse() override;
   virtual bool is_run_out() override;
@@ -407,23 +431,22 @@ private:
       const storage::ObTabletHandle &tablet_handle, const ObITable::TableKey &table_key,
       const blocksstable::ObSSTable &sstable, int64_t &total_count);
   int add_macro_block_id_item_list_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
-      const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count);
+      const common::ObIArray<ObBackupMacroBlockId> &list, int64_t &added_count, int64_t &total_count);
   int get_backup_data_type_(const storage::ObITable::TableKey &table_key, share::ObBackupDataType &backup_data_type);
   bool is_same_type_(const storage::ObITable::TableKey &lhs, const storage::ObITable::TableKey &rhs);
-  int add_prepare_tablet_item_(const common::ObTabletID &tablet_id);
-  int add_tablet_item_(const common::ObTabletID &tablet_id, const bool has_ss_ddl, const storage::ObITable::TableKey &table_key);
+  int add_prepare_tablet_item_(const common::ObTabletID &tablet_id, int64_t &total_count);
+  int add_tablet_item_(const common::ObTabletID &tablet_id, const bool has_ss_ddl, const storage::ObITable::TableKey &table_key, int64_t &total_count);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
   int check_tablet_status_(const storage::ObTabletHandle &tablet_handle, bool &is_normal, bool &is_split_dst);
   int get_tablet_status_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, ObTabletStatus &status);
   int get_tenant_meta_index_turn_id_(int64_t &turn_id);
   int get_tenant_meta_index_retry_id_(const share::ObBackupDataType &backup_data_type,
       const int64_t turn_id, int64_t &retry_id);
-  int push_item_to_queue_(const ObBackupProviderItem &item);
+  int push_item_to_queue_(const ObBackupProviderItem &item, int64_t &total_count);
   int pop_item_from_queue_(ObBackupProviderItem &item);
   void free_queue_item_();
 
 private:
-  static const int64_t BATCH_SIZE = 2000;
   static const int64_t MACRO_BLOCK_SIZE = 2 << 20;
   static const int64_t BUF_MEM_LIMIT = 32 * MACRO_BLOCK_SIZE;
   static const int64_t FILE_BUF_SIZE = MACRO_BLOCK_SIZE;
@@ -439,6 +462,7 @@ private:
   mutable lib::ObMutex mutex_;
   ObLSBackupParam param_;
   share::ObBackupDataType backup_data_type_;
+  int64_t batch_size_;
   int64_t cur_task_id_;
   ObLSBackupCtx *ls_backup_ctx_;
   ObBackupIndexKVCache *index_kv_cache_;
