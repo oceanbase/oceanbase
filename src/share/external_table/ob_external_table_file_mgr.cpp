@@ -2053,19 +2053,18 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
   OZ(query_sql.append("(select count(*) from internal.oceanbase.__all_dummy);"));
   if (OB_FAIL(ret)) {
   } else if (path_to_collect > 0) {
-    ObInnerSQLConnectionPool *pool = NULL;
-    sqlclient::ObISQLConnection *conn = NULL;
-    if (OB_ISNULL(GCTX.sql_proxy_)
-      || OB_ISNULL(pool = static_cast<ObInnerSQLConnectionPool*>(GCTX.sql_proxy_->get_pool()))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null pool", K(ret));
-    } else if (OB_FAIL(pool->acquire(&session, conn))) {
-      LOG_WARN("failed to acquire connection", K(ret));
+    ObMySQLTransaction trans;
+
+    CK(OB_NOT_NULL(GCTX.sql_proxy_));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to assign query sql", KR(ret));
     } else {
       LOG_TRACE("collect_file_list query_sql", K(query_sql));
+
+      OZ(trans.start(GCTX.sql_proxy_, tenant_id));
       SMART_VAR(ObISQLClient::ReadResult, result)
       {
-        if (OB_FAIL(conn->execute_read(tenant_id, query_sql.ptr(), result))) {
+        if (OB_FAIL(trans.read(result, tenant_id, query_sql.ptr()))) {
           LOG_WARN("failed to read result", KR(ret));
         } else {
           ObMySQLResult *res = NULL;
@@ -2108,12 +2107,9 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
         }
       }
     }
-    if (OB_NOT_NULL(GCTX.sql_proxy_) && OB_NOT_NULL(conn)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = GCTX.sql_proxy_->close(conn, ret))) {
-        SHARE_LOG(WARN, "failed to close connection", K(tmp_ret));
-        ret = COVER_SUCC(tmp_ret);
-      }
+    OZ(trans.end(true));
+    if (trans.is_started()) {
+      trans.end(false);
     }
   }
   return ret;
