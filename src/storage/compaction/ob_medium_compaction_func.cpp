@@ -1696,10 +1696,13 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
   bool is_progressive_merge = false;
   ObSEArray<ObTableHandleV2, BASIC_MEMSTORE_CNT> memtables;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
-  int64_t truncate_info_count = 0;
-  int64_t newest_truncate_version = 0;
   const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
-
+  ObMdsInfoDistinctMgr mds_info_mgr;
+  ObVersionRange read_version_range(medium_info.last_medium_snapshot_, medium_info.medium_snapshot_);
+  const bool read_mds = medium_info.storage_schema_.is_global_index_table()
+    || tablet_handle_.get_obj()->has_merged_with_mds_info()
+    || medium_info.storage_schema_.has_ttl_definition()
+    || ObCompactionTTLUtil::is_compaction_ttl_merge_engine(medium_info.storage_schema_.get_merge_engine_type());
   if (OB_FAIL(tablet.fetch_table_store(wrapper))) {
     LOG_WARN("failed to get table store wrapper", K(ret));
   } else if (OB_FAIL(check_progressive_merge(*wrapper.get_member(), medium_info.storage_schema_, is_progressive_merge))) {
@@ -1714,10 +1717,12 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
     LOG_WARN("failed to get all memtable", K(ret), K(tablet));
   } else if (!memtables.empty()) {
     // tablet has memtable, exist inc data to merge
-  } else if (medium_info.storage_schema_.is_global_index_table() && OB_FAIL(tablet.get_truncate_info_newest_version(newest_truncate_version, truncate_info_count))) {
-    LOG_WARN("failed to get newest truncate version", KR(ret));
-  } else if (medium_info.storage_schema_.is_global_index_table() && newest_truncate_version > last_major_snapshot) {
-    LOG_TRACE("exist truncate info, should not do skip merge", KR(ret), K(newest_truncate_version), K(truncate_info_count));
+  } else if (medium_info.storage_schema_.is_mlog_table()) {
+    LOG_TRACE("recycle data in major compaction, should not do skip merge", KR(ret));
+  } else if (read_mds && OB_FAIL(mds_info_mgr.init(allocator_, *tablet_handle_.get_obj(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
+    LOG_WARN("failed to init mds filter info mgr", KR(ret), K(read_version_range));
+  } else if (read_mds && !mds_info_mgr.is_empty()) {
+    LOG_TRACE("exist mds info, should not do skip merge", KR(ret), K(mds_info_mgr));
   } else if (0 == tablet.get_minor_table_count() && 0 == wrapper.get_member()->get_inc_major_sstables().count()) {
     no_inc_data = true;
     FLOG_INFO("tablet no minor table", K(tablet));

@@ -375,8 +375,8 @@ protected:
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
   virtual int common_minor_inner_init(const ObMergeParameter &merge_param);
 
-  virtual int inner_next(const bool open_macro);
-  int inner_next_with_filter();
+  virtual int fetch_row(const bool open_macro);
+  int fetch_row_with_filter();
   virtual int try_make_committing_trans_compacted();
   virtual int check_meet_another_trans(bool &skip_cur_row);
   virtual int check_compact_finish(bool &finish);
@@ -433,7 +433,7 @@ public:
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
-  virtual int inner_next(const bool open_macro) override;
+  virtual int fetch_row(const bool open_macro) override;
   int next_range(const bool open_macro);
   virtual int open_curr_macro_block();
   void reset_macro_block_desc()

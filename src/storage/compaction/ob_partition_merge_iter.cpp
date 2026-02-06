@@ -1567,10 +1567,10 @@ int ObPartitionMinorRowMergeIter::inner_init(const ObMergeParameter &merge_param
   return ret;
 }
 
-int ObPartitionMinorRowMergeIter::inner_next(const bool open_macro)
+int ObPartitionMinorRowMergeIter::fetch_row(const bool open_macro)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_next_with_filter())) {
+  if (OB_FAIL(fetch_row_with_filter())) {
     if (OB_LIKELY(OB_ITER_END == ret)) {
       iter_end_ = true;
     } else {
@@ -1580,7 +1580,7 @@ int ObPartitionMinorRowMergeIter::inner_next(const bool open_macro)
   return ret;
 }
 
-int ObPartitionMinorRowMergeIter::inner_next_with_filter()
+int ObPartitionMinorRowMergeIter::fetch_row_with_filter()
 {
   int ret = OB_SUCCESS;
 
@@ -1655,7 +1655,7 @@ int ObPartitionMinorRowMergeIter::check_meet_another_trans(bool &skip_cur_row)
           break;
         } else if (OB_FAIL(tmp_compaction_row_.deep_copy(*curr_row_, obj_copy_allocator_))) {
           LOG_WARN("Fail to deep copy curr row", K(ret), KPC_(curr_row));
-        } else if (OB_FAIL(inner_next(true /*open_macro*/))) {
+        } else if (OB_FAIL(fetch_row(true /*open_macro*/))) {
           LOG_WARN("Failed to inner next for compact first row", K(ret), KPC(this));
         }
       } else {
@@ -1736,7 +1736,7 @@ int ObPartitionMinorRowMergeIter::compact_old_row()
           LOG_WARN("Failed to get next row from row_queue", K(ret));
         }
         break;
-      } else if (OB_FAIL(inner_next(true /*open_macro*/))) {
+      } else if (OB_FAIL(fetch_row(true /*open_macro*/))) {
         LOG_WARN("Failed to inner next for compact first row", K(ret));
       }
     } // end of while
@@ -1800,7 +1800,7 @@ int ObPartitionMinorRowMergeIter::compact_old_row_for_delete_insert()
         }
       }
       break;
-    } else if (OB_FAIL(inner_next(true /*open_macro*/))) {
+    } else if (OB_FAIL(fetch_row(true /*open_macro*/))) {
       LOG_WARN("Failed to inner next for compact first row", K(ret));
     }
   } // end of while
@@ -1861,7 +1861,7 @@ int ObPartitionMinorRowMergeIter::try_make_committing_trans_compacted()
         LOG_WARN("Failed to check compact finish", K(ret));
       }
       while (OB_SUCC(ret) && !compact_finish) {
-        if (OB_FAIL(inner_next(true /*open_macro*/))) { // read to curr_row_
+        if (OB_FAIL(fetch_row(true /*open_macro*/))) { // read to curr_row_
           LOG_WARN("Failed to inner next for compact first row", K(ret), K(*this), K(compact_finish));
         } else if (OB_ISNULL(curr_row_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1942,7 +1942,7 @@ int ObPartitionMinorRowMergeIter::next()
     if (OB_FAIL(row_queue_.get_next_row(curr_row_))) {
       LOG_WARN("Failed to get next row from row_queue", K(ret));
     }
-  } else if (OB_FAIL(inner_next(false /*open_macro*/))) {
+  } else if (OB_FAIL(fetch_row(false /*open_macro*/))) {
     if (OB_UNLIKELY(ret != OB_ITER_END)) {
       LOG_WARN("Failed to inner next row", K(ret));
     }
@@ -1983,7 +1983,7 @@ int ObPartitionMinorRowMergeIter::skip_ghost_row()
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret) && curr_row_ != nullptr && curr_row_->is_ghost_row() && !is_rowkey_first_row_already_output()) {
     curr_row_ = nullptr;
-    if (OB_FAIL(inner_next(false /*open_macro*/))) {
+    if (OB_FAIL(fetch_row(false /*open_macro*/))) {
       if (OB_UNLIKELY(ret != OB_ITER_END)) {
         LOG_WARN("Failed to inner next row", K(ret));
       }
@@ -2324,35 +2324,34 @@ int ObPartitionMinorMacroMergeIter::next()
   return ret;
 }
 
-int ObPartitionMinorMacroMergeIter::inner_next(const bool open_macro)
+int ObPartitionMinorMacroMergeIter::fetch_row(const bool open_macro)
 {
   int ret = OB_SUCCESS;
-  if (curr_block_op_.is_open() && OB_SUCC(ObPartitionMinorRowMergeIter::inner_next_with_filter())) {
-    // do nothing
-  } else if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ITER_END != ret)) {
-    LOG_WARN("Failed to get next row", K(ret), K(*this));
-  } else {
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-
-    if (OB_FAIL(next_range(open_macro))) { // recycle macro block
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("Failed to get next range", K(ret), K(*this));
+  while (OB_SUCC(ret)) {
+    if (curr_block_op_.is_open() && OB_SUCC(ObPartitionMinorRowMergeIter::fetch_row_with_filter())) {
+      break;
+    } else if (OB_UNLIKELY(OB_SUCCESS != ret && OB_ITER_END != ret)) {
+      LOG_WARN("Failed to get next row", K(ret), K(*this));
+    } else {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
       }
-    } else if (curr_block_op_.is_open()) {
-      if (OB_FAIL(open_curr_macro_block())) {
-        LOG_WARN("Failed to open current macro block", K(ret), K(open_macro));
-      } else if (OB_FAIL(inner_next(open_macro))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("Failed to inner next row", K(ret),KPC(this));
+
+      if (OB_FAIL(next_range(open_macro))) { // recycle macro block
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("Failed to get next range", K(ret), K(*this));
+        }
+      } else if (curr_block_op_.is_open()) {
+        if (OB_FAIL(open_curr_macro_block())) {
+          LOG_WARN("Failed to open current macro block", K(ret), K(open_macro));
+        } else {
+          LOG_DEBUG("open macro block on demand", K(open_macro), KPC(this));
         }
       } else {
-        LOG_INFO("open macro block on demand", K(open_macro), KPC(this));
+        break;
       }
     }
-  }
-
+  } // while
   return ret;
 }
 
