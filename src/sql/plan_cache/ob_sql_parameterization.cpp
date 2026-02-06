@@ -231,7 +231,7 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
         } // for end
       }
     }
-    SQL_PC_LOG(DEBUG, "after transform_tree",
+    SQL_PC_LOG(DEBUG, "after transform_tree", K(ctx.mode_),
                "result_tree_", SJ(ObParserResultPrintWrapper(*tree)));
   }
   return ret;
@@ -675,7 +675,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
             // so the constant cannot be resolved as a question mark, and there is no need to
             // add it to the param store.
             ObItemType node_type;
-            if (!is_execute_mode(ctx.mode_) || ctx.is_from_pl_) {
+            if (!is_execute_mode(ctx.mode_) || (ctx.is_from_pl_ && ctx.enable_pl_sql_parameterize_)) {
               node_type = ctx.tree_->type_;
               ctx.tree_->type_ = T_QUESTIONMARK;
               ctx.tree_->raw_param_idx_ = ctx.sql_info_->total_;
@@ -1153,7 +1153,8 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
     fp_ctx.is_format_ = false;
   }
 
-  const bool is_from_pl = (PC_PL_MODE == pc_ctx.mode_) && is_execute_mode(mode);
+  const bool is_from_pl = ((PC_PL_MODE == pc_ctx.mode_) && is_execute_mode(mode)
+                              && sql_info.enable_pl_sql_parameterize_);
 
   if (OB_FAIL(ret)) {
   } else if (is_prepare_mode(mode)
@@ -1193,7 +1194,8 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
     LOG_WARN("failed to reserve array", K(ret));
   } else if (OB_FAIL(transform_syntax_tree(allocator,
                                       *session,
-                                      (PS_EXECUTE_MODE == mode) ? NULL : &pc_ctx.fp_result_.raw_params_,
+                                      (PS_EXECUTE_MODE == mode || (!is_from_pl && mode == PL_EXECUTE_MODE)) ?
+                                          NULL : &pc_ctx.fp_result_.raw_params_,
                                       tree,
                                       sql_info,
                                       params,
@@ -2779,7 +2781,7 @@ int ObSqlParameterization::resolve_paramed_const(SelectItemTraverseCtx &ctx)
   return ret;
 }
 
-int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tree, bool is_from_pl)
+int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tree, bool is_from_pl, bool enable_pl_sql_parameterize)
 {
   int ret = OB_SUCCESS;
   if (T_OP_MINUS != tree->type_) {
@@ -2800,7 +2802,7 @@ int ObSqlParameterization::transform_minus_op(ObIAllocator &alloc, ParseNode *tr
                  && tree->children_[1]->value_ >= 0)) {
     ParseNode *child = tree->children_[1];
     tree->type_ = T_OP_ADD;
-    if (!is_from_pl) {
+    if (!is_from_pl || enable_pl_sql_parameterize) {
       if (T_INT == child->type_) {
         child->value_ = -child->value_;
       }

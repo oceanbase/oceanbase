@@ -1749,7 +1749,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
   context.origin_pl_param_count_ = params.count();
   ObExecContext &ectx = result.get_exec_context();
   ObIAllocator &allocator = result.get_mem_pool();
-  PlanCacheMode mode = params.count() == 0 ? PC_TEXT_MODE : PC_PL_MODE;
+  PlanCacheMode mode = (is_prepare_protocol || params.count() > 0) ? PC_PL_MODE : PC_TEXT_MODE;
   bool is_call_procedure = false;
   bool param_byorder = false;
   if (!context.is_dbms_sql_ && !context.is_dynamic_sql_ && lib::is_oracle_mode()) {
@@ -1761,8 +1761,9 @@ int ObSql::handle_pl_execute(const ObString &sql,
 
   bool enable_pl_sql_parameterize = session_info.is_enable_pl_sql_parameterize();
   context.enable_pl_sql_parameterize_ = enable_pl_sql_parameterize;
-  LOG_DEBUG("try_paramlize", K(try_paramlize), K(mode), K(param_byorder), K(sql));
+  LOG_DEBUG("try paramlize pl sql", K(try_paramlize), K(mode), K(param_byorder), K(sql));
   if (!try_paramlize || mode == PC_TEXT_MODE || !enable_pl_sql_parameterize) {
+    context.enable_pl_sql_parameterize_ = false;
     ObPlanCacheCtx pc_ctx = ObPlanCacheCtx(sql, mode, allocator, context, ectx, session_info.get_effective_tenant_id());
 
     if (OB_FAIL(inner_handle_pl_execute(sql, session_info, params, result, context,

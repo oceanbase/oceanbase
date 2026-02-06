@@ -246,7 +246,7 @@ private:
   static int parameterize_fields(SelectItemTraverseCtx &ctx);
 
   static int resolve_paramed_const(SelectItemTraverseCtx &ctx);
-  static int transform_minus_op(ObIAllocator &, ParseNode *, bool is_from_pl=false);
+  static int transform_minus_op(ObIAllocator &, ParseNode *, bool is_from_pl=false, bool enable_pl_sql_parameterize=false);
 
   static int find_leftest_const_node(ParseNode &cur_node, ParseNode *&const_node);
   static bool need_fast_parser(const ObString &sql);
