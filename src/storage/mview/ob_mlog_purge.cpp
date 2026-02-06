@@ -227,18 +227,12 @@ int ObMLogPurger::prepare_for_purge()
   if (OB_SUCC(ret)) {
     if (min_mview_refresh_scn != UINT64_MAX) {
       if (min_mview_refresh_scn <= mlog_info_.get_last_purge_scn()) {
-        if (purge_data_by_sql_) {
-          need_purge_ = true;
-        } else {
-          need_purge_ = false;
-        }
-        LOG_INFO("try purge mlog", KR(ret), K(mlog_info_), K(min_mview_refresh_scn),
-                  K(need_purge_), K(purge_data_by_sql_));
+        need_purge_ = false;
+        LOG_INFO("mlog does not need purge", KR(ret), K(mlog_info_), K(min_mview_refresh_scn));
+      } else if (OB_FAIL(purge_scn_.convert_for_inner_table_field(min_mview_refresh_scn))) {
+        LOG_WARN("fail to convert for inner table field", KR(ret), K(min_mview_refresh_scn));
       } else {
         need_purge_ = true;
-      }
-      if (need_purge_ && OB_FAIL(purge_scn_.convert_for_inner_table_field(min_mview_refresh_scn))) {
-        LOG_WARN("fail to convert for inner table field", KR(ret), K(min_mview_refresh_scn));
       }
     } else {
       purge_scn_ = current_scn;
