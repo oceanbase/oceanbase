@@ -642,7 +642,18 @@ public:
           gen_new_field(false, ori_field_begin, str, field_begin, str, field_idx);
         }
       } else {
-        find_new_line = false;
+        // Don't set find_new_line = false here.
+
+        // Reason: scan_utf8_ex is only used when is_line_term_by_counting_field_ is false,
+        // so we should always set find_new_line to true, when we found line_term.
+
+        // the behaviour of scan_proto is:
+        /*
+          if (is_line_term
+              && (!opt_param_.is_line_term_by_counting_field_ || field_idx == format_.file_column_nums_)) {
+            find_new_line = true;
+          }
+        */
       }
     }
     str++;
