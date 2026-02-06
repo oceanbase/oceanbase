@@ -3038,7 +3038,8 @@ int ObMemtable::mvcc_write_(ObStoreCtx &ctx,
   // Step2: write the mvcc data into the memtable according to the concurrency
   // control algorithm which may report conflicts like write-write conflict,
   // lost-update, primary key duplication or other errors
-  if (OB_SUCC(ret) && OB_FAIL(mvcc_engine_->mvcc_write(ctx,
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(mvcc_engine_->mvcc_write(ctx,
                                               *value,
                                               tx_node_arg,
                                               check_exist,
