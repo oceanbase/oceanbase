@@ -2631,6 +2631,7 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
   ObIDag *stored_dag = nullptr;
   ObTabletLobSplitDag *lob_split_dag = nullptr;
   ObTabletSplitDag *data_split_dag = nullptr;
+  bool is_split_finish_with_meta_flag = false;
   if (OB_UNLIKELY(nullptr == request_arg || nullptr == request_res)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), KP(request_arg), KP(request_res));
@@ -2641,6 +2642,11 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
       LOG_WARN("init param failed", K(ret));
     } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_and_get_lob_tablet_split_dag(lob_split_param, lob_split_dag))) {
       LOG_WARN("failed to schedule dag", K(ret));
+    } else if (OB_ISNULL(lob_split_dag)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc failed", K(ret));
+    } else {
+      is_split_finish_with_meta_flag = lob_split_dag->get_context().is_split_finish_with_meta_flag_;
     }
     ls_id = lob_split_param.ls_id_;
     dag_param = &lob_split_param;
@@ -2653,17 +2659,15 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
       LOG_WARN("init param failed", K(ret));
     } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_and_get_tablet_split_dag(data_split_param, data_split_dag))) {
       LOG_WARN("failed to schedule dag", K(ret));
+    } else if (OB_ISNULL(data_split_dag)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc failed", K(ret));
+    } else {
+      is_split_finish_with_meta_flag = data_split_dag->get_context().is_split_finish_with_meta_flag_;
     }
     ls_id = data_split_param.ls_id_;
     dag_param = &data_split_param;
     stored_dag = data_split_dag;
-  }
-
-  if (OB_SUCC(ret) && !is_start_request) {
-    share::SCN unused_finish_scn = SCN::min_scn();
-    if (OB_FAIL(ObTabletLobSplitUtil::write_split_log(is_lob_tablet, is_start_request, ls_id, dag_param, unused_finish_scn))) {
-      LOG_WARN("write split log failed", K(ret));
-    }
   }
 
   if (OB_SUCC(ret)) {
@@ -2677,8 +2681,9 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
         static_cast<ObDDLBuildSingleReplicaRequestResult*>(request_res)->cg_row_inserted_ : unused_cg_row_inserted;
     int64_t &physical_row_count = is_start_request ?
         static_cast<ObDDLBuildSingleReplicaRequestResult*>(request_res)->physical_row_count_ : unused_phy_row_cnt;
-    static_cast<ObDDLBuildSingleReplicaRequestResult*>(request_res)->is_data_split_finished_ =
-        is_lob_tablet ? lob_split_dag->get_context().is_split_finish_with_meta_flag_ : data_split_dag->get_context().is_split_finish_with_meta_flag_;
+    if (is_start_request) {
+      static_cast<ObDDLBuildSingleReplicaRequestResult*>(request_res)->is_data_split_finished_ = is_split_finish_with_meta_flag;
+    }
     if (is_lob_tablet) {
       if (OB_FAIL(add_dag_and_get_progress<ObTabletLobSplitDag>(lob_split_dag, row_inserted, cg_row_inserted/*unused*/, physical_row_count))) {
         if (OB_EAGAIN == ret) { // dag exists.
@@ -2706,13 +2711,27 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
     }
   }
 
+  if (OB_SUCC(ret) && !is_start_request) {
+    share::SCN unused_finish_scn = SCN::min_scn();
+    if (is_split_finish_with_meta_flag) {
+      if (OB_FAIL(ObTabletLobSplitUtil::write_split_log(is_lob_tablet, is_start_request, ls_id, dag_param, unused_finish_scn))) {
+        LOG_WARN("write split log failed", K(ret));
+      }
+    } else {
+      ret = OB_EAGAIN;
+      LOG_TRACE("set eagain to write finish log after leader split data finished", K(ret));
+    }
+  }
+
   if (OB_NOT_NULL(stored_dag)) {
     // to free dag.
     MTL(ObTenantDagScheduler*)->free_dag(*stored_dag);
     stored_dag = nullptr;
   }
-  LOG_INFO("process tablet split request finish", K(ret), K(is_start_request), K(is_lob_tablet), K(lob_split_param), K(data_split_param),
-    K(data_split_dag), K(lob_split_dag));
+  LOG_INFO("process tablet split request finish",
+      K(ret), K(is_start_request), K(is_lob_tablet),
+      K(is_split_finish_with_meta_flag), K(lob_split_param), K(data_split_param),
+      K(data_split_dag), K(lob_split_dag));
   return ret;
 }
 
