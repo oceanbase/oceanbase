@@ -566,7 +566,6 @@ int ObLobRepairTabletScheduler::generate_dag_task(table::ObTTLTaskInfo &task_inf
 int ObLobRepairTabletScheduler::handle_exception_table_op(table::ObTTLTaskCtx *ctx, common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-
   ObLobTaskInfo &lob_task_info = ctx->lob_task_info_;
   if (OB_NOT_NULL(lob_task_info.orphan_tablets_json_)) {
     uint64_t ls_id = ctx->task_info_.ls_id_.id();

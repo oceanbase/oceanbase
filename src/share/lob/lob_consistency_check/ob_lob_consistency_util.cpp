@@ -413,7 +413,6 @@ int ObLobConsistencyUtil::check_all_ls_finished(uint64_t tenant_id,
 int ObLobConsistencyUtil::handle_lob_task_info(table::ObTTLTaskCtx *&ctx, table::ObTTLTaskInfo &task_info)
 {
   int ret = OB_SUCCESS;
-  common::ObSpinLockGuard ctx_guard(ctx->lock_);
   ObLobTaskInfo &lob_task_info = ctx->lob_task_info_;
   if (ctx->task_info_.tablet_id_ != task_info.tablet_id_ || OB_ITER_END == task_info.err_code_) {
     if (lob_task_info.lob_not_found_cnt_ == 0) {

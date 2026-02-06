@@ -1254,9 +1254,14 @@ int ObLobCheckTask::init_iterators(transaction::ObTxReadSnapshot &snapshot, ObTa
     LOG_WARN("fail to build table scan param", K(ret), K(tablet_id_));
   } else if (OB_FAIL(oas->table_scan(main_scan_param, table_iter))) {
     LOG_WARN("fail to table scan main table", K(ret), K(main_scan_param), K(main_table_iter_));
+  } else if (OB_ISNULL(table_iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table iter is null", K(ret));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(table_iter)) {
     oas->revert_scan_iter(table_iter);
+  } else if (OB_NOT_NULL(table_iter)) {
+    main_table_iter_ = static_cast<storage::ObTableScanIterator *>(table_iter);
   }
   return ret;
 }
