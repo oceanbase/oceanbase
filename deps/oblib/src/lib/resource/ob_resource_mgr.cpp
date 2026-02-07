@@ -491,15 +491,17 @@ void ObResourceMgr::inc_ref(ObTenantResourceMgr *tenant_resource_mgr)
 void ObResourceMgr::dec_ref(ObTenantResourceMgr *tenant_resource_mgr)
 {
   if (NULL != tenant_resource_mgr) {
-    const int64_t pos = tenant_resource_mgr->tenant_id_ % MAX_TENANT_COUNT;
-    ObDisableDiagnoseGuard disable_diagnose_guard;
-    SpinWLockGuard guard(locks_[pos]);
     int64_t ref_cnt = 0;
     if (0 == (ref_cnt = ATOMIC_SAF(&tenant_resource_mgr->ref_cnt_, 1))) {
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(remove_tenant_resource_mgr_unsafe(tenant_resource_mgr->tenant_id_))) {
-        LOG_WARN("remove_tenant_resource_mgr_unsafe failed", K(ret),
-            "tenant_id", tenant_resource_mgr->tenant_id_);
+      const int64_t pos = tenant_resource_mgr->tenant_id_ % MAX_TENANT_COUNT;
+      ObDisableDiagnoseGuard disable_diagnose_guard;
+      SpinWLockGuard guard(locks_[pos]);
+      if (0 == ATOMIC_LOAD(&tenant_resource_mgr->ref_cnt_)) {
+        int ret = OB_SUCCESS;
+        if (OB_FAIL(remove_tenant_resource_mgr_unsafe(tenant_resource_mgr->tenant_id_))) {
+          LOG_WARN("remove_tenant_resource_mgr_unsafe failed", K(ret),
+              "tenant_id", tenant_resource_mgr->tenant_id_);
+        }
       }
     } else if (ref_cnt < 0) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ref_cnt negative", K(ref_cnt));
