@@ -102,6 +102,23 @@ CREATE OR REPLACE PACKAGE BODY dbms_vector
   RETURN VARCHAR(65535);
   PRAGMA INTERFACE(C, DBMS_VECTOR_MYSQL_INDEX_VECTOR_MEMORY_ESTIMATE);
 
+  FUNCTION query_recall (
+    IN     sql_query         LONGTEXT)
+  RETURN FLOAT;
+  PRAGMA INTERFACE(C, DBMS_VECTOR_MYSQL_QUERY_RECALL);
+
+  FUNCTION index_recall (
+    IN     table_name        VARCHAR(65535),
+    IN     index_name        VARCHAR(65535),
+    IN     vectors           LONGTEXT DEFAULT NULL,
+    IN     num_vectors       INT DEFAULT 25,
+    IN     top_k             INT DEFAULT 10,
+    IN     filter            LONGTEXT DEFAULT NULL,
+    IN     parallel          INT DEFAULT 1,
+    IN     parameters        VARCHAR(65535) DEFAULT NULL)
+  RETURN FLOAT;
+  PRAGMA INTERFACE(C, DBMS_VECTOR_MYSQL_INDEX_RECALL);
+
   PROCEDURE do_set_attribute (
     IN     idx_name                VARCHAR(65535),
     IN     table_name              VARCHAR(65535),
