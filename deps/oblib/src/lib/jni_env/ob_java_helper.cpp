@@ -228,7 +228,11 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
     } else if (0 == STRCMP(lib_name, "libjvm.so")) {
       const char *java_home = std::getenv("JAVA_HOME");
       // libjvm.so relative path options and higher jdk version options are "/lib/server/".
+#if defined(__aarch64__)
+      const char *jdk8_opt = "/jre/lib/aarch64/server/";
+#else
       const char *jdk8_opt = "/jre/lib/amd64/server/";
+#endif
       const char *jdk_higher_version_opt = "/lib/server/";
 
       if (OB_ISNULL(java_home)) {

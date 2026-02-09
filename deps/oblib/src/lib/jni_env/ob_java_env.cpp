@@ -87,33 +87,48 @@ int ObJavaEnv::setup_java_home()
   bool found = false;
   if (OB_UNLIKELY(is_inited_java_home_)) {
     // java home is inited by other thread
-  } else if (OB_ISNULL(GCONF.ob_java_home)) {
-    ret = OB_JNI_PARAMS_ERROR;
-    LOG_WARN("ob_java_home was not configured", K(ret));
-  } else if (OB_FAIL(ob_write_string(arena_alloc_,
+  } else if (OB_ISNULL(GCONF.ob_java_home) || GCONF.ob_java_home.get_value_string().empty()) {
+    // try to find java home int std::getenv("JAVA_HOME")
+    const char *java_home = std::getenv("JAVA_HOME");
+    if (OB_ISNULL(java_home)) {
+      ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
+      LOG_WARN("JAVA_HOME is not set", K(ret));
+      LOG_USER_ERROR(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, "JAVA_HOME is not set");
+    } else if (OB_FAIL(ob_write_string(arena_alloc_, ObString(java_home), temp_java_home, true))) {
+      LOG_WARN("failed to copy JAVA_HOME from env", K(ret));
+    } else if (OB_FAIL(check_path_exists(temp_java_home.ptr(), found))) {
+      LOG_WARN("JAVA_HOME is not valid", K(ret), K(temp_java_home));
+      LOG_USER_ERROR(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, temp_java_home.ptr());
+    } else {
+      java_home_ = temp_java_home.ptr();
+      is_inited_java_home_ = true;
+    }
+  } else {
+    if (OB_FAIL(ob_write_string(arena_alloc_,
                                      GCONF.ob_java_home.get_value_string(),
                                      temp_java_home, true))) {
-    LOG_WARN("failed to copy java home variables from global conf", K(ret));
-  } else if (OB_FAIL(check_path_exists(temp_java_home.ptr(), found))) {
-    LOG_WARN("java home is not valid", K(ret), K(temp_java_home));
-  } else if (!found) {
-    ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
-    LOG_WARN("java home is not valid", K(ret), K(temp_java_home));
-    LOG_USER_ERROR(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, temp_java_home.ptr());
-  } else {
-    java_home_ = temp_java_home.ptr();
-    if (OB_ISNULL(java_home_)) {
-      ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to setup JAVA_HOME with null variables", K(ret), K(GCONF.ob_java_home.get_value_string()));
-      LOG_USER_WARN(OB_JNI_PARAMS_ERROR, "failed to setup JAVA_HOME with null variables", K(ret));
-    } else if (0 != setenv(JAVA_HOME, java_home_, 1)) {
-      ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("faieled to setup JAVA_HOME", K(ret), K_(java_home));
-    } else if (STRCMP(java_home_, std::getenv(JAVA_HOME))) {
-      ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to set JAVA_HOME from variables", K(ret), K_(java_home));
+      LOG_WARN("failed to copy java home variables from global conf", K(ret));
+    } else if (OB_FAIL(check_path_exists(temp_java_home.ptr(), found))) {
+      LOG_WARN("java home is not valid", K(ret), K(temp_java_home));
+    } else if (!found) {
+      ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
+      LOG_WARN("java home is not valid", K(ret), K(temp_java_home));
+      LOG_USER_ERROR(OB_JNI_JAVA_HOME_NOT_FOUND_ERROR, temp_java_home.ptr());
     } else {
-      is_inited_java_home_ = true;
+      java_home_ = temp_java_home.ptr();
+      if (OB_ISNULL(java_home_)) {
+        ret = OB_JNI_PARAMS_ERROR;
+        LOG_WARN("failed to setup JAVA_HOME with null variables", K(ret), K(GCONF.ob_java_home.get_value_string()));
+        LOG_USER_WARN(OB_JNI_PARAMS_ERROR, "failed to setup JAVA_HOME with null variables", K(ret));
+      } else if (0 != setenv(JAVA_HOME, java_home_, 1)) {
+        ret = OB_JNI_PARAMS_ERROR;
+        LOG_WARN("faieled to setup JAVA_HOME", K(ret), K_(java_home));
+      } else if (STRCMP(java_home_, std::getenv(JAVA_HOME))) {
+        ret = OB_JNI_PARAMS_ERROR;
+        LOG_WARN("failed to set JAVA_HOME from variables", K(ret), K_(java_home));
+      } else {
+        is_inited_java_home_ = true;
+      }
     }
   }
   return ret;
@@ -123,14 +138,24 @@ int ObJavaEnv::setup_java_opts()
 {
   int ret = OB_SUCCESS;
   ObString temp_java_opts;
-  if (OB_ISNULL(GCONF.ob_java_opts)) {
-    ret = OB_JNI_PARAMS_ERROR;
-    LOG_WARN("ob_java_opts was not configured", K(ret));
-  } else if (OB_FAIL(ob_write_string(arena_alloc_, GCONF.ob_java_opts.get_value_string(),
-                                     temp_java_opts, true))) {
-    LOG_WARN("failed to copy java options variables from global conf", K(ret));
+  if (OB_ISNULL(GCONF.ob_java_opts) || GCONF.ob_java_opts.get_value_string().empty()) {
+    const char *java_opts = std::getenv("JAVA_OPTS");
+    if (OB_ISNULL(java_opts)) {
+      ret = OB_JNI_JAVA_OPTS_NOT_FOUND_ERROR;
+      LOG_WARN("JAVA_OPTS is not set", K(ret));
+      LOG_USER_ERROR(OB_JNI_JAVA_OPTS_NOT_FOUND_ERROR, "JAVA_OPTS is not set");
+    } else if (OB_FAIL(ob_write_string(arena_alloc_, ObString(java_opts), temp_java_opts, true))) {
+      LOG_WARN("failed to copy JAVA_OPTS from env", K(ret));
+    } else {
+      java_opts_ = temp_java_opts.ptr();
+    }
   } else {
-    java_opts_ = temp_java_opts.ptr();
+    if (OB_FAIL(ob_write_string(arena_alloc_, GCONF.ob_java_opts.get_value_string(),
+                                      temp_java_opts, true))) {
+      LOG_WARN("failed to copy java options variables from global conf", K(ret));
+    } else {
+      java_opts_ = temp_java_opts.ptr();
+    }
   }
 
   if (OB_SUCC(ret) && OB_LIKELY(!is_inited_java_opts_)) {
@@ -166,25 +191,73 @@ int ObJavaEnv::setup_java_opts()
   return ret;
 }
 
+int ObJavaEnv::find_jni_packages_in_ld_library_path(ObString &out_path)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  const char *ld_library_path = std::getenv("LD_LIBRARY_PATH");
+  if (OB_ISNULL(ld_library_path)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("LD_LIBRARY_PATH is not set", K(ret));
+  } else {
+    ObSqlString ld_path_copy;
+    if (OB_FAIL(ld_path_copy.assign(ld_library_path))) {
+      LOG_WARN("failed to copy LD_LIBRARY_PATH", K(ret));
+    } else {
+      char *saveptr = NULL;
+      char *path_token = strtok_r(ld_path_copy.ptr(), ":", &saveptr);
+      while (OB_SUCC(ret) && !found && path_token != NULL) {
+        ObSqlString jni_path;
+        if (OB_FAIL(jni_path.append_fmt("%s/jni_packages/current", path_token))) {
+          LOG_WARN("failed to build jni_packages path", K(ret));
+        } else if (OB_FAIL(check_path_exists(jni_path.ptr(), found))) {
+          LOG_WARN("failed to check jni_packages path", K(ret), K(jni_path));
+        } else if (found) {
+          if (OB_FAIL(ob_write_string(arena_alloc_, ObString(jni_path.ptr()), out_path, true))) {
+            LOG_WARN("failed to copy jni_packages path", K(ret));
+          } else {
+            LOG_INFO("found jni_packages in LD_LIBRARY_PATH", K(jni_path));
+          }
+        }
+        path_token = strtok_r(NULL, ":", &saveptr);
+      }
+      if (OB_SUCC(ret) && !found) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("jni_packages/current not found in LD_LIBRARY_PATH", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObJavaEnv::setup_useful_path()
 {
   int ret = OB_SUCCESS;
   ObString temp_path;
   bool found = false;
-  if (OB_ISNULL(GCONF.ob_java_connector_path)) {
-    ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
-    LOG_WARN("ob_java_connector_path was not configured", K(ret));
-  } else if (OB_FAIL(ob_write_string(
+  if (OB_ISNULL(GCONF.ob_java_connector_path) || GCONF.ob_java_connector_path.get_value_string().empty()) {
+    // 尝试在 LD_LIBRARY_PATH 下查找 jni_packages/current
+    if (OB_FAIL(find_jni_packages_in_ld_library_path(temp_path))) {
+      ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
+      LOG_WARN("ob_java_connector_path was not configured and jni_packages/current not found in LD_LIBRARY_PATH", K(ret));
+    } else {
+      connector_path_ = temp_path.ptr();
+      found = true;
+    }
+  }
+  if (!found) { // we can cover error code here
+    if (OB_FAIL(ob_write_string(
                  arena_alloc_, GCONF.ob_java_connector_path.get_value_string(),
                  temp_path, true))) {
-    LOG_WARN("failed to copy path variables from global conf", K(ret));
-  } else if (OB_FAIL(check_path_exists(temp_path.ptr(), found))) {
-    LOG_WARN("unable to find out connector path", K(ret), K(temp_path));
-  } else if (!found) {
-    ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
-    LOG_WARN("unable to find out java connector path", K(ret));
-  } else {
-    connector_path_ = temp_path.ptr();
+      LOG_WARN("failed to copy path variables from global conf", K(ret));
+    } else if (OB_FAIL(check_path_exists(temp_path.ptr(), found))) {
+      LOG_WARN("unable to find out connector path", K(ret), K(temp_path));
+    } else if (!found) {
+      ret = OB_JNI_CONNECTOR_PATH_NOT_FOUND_ERROR;
+      LOG_WARN("unable to find out java connector path ob_java_connector_path should be set", K(ret));
+    } else {
+      connector_path_ = temp_path.ptr();
+    }
   }
 
   if (OB_SUCC(ret)) {
