@@ -653,9 +653,10 @@ int ObBackupDestMgr::remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
   } else if (OB_FALSE_IT(need_remote_execute = !is_self_tenant_server)) {
   } else if (need_remote_execute) {  // then forward request to a tenant server
     if (is_remote_execute_) { // but reciever can not foward this request again
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("self not in tenant alive servers is unexpected, should not remote execute again",
+      ret = OB_EAGAIN;
+      LOG_WARN("self not in tenant alive servers, locality of tenant may have changed, try again",
                KR(ret),
+               K_(tenant_id),
                K(is_self_tenant_server),
                K(server_list));
     } else {
