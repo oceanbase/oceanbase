@@ -1487,7 +1487,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprIsNan::eval_is_nan,                                           /* 887 */
   ObExprCollectFileList::collect_file_list,                           /* 888 */
   ObExprVoid::calc_void_expr,                                         /* 889 */
-  NULL, // ObExprRandCanonical                                        /* 890 */
+  NULL, // ObExprRandCanonical::calc_random_expr_canonical            /* 890 */
   ObExprLoadFile::eval_load_file,                                     /* 891 */
   NULL, // ObExprAIParseDocument::eval_ai_parse_document              /* 892 */
   NULL, // ObExprSearchIndexInnerType::calc_search_index_inner_path   /* 893 */
