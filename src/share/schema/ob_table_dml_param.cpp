@@ -595,6 +595,17 @@ int ObTableSchemaParam::get_typed_doc_id_col_id(uint64_t &doc_id_col_id, ObDocID
   return ret;
 }
 
+ObDocIDType ObTableSchemaParam::get_multivalue_doc_id_type() const
+{
+  ObDocIDType type = ObDocIDType::INVALID;
+  if (doc_id_col_id_ != OB_INVALID_ID) {
+    type = ObDocIDType::TABLET_SEQUENCE;
+  } else {
+    type = ObDocIDType::HIDDEN_INC_PK;
+  }
+  return type;
+}
+
 int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
