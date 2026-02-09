@@ -416,12 +416,11 @@ int TestSSCommonUtil::add_micro_blocks(
 }
 
 int TestSSCommonUtil::batch_add_micro_block(
-  const uint64_t tablet_id,
-  const int64_t micro_cnt,
-  const int64_t min_micro_size,
-  const int64_t max_micro_size,
-  int64_t &add_cnt
-)
+    const uint64_t tablet_id,
+    const int64_t micro_cnt,
+    const int64_t min_micro_size,
+    const int64_t max_micro_size,
+    int64_t &add_cnt)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -486,11 +485,11 @@ int TestSSCommonUtil::batch_add_micro_block(
 }
 
 int TestSSCommonUtil::batch_get_micro_block_meta(
-  const uint64_t tablet_id,
-  const int64_t micro_cnt,
-  const int64_t min_micro_size,
-  const int64_t max_micro_size,
-  int64_t &get_cnt)
+    const uint64_t tablet_id,
+    const int64_t micro_cnt,
+    const int64_t min_micro_size,
+    const int64_t max_micro_size,
+    int64_t &get_cnt)
 {
   int ret = OB_SUCCESS;
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
