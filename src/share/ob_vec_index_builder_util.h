@@ -272,6 +272,7 @@ private:
   static int append_hybrid_vec_log_table_arg(
       const obrpc::ObCreateIndexArg &index_arg,
       ObIAllocator *allocator,
+      const sql::ObSQLSessionInfo *session_info,
       ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
   static int append_hybrid_vec_index_embedded_vec_arg(
       const obrpc::ObCreateIndexArg &index_arg,

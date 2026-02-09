@@ -36495,11 +36495,11 @@ int ObDDLService::set_dbms_job_exec_env(const obrpc::ObCreateIndexArg &create_in
                                         ObTableSchema& vidx_table_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_LIKELY(!vidx_table_schema.is_vec_delta_buffer_type())) {
+  if (OB_LIKELY(!vidx_table_schema.is_vec_delta_buffer_type() && !vidx_table_schema.is_hybrid_vec_index_log_type())) {
     // do nothing
-  } else if (OB_UNLIKELY(create_index_arg.index_type_ != INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL)) {
+  } else if (OB_UNLIKELY(create_index_arg.index_type_ != INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL && create_index_arg.index_type_ != INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index arg type is not INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL", K(ret), K(create_index_arg.index_type_));
+    LOG_WARN("index arg type is not INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL or INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL", K(ret), K(create_index_arg.index_type_));
   } else if (OB_FAIL(vidx_table_schema.set_exec_env(create_index_arg.vidx_refresh_info_.exec_env_))) {
     LOG_WARN("fail to set exec env", K(ret));
   }

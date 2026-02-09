@@ -374,7 +374,7 @@ int ObVecIndexBuilderUtil::append_hybrid_vec_hnsw_args(
   } else if (vid_type == ObDocIDType::TABLET_SEQUENCE && !vec_common_aux_table_exist) {
     const int64_t num_vec_args = 6;
     // append domain table first append_hybrid_vec_log_table_arg
-    if (OB_FAIL(append_hybrid_vec_log_table_arg(index_arg, allocator, index_arg_list))) {
+    if (OB_FAIL(append_hybrid_vec_log_table_arg(index_arg, allocator, session_info, index_arg_list))) {
       LOG_WARN("failed to append vec delta_buffer_table arg", K(ret));
     } else if (OB_FAIL(append_vec_rowkey_vid_arg(index_arg, allocator, index_arg_list))) {
       LOG_WARN("failed to append vec rowkey_vid_table arg", K(ret));
@@ -397,7 +397,7 @@ int ObVecIndexBuilderUtil::append_hybrid_vec_hnsw_args(
     }
   } else {
     const int64_t num_vec_args = 4; // 如果一个主表中已经创建过向量索引，那么只需要新增 4 张非共享索引辅助表
-    if (OB_FAIL(append_hybrid_vec_log_table_arg(index_arg, allocator, index_arg_list))) {
+    if (OB_FAIL(append_hybrid_vec_log_table_arg(index_arg, allocator, session_info, index_arg_list))) {
       LOG_WARN("failed to append vec delta_buffer_table arg", K(ret));
     } else if (OB_FAIL(append_vec_index_id_arg(index_arg, allocator, index_arg_list))) {
       LOG_WARN("failed to append vec index_id_table arg", K(ret));
@@ -606,14 +606,22 @@ int ObVecIndexBuilderUtil::append_vec_index_snapshot_data_arg(
 int ObVecIndexBuilderUtil::append_hybrid_vec_log_table_arg(
     const obrpc::ObCreateIndexArg &index_arg,
     ObIAllocator *allocator,
+    const sql::ObSQLSessionInfo *session_info,
     ObIArray<obrpc::ObCreateIndexArg> &index_arg_list)
 {
   int ret = OB_SUCCESS;
   ObCreateIndexArg hybrid_vec_log_arg;
+  char* buf = nullptr;
+  int64_t pos = 0;
   ObString domain_index_name = index_arg.index_name_;
-  if (OB_ISNULL(allocator) || !(is_vec_index(index_arg.index_type_))) {
+  if (OB_ISNULL(allocator) || OB_ISNULL(session_info) || !(is_vec_index(index_arg.index_type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is nullptr", K(ret), K(index_arg.index_type_));
+  } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator->alloc(sizeof(char) * OB_MAX_PROC_ENV_LENGTH)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc buffer", KR(ret), K(OB_MAX_PROC_ENV_LENGTH));
+  } else if (OB_FAIL(ObExecEnv::gen_exec_env(*session_info, buf, OB_MAX_PROC_ENV_LENGTH, pos))) {
+    LOG_WARN("fail to gen exec env", KR(ret));
   } else if (OB_FAIL(hybrid_vec_log_arg.assign(index_arg))) {
     LOG_WARN("failed to assign to hybrid vec log arg", K(ret));
   } else if (FALSE_IT(hybrid_vec_log_arg.index_type_ = INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL)) {
@@ -622,6 +630,7 @@ int ObVecIndexBuilderUtil::append_hybrid_vec_log_table_arg(
                                              domain_index_name,
                                              hybrid_vec_log_arg.index_name_))) {
     LOG_WARN("failed to generate vec index name", K(ret));
+  } else if (FALSE_IT(hybrid_vec_log_arg.vidx_refresh_info_.exec_env_.assign_ptr(buf, pos))) {
   } else if (OB_FAIL(index_arg_list.push_back(hybrid_vec_log_arg))) {
     LOG_WARN("failed to push back hybrid vec log arg", K(ret));
   }
