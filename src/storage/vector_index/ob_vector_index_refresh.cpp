@@ -702,7 +702,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   } else if (0 != base_table_row_cnt && (index_id_table_row_cnt + domain_table_row_cnt) * 1.0 / base_table_row_cnt < refresh_ctx_->delta_rate_threshold_) {
     // rebuilding is not triggered.
     triggered = false;
-    LOG_WARN("no need to start rebuild", K(base_table_row_cnt));
+    LOG_WARN("no need to start rebuild", K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt), K(refresh_ctx_->delta_rate_threshold_));
   } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
     LOG_WARN("fail to lock domain for rebuild", KR(ret));
   }
