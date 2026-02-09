@@ -28,6 +28,7 @@ struct ObMemTracker
     cache_mem_limit_(-1), check_status_times_(0), try_check_tick_(0), mem_quota_pct_(0),
     tenant_id_(0), mem_context_(nullptr)
   {}
+  int64_t get_tenant_id();
   void reset()
   {
     cur_mem_used_ = 0;
