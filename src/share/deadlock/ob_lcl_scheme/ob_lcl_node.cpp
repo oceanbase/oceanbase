@@ -881,7 +881,12 @@ int ObLCLNode::push_state_to_downstreams_with_lock_()
         DETECT_LOG_(WARN, "failed to execute collect call back", KR(ret), K(notify_msg), K(*this));
       } else {
         if (user_report_info.get_valid_extra_column_size() > 0) {
-          action.assign(user_report_info.get_extra_columns_values()[0]);// if values[0] exists, should be doing action
+          if (user_report_info.get_extra_columns_values().count() == 0) {
+            ret = OB_ERR_UNEXPECTED;
+            DETECT_LOG(WARN, "extra columns values count is 0", K(user_report_info));
+          } else {
+            action.assign(user_report_info.get_extra_columns_values()[0]);// if values[0] exists, should be doing action
+          }
         }
         for (int64_t idx = 0; idx < parent_list_.count(); ++idx) {
           notify_msg.set_args(parent_list_.at(idx).get_addr(),
@@ -1046,7 +1051,11 @@ int ObLCLNode::fill_virtual_info(const bool need_fill_conflict_actions_flag,
     } else if (OB_FAIL(get_resource_from_callback_list_(dynamic_block_list, _))) {
     } else {
       if (user_report_info.get_valid_extra_column_size() > 0) {// extra[0] should be action
-        if (OB_FAIL(obj_to_string_in_buffer(user_report_info.get_extra_columns_values()[0], buffer, buffer_size, pos_old, pos))) {
+        if (user_report_info.get_extra_columns_values().count() == 0) {
+          ret = OB_ERR_UNEXPECTED;
+          DETECT_LOG(WARN, "extra columns values count is 0", PRINT_WRAPPER);
+        } else if (OB_FAIL(obj_to_string_in_buffer(user_report_info.get_extra_columns_values()[0], buffer, buffer_size, pos_old, pos))) {
+          DETECT_LOG(WARN, "failed to string object", PRINT_WRAPPER);
         } else if (FALSE_IT(info.action_.assign(buffer + pos_old, pos - pos_old))) {
         }
       }
