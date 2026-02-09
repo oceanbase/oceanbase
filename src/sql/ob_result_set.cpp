@@ -639,12 +639,17 @@ int ObResultSet::set_mysql_info()
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = get_exec_context().get_physical_plan_ctx();
   int64_t pos = 0;
+  int64_t warning_cnt = warning_count_;
+  ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+  if (OB_NOT_NULL(buffer)) {
+    warning_cnt = buffer->get_readable_warning_count();
+  }
   if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_LOG(WARN, "fail to get physical plan ctx");
   } else if (stmt::T_UPDATE == get_stmt_type()) {
     int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_UPDATE_MSG_FMT, plan_ctx->get_row_matched_count(),
-                              plan_ctx->get_row_duplicated_count(), warning_count_);
+                              plan_ctx->get_row_duplicated_count(), warning_cnt);
     if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to snprintf to buff", K(ret));
@@ -655,15 +660,13 @@ int ObResultSet::set_mysql_info()
       //nothing to do
     } else {
       int result_len = snprintf(message_ + pos, MSG_SIZE - pos, OB_INSERT_MSG_FMT, plan_ctx->get_row_matched_count(),
-                                plan_ctx->get_row_duplicated_count(), warning_count_);
+                                plan_ctx->get_row_duplicated_count(), warning_cnt);
       if (OB_UNLIKELY(result_len < 0) || OB_UNLIKELY(result_len >= MSG_SIZE - pos)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to snprintf to buff", K(ret));
       }
     }
   } else if (stmt::T_LOAD_DATA == get_stmt_type()) {
-    int64_t warning_cnt = warning_count_;
-    ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
     if (OB_NOT_NULL(buffer)) {
       warning_cnt = buffer->get_total_warning_count();
     }
