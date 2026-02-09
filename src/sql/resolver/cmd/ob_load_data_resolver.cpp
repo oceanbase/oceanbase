@@ -947,8 +947,9 @@ int ObLoadDataResolver::resolve_single_file(ObLoadArgument &load_args, const ObS
                                 false))) {
         LOG_WARN("get location schema failed", K(ret), K(session_info_->get_effective_tenant_id()), K(actual_file_name));
       } else if (OB_ISNULL(schema_ptr)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("match location object failed", K(ret), K(session_info_->get_effective_tenant_id()), K(actual_file_name));
+        if (OB_FAIL(load_args.access_info_.set(actual_file_name.ptr(), ""))) {  // 可能不需要access_info
+          LOG_WARN("failed to set empty access info", K(ret), K(actual_file_name));
+        }
       } else if (OB_FAIL(load_args.access_info_.set(actual_file_name.ptr(), schema_ptr->get_location_access_info()))) {
         LOG_WARN("failed to set access info", K(ret), K(actual_file_name), K(schema_ptr->get_location_access_info()));
       }

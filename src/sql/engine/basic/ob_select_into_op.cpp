@@ -3922,7 +3922,7 @@ int ObSelectIntoOp::get_parquet_logical_type(std::shared_ptr<const parquet::Logi
 {
   int ret = OB_SUCCESS;
   if (ObTinyIntType == obj_type) {
-    logical_type = parquet::LogicalType::None();
+    logical_type = parquet::LogicalType::Int(8, true);
   } else if (ObSmallIntType == obj_type) {
     logical_type = parquet::LogicalType::Int(16, true);
   } else if (ObMediumIntType == obj_type || ObInt32Type == obj_type) {
@@ -3976,9 +3976,7 @@ int ObSelectIntoOp::get_parquet_physical_type(parquet::Type::type &physical_type
                                               const ObObjType &obj_type)
 {
   int ret = OB_SUCCESS;
-  if (ObTinyIntType == obj_type) {
-    physical_type = parquet::Type::BOOLEAN;
-  } else if (ObSmallIntType == obj_type
+  if (ObTinyIntType == obj_type || ObSmallIntType == obj_type
       || ObMediumIntType == obj_type || ObInt32Type == obj_type
       || ObUTinyIntType == obj_type || ObUSmallIntType == obj_type
       || ObUMediumIntType == obj_type || ObUInt32Type == obj_type
@@ -4939,19 +4937,6 @@ int ObSelectIntoOp::build_parquet_cell(parquet::RowGroupWriter* rg_writer,
         } else if (OB_FAIL(oracle_timestamp_to_int96(expr_vector, row_idx, datum_meta, *value))) {
           LOG_WARN("failed to convert timestamp to int96", K(ret));
         } else {
-          value_offset++;
-          definition_levels[row_offset] = normal_definition_level;
-        }
-        break;
-      }
-      case parquet::Type::BOOLEAN:
-      {
-        bool* value = reinterpret_cast<bool*>(value_batch);
-        value += value_offset;
-        if (expr_vector->is_null(row_idx)) {
-          definition_levels[row_offset] = null_definition_level;
-        } else {
-          *value = (expr_vector->get_tinyint(row_idx) != 0);
           value_offset++;
           definition_levels[row_offset] = normal_definition_level;
         }

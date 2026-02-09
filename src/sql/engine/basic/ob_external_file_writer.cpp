@@ -459,16 +459,6 @@ int ObParquetFileWriter::create_parquet_row_batch(const int64_t &row_batch_size,
           }
           break;
         }
-        case parquet::Type::BOOLEAN:
-        {
-          ObArrayWrap<bool> value_batch;
-          if (OB_FAIL(value_batch.allocate_array(allocator, row_batch_size_))) {
-            LOG_WARN("failed to allocate array", K(ret));
-          } else {
-            parquet_row_batch_.at(col_idx) = value_batch.get_data();
-          }
-          break;
-        }
         default:
         {
           ret = OB_ERR_UNEXPECTED;
@@ -580,16 +570,6 @@ int ObParquetFileWriter::write_file()
                                 parquet_row_def_levels_.at(col_idx),
                                 nullptr,
                                 reinterpret_cast<parquet::Int96*>(parquet_row_batch_.at(col_idx)));
-              estimated_bytes_ += writer->estimated_buffered_value_bytes();
-              break;
-            }
-            case parquet::Type::BOOLEAN:
-            {
-              parquet::BoolWriter *writer = static_cast<parquet::BoolWriter *>(col_writer);
-              writer->WriteBatch(row_batch_offset_,
-                                parquet_row_def_levels_.at(col_idx),
-                                nullptr,
-                                reinterpret_cast<bool*>(parquet_row_batch_.at(col_idx)));
               estimated_bytes_ += writer->estimated_buffered_value_bytes();
               break;
             }
