@@ -83,7 +83,8 @@ int ObCOSSTableRowScanner::init(
     LOG_WARN("Fail to init row scanner", K(ret), K(param), KPC(row_sstable));
   } else if (OB_FAIL(init_cg_param_pool(context))) {
     LOG_WARN("Fail to init cg param pool", K(ret));
-  } else if (param.vectorized_enabled_ && param.enable_pd_blockscan() && param.enable_pd_filter()) {
+  } else if (param.vectorized_enabled_ && param.enable_pd_blockscan() && param.enable_pd_filter()
+             && support_pd_rowscn_filter_if_contain(*table, context.block_row_store_)) {
     if (OB_FAIL(init_rows_filter(param, context, table))) {
       LOG_WARN("Fail to init rows filter", K(ret));
     } else if (OB_FAIL(init_project_iter(param, context, table))) {
@@ -1292,19 +1293,21 @@ int ObCOSSTableRowScanner::push_group_by_processor(ObICGIterator *cg_iterator)
 
 ERRSIM_POINT_DEF(ERRSIM_CO_SCAN_USE_ROW_PROJ)
 
-bool ObCOSSTableRowScanner::use_row_store_projector(const ObTableIterParam& row_param, const ObTableAccessContext& context, const ObCOSSTableV2& co_sstable) const
+bool ObCOSSTableRowScanner::use_row_store_projector(const ObTableIterParam& row_param, const ObTableAccessContext& context, const ObCOSSTableV2& co_sstable)
 {
   bool b_ret = false;
-  if (nullptr != project_iter_) {
-    // we should not switch between row store projector and column store projector
-    b_ret = use_row_store_projector_;
-  } else if (!co_sstable.is_all_cg_base() || co_sstable.is_ddl_sstable()) {
+  if (!co_sstable.is_all_cg_base() || !is_support_locate_cs_range(co_sstable)) {
   } else if (row_param.enable_pd_aggregate()) {
   } else if (row_param.enable_pd_group_by()) {
   } else if (OB_SUCCESS != ERRSIM_CO_SCAN_USE_ROW_PROJ) {
-    b_ret = use_row_store_projector_ = true;
+    b_ret = true;
   } else {
-    b_ret = use_row_store_projector_ = !context.block_row_store_->filter_is_null() && row_param.output_exprs_->count() >= ROW_STORE_PROJECTION_THRESHOLD;
+    b_ret = !context.block_row_store_->filter_is_null() && row_param.output_exprs_->count() >= ROW_STORE_PROJECTION_THRESHOLD;
+  }
+  if (OB_UNLIKELY(b_ret != use_row_store_projector_)) {
+    // If we switch-context between row projector and column projector, we need to free the project_iter_ now and reinit it later
+    FREE_PTR_FROM_CONTEXT(access_ctx_, project_iter_, ObICGIterator);
+    use_row_store_projector_ = b_ret;
   }
   return b_ret;
 }
