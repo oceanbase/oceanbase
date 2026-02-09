@@ -68,6 +68,7 @@ ObTabletMeta::ObTabletMeta()
     split_info_(),
     has_merged_with_mds_info_(false),
     inc_major_snapshot_(0),
+    min_ss_flush_op_id_(0),
     is_inited_(false)
 {
 }
@@ -152,6 +153,7 @@ int ObTabletMeta::init_for_share_storage(const ObTabletMeta &old_tablet_meta)
     }
     last_persisted_committed_tablet_status_.reset();
     min_ss_tablet_version_.set_min();
+    min_ss_flush_op_id_ = 0;
   }
 
   if (OB_SUCC(ret)) {
@@ -262,7 +264,7 @@ int ObTabletMeta::init(
     report_status_.data_checksum_ = 0;
     report_status_.row_count_ = 0;
     min_ss_tablet_version_.set_min();
-
+    min_ss_flush_op_id_ = 0;
     if (has_cs_replica) { // cs replica is visable when doing offline ddl
       if (need_generate_cs_replica_cg_array) {
         ddl_replay_status_ = CS_REPLICA_VISIBLE_AND_REPLAY_COLUMN; // need process cs replica locally
@@ -361,6 +363,7 @@ int ObTabletMeta::init(
       has_merged_with_mds_info_ = true;
     }
     min_ss_tablet_version_ = old_tablet_meta.min_ss_tablet_version_;
+    min_ss_flush_op_id_ = old_tablet_meta.min_ss_flush_op_id_;
     if (OB_FAIL(last_persisted_committed_tablet_status_.assign(old_tablet_meta.last_persisted_committed_tablet_status_))) {
       LOG_WARN("fail to init last_persisted_committed_tablet_status from old tablet meta", K(ret),
           "last_persisted_committed_tablet_status", old_tablet_meta.last_persisted_committed_tablet_status_);
@@ -565,6 +568,7 @@ int ObTabletMeta::assign(const ObTabletMeta &other)
       LOG_WARN("fail to init last_persisted_committed_tablet_status from old tablet meta", K(ret),
           "last_persisted_committed_tablet_status", other.last_persisted_committed_tablet_status_);
     }
+    min_ss_flush_op_id_ = other.min_ss_flush_op_id_;
   }
 
   if (OB_SUCC(ret)) {
@@ -727,6 +731,7 @@ void ObTabletMeta::reset()
   inc_major_snapshot_ = 0;
   has_merged_with_mds_info_ = false;
   min_ss_tablet_version_.set_min();
+  min_ss_flush_op_id_ = 0;
   is_inited_ = false;
 }
 
@@ -856,6 +861,13 @@ int ObTabletMeta::serialize(const uint64_t data_version, char *buf, const int64_
     LOG_WARN("failed to serialize min_ss_tablet_version", K(ret), K(len), K(new_pos), K_(min_ss_tablet_version));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, inc_major_snapshot_))) {
     LOG_WARN("failed to serialize inc major snapshot", K(ret), K(len), K(new_pos), K_(inc_major_snapshot));
+  }
+  if (OB_SUCC(ret) && data_version >= DATA_VERSION_4_5_1_0) {
+    if (new_pos - pos < length && OB_FAIL(serialization::encode_i32(buf, len, new_pos, min_ss_flush_op_id_))) {
+      LOG_WARN("failed to serialize min ss flush op id", K(ret), K(len), K(new_pos), K_(min_ss_flush_op_id));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), K(length));
@@ -965,6 +977,8 @@ int ObTabletMeta::deserialize(
       LOG_WARN("failed to deserialize min_ss_tablet_version", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &inc_major_snapshot_))) {
       LOG_WARN("failed to deserialize inc major snapshot", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i32(buf, len, new_pos, &min_ss_flush_op_id_))) {
+      LOG_WARN("failed to deserialize min ss flush op id", K(ret), K(len), K(new_pos));
     } else if (OB_UNLIKELY(length_ < new_pos - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K_(length));
@@ -1027,6 +1041,9 @@ int64_t ObTabletMeta::get_serialize_size(const uint64_t data_version) const
   size += serialization::encoded_length_bool(has_merged_with_mds_info_);
   size += min_ss_tablet_version_.get_fixed_serialize_size();
   size += serialization::encoded_length_i64(inc_major_snapshot_);
+  if (data_version >= DATA_VERSION_4_5_1_0) {
+    size += serialization::encoded_length_i32(min_ss_flush_op_id_);
+  }
   return size;
 }
 

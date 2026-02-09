@@ -169,6 +169,7 @@ public:
                K_(ddl_commit_scn),
                K_(mds_checkpoint_scn),
                K_(min_ss_tablet_version),
+               K_(min_ss_flush_op_id),
                K_(transfer_info),
                K_(extra_medium_info),
                K_(last_persisted_committed_tablet_status),
@@ -247,6 +248,7 @@ public:
   share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 16B
   bool has_merged_with_mds_info_; // be True after first major with mds info
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
+  int32_t min_ss_flush_op_id_; // the min referenced flush op id in local tablet
 private:
   void update_extra_medium_info(
       const compaction::ObMergeType merge_type,
