@@ -171,6 +171,10 @@ void TestFileManager::SetUpTestCase()
   MTL(tmp_file::ObTenantTmpFileManager *)->wait();
   MTL(tmp_file::ObTenantTmpFileManager *)->destroy();
   ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+  ObTenantFileManager *file_manager = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, file_manager);
+  // disable persist disk space task to avoid interfere with belowing tests
+  file_manager->persist_disk_space_task_.is_inited_ = false;
 }
 
 void TestFileManager::TearDownTestCase()
