@@ -198,6 +198,7 @@ public:
   virtual int handle_user_ttl(const obrpc::ObTTLRequestArg& arg) override;
   virtual int check_task_need_move(bool &need_move) override;
   virtual common::ObTTLType get_ttl_type() override { return common::ObTTLType::HBASE_ROWKEY; }
+  virtual bool enable_scheduler() override { return common::ObTTLUtil::is_enable_hbase_rowkey_ttl(tenant_id_); }
 };
 
 class ObTenantTTLManager

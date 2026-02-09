@@ -338,6 +338,7 @@ public:
   virtual int do_after_leader_switch() override;
   virtual int safe_to_destroy(bool &is_safe) override;
   virtual int check_is_ttl_table(const ObTableSchema &table_schema, bool &is_ttl_table) override;
+  virtual bool enable_scheduler() override { return common::ObTTLUtil::is_enable_hbase_rowkey_ttl(tenant_id_); }
 
 private:
   int generate_rowkey_ttl_task();

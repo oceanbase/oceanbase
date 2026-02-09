@@ -169,7 +169,8 @@ int ObTableSqlUtils::execute_create_table(sql::ObExecContext &ctx,
                                           const ObIArray<ObString> &create_table_sqls,
                                           ObStmt &tablegroup_stmt,
                                           const ObIArray<ObStmt*> &table_stmts,
-                                          int64_t timeout)
+                                          int64_t timeout,
+                                          uint64_t define_user_id)
 {
   int ret = OB_SUCCESS;
 
@@ -195,6 +196,7 @@ int ObTableSqlUtils::execute_create_table(sql::ObExecContext &ctx,
           LOG_WARN("create table stmt is null", K(ret), K(i));
         } else {
           tb_stmt->get_create_table_arg().ddl_stmt_str_ = create_table_sqls.at(i);
+          tb_stmt->get_create_table_arg().schema_.set_define_user_id(define_user_id);
           if (OB_FAIL(param.cf_arg_list_.push_back(tb_stmt->get_create_table_arg()))) {
             LOG_WARN("fail to push back create table arg", K(ret), K(i));
           }
@@ -251,7 +253,8 @@ int ObTableSqlUtils::create_table(ObIAllocator &allocator,
                                   int64_t timeout,
                                   const ObString &database,
                                   const ObString &create_tablegroup_sql,
-                                  const ObIArray<ObString> &create_table_sqls)
+                                  const ObIArray<ObString> &create_table_sqls,
+                                  uint64_t define_user_id)
 {
   int ret = OB_SUCCESS;
   const int64_t table_stmt_count = create_table_sqls.count();
@@ -304,7 +307,7 @@ int ObTableSqlUtils::create_table(ObIAllocator &allocator,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("tablegroup statement is null", K(ret));
           } else if (OB_FAIL(execute_create_table(exec_ctx, create_tablegroup_sql, create_table_sqls,
-              *tablegroup_stmt, table_stmts, timeout))) {
+              *tablegroup_stmt, table_stmts, timeout, define_user_id))) {
             LOG_WARN("fail to execute create table", K(ret), K(create_tablegroup_sql),
               K(create_table_sqls), K(timeout));
           }
