@@ -104,7 +104,7 @@ int ObRestoreBaseInfo::copy_from(const ObTenantRestoreCtx &restore_arg)
 }
 
 int ObRestoreBaseInfo::get_restore_backup_set_dest(const int64_t backup_set_id,
-    share::ObRestoreBackupSetBriefInfo &backup_set_dest) const
+    share::ObBackupSetBriefInfo &backup_set_dest) const
 {
   int ret = OB_SUCCESS;
   bool find_target = false;
@@ -713,12 +713,74 @@ int ObRestoreMacroBlockIdMgr::init(
     LOG_WARN("restore macro block id mgr init get invalid argument", K(ret), K(tablet_id),
         K(table_key), K(restore_base_info));
   } else {
-    if (compatible <= ObBackupSetFileDesc::COMPATIBLE_VERSION_3) {
-      if (OB_FAIL(inner_init_v1_(tablet_id, table_key, restore_base_info, meta_index_store, second_meta_index_store))) {
+    int64_t dest_id = 0;
+    const ObBackupDest &backup_dest = restore_base_info.backup_dest_;
+    if (OB_FAIL(restore_base_info.get_restore_data_dest_id(*GCTX.sql_proxy_, MTL_ID(), dest_id))) {
+      LOG_WARN("fail to get restore data dest id", K(ret));
+    } else if (compatible <= ObBackupSetFileDesc::COMPATIBLE_VERSION_3) {
+      if (OB_FAIL(inner_init_v1_(tablet_id, table_key, dest_id, backup_dest, meta_index_store, second_meta_index_store))) {
+        LOG_WARN("failed to inner init restore macro block id mgr",
+                    K(ret), K(tablet_id), K(table_key), K(restore_base_info));
+      }
+    } else {
+      share::ObBackupSetDesc backup_set_desc;
+      const storage::ObITableReadInfo *index_read_info = NULL;
+      if (OB_FAIL(restore_base_info.get_last_backup_set_desc(backup_set_desc))) {
+        LOG_WARN("failed to get last backup set desc", K(ret), K(restore_base_info));
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_sstable_read_info(table_key, index_read_info))) {
+        LOG_WARN("failed to get sstable read info", K(ret), K(tablet_id), K(table_key));
+      } else if (OB_ISNULL(index_read_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index read info is null", K(ret), K(tablet_id), K(table_key));
+      } else if (OB_FAIL(inner_init_v2_(tablet_id, *index_read_info, table_key, dest_id,
+                                            backup_dest, backup_set_desc, meta_index_store))) {
+        LOG_WARN("failed to inner init restore macro block id mgr", K(ret), K(tablet_id), K(table_key), K(restore_base_info));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      table_key_ = table_key;
+      backup_compatible_ = compatible;
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObRestoreMacroBlockIdMgr::init(
+    const common::ObTabletID &tablet_id,
+    const storage::ObITableReadInfo &read_info,
+    const ObITable::TableKey &table_key,
+    const ObExternBackupSetInfoDesc &backup_set_info,
+    const ObBackupDest &backup_dest,
+    backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+    backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("restore macro block id mgr init tiwce", K(ret));
+  } else if (!tablet_id.is_valid() || !table_key.is_valid() || !backup_dest.is_valid()
+                || !read_info.is_valid() || !backup_set_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("restore macro block id mgr init get invalid argument", K(ret),
+           K(tablet_id), K(table_key), K(backup_dest), K(read_info), K(backup_set_info));
+  } else {
+    int64_t dest_id = backup_dest.get_storage_info()->get_dest_id();
+    ObBackupSetFileDesc::Compatible compatible = backup_set_info.backup_set_file_.backup_compatible_;
+    if (OB_INVALID_DEST_ID == dest_id || dest_id < OB_START_DEST_ID) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("restore macro block id mgr init get invalid argument", K(ret), K(backup_dest), K(dest_id));
+    } else if (compatible <= ObBackupSetFileDesc::COMPATIBLE_VERSION_3) {
+      if (OB_FAIL(inner_init_v1_(tablet_id, table_key, dest_id, backup_dest, meta_index_store, second_meta_index_store))) {
         LOG_WARN("failed to inner init restore macro block id mgr", K(ret), K(tablet_id), K(table_key));
       }
     } else {
-      if (OB_FAIL(inner_init_v2_(tablet_id, tablet_handle, table_key, restore_base_info, meta_index_store))) {
+      share::ObBackupSetDesc backup_set_desc;
+      backup_set_desc.backup_set_id_ = backup_set_info.backup_set_file_.backup_set_id_;
+      backup_set_desc.backup_type_ = backup_set_info.backup_set_file_.backup_type_;
+      backup_set_desc.min_restore_scn_ = backup_set_info.backup_set_file_.min_restore_scn_;
+      backup_set_desc.total_bytes_ = backup_set_info.backup_set_file_.stats_.output_bytes_;
+      if (OB_FAIL(inner_init_v2_(tablet_id, read_info, table_key, dest_id, backup_dest, backup_set_desc, meta_index_store))) {
         LOG_WARN("failed to inner init", K(ret), K(tablet_id), K(table_key));
       }
     }
@@ -731,10 +793,12 @@ int ObRestoreMacroBlockIdMgr::init(
   return ret;
 }
 
+
 int ObRestoreMacroBlockIdMgr::inner_init_v1_(
     const common::ObTabletID &tablet_id,
     const ObITable::TableKey &table_key,
-    const ObRestoreBaseInfo &restore_base_info,
+    const int64_t dest_id,
+    const ObBackupDest &backup_dest,
     backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
     backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store)
 {
@@ -750,15 +814,12 @@ int ObRestoreMacroBlockIdMgr::inner_init_v1_(
   ObArray<backup::ObBackupSSTableMeta> backup_sstable_meta_array;
   ObStorageIdMod mod;
   mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
-  int64_t dest_id = 0;
 
   if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key, data_type))) {
     LOG_WARN("failed to get backup data type", K(ret), K(table_key));
-  } else if (OB_FAIL(restore_base_info.get_restore_data_dest_id(*GCTX.sql_proxy_, MTL_ID(), dest_id))) {
-      LOG_WARN("fail to get restore data dest id", K(ret));
   } else if (OB_FALSE_IT(mod.storage_id_ = static_cast<uint64_t>(dest_id))) {
   } else if (OB_FAIL(meta_index_store.get_backup_meta_index(data_type, tablet_id, backup::ObBackupMetaType::BACKUP_SSTABLE_META, sstable_meta_index))) {
-      LOG_WARN("failed to get backup meta index", K(ret), K(tablet_id), K(restore_base_info));
+      LOG_WARN("failed to get backup meta index", K(ret), K(tablet_id));
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       }
@@ -766,18 +827,18 @@ int ObRestoreMacroBlockIdMgr::inner_init_v1_(
     LOG_WARN("failed to get backup meta index", K(ret), K(tablet_id), K(table_key), K(meta_type));
   } else {
     SMART_VARS_3((share::ObBackupPath, sstable_meta_backup_path), (share::ObBackupPath, second_meta_backup_path), (backup::ObBackupMacroBlockIDMappingsMeta, macro_block_id_map)) {
-      if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(restore_base_info.backup_dest_,
+      if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_dest,
           sstable_meta_index.ls_id_, data_type, sstable_meta_index.turn_id_, sstable_meta_index.retry_id_, sstable_meta_index.file_id_, sstable_meta_backup_path))) {
-        LOG_WARN("failed to get sstable meta index", K(ret), K(table_key), K(tablet_id), K(restore_base_info), K(sstable_meta_index));
-      } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(restore_base_info.backup_dest_,
+        LOG_WARN("failed to get sstable meta index", K(ret), K(table_key), K(tablet_id), K(backup_dest), K(sstable_meta_index));
+      } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_dest,
           second_meta_index.ls_id_, data_type, second_meta_index.turn_id_, second_meta_index.retry_id_, second_meta_index.file_id_, second_meta_backup_path))) {
-        LOG_WARN("failed to get macro block index", K(ret), K(table_key), K(tablet_id), K(restore_base_info), K(second_meta_index));
+        LOG_WARN("failed to get macro block index", K(ret), K(table_key), K(tablet_id), K(backup_dest), K(second_meta_index));
       } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(sstable_meta_backup_path.get_obstr(),
-          restore_base_info.backup_dest_.get_storage_info(), mod, sstable_meta_index, &OB_BACKUP_META_CACHE, backup_sstable_meta_array))) {
-        LOG_WARN("failed to read sstable metas", K(ret), K(table_key), K(tablet_id), K(restore_base_info));
+          backup_dest.get_storage_info(), mod, sstable_meta_index, &OB_BACKUP_META_CACHE, backup_sstable_meta_array))) {
+        LOG_WARN("failed to read sstable metas", K(ret), K(table_key), K(tablet_id), K(backup_dest));
       } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_id_mapping_metas(second_meta_backup_path.get_obstr(),
-          restore_base_info.backup_dest_.get_storage_info(), mod, second_meta_index, macro_block_id_map))) {
-        LOG_WARN("failed to read macro block data", K(ret), K(table_key), K(tablet_id), K(restore_base_info));
+          backup_dest.get_storage_info(), mod, second_meta_index, macro_block_id_map))) {
+        LOG_WARN("failed to read macro block data", K(ret), K(table_key), K(tablet_id), K(backup_dest));
       } else {
         backup::ObBackupSSTableMeta *backup_sstable_meta = nullptr;
         for (int64_t i = 0; OB_SUCC(ret) && i < backup_sstable_meta_array.count(); ++i) {
@@ -864,9 +925,11 @@ int ObRestoreMacroBlockIdMgr::sort_block_id_array(
 
 int ObRestoreMacroBlockIdMgr::inner_init_v2_(
     const common::ObTabletID &tablet_id,
-    const storage::ObTabletHandle &tablet_handle,
+    const storage::ObITableReadInfo &read_info,
     const ObITable::TableKey &table_key,
-    const ObRestoreBaseInfo &restore_base_info,
+    const int64_t dest_id,
+    const ObBackupDest &backup_dest,
+    const share::ObBackupSetDesc &backup_set_desc,
     backup::ObBackupMetaIndexStoreWrapper &meta_index_store)
 {
   int ret = OB_SUCCESS;
@@ -876,22 +939,19 @@ int ObRestoreMacroBlockIdMgr::inner_init_v2_(
   common::ObArray<backup::ObBackupSSTableMeta> sstable_metas;
   const backup::ObBackupMetaType meta_type = backup::ObBackupMetaType::BACKUP_SSTABLE_META;
   ObStorageIdMod mod;
-  int64_t dest_id = 0;
 
   mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
   if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key, data_type))) {
     LOG_WARN("failed to get backup data type", K(ret), K(table_key));
-  } else if (OB_FAIL(restore_base_info.get_restore_data_dest_id(*GCTX.sql_proxy_, MTL_ID(), dest_id))) {
-    LOG_WARN("fail to get restore data dest id", K(ret));
   } else if (OB_FALSE_IT(mod.storage_id_ = static_cast<uint64_t>(dest_id))) {
   } else if (OB_FAIL(meta_index_store.get_backup_meta_index(data_type, tablet_id, meta_type, meta_index))) {
     LOG_WARN("failed to get backup meta index", K(ret), K(data_type), K(tablet_id), K(meta_type));
-  } else if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(restore_base_info.backup_dest_,
+  } else if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_dest,
       meta_index.ls_id_, data_type, meta_index.turn_id_, meta_index.retry_id_, meta_index.file_id_, backup_path))) {
-    LOG_WARN("failed to get macro block backup path", K(ret), K(restore_base_info), K(meta_index), K(data_type));
+    LOG_WARN("failed to get macro block backup path", K(ret), K(backup_dest), K(meta_index), K(data_type));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(backup_path.get_obstr(),
-      restore_base_info.backup_dest_.get_storage_info(), mod, meta_index, &OB_BACKUP_META_CACHE, sstable_metas))) {
-    LOG_WARN("failed to read sstable meta", K(ret), K(backup_path), K(restore_base_info), K(meta_index));
+      backup_dest.get_storage_info(), mod, meta_index, &OB_BACKUP_META_CACHE, sstable_metas))) {
+    LOG_WARN("failed to read sstable meta", K(ret), K(backup_path), K(backup_dest), K(meta_index));
   } else {
     int64_t index = -1;
     ARRAY_FOREACH_X(sstable_metas, idx, cnt, OB_SUCC(ret)) {
@@ -911,16 +971,18 @@ int ObRestoreMacroBlockIdMgr::inner_init_v2_(
       const ObITable::TableKey &table_key = sstable_metas.at(index).sstable_meta_.table_key_;
       ObArenaAllocator allocator;
       backup::ObBackupSSTableSecMetaIterator *iterator = NULL;
-      if (OB_FAIL(ObRestoreUtils::create_backup_sstable_sec_meta_iterator(tenant_id,
-                                                                          tablet_id,
-                                                                          tablet_handle,
-                                                                          table_key,
-                                                                          restore_base_info,
-                                                                          meta_index_store,
-                                                                          iterator))) {
+      backup::ObRestoreMetaIndexStore *meta_index_store_ptr = nullptr;
+      if (OB_ISNULL(iterator = backup::ObLSBackupFactory::get_backup_sstable_sec_meta_iterator(tenant_id))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to get backup sstable sec meta iterator", K(ret));
+      } else if (OB_FAIL(meta_index_store.get_backup_meta_index_store(data_type, meta_index_store_ptr))) {
+        LOG_WARN("failed to get backup meta index store", K(ret), K(data_type));
+      } else if (OB_FAIL(iterator->init(tablet_id, read_info, table_key,
+                                            backup_dest, backup_set_desc, mod, *meta_index_store_ptr))) {
         LOG_WARN("failed to create backup sstable sec meta iterator", K(ret), K(tablet_id), K(table_key));
       } else if (OB_FAIL(get_macro_block_index_list_from_iter_(*iterator, block_id_array_))) {
-        LOG_WARN("failed to get macro block index list from iter", K(ret), K(tablet_id), K(table_key), K(restore_base_info));
+        LOG_WARN("failed to get macro block index list from iter", K(ret), K(tablet_id), K(table_key),
+                    K(backup_dest), K(backup_set_desc));
       } else {
         LOG_INFO("get macro block index list", K(block_id_array_));
       }

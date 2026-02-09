@@ -374,6 +374,10 @@ ob_set_subtarget(ob_storage backup
   backup/ob_backup_fuse_tablet_task.cpp
   backup/ob_backup_fuse_tablet_dag.cpp
   backup/ob_backup_meta_cache.cpp
+  backup/ob_backup_validate_base.cpp
+  backup/ob_backup_validate_tasks.cpp
+  backup/ob_backup_validate_dag_scheduler.cpp
+  backup/ob_backup_block_file_reader_writer.cpp
 )
 
 ob_set_subtarget(ob_storage tablet

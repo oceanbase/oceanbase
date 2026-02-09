@@ -145,6 +145,7 @@
 #include "sql/resolver/cmd/ob_transfer_partition_resolver.h"
 #include "sql/resolver/ddl/ob_create_ccl_rule_resolver.h"
 #include "sql/resolver/ddl/ob_drop_ccl_rule_resolver.h"
+#include "sql/resolver/backup/ob_backup_validate_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -1191,6 +1192,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_BACKUP_DATABASE: {
         REGISTER_STMT_RESOLVER(BackupDatabase);
+        break;
+      }
+      case T_BACKUP_VALIDATE: {
+        REGISTER_STMT_RESOLVER(BackupValidate);
         break;
       }
       case T_CANCEL_RESTORE: {

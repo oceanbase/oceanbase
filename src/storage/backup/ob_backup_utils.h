@@ -72,6 +72,22 @@ public:
       const storage::ObBackupLSMetaInfosDesc &ls_meta_infos, const share::ObTenantArchiveRoundAttr &round_attr,
       share::SCN &start_replay_scn);
   static int check_tenant_backup_dest_exists(const uint64_t tenant_id, bool &exists, common::ObISQLClient &sql_proxy);
+  static int get_tenant_macro_index_retry_id(const share::ObBackupDest &backup_dest,
+    const share::ObBackupSetDesc &backup_set_desc, const share::ObBackupDataType &backup_data_type,
+    const bool is_restore, const int64_t turn_id, int64_t &retry_id);
+  static int get_backup_tx_data_table_filled_tx_scn(
+      ObBackupMetaIndexStore &meta_index_store,
+      const bool is_backup_set_support_quick_restore,
+      const ObBackupDest &backup_set_dest,
+      const int64_t dest_id,
+      share::SCN &filled_tx_scn);
+  static int get_macro_block_backup_path(
+      const ObBackupDest &backup_set_dest,
+      const bool is_backup_set_support_quick_restore,
+      const share::ObBackupDataType &backup_data_type,
+      const ObBackupMetaIndex &meta_index,
+      share::ObBackupPath &sstable_meta_backup_path);
+
 private:
   static int check_tablet_minor_sstable_validity_(const storage::ObTabletHandle &tablet_handle,
       const common::ObIArray<storage::ObSSTableWrapper> &minor_sstable_array);

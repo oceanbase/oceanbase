@@ -49,7 +49,7 @@ public:
   virtual ~ObIBackupJobScheduler() {}
   // job status move forward、generate task、and add task
   virtual int process() = 0;
-  virtual int force_cancel(const uint64_t &tenant_id) = 0;    
+  virtual int force_cancel(const uint64_t tenant_id) = 0;
   // if can_remove return true, scheudler can remove task from scheduler  
   virtual int handle_execute_over(const ObBackupScheduleTask *task, const share::ObHAResultInfo &result_info, bool &can_remove) = 0;
   virtual int reload_task(common::ObIAllocator &allocator,

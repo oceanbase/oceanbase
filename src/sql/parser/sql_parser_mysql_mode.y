@@ -558,7 +558,7 @@ END_P SET_VAR DELIMITER
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action alter_tablespace_options opt_force_purge
 %type <node> opt_tablespace_option opt_tablespace_options opt_tablespace_engine opt_alter_tablespace_option opt_alter_tablespace_options
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
-%type <node> opt_copy_id opt_backup_dest backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_encrypt_key
+%type <node> opt_backup_dest backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_encrypt_key
 %type <node> opt_recover_tenant recover_table_list recover_table_relation_name restore_remap_list remap_relation_name table_relation_name opt_recover_remap_item_list restore_remap_item_list restore_remap_item remap_item remap_table_val opt_tenant
 %type <node> opt_restore_with_config_list restore_with_config_list restore_with_config restore_with_item ls_attr_list
 %type <node> new_or_old new_or_old_column_ref diagnostics_info_ref
@@ -617,6 +617,8 @@ END_P SET_VAR DELIMITER
 %type <node> create_sensitive_rule_stmt drop_sensitive_rule_stmt alter_sensitive_rule_stmt alter_sensitive_rule_action sensitive_rule_name sensitive_field_list sensitive_field sensitivity_protection_spec sensitivity_encryption_spec
 %type <node> create_routine_load_stmt load_properties load_property_list load_property opt_load_where_clause job_properties_expr job_property_list job_property
 %type <node> pause_routine_load_stmt resume_routine_load_stmt stop_routine_load_stmt
+
+%type <node> archivelog_piece_optional_piece_list backupset_optional_set_list opt_level opt_validate_backup_dest
 
 %start sql_stmt
 %%
@@ -8864,6 +8866,38 @@ relation_name
 }
 ;
 
+archivelog_piece_optional_piece_list:
+ARCHIVELOG_PIECE opt_equal_mark STRING_VALUE
+{
+  (void)($2) ; /* make bison mute */
+  $$ = $3;
+}
+| ARCHIVELOG_PIECE
+{
+  $$ = NULL;
+}
+;
+
+backupset_optional_set_list:
+BACKUPSET opt_equal_mark STRING_VALUE
+{
+  (void)($2) ; /* make bison mute */
+  $$ = $3;
+}
+| BACKUPSET
+{
+  $$ = NULL;
+}
+;
+
+opt_level:
+/*EMPTY*/  { $$ = NULL; }
+| LEVEL opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  $$ = $3;
+}
+;
 
 opt_equal_mark:
 COMP_EQ     { $$ = NULL; }
@@ -21932,10 +21966,58 @@ alter_with_opt_hint SYSTEM CANCEL BACKUP opt_backup_tenant_list
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 4, type, value, tenant, $5);
 }
 |
+alter_with_opt_hint SYSTEM CANCEL VALIDATE BACKUP opt_backup_tenant_list
+{
+  (void)($1);
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 10;
+
+  ParseNode *value = NULL;
+  malloc_terminal_node(value, result->malloc_pool_, T_INT);
+  value->value_ = 0;
+
+  ParseNode *tenant = NULL;
+  malloc_terminal_node(tenant, result->malloc_pool_, T_INT);
+  tenant->value_ = 1;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 4, type, value, tenant, $6);
+}
+|
 alter_with_opt_hint SYSTEM BACKUP CLUSTER PARAMETERS TO STRING_VALUE
 {
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_CLUSTER_PARAMETERS, 1, $7);
+}
+|
+alter_with_opt_hint SYSTEM VALIDATE BACKUP opt_level opt_backup_tenant_list opt_description
+{
+  (void)($1);
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_  = 0;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_VALIDATE, 4, type, $5, $7, $6);
+}
+|
+alter_with_opt_hint SYSTEM VALIDATE backupset_optional_set_list opt_validate_backup_dest opt_level opt_backup_tenant_list opt_description
+{
+  (void)($1);
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 1;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_VALIDATE, 6, type, $6, $8, $4, $5, $7);
+}
+|
+alter_with_opt_hint SYSTEM VALIDATE archivelog_piece_optional_piece_list opt_validate_backup_dest opt_level opt_backup_tenant_list opt_description
+{
+  (void)($1);
+  ParseNode *type = NULL;
+  malloc_terminal_node(type, result->malloc_pool_, T_INT);
+  type->value_ = 2;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_VALIDATE, 6, type, $6, $8, $4, $5, $7);
 }
 |
 alter_with_opt_hint SYSTEM CANCEL RESTORE relation_name
@@ -22012,48 +22094,6 @@ alter_with_opt_hint SYSTEM CANCEL TTL opt_tenant_list_v2
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
   type->value_ = 3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_TTL, 2, type, $5);
-}
-|
-alter_with_opt_hint SYSTEM VALIDATE DATABASE opt_copy_id
-{
-  (void)($1);
-  ParseNode *type = NULL;
-  malloc_terminal_node(type, result->malloc_pool_, T_INT);
-  type->value_ = 5;
-
-  ParseNode *value = NULL;
-  malloc_terminal_node(value, result->malloc_pool_, T_INT);
-  value->value_ = 0;
-
-  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 3, type, value, $5);
-}
-|
-alter_with_opt_hint SYSTEM VALIDATE BACKUPSET INTNUM opt_copy_id
-{
-  (void)($1);
-  ParseNode *type = NULL;
-  malloc_terminal_node(type, result->malloc_pool_, T_INT);
-  type->value_ = 6;
-
-  ParseNode *value = NULL;
-  malloc_terminal_node(value, result->malloc_pool_, T_INT);
-  value->value_ = $5->value_;
-
-  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 3, type, value, $6);
-}
-|
-alter_with_opt_hint SYSTEM CANCEL VALIDATE INTNUM opt_copy_id
-{
-  (void)($1);
-  ParseNode *type = NULL;
-  malloc_terminal_node(type, result->malloc_pool_, T_INT);
-  type->value_ = 7;
-
-  ParseNode *value = NULL;
-  malloc_terminal_node(value, result->malloc_pool_, T_INT);
-  value->value_ = $5->value_;
-
-  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 3, type, value, $6);
 }
 |
 alter_with_opt_hint SYSTEM CANCEL BACKUP BACKUPSET
@@ -22986,6 +23026,11 @@ NAME_OB opt_equal_mark STRING_VALUE
 }
 ;
 
+opt_validate_backup_dest:
+  /* EMPTY */ { $$ = NULL; }
+| backup_dest { $$ = $1; }
+;
+
 opt_backup_dest:
 /*empty*/
 {
@@ -23350,17 +23395,6 @@ opt_zone_desc:
 zone_desc
 {
   $$ = $1;
-}
-| /* EMPTY */
-{
-  $$ = NULL;
-}
-;
-
-opt_copy_id:
-COPY INTNUM
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_COPY_ID, 1, $2);
 }
 | /* EMPTY */
 {

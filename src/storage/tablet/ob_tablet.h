@@ -167,6 +167,25 @@ public:
   };
 };
 
+struct ObSSTableTxScnMeta final
+{
+public:
+  ObSSTableTxScnMeta();
+  ~ObSSTableTxScnMeta();
+  bool is_valid() const;
+  void reset();
+  int set(const bool contain_uncommitted_row, const share::SCN &filled_tx_scn, const share::SCN &end_scn);
+  const share::SCN &get_filled_tx_scn() const { return filled_tx_scn_; }
+  const share::SCN &get_end_scn() const { return end_scn_; }
+  bool contain_uncommitted_row() const { return contain_uncommitted_row_; }
+
+  TO_STRING_KV(K_(contain_uncommitted_row), K_(filled_tx_scn), K_(end_scn));
+private:
+  bool contain_uncommitted_row_;
+  share::SCN filled_tx_scn_;
+  share::SCN end_scn_;
+};
+
 class ObTablet final : public ObITabletMdsCustomizedInterface
 {
   friend class ObLSTabletService;
@@ -764,7 +783,6 @@ public:
   // different from the is_valid() function
   // typically used for check valid for migration or restore
   int check_valid(const bool ignore_ha_status = false) const;
-
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt) const;
   static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
@@ -778,6 +796,9 @@ public:
   int get_sstable_read_info(
       const blocksstable::ObSSTable *sstable,
       const storage::ObITableReadInfo *&index_read_info) const;
+  int get_sstable_read_info(
+    const ObITable::TableKey &table_key,
+    const storage::ObITableReadInfo *&index_read_info) const;
   int build_full_memory_mds_data(
       common::ObArenaAllocator &allocator,
       ObTabletFullMemoryMdsData &data) const;
@@ -878,6 +899,15 @@ private:
                                         int64_t &newest_commit_version,
                                         int64_t &count);
 
+public:
+  static int check_tx_data_with_minor_tx_scn_meta_array(
+      const ObIArray<storage::ObSSTableTxScnMeta> &tx_scn_meta_array,
+      const share::SCN &backup_tx_table_filled_tx_scn);
+  static int build_read_info_by_storage_schema(
+      common::ObIAllocator &allocator,
+      const storage::ObStorageSchema &storage_schema,
+      const bool is_cs_replica_compat,
+      storage::ObRowkeyReadInfo *&index_read_info);
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;

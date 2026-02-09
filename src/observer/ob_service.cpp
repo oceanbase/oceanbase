@@ -54,6 +54,7 @@
 #endif
 #include "storage/column_store/ob_column_store_replica_util.h"
 #include "share/backup/ob_backup_config.h"
+#include "storage/backup/ob_backup_validate_dag_scheduler.h"
 
 namespace oceanbase
 {
@@ -896,6 +897,25 @@ int ObService::delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg)
     LOG_WARN("failed to schedule backup clean dag", K(ret), K(arg));
   } else {
     LOG_INFO("success receive delete backup ls task rpc", K(arg));
+  }
+
+  return ret;
+}
+
+int ObService::validate_backup_ls_task(const obrpc::ObBackupValidateLSArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("receive validate backup ls task request", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(ObLSBackupValidateScheduler::schedule_backup_validate_dag(arg))) {
+    LOG_WARN("failed to schedule backup validate dag", KR(ret), K(arg));
+  } else {
+    LOG_INFO("success receive validate backup ls task rpc", K(arg));
   }
 
   return ret;
@@ -3509,6 +3529,31 @@ int ObService::report_backup_clean_over(const obrpc::ObBackupTaskRes &res)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("backup task scheduler can't be nullptr", K(ret));
       } else if (OB_FAIL(task.build_from_res(res, BackupJobType::BACKUP_CLEAN_JOB))) {
+        LOG_WARN("failed to build task from res rpc", K(ret), K(res));
+      } else if (OB_FAIL(task_scheduler->execute_over(task, result_info))) {
+        LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::report_backup_validate_over(const obrpc::ObBackupTaskRes &res)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("report backup validate over", K(res));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else {
+    ObBackupValidateLSTask task;
+    ObBackupTaskScheduler *task_scheduler = nullptr;
+    ObHAResultInfo result_info(ObHAResultInfo::BACKUP_VALIDATE, res.ls_id_, res.src_server_, res.dag_id_, res.result_);
+    MTL_SWITCH(gen_meta_tenant_id(res.tenant_id_)) {
+      if (OB_ISNULL(task_scheduler = MTL(ObBackupTaskScheduler *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("backup task scheduler can't be nullptr", K(ret));
+      } else if (OB_FAIL(task.build_from_res(res, BackupJobType::VALIDATE_JOB))) {
         LOG_WARN("failed to build task from res rpc", K(ret), K(res));
       } else if (OB_FAIL(task_scheduler->execute_over(task, result_info))) {
         LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));

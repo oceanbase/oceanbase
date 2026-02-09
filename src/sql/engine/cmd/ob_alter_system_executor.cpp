@@ -2658,6 +2658,66 @@ int ObArchiveLogExecutor::execute(ObExecContext &ctx, ObArchiveLogStmt &stmt)
   return ret;
 }
 
+int ObBackupValidateExecutor::execute(ObExecContext &ctx, ObBackupValidateStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  common::ObCurTraceId::mark_user_request();
+  const int64_t SECOND = 1* 1000 * 1000; //1s
+  //rs refresh schema_version interval 5s
+  const int64_t MAX_RETRY_NUM = UPDATE_SCHEMA_ADDITIONAL_INTERVAL / SECOND + 1;
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_FAIL(task_exec_ctx->get_common_rpc(common_rpc_proxy))) {
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (OB_ISNULL(common_rpc_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("common_rpc_proxy is null", K(ret));
+  } else {
+    FLOG_INFO("ObBackupValidateExecutor::execute", K(stmt), K(ctx));
+    obrpc::ObBackupValidateArg arg;
+    if (OB_FAIL(arg.validate_dest_.assign(stmt.get_backup_dest()))) {
+      LOG_WARN("failed to assign backup dest", K(ret));
+    } else if (OB_FAIL(arg.execute_tenant_ids_.assign(stmt.get_execute_tenant_ids()))) {
+      LOG_WARN("failed to assign backup tenant ids", K(ret));
+    } else if (OB_FAIL(arg.description_.assign(stmt.get_backup_description()))) {
+      LOG_WARN("failed to assign backup description", K(ret));
+    } else if (OB_FAIL(arg.set_or_piece_ids_.assign(stmt.get_set_or_piece_ids()))) {
+      LOG_WARN("failed to assign set or piece ids", K(ret));
+    } else {
+      arg.tenant_id_ = stmt.get_tenant_id();
+      arg.initiator_tenant_id_ = stmt.get_tenant_id();
+      arg.validate_type_.type_ = stmt.get_validate_type().type_;
+      arg.validate_level_.level_ = stmt.get_validate_level().level_;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!arg.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", K(ret), K(arg));
+    } else {
+      int32_t retry_cnt = 0;
+      while (retry_cnt < MAX_RETRY_NUM) {
+        ret = OB_SUCCESS;
+        if (OB_FAIL(common_rpc_proxy->backup_validate(arg))) {
+          if (OB_EAGAIN == ret) {
+            LOG_WARN("backup_validate rpc failed, need retry", KR(ret), K(arg), "dst", common_rpc_proxy->get_server(),
+                      "retry_cnt", retry_cnt);
+            ob_usleep(SECOND); //1s
+          } else {
+            LOG_WARN("backup_validate rpc failed", KR(ret), K(arg), "dst", common_rpc_proxy->get_server());
+          }
+        } else {
+          break;
+        }
+        ++retry_cnt;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupDatabaseExecutor::execute(ObExecContext &ctx, ObBackupDatabaseStmt &stmt)
 {
   int ret = OB_SUCCESS;

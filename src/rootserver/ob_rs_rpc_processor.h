@@ -81,7 +81,8 @@ inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_PHYSICAL_RESTORE_TENANT == pcode
          || obrpc::OB_RUN_UPGRADE_JOB == pcode
          || obrpc::OB_DROP_RESTORE_POINT == pcode
-         || obrpc::OB_CLEAN_SPLITTED_TABLET == pcode;
+         || obrpc::OB_CLEAN_SPLITTED_TABLET == pcode
+         || obrpc::OB_VALIDATE_BACKUP == pcode;
 }
 
 // precondition: enable_ddl = false
@@ -748,6 +749,7 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_CLEAN, ObBackupCleanP, handle_backup_de
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_DELETE_POLICY, ObDeletePolicyP, handle_delete_policy(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_PHYSICAL_RESTORE_RES, ObRpcPhysicalRestoreResultP, send_physical_restore_result(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RECOVER_TABLE, ObRecoverTableP, handle_recover_table(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_VALIDATE_BACKUP, ObBackupValidateP, handle_backup_validate(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_CLONE_TENANT, ObRpcCloneTenantP, clone_tenant(arg_, result_));
 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RS_FLUSH_OPT_STAT_MONITORING_INFO, ObRpcFlushOptStatMonitoringInfoP, flush_opt_stat_monitoring_info(arg_));

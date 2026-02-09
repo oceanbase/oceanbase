@@ -740,6 +740,18 @@ int ObRpcBackupLSCleanP::process()
   return ret;
 }
 
+int ObRpcBackupLSValidateP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KP(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->validate_backup_ls_task(arg_);
+  }
+  return ret;
+}
+
 int ObRpcNotifyArchiveP::process()
 {
   int ret = OB_SUCCESS;
@@ -3214,6 +3226,18 @@ int ObRpcBackupCleanLSResP::process()
   return ret;
 }
 
+int ObRpcBackupValidateLSResP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->report_backup_validate_over(arg_);
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_SPM
 int ObServerAcceptPlanBaselineP::process()
 {
@@ -3798,7 +3822,7 @@ int ObRpcNotifyTenantThreadP::process()
         rootserver::ObBackupDataService *service = MTL(rootserver::ObBackupDataService*);
         WAKE_UP_TENANT_SERVICE
       } else if (obrpc::ObNotifyTenantThreadArg::BACKUP_CLEAN_SERVICE == arg_.get_thread_type()) {
-        rootserver::ObBackupCleanService *service = MTL(rootserver::ObBackupCleanService*);
+        rootserver::ObBackupMgrService *service = MTL(rootserver::ObBackupMgrService*);
         WAKE_UP_TENANT_SERVICE
       } else {
         ret = OB_ERR_UNEXPECTED;

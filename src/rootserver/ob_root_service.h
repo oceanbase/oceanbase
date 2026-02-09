@@ -919,6 +919,7 @@ public:
   int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
   int handle_validate_database(const obrpc::ObBackupManageArg &arg);
   int handle_validate_backupset(const obrpc::ObBackupManageArg &arg);
+  int handle_backup_validate(const obrpc::ObBackupValidateArg &arg);
   int handle_cancel_validate(const obrpc::ObBackupManageArg &arg);
   int handle_recover_table(const obrpc::ObRecoverTableArg &arg);
   int standby_upgrade_virtual_schema(const obrpc::ObDDLNopOpreatorArg &arg);
@@ -995,6 +996,7 @@ private:
     return lhs < tenant_id;
   }
   int handle_cancel_backup_backup(const obrpc::ObBackupManageArg &arg);
+  int handle_backup_validate_cancel(const obrpc::ObBackupManageArg &arg);
   int handle_cancel_all_backup_force(const obrpc::ObBackupManageArg &arg);
   int clean_global_context();
 

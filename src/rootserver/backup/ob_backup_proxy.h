@@ -24,6 +24,7 @@ struct ObBackupCleanArg;
 struct ObArchiveLogArg;
 struct ObBackupManageArg;
 struct ObArchiveLogArg;
+struct ObBackupValidateArg;
 }
 
 namespace rootserver
@@ -38,6 +39,8 @@ public:
   static int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
   static int handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg);
   static int handle_archive_log(const obrpc::ObArchiveLogArg &arg);
+  static int handle_backup_validate(const obrpc::ObBackupValidateArg &arg);
+  static int handle_backup_validate_cancel(const obrpc::ObBackupManageArg &arg);
 };
 
 }

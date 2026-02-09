@@ -27,6 +27,8 @@
 #include "lib/wait_event/ob_wait_event.h"
 #include "share/backup/ob_backup_helper.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/backup/ob_backup_meta_cache.h"
+#include "share/backup/ob_backup_path.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -84,6 +86,26 @@ int ObBackupUtils::check_tenant_backup_dest_exists(const uint64_t tenant_id, boo
   return ret;
 }
 
+int ObBackupUtils::get_tenant_macro_index_retry_id(const share::ObBackupDest &backup_dest,
+  const share::ObBackupSetDesc &backup_set_desc, const share::ObBackupDataType &backup_data_type,
+  const bool is_restore, const int64_t turn_id, int64_t &retry_id)
+{
+  int ret = OB_SUCCESS;
+  retry_id = -1;
+  ObBackupTenantIndexRetryIDGetter retry_id_getter;
+  const bool is_macro_index = true;
+  if (!backup_dest.is_valid() || !backup_set_desc.is_valid() || !backup_data_type.is_valid() || turn_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(backup_dest), K(backup_set_desc), K(backup_data_type), K(turn_id));
+  } else if (OB_FAIL(retry_id_getter.init(backup_dest, backup_set_desc, backup_data_type,
+      turn_id, is_restore, is_macro_index, false/*is_sec_meta*/))) {
+    LOG_WARN("failed to init retry id getter", K(ret), K(backup_dest), K(backup_set_desc), K(backup_data_type), K(turn_id));
+  } else if (OB_FAIL(retry_id_getter.get_max_retry_id(retry_id))) {
+    LOG_WARN("failed to get max retry id", K(ret));
+  }
+  return ret;
+}
+
 int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tablet_handle, const share::ObBackupDataType &backup_data_type,
     const storage::ObTabletTableStore &tablet_table_store, const bool is_major_compaction_mview_dep_tablet, const share::SCN &mview_dep_scn,
     common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
@@ -102,6 +124,52 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
       LOG_WARN("failed to fetch minor and ddl sstables", K(ret), K(tablet_handle), K(tablet_table_store));
     } else if (OB_FAIL(fetch_major_sstables_(tablet_handle, tablet_table_store, is_major_compaction_mview_dep_tablet, mview_dep_scn, sstable_array))) {
       LOG_WARN("failed to fetch major sstables", K(ret), K(tablet_handle), K(tablet_table_store));
+    }
+  }
+  return ret;
+}
+
+
+int ObBackupUtils::get_backup_tx_data_table_filled_tx_scn(
+    ObBackupMetaIndexStore &meta_index_store,
+    const bool is_backup_set_support_quick_restore,
+    const ObBackupDest &backup_set_dest,
+    const int64_t dest_id,
+    share::SCN &filled_tx_scn)
+{
+  int ret = OB_SUCCESS;
+  filled_tx_scn = SCN::max_scn();
+  const common::ObTabletID &tx_data_tablet_id = LS_TX_DATA_TABLET;
+  const ObBackupMetaType meta_type = ObBackupMetaType::BACKUP_SSTABLE_META;
+  ObBackupDataType sys_backup_data_type;
+  sys_backup_data_type.set_sys_data_backup();
+  ObBackupMetaIndex meta_index;
+  ObBackupPath backup_path;
+  ObArray<ObBackupSSTableMeta> meta_array;
+  ObStorageIdMod mod;
+  mod.storage_id_ = dest_id;
+  mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_BACKUP;
+  if (OB_FAIL(meta_index_store.get_backup_meta_index(tx_data_tablet_id, meta_type, meta_index))) {
+    LOG_WARN("failed to get backup meta index", K(ret), K(tx_data_tablet_id), K(meta_type));
+  } else if (OB_FAIL(get_macro_block_backup_path(backup_set_dest, is_backup_set_support_quick_restore,
+      sys_backup_data_type, meta_index, backup_path))) {
+    LOG_WARN("failed to get meta index backup path", K(ret), K(backup_set_dest), K(is_backup_set_support_quick_restore),
+                K(sys_backup_data_type), K(meta_index));
+  } else if (OB_FAIL(ObLSBackupRestoreUtil::read_sstable_metas(
+      backup_path.get_obstr(), backup_set_dest.get_storage_info(), mod, meta_index, &OB_BACKUP_META_CACHE, meta_array))) {
+    LOG_WARN("failed to read sstable metas", K(ret), K(backup_path), K(meta_index));
+  } else if (meta_array.empty()) {
+    filled_tx_scn = SCN::min_scn();
+    LOG_INFO("the log stream do not have tx data sstable", K(ret));
+  } else {
+    filled_tx_scn = meta_array.at(0).sstable_meta_.basic_meta_.filled_tx_scn_;
+    ARRAY_FOREACH_X(meta_array, idx, cnt, OB_SUCC(ret)) {
+      const ObBackupSSTableMeta &sstable_meta = meta_array.at(idx);
+      const storage::ObITable::TableKey &table_key = sstable_meta.sstable_meta_.table_key_;
+      if (ObITable::TableType::MINOR_SSTABLE == table_key.table_type_
+          && sstable_meta.sstable_meta_.basic_meta_.filled_tx_scn_ > table_key.get_start_scn()) {
+        filled_tx_scn = MAX(filled_tx_scn, sstable_meta.sstable_meta_.basic_meta_.filled_tx_scn_);
+      }
     }
   }
   return ret;
@@ -315,6 +383,30 @@ int ObBackupUtils::filter_major_sstables_for_mview_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sstable array should not be empty", K(ret), K(mview_dep_scn), KPC(major_sstable_array_ptr));
     }
+  }
+  return ret;
+}
+
+int ObBackupUtils::get_macro_block_backup_path(
+    const ObBackupDest &backup_set_dest,
+    const bool is_backup_set_support_quick_restore,
+    const share::ObBackupDataType &backup_data_type,
+    const ObBackupMetaIndex &meta_index,
+    share::ObBackupPath &sstable_meta_backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (is_backup_set_support_quick_restore) {
+    if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest, meta_index.ls_id_,
+                    backup_data_type, meta_index.turn_id_, meta_index.retry_id_,
+                    meta_index.file_id_, sstable_meta_backup_path))) {
+      LOG_WARN("failed to get macro block backup path", KR(ret), K(meta_index),
+                  K(backup_set_dest), K(backup_data_type));
+    }
+  } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest, meta_index.ls_id_,
+                      backup_data_type, meta_index.turn_id_, meta_index.retry_id_,
+                      meta_index.file_id_, sstable_meta_backup_path))) {
+      LOG_WARN("failed to get macro block backup path", KR(ret), K(meta_index),
+                  K(backup_set_dest), K(backup_data_type));
   }
   return ret;
 }

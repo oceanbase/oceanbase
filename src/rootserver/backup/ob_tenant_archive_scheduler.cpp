@@ -18,11 +18,17 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ls/ob_ls_operator.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"
+#include "share/backup/ob_archive_path.h"
+#include "share/backup/ob_backup_io_adapter.h"
+#include "share/backup/ob_backup_struct.h"
+#include "logservice/archiveservice/ob_archive_file_utils.h"
+#include "storage/backup/ob_backup_block_file_reader_writer.h"
 
 using namespace oceanbase;
 using namespace rootserver;
 using namespace common;
 using namespace share;
+using namespace backup;
 
 static int record_piece_start(const ObTenantArchiveRoundAttr &old_round_info, const ObTenantArchivePieceAttr &piece_info, const ObArchiveStore &store)
 {
@@ -144,13 +150,204 @@ static int record_piece_checkpoint(const ObTenantArchiveRoundAttr &old_round_inf
   return ret;
 }
 
-static int record_piece_info(const ObDestRoundCheckpointer::GeneratedPiece &piece, const ObArchiveStore &store)
+static int add_ls_meta_recorder_file_file_list(
+    const ObSingleLSInfoDesc &single_ls_desc,
+    const ObArchiveStore &store,
+    const ObBackupPath &shema_meta_dir,
+    const ObArray<int64_t> &array)
+{
+  int ret = OB_SUCCESS;
+  if (!single_ls_desc.is_valid() || !store.is_init()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(single_ls_desc), K(store));
+  } else {
+    bool is_exist = false;
+    if (OB_FAIL(store.is_file_list_file_exist(shema_meta_dir, ObBackupFileSuffix::ARCHIVE, is_exist))) {
+      LOG_WARN("failed to check file list file exist", KR(ret), K(shema_meta_dir));
+    } else if (is_exist) {
+      //do nothing
+    } else {
+      ObBackupPath file_path;
+      const ObBackupDest &dest = store.get_backup_dest();
+      ObBackupFileListInfo file_list_info;
+      const ObBackupStorageInfo *storage_info = store.get_storage_info();
+      const int64_t dest_id = storage_info->get_dest_id();
+      ObBackupPath file_list_path;
+      share::ObArchiveLSMetaType meta_type(share::ObArchiveLSMetaType::Type::SCHEMA_META);
+      for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); i++) {
+        const int64_t file_id = array.at(i);
+        file_path.reset();
+        if (OB_FAIL(share::ObArchivePathUtil::get_ls_meta_record_path(dest, single_ls_desc.dest_id_,
+                                                  single_ls_desc.round_id_, single_ls_desc.piece_id_,
+                                                  single_ls_desc.ls_id_, meta_type, file_id, file_path))) {
+          LOG_WARN("failed to get ls meta record path", KR(ret), K(dest), K(single_ls_desc), K(file_id));
+        } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(file_path,
+                                                                                      *storage_info, file_list_info))) {
+          LOG_WARN("failed to push file info", KR(ret), K(file_path), KP(storage_info));
+        }
+      }
+      if (OB_FAIL(ret) || file_list_info.is_empty()) {
+      } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, ObBackupFileSuffix::ARCHIVE,
+                                                                            shema_meta_dir, dest_id, file_list_info))) {
+        LOG_WARN("failed to write file list", KR(ret), K(shema_meta_dir), K(file_list_info), KP(storage_info), K(dest_id));
+      }
+    }
+  }
+  return ret;
+}
+
+static int add_ls_meta_recorder_to_file_list(
+  const ObSingleLSInfoDesc &single_ls_desc,
+  const ObArchiveStore &store,
+  ObBackupFileListInfo &file_list_info)
+{
+  int ret = OB_SUCCESS;
+  if (!single_ls_desc.is_valid() || !store.is_init()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(single_ls_desc), K(store));
+  } else {
+    ObBackupPath shema_meta_prefix;
+    const ObBackupDest &dest = store.get_backup_dest();
+    ObArray<int64_t> array;
+    const ObArchiveLSMetaType meta_type(ObArchiveLSMetaType::Type::SCHEMA_META);
+    if (OB_FAIL(ObArchivePathUtil::get_ls_meta_record_prefix(dest, single_ls_desc.dest_id_,
+                                                  single_ls_desc.round_id_, single_ls_desc.piece_id_,
+                                                  single_ls_desc.ls_id_, meta_type, shema_meta_prefix))) {
+      LOG_WARN("failed to get ls meta record prefix", KR(ret), K(single_ls_desc));
+    } else if (OB_FAIL(archive::ObArchiveFileUtils::list_files(shema_meta_prefix.get_obstr(),
+                            store.get_storage_info(), array))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to list ls meta record files", KR(ret), K(shema_meta_prefix));
+      }
+    } else if (OB_FAIL(add_ls_meta_recorder_file_file_list(single_ls_desc, store, shema_meta_prefix, array))) {
+      LOG_WARN("failed to add ls meta recorder file file list", KR(ret), K(single_ls_desc), K(shema_meta_prefix), K(array));
+    } else if (OB_FAIL(file_list_info.push_dir_info(shema_meta_prefix))) {
+      LOG_WARN("failed to push dir name", KR(ret), K(shema_meta_prefix));
+    }
+  }
+  return ret;
+}
+
+static int record_piece_ls_file_list(
+    const ObSingleLSInfoDesc &single_ls_desc,
+    const ObArchiveStore &store)
+{
+  int ret = OB_SUCCESS;
+  if (!single_ls_desc.is_valid() || !store.is_init()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(single_ls_desc), K(store));
+  } else {
+    const ObBackupFileSuffix suffix(ObBackupFileSuffix::ARCHIVE);
+    ObBackupPath dir_path;
+    ObBackupPath ls_log_dir_path;
+    const ObBackupDest &dest = store.get_backup_dest();
+    ObBackupFileListInfo file_list_info;
+    const int64_t file_count = single_ls_desc.filelist_.count();
+    const ObBackupStorageInfo *storage_info = store.get_storage_info();
+    const int64_t dest_id = storage_info->get_dest_id();
+    const ObLSID &ls_id = single_ls_desc.ls_id_;
+    bool is_exist = false;
+    if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(dest, single_ls_desc.dest_id_, single_ls_desc.round_id_,
+                                                            single_ls_desc.piece_id_, ls_id, dir_path))) {
+      LOG_WARN("failed to get piece ls dir path", KR(ret), K(dest), K(single_ls_desc));
+    } else if (OB_FAIL(store.is_file_list_file_exist(dir_path, suffix, is_exist))) {
+      LOG_WARN("failed to check file list file exist", KR(ret), K(dir_path));
+    } else if (is_exist) {
+    } else if (0 != file_count && OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(dest, single_ls_desc.dest_id_,
+                                                  single_ls_desc.round_id_, single_ls_desc.piece_id_,
+                                                  single_ls_desc.ls_id_, ls_log_dir_path))) {
+      LOG_WARN("failed to get ls log dir path", KR(ret), K(dest), K(single_ls_desc));
+    } else if (0 != file_count && OB_FAIL(file_list_info.push_dir_info(ls_log_dir_path))) {
+      LOG_WARN("failed to push ls log dir to list", KR(ret), K(ls_log_dir_path));
+    } else if (ls_id.is_sys_ls() && OB_FAIL(add_ls_meta_recorder_to_file_list(single_ls_desc, store, file_list_info))) {
+      LOG_WARN("failed to add ls meta recorder to file list", KR(ret), K(single_ls_desc));
+    } else {
+      ObBackupPath file_info_path;
+      if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, single_ls_desc.dest_id_,
+                                                  single_ls_desc.round_id_, single_ls_desc.piece_id_,
+                                                  single_ls_desc.ls_id_, file_info_path))) {
+        LOG_WARN("failed to get ls file info path", KR(ret), K(dest), K(single_ls_desc));
+      } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(file_info_path,
+                                                                                    single_ls_desc, file_list_info))) {
+        LOG_WARN("failed to add file to list", KR(ret), K(file_info_path), K(single_ls_desc), K(file_list_info));
+      } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, suffix,
+                                                                            dir_path, dest_id, file_list_info))) {
+        LOG_WARN("failed to write file list", KR(ret), K(dir_path), K(file_list_info));
+      }
+    }
+  }
+  return ret;
+}
+
+static int record_piece_ls_log_file_list(
+    const ObSingleLSInfoDesc &single_ls_desc, const ObArchiveStore &store)
+{
+  int ret = OB_SUCCESS;
+  if (!single_ls_desc.is_valid() || !store.is_init()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(single_ls_desc), K(store));
+  } else {
+    bool is_exist = false;
+    ObBackupPath ls_log_dir_path;
+    const ObBackupFileSuffix suffix(ObBackupFileSuffix::ARCHIVE);
+    const ObBackupDest &dest = store.get_backup_dest();
+    const ObBackupStorageInfo *storage_info = store.get_storage_info();
+    const int64_t dest_id = storage_info->get_dest_id();
+    ObBackupFileListInfo file_list_info;
+    ObBackupFileInfo file_info;
+    ObBackupPath file_path;
+    ObBackupPathString file_name;
+    ObBackupBlockFileItemWriter writer;
+    ObBackupBlockFileAddr entry_block_addr;
+    int64_t total_item_count = 0;
+    int64_t total_block_count = 0;
+    const int64_t max_file_size = DEFAULT_BACKUP_DATA_FILE_SIZE;
+    const ObBackupBlockFileDataType data_type = ObBackupBlockFileDataType::FILE_PATH_INFO;
+    const int64_t file_count = single_ls_desc.filelist_.count();
+    if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(dest, single_ls_desc.dest_id_,
+                                                  single_ls_desc.round_id_, single_ls_desc.piece_id_,
+                                                  single_ls_desc.ls_id_, ls_log_dir_path))) {
+      LOG_WARN("failed to get ls log dir path", KR(ret), K(dest), K(single_ls_desc));
+    } else if (OB_FAIL(store.is_file_list_file_exist(ls_log_dir_path, suffix, is_exist))) {
+      LOG_WARN("failed to check file list file exist", KR(ret), K(ls_log_dir_path));
+    } else if (is_exist || 0 == file_count) {
+    } else if (OB_FAIL(writer.init(storage_info, data_type, suffix, ls_log_dir_path, dest_id, max_file_size))) {
+      LOG_WARN("failed to init writer", KR(ret), K(storage_info), K(suffix), K(ls_log_dir_path), K(dest_id), K(max_file_size));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_count; i++) {
+        const ObSingleLSInfoDesc::OneFile &file = single_ls_desc.filelist_.at(i);
+        file_path.reset();
+        file_info.reset();
+        if (OB_FAIL(share::ObArchivePathUtil::get_ls_archive_file_path(dest, single_ls_desc.dest_id_,
+            single_ls_desc.round_id_, single_ls_desc.piece_id_, single_ls_desc.ls_id_, file.file_id_, file_path))) {
+          LOG_WARN("failed to get ls archive file path", KR(ret), K(dest), K(single_ls_desc), K(file));
+        } else if (OB_FAIL(file_info.set_file_info(file_path, file.size_bytes_))) {
+          LOG_WARN("failed to set file info", KR(ret), K(file_path), K(file.size_bytes_));
+        } else if (OB_FAIL(writer.write_item(file_info))) {
+          LOG_WARN("failed to write item", KR(ret), K(file_info));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(writer.close(entry_block_addr, total_item_count, total_block_count))) {
+        LOG_WARN("failed to close writer", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+static int record_piece_info(const ObDestRoundCheckpointer::GeneratedPiece &piece,
+                                  const ObArchiveStore &store, ObBackupFileListInfo &file_list_info)
 {
   int ret = OB_SUCCESS;
   const ObTenantArchivePieceAttr &piece_info = piece.piece_info_;
   if (!piece_info.status_.is_frozen()) {
   } else {
     bool is_exist = false;
+    ObBackupPath piece_file_info_path;
+    const ObBackupDest &dest = store.get_backup_dest();
     // persist piece ls info & piece info
     ObPieceInfoDesc piece_info_desc;
     for (int64_t i = 0; OB_SUCC(ret) && i < piece.ls_piece_list_.count(); i++) {
@@ -192,29 +389,45 @@ static int record_piece_info(const ObDestRoundCheckpointer::GeneratedPiece &piec
           LOG_WARN("failed to write single ls info file", K(ret), K(piece), K(single_ls_desc));
         }
       }
-
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(record_piece_ls_log_file_list(single_ls_desc, store))) {
+        LOG_WARN("failed to record piece ls file list", KR(ret), K(piece), K(single_ls_desc));
+      } else if (OB_FAIL(record_piece_ls_file_list(single_ls_desc, store))) {
+        LOG_WARN("failed to record piece ls file list", KR(ret), K(piece), K(single_ls_desc));
+      }
     }
 
     piece_info_desc.dest_id_ = piece_info.key_.dest_id_;
     piece_info_desc.round_id_ = piece_info.key_.round_id_;
     piece_info_desc.piece_id_ = piece_info.key_.piece_id_;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(store.is_piece_info_file_exist(piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, is_exist))) {
+    } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_info_file_path(dest, piece_info.key_.dest_id_,
+                          piece_info.key_.round_id_, piece_info.key_.piece_id_, piece_file_info_path))) {
+      LOG_WARN("failed to get piece file info path", K(ret), K(dest), K(piece_info));
+    } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(piece_file_info_path,
+                                                                                  piece_info_desc, file_list_info))) {
+      LOG_WARN("failed to add file to list", K(ret), K(piece_file_info_path), K(piece_info_desc), K(file_list_info));
+    } else if (OB_FAIL(store.is_piece_info_file_exist(piece_info.key_.dest_id_, piece_info.key_.round_id_,
+                                                          piece_info.key_.piece_id_, is_exist))) {
       LOG_WARN("failed to check piece info file exist", K(ret), K(piece), K(piece_info_desc));
     } else if (is_exist) {
-    } else if (OB_FAIL(store.write_piece_info(piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, piece_info_desc))) {
+    } else if (OB_FAIL(store.write_piece_info(piece_info.key_.dest_id_, piece_info.key_.round_id_,
+                                                          piece_info.key_.piece_id_, piece_info_desc))) {
       LOG_WARN("failed to write piece info file", K(ret), K(piece), K(piece_info_desc));
     }
   }
   return ret;
 }
 
-static int record_piece_inner_placeholder(const ObTenantArchivePieceAttr &piece_info, const ObArchiveStore &store)
+static int record_piece_inner_placeholder(const ObTenantArchivePieceAttr &piece_info,
+                                          const ObArchiveStore &store, ObBackupFileListInfo &file_list_info)
 {
   int ret = OB_SUCCESS;
   if (!piece_info.status_.is_frozen()) {
   } else {
     bool is_exist = false;
+    ObBackupPath inner_placeholder_path;
+    const ObBackupDest &dest = store.get_backup_dest();
     ObPieceInnerPlaceholderDesc inner_placeholder_desc;
     inner_placeholder_desc.dest_id_ = piece_info.key_.dest_id_;
     inner_placeholder_desc.round_id_ = piece_info.key_.round_id_;
@@ -222,6 +435,14 @@ static int record_piece_inner_placeholder(const ObTenantArchivePieceAttr &piece_
     inner_placeholder_desc.start_scn_ = piece_info.start_scn_;
     inner_placeholder_desc.checkpoint_scn_ = piece_info.checkpoint_scn_;
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_inner_placeholder_file_path(dest, piece_info.key_.dest_id_,
+                                        piece_info.key_.round_id_, piece_info.key_.piece_id_,
+                                        piece_info.start_scn_, piece_info.checkpoint_scn_, inner_placeholder_path))) {
+      LOG_WARN("failed to get piece inner placeholder file path", K(ret), K(dest), K(piece_info));
+    } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(inner_placeholder_path,
+                                                                            inner_placeholder_desc, file_list_info))) {
+      LOG_WARN("failed to add file to list", K(ret), K(inner_placeholder_path),
+                    K(inner_placeholder_desc), K(file_list_info));
     } else if (OB_FAIL(store.is_piece_inner_placeholder_file_exist(piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, piece_info.start_scn_, piece_info.checkpoint_scn_, is_exist))) {
       LOG_WARN("failed to check piece inner placeholder file exist", K(ret), K(piece_info), K(inner_placeholder_desc));
     } else if (is_exist) {
@@ -232,22 +453,152 @@ static int record_piece_inner_placeholder(const ObTenantArchivePieceAttr &piece_
   return ret;
 }
 
-static int record_single_piece_info(const ObTenantArchivePieceAttr &piece_info, const ObArchiveStore &store)
+static int record_single_piece_file_list(
+    const ObDestRoundCheckpointer::GeneratedPiece &piece,
+    const ObTenantArchivePieceAttr &piece_info,
+    const ObArchiveStore &store,
+    ObBackupFileListInfo &file_list_info)
+{
+  int ret = OB_SUCCESS;
+  if (!piece_info.status_.is_frozen()) {
+  } else {
+    ObBackupPath checkpoint_dir_path;
+    ObBackupPath piece_path;
+    const ObBackupDest &dest = store.get_backup_dest();
+    const ObBackupStorageInfo *storage_info = store.get_storage_info();
+    const int64_t dest_id = storage_info->get_dest_id();
+    ObBackupPath tenant_piece_infos_path;
+    bool is_exist = false;
+    const ObBackupFileSuffix suffix(ObBackupFileSuffix::ARCHIVE);
+    if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(dest, piece_info.key_.dest_id_, piece_info.key_.round_id_,
+                                                                piece_info.key_.piece_id_, piece_path))) {
+      LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(piece_info));
+    } else if (OB_FAIL(store.is_file_list_file_exist(piece_path, suffix, is_exist))) {
+      LOG_WARN("failed to check file list file exist", K(ret), K(piece_path));
+    } else if (is_exist) {
+    } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_checkpoint_dir_path(dest,
+        piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, checkpoint_dir_path))) {
+      LOG_WARN("failed to get piece checkpoint dir path", K(ret), K(dest), K(piece_info));
+    } else if (OB_FAIL(store.is_file_list_file_exist(checkpoint_dir_path, suffix, is_exist))) {
+      LOG_WARN("failed to check file list file exist", K(ret), K(checkpoint_dir_path));
+    } else if (is_exist && OB_FAIL(file_list_info.push_dir_info(checkpoint_dir_path))) {
+      LOG_WARN("failed to push checkpoint dir info", K(ret), K(checkpoint_dir_path));
+    } else if (OB_FAIL(share::ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(dest,
+                                      piece_info.key_.dest_id_, piece_info.key_.round_id_,
+                                      piece_info.key_.piece_id_, tenant_piece_infos_path))) {
+      LOG_WARN("failed to get tenant archive piece infos file path", K(ret), K(dest), K(piece_info));
+    } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(tenant_piece_infos_path,
+                                                                                  *storage_info, file_list_info))) {
+      LOG_WARN("failed to add file to list", K(ret), K(file_list_info), K(tenant_piece_infos_path));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < piece.ls_piece_list_.count(); i++) {
+        const ObDestRoundCheckpointer::GeneratedLSPiece &ls_piece = piece.ls_piece_list_.at(i);
+        ObBackupPath ls_dir_path;
+        if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_dir_path(dest,
+            piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_,
+            ls_piece.ls_id_, ls_dir_path))) {
+          LOG_WARN("failed to get piece ls dir path", K(ret), K(dest), K(piece_info), K(ls_piece.ls_id_));
+        } else if (OB_FAIL(file_list_info.push_dir_info(ls_dir_path))) {
+          LOG_WARN("failed to push ls dir info", K(ret), K(ls_dir_path));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, suffix,
+                                                                            piece_path, dest_id, file_list_info))) {
+        LOG_WARN("failed to write file list", K(ret), K(piece_path), K(file_list_info));
+      }
+    }
+  }
+  return ret;
+}
+
+static int record_checkpoint_dir_file_list(
+  const ObTenantArchivePieceAttr &piece_info,
+  const ObArchiveStore &store)
+{
+  int ret = OB_SUCCESS;
+  if (!piece_info.status_.is_frozen()) {
+  } else {
+    const ObBackupDest &dest = store.get_backup_dest();
+    const ObBackupStorageInfo *storage_info = store.get_storage_info();
+    const int64_t dest_id = storage_info->get_dest_id();
+    const int64_t min_file_id = 0;
+    uint64_t checkpoint_scn = 0;
+    ObBackupPath checkpoint_file_path;
+    ObBackupPath checkpoint_dir_path;
+    ObBackupFileListInfo file_list_info;
+    ObPieceCheckpointDesc checkpoint_desc;
+    const ObBackupFileSuffix suffix(ObBackupFileSuffix::ARCHIVE);
+    bool is_exist = false;
+    if (OB_FAIL(share::ObArchivePathUtil::get_piece_checkpoint_dir_path(dest,
+        piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, checkpoint_dir_path))) {
+      LOG_WARN("failed to get piece checkpoint dir path", K(ret), K(dest), K(piece_info));
+    } else if (OB_FAIL(store.is_file_list_file_exist(checkpoint_dir_path, suffix, is_exist))) {
+      LOG_WARN("failed to check file list file exist", K(ret), K(checkpoint_dir_path));
+    } else if (is_exist) {
+    } else if (OB_FAIL(checkpoint_file_path.init(checkpoint_dir_path.get_ptr()))) {
+      LOG_WARN("failed to init checkpoint file path", K(ret));
+    } else if (OB_FAIL(checkpoint_file_path.join_checkpoint_info_file(OB_STR_CHECKPOINT_FILE_NAME,
+                                                                          min_file_id, ObBackupFileSuffix::ARCHIVE))) {
+      LOG_WARN("failed to get piece checkpoint file path for min file id", K(ret), K(dest), K(piece_info));
+    } else if (OB_FAIL(store.is_piece_checkpoint_file_exist(piece_info.key_.dest_id_, piece_info.key_.round_id_,
+                                                            piece_info.key_.piece_id_, min_file_id, is_exist))) {
+      LOG_WARN("failed to check checkpoint file exist", K(ret), K(piece_info));
+    } else if (!is_exist) {
+    // Some test environments set the PIECE_SWITCH_INTERVAL time to a shorter time,
+    // causing the piece status to become frozen without executing checkpoint.
+    // In this case, the checkpoint file does not exist.
+    // The checkpoint file is only dependent on the piece when it is active.
+    // This function only executes when the piece is frozen,
+    // so the absence of the checkpoint file does not affect the validity of the piece.
+    } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(checkpoint_file_path,
+                                                                          *storage_info, file_list_info))) {
+      LOG_WARN("failed to add file to list", K(ret), K(file_list_info), K(checkpoint_file_path));
+    } else if (FALSE_IT(checkpoint_file_path.reset())) {
+    } else if (OB_FAIL(store.read_piece_checkpoint(piece_info.key_.dest_id_, piece_info.key_.round_id_,
+                                                            piece_info.key_.piece_id_, min_file_id, checkpoint_desc))) {
+      LOG_WARN("failed to read piece checkpoint", K(ret), K(piece_info));
+    } else if (FALSE_IT(checkpoint_scn = checkpoint_desc.checkpoint_scn_.get_val_for_inner_table_field())) {
+    } else if (OB_FAIL(checkpoint_file_path.init(checkpoint_dir_path.get_ptr()))) {
+      LOG_WARN("failed to init max checkpoint file path", K(ret), K(checkpoint_dir_path), K(piece_info));
+    } else if (OB_FAIL(checkpoint_file_path.join_checkpoint_info_file(OB_STR_CHECKPOINT_FILE_NAME, checkpoint_scn,
+                                                                            ObBackupFileSuffix::ARCHIVE))) {
+      LOG_WARN("failed to get piece checkpoint file path for max file id", K(ret), K(dest), K(piece_info));
+    } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(checkpoint_file_path, *storage_info,
+                                                                            file_list_info))) {
+      LOG_WARN("failed to add file to list", K(ret), K(file_list_info), K(checkpoint_file_path));
+    } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, suffix, checkpoint_dir_path,
+                                                                              dest_id, file_list_info))) {
+      LOG_WARN("failed to write file list", K(ret), K(checkpoint_dir_path), K(file_list_info));
+    }
+  }
+  return ret;
+}
+
+static int record_single_piece_info(const ObTenantArchivePieceAttr &piece_info,
+                                    const ObArchiveStore &store, ObBackupFileListInfo &file_list_info)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool is_exist = false;
+  ObBackupPath single_piece_info_path;
+  const ObBackupDest &dest = store.get_backup_dest();
   ObSinglePieceDesc single_piece_desc;
   if (!piece_info.status_.is_frozen()) {
+  } else if (OB_FAIL(share::ObArchivePathUtil::get_single_piece_file_path(dest, piece_info.key_.dest_id_,
+                                    piece_info.key_.round_id_, piece_info.key_.piece_id_, single_piece_info_path))) {
+    LOG_WARN("failed to get single piece info path", K(ret), K(dest), K(piece_info));
   } else if (OB_FAIL(single_piece_desc.piece_.assign(piece_info))) {
     LOG_WARN("failed to assign piece", K(ret));
+  } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(single_piece_info_path, single_piece_desc,
+                                                                                file_list_info))) {
+    LOG_WARN("failed to add file to list", K(ret), K(single_piece_desc), K(single_piece_info_path));
   } else if (OB_FAIL(store.is_single_piece_file_exist(piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, is_exist))) {
     LOG_WARN("failed to check single piece info file exist", K(ret), K(piece_info), K(single_piece_desc));
   } else if (is_exist) {
   } else if (OB_FAIL(store.write_single_piece(piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, single_piece_desc))) {
     LOG_WARN("failed to write single piece info file", K(ret), K(piece_info), K(single_piece_desc));
   }
-
   return ret;
 }
 
@@ -332,6 +683,7 @@ static int piece_generated_cb(
   const ObTenantArchivePieceAttr &piece_info = piece.piece_info_;
   ObArchiveStore store;
   ObBackupDest dest;
+  ObBackupFileListInfo file_list_info;
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -342,15 +694,19 @@ static int piece_generated_cb(
   } else if (OB_FAIL(record_piece_start(old_round_info, piece_info, store))) {
     LOG_WARN("failed to record piece start", K(ret), K(old_round_info), K(piece));
   } else if (OB_FAIL(record_piece_extend_info(*sql_proxy, old_round_info, result, piece.piece_info_, store))) {
-    LOG_WARN("failed to record piece extend info", K(ret));
+    LOG_WARN("failed to record piece extend info", K(ret), K(old_round_info), K(piece));
   } else if (OB_FAIL(record_piece_checkpoint(old_round_info, piece_info, store))) {
     LOG_WARN("failed to record piece checkpoint", K(ret), K(old_round_info), K(piece));
-  } else if (OB_FAIL(record_piece_info(piece, store))) {
-    LOG_WARN("failed to record piece info", K(ret), K(old_round_info), K(piece));
-  } else if (OB_FAIL(record_piece_inner_placeholder(piece_info, store))) {
-    LOG_WARN("failed to record piece inner placeholder", K(ret), K(old_round_info), K(piece));
-  } else if (OB_FAIL(record_single_piece_info(piece_info, store))) {
+  } else if (OB_FAIL(record_piece_info(piece, store, file_list_info))) {
+    LOG_WARN("failed to record piece info", K(ret), K(old_round_info), K(piece), K(file_list_info));
+  } else if (OB_FAIL(record_piece_inner_placeholder(piece_info, store, file_list_info))) {
+    LOG_WARN("failed to record piece inner placeholder", K(ret), K(old_round_info), K(piece), K(file_list_info));
+  } else if (OB_FAIL(record_single_piece_info(piece_info, store, file_list_info))) {
     LOG_WARN("failed to record single piece info", K(ret), K(old_round_info), K(piece));
+  } else if (OB_FAIL(record_checkpoint_dir_file_list(piece_info, store))) {
+    LOG_WARN("failed to record checkpoint dir file list", K(ret), K(piece_info), K(old_round_info), K(file_list_info));
+  } else if (OB_FAIL(record_single_piece_file_list(piece, piece_info, store, file_list_info))) {
+    LOG_WARN("failed to record piece file list", K(ret), K(old_round_info), K(piece), K(file_list_info));
   } else if (OB_FAIL(record_piece_end(piece_info, store))) {
     LOG_WARN("failed to record piece end", K(ret), K(old_round_info), K(piece));
   }

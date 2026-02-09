@@ -15,10 +15,11 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-
+#include "share/backup/ob_backup_struct.h"
 using namespace oceanbase;
 using namespace common;
 using namespace share;
+using namespace backup;
 /*
  *--------------------------------ObBackupLSInfo-----------------------------
  */
@@ -685,18 +686,28 @@ int ObBackupDataStore::write_tablet_to_ls_info(const ObBackupDataTabletToLSDesc 
   int ret = OB_SUCCESS;
   ObBackupPathString full_path;
   share::ObBackupPath path;
-
+  ObBackupPath dir_path;
+  ObBackupFileListInfo file_list_info;
+  int64_t file_size = tablet_to_ls_info.get_serialize_size() + sizeof(ObBackupCommonHeader);
+  const ObBackupStorageInfo *storage_info = backup_set_dest_.get_storage_info();
+  const int64_t dest_id = storage_info->get_dest_id();
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data extern mgr not init", K(ret));
   } else if (OB_FAIL(ObBackupPathUtil::get_backup_data_tablet_ls_info_path(backup_set_dest_, type, turn_id, path))) {
     LOG_WARN("fail to get path", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_set_dest_, type, turn_id, dir_path))) {
+    LOG_WARN("fail to get ls info data info dir path", K(ret));
   } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(write_single_file(full_path, tablet_to_ls_info))) {
     LOG_WARN("fail to write single file", K(ret));
-  } 
-
+  } else if (OB_FAIL(file_list_info.push_file_info(path, file_size))) {
+    LOG_WARN("failed to push file info", K(ret), K(path), K(file_size));
+  } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, ObBackupFileSuffix::BACKUP,
+                                                                            dir_path, dest_id, file_list_info))) {
+    LOG_WARN("fail to write file list", K(ret), K(dir_path), K(path), K(file_list_info));
+  }
   return ret;
 }
 
@@ -1012,6 +1023,29 @@ int ObBackupDataStore::read_backup_set_info(ObExternBackupSetInfoDesc &backup_se
   return ret;
 }
 
+int ObBackupDataStore::read_backup_set_info_by_desc(
+    const share::ObBackupSetDesc &desc,
+    ObExternBackupSetInfoDesc &backup_set_info)
+{
+  int ret = OB_SUCCESS;
+
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_set_info_path(get_backup_dest(), desc, path))) {
+    LOG_WARN("fail to get backup set info path", K(ret), K(desc));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("fail to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, backup_set_info))) {
+    LOG_WARN("failed to read single file", K(ret), K(full_path));
+  } else {
+    LOG_INFO("read backup set info by desc", K(backup_set_info), K(desc));
+  }
+  return ret;
+}
+
 int ObBackupDataStore::is_backup_set_info_file_exist(bool &is_exist) const
 {
   int ret = OB_SUCCESS;
@@ -1110,7 +1144,7 @@ int ObBackupDataStore::get_backup_set_array(
     const common::ObString &passwd_array,
     const SCN &restore_scn,
     SCN &restore_start_scn,
-    common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list)
+    common::ObIArray<share::ObBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
   backup_set_list.reset();
@@ -1136,6 +1170,30 @@ int ObBackupDataStore::get_backup_set_array(
   }
   return ret;
 }
+
+int ObBackupDataStore::get_backup_set_list(ObArray<share::ObBackupSetDesc> &set_list)
+{
+  int ret = OB_SUCCESS;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data store do not init", K(ret));
+  } else {
+    common::ObBackupIoAdapter util;
+    storage::ObBackupSetFilter op;
+    share::ObBackupPath sets_dir_path;
+    const ObBackupStorageInfo *storage_info = get_storage_info();
+    if (OB_FAIL(share::ObBackupPathUtil::get_backup_sets_dir_path(get_backup_dest(), sets_dir_path))) {
+      LOG_WARN("fail to get simple backup placeholder dir", KR(ret));
+    } else if (OB_FAIL(util.adaptively_list_files(sets_dir_path.get_ptr(), storage_info, op))) {
+      LOG_WARN("fail to list files", KR(ret), K(sets_dir_path));
+    } else if (OB_FAIL(op.get_backup_set_array(set_list))) {
+      LOG_WARN("fail to get backup set array", KR(ret), K(sets_dir_path));
+    }
+  }
+
+  return ret;
+}
+
 
 int ObBackupDataStore::get_max_backup_set_file_info(const common::ObString &passwd_array, ObBackupSetFileDesc &output_desc)
 {
@@ -1311,7 +1369,7 @@ int ObBackupDataStore::do_get_backup_set_array_(
     const common::ObString &passwd_array,
     const SCN &restore_scn,
     const ObBackupSetFilter &op,
-    common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
+    common::ObIArray<share::ObBackupSetBriefInfo> &tmp_backup_set_list,
     int64_t &cur_max_backup_set_id, SCN &restore_start_scn)
 {
   int ret = OB_SUCCESS;
@@ -1399,7 +1457,7 @@ int ObBackupDataStore::do_get_backup_set_array_(
   }
 
   share::ObBackupDest backup_set_dest;
-  ObRestoreBackupSetBriefInfo tmp_backup_set_brief_info;
+  ObBackupSetBriefInfo tmp_backup_set_brief_info;
   ObBackupSetFilter::BackupSetMap::iterator iter = backup_set_map.begin();
   for ( ; OB_SUCC(ret) && iter != backup_set_map.end(); ++iter) {
     // construct path which is include root_path, host and storage info
@@ -1770,6 +1828,115 @@ int ObBackupDataStore::read_major_compaction_mview_dep_tablet_list(ObBackupMajor
     LOG_WARN("fail to read single file", K(ret), K(full_path));
   } else {
     LOG_INFO("read mview dep tablet list", K(desc));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_backup_meta_file_list(const share::ObBackupLSTaskAttr &ls_attr)
+{
+  int ret = OB_SUCCESS;
+  if (!ls_attr.task_type_.is_backup_meta()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_attr));
+  } else {
+    ObBackupPath sys_data_path;
+    ObBackupPath meta_info_path;
+    ObBackupDataType backup_data_type;
+    backup_data_type.set_sys_data_backup();
+    ObBackupFileListInfo file_list_info;
+    if (OB_FAIL(ObBackupPathUtil::get_meta_info_path(backup_set_dest_, ls_attr.ls_id_, ls_attr.turn_id_,
+                                                        ls_attr.retry_id_, false/*is_final_fuse*/, meta_info_path))) {
+      LOG_WARN("fail to get meta info path", K(ret), K(backup_set_dest_), K(ls_attr));
+    } else if (OB_FAIL(list_and_generate_file_list_(meta_info_path, ObBackupFileSuffix::BACKUP, file_list_info))) {
+      LOG_WARN("fail to list and generate file list", K(ret), K(meta_info_path));
+    } else if (OB_FAIL(ObBackupPathUtil::get_ls_backup_data_dir_path(backup_set_dest_, ls_attr.ls_id_, backup_data_type,
+                                                        ls_attr.turn_id_, ls_attr.retry_id_, sys_data_path))) {
+      LOG_WARN("fail to get sys data path", K(ret), K(backup_set_dest_), K(ls_attr));
+    } else if (OB_FAIL(list_and_generate_file_list_(sys_data_path, ObBackupFileSuffix::BACKUP, file_list_info))) {
+      LOG_WARN("fail to list and generate file list", K(ret), K(sys_data_path));
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_backup_data_file_list(const share::ObBackupLSTaskAttr &ls_attr)
+{
+  int ret = OB_SUCCESS;
+  if (!ls_attr.task_type_.is_backup_data()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_attr));
+  } else {
+    ObBackupPath user_data_path;
+    ObBackupDataType backup_data_type;
+    ObBackupFileListInfo file_list_info;
+    backup_data_type.set_user_data_backup();
+    if (OB_FAIL(ObBackupPathUtilV_4_3_2::get_ls_backup_data_dir_path(backup_set_dest_, ls_attr.ls_id_, backup_data_type,
+                                                                  ls_attr.turn_id_, ls_attr.retry_id_, user_data_path))) {
+      LOG_WARN("fail to get user data path", K(ret), K(backup_set_dest_), K(ls_attr));
+    } else if (OB_FAIL(list_and_generate_file_list_(user_data_path, ObBackupFileSuffix::BACKUP, file_list_info))) {
+      LOG_WARN("fail to list and generate file list", K(ret), K(user_data_path));
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_backup_fuse_meta_info_file_list(const share::ObBackupLSTaskAttr &ls_attr)
+{
+  int ret = OB_SUCCESS;
+  if (!ls_attr.task_type_.is_backup_fuse_meta_info()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_attr));
+  } else {
+    ObBackupPath meta_info_path;
+    ObBackupFileListInfo file_list_info;
+    if (OB_FAIL(ObBackupPathUtil::get_meta_info_path(backup_set_dest_, ls_attr.ls_id_, ls_attr.turn_id_,
+                                                        ls_attr.retry_id_, true/*is_final_fuse*/, meta_info_path))) {
+      LOG_WARN("fail to get meta info path", K(ret), K(backup_set_dest_), K(ls_attr));
+    } else if (OB_FAIL(list_and_generate_file_list_(meta_info_path, ObBackupFileSuffix::BACKUP, file_list_info))) {
+      LOG_WARN("fail to list and generate file list", K(ret), K(meta_info_path));
+    }
+  }
+  return ret;
+}
+
+int ObBackupDataStore::list_and_generate_file_list_(
+    const ObBackupPath &path,
+    const ObBackupFileSuffix &suffix,
+    ObBackupFileListInfo &file_list_info)
+{
+  int ret = OB_SUCCESS;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (path.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[DATA_BACKUP]invalid dest id or path or file list", K(ret), K(path));
+  } else {
+    file_list_info.reset();
+    ObSArray<ObBackupFileInfo> file_list;
+    ObBackupIoAdapter io_util;
+    const ObBackupStorageInfo *storage_info = backup_set_dest_.get_storage_info();
+    const int64_t dest_id = storage_info->get_dest_id();
+    ObBackupDirListOp dir_list_op(file_list);
+    if (OB_FAIL(io_util.adaptively_list_files(path.get_ptr(), storage_info, dir_list_op))) {
+      LOG_WARN("[DATA_BACKUP]failed to list ls directory files", K(ret), K(path));
+    } else if (file_list.empty()) {
+      LOG_INFO("[DATA_BACKUP]no direct files, do nothing", K(ret), K(path));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_list.count(); ++i) {
+        const ObBackupFileInfo &file_info = file_list.at(i);
+        if (!file_info.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("[DATA_BACKUP]file info is not valid", K(ret), K(file_info));
+        } else if (OB_FAIL(file_list_info.push_file_info(file_info))) {
+          LOG_WARN("[DATA_BACKUP]failed to push file info", K(ret), K(file_info));
+        }
+      }
+      if (FAILEDx(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, suffix,
+                                                                          path, dest_id, file_list_info))) {
+        LOG_WARN("[DATA_BACKUP]failed to write file list to path", K(ret), K(path), K(file_list_info), K(suffix));
+      }
+    }
   }
   return ret;
 }

@@ -8446,12 +8446,224 @@ def_table_schema(**all_sensitive_rule_privilege_def)
 def_table_schema(**gen_history_table_def(561, all_sensitive_rule_privilege_def))
 
 # 562: __wr_sql_histogram
-# 563: __all_backup_validate_job
-# 564: __all_backup_validate_job_history
-# 565: __all_backup_validate_task
-# 566: __all_backup_validate_task_history
-# 567: __all_backup_validate_ls_task
-# 568: __all_backup_validate_ls_task_history
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name = '__all_backup_validate_job',
+  table_id = '563',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_id', 'int'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('incarnation', 'int'),
+    ('initiator_tenant_id', 'int'),
+    ('initiator_job_id', 'int'),
+    ('executor_tenant_id', 'varchar:OB_MAX_EXECUTOR_TENANT_LENGTH', 'false', ''),
+    ('type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH', 'false', ''),
+    ('path', 'longtext', 'true', ''),
+    ('path_type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH', 'true', ''),
+    ('id', 'longtext', 'true', ''),
+    ('validate_level', 'varchar:OB_DEFAULT_LEVEL_LENGTH', 'false', 'PHYSICAL'),
+    ('start_ts', 'int'),
+    ('end_ts', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('retry_count', 'int', 'true', '0'),
+    ('task_count', 'int', 'true', '0'),
+    ('success_task_count', 'int', 'true', '0'),
+    ('result', 'int'),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ('description', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name = '__all_backup_validate_job_history',
+  table_id = '564',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_id', 'int'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('incarnation', 'int'),
+    ('initiator_tenant_id', 'int'),
+    ('initiator_job_id', 'int'),
+    ('executor_tenant_id', 'varchar:OB_MAX_EXECUTOR_TENANT_LENGTH', 'false', ''),
+    ('type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH', 'false', ''),
+    ('path', 'longtext', 'true', ''),
+    ('path_type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH', 'true', ''),
+    ('id', 'longtext', 'true', ''),
+    ('validate_level', 'varchar:OB_DEFAULT_LEVEL_LENGTH', 'false', 'PHYSICAL'),
+    ('start_ts', 'int'),
+    ('end_ts', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('retry_count', 'int', 'true', '0'),
+    ('task_count', 'int', 'true', '0'),
+    ('success_task_count', 'int', 'true', '0'),
+    ('result', 'int'),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ('description', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name = '__all_backup_validate_task',
+  table_id = '565',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('task_id', 'int'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('incarnation', 'int'),
+    ('job_id', 'int'),
+    ('task_type', 'varchar:OB_INNER_TABLE_BACKUP_VALIDATE_TYPE_LENGTH'),
+    ('path', 'longtext', 'true', ''),
+    ('path_type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH', 'true', ''),
+    ('dest_id', 'int', 'true', '-1'),
+    ('plus_archivelog', 'varchar:OB_INNER_TABLE_BACKUP_VALIDATE_TYPE_LENGTH', 'false', 'OFF'),
+    ('initiator_task_id', 'int'),
+    ('id', 'int', 'true', '0'),
+    ('validate_level', 'varchar:OB_DEFAULT_LEVEL_LENGTH', 'false', 'PHYSICAL'),
+    ('round_id', 'int'),
+    ('start_ts', 'int'),
+    ('end_ts', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('total_ls_count', 'int', 'true', '0'),
+    ('finish_ls_count', 'int', 'true', '0'),
+    ('total_bytes', 'int', 'true', '0'),
+    ('validated_bytes', 'int', 'true', '0'),
+    ('result', 'int'),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name = '__all_backup_validate_task_history',
+  table_id = '566',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('task_id', 'int'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('incarnation', 'int'),
+    ('job_id', 'int'),
+    ('task_type', 'varchar:OB_INNER_TABLE_BACKUP_VALIDATE_TYPE_LENGTH'),
+    ('path', 'longtext', 'true', ''),
+    ('path_type', 'varchar:OB_INNER_TABLE_BACKUP_TYPE_LENTH', 'true', ''),
+    ('dest_id', 'int', 'true', '-1'),
+    ('plus_archivelog', 'varchar:OB_INNER_TABLE_BACKUP_VALIDATE_TYPE_LENGTH', 'false', 'OFF'),
+    ('initiator_task_id', 'int'),
+    ('id', 'int', 'true', '0'),
+    ('validate_level', 'varchar:OB_DEFAULT_LEVEL_LENGTH', 'false', 'PHYSICAL'),
+    ('round_id', 'int'),
+    ('start_ts', 'int'),
+    ('end_ts', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('total_ls_count', 'int', 'true', '0'),
+    ('finish_ls_count', 'int', 'true', '0'),
+    ('total_bytes', 'int', 'true', '0'),
+    ('validated_bytes', 'int', 'true', '0'),
+    ('result', 'int'),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name = '__all_backup_validate_ls_task',
+    table_id = '567',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('task_id', 'int'),
+    ('ls_id', 'int'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('job_id', 'int'),
+    ('task_type', 'varchar:OB_INNER_TABLE_BACKUP_VALIDATE_TYPE_LENGTH'),
+    ('path', 'longtext', 'true', ''),
+    ('dest_id', 'int', 'true', '-1'),
+    ('id', 'int', 'true', '0'),
+    ('validate_level', 'varchar:OB_DEFAULT_LEVEL_LENGTH', 'false', 'PHYSICAL'),
+    ('start_ts', 'int'),
+    ('end_ts', 'int'),
+    ('round_id', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('svr_ip', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ('svr_port', 'int', 'true', '0'),
+    ('total_object_count', 'int', 'true', '0'),
+    ('finish_object_count', 'int', 'true', '0'),
+    ('validated_bytes', 'int', 'true', '0'),
+    ('retry_id', 'int', 'true', '0'),
+    ('result', 'int'),
+    ('task_trace_id', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name = '__all_backup_validate_ls_task_history',
+  table_id = '568',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('task_id', 'int'),
+    ('ls_id', 'int'),
+    ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('job_id', 'int'),
+    ('task_type', 'varchar:OB_INNER_TABLE_BACKUP_VALIDATE_TYPE_LENGTH'),
+    ('path', 'longtext', 'true', ''),
+    ('dest_id', 'int', 'true', '-1'),
+    ('id', 'int', 'true', '0'),
+    ('validate_level', 'varchar:OB_DEFAULT_LEVEL_LENGTH', 'false', 'PHYSICAL'),
+    ('start_ts', 'int'),
+    ('end_ts', 'int'),
+    ('round_id', 'int'),
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+    ('svr_ip', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ('svr_port', 'int', 'true', '0'),
+    ('total_object_count', 'int', 'true', '0'),
+    ('finish_object_count', 'int', 'true', '0'),
+    ('validated_bytes', 'int', 'true', '0'),
+    ('retry_id', 'int', 'true', '0'),
+    ('result', 'int'),
+    ('task_trace_id', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
+    ],
+)
 
 def_table_schema(
     owner = 'zk250686',
@@ -17524,12 +17736,42 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12561: __all_virtual_sql_histogram_cache
 # 12562: __all_virtual_wr_sql_histogram
-# 12563: __all_virtual_backup_validate_job
-# 12564: __all_virtual_backup_validate_job_history
-# 12565: __all_virtual_backup_validate_task
-# 12566: __all_virtual_backup_validate_task_history
-# 12567: __all_virtual_backup_validate_ls_task
-# 12568: __all_virtual_backup_validate_ls_task_history
+#backup validate virtual table
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12563',
+  table_name = '__all_virtual_backup_validate_job',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_backup_validate_job']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12564',
+  table_name = '__all_virtual_backup_validate_job_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_backup_validate_job_history']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12565',
+  table_name = '__all_virtual_backup_validate_task',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_backup_validate_task']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12566',
+  table_name = '__all_virtual_backup_validate_task_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_backup_validate_task_history']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12567',
+  table_name = '__all_virtual_backup_validate_ls_task',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_backup_validate_ls_task']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12568',
+  table_name = '__all_virtual_backup_validate_ls_task_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_backup_validate_ls_task_history']))
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12569',
@@ -18328,10 +18570,11 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15524', all_def_keywords['__all_unit'])))
 # 15525: __all_virtual_sql_histogram_cache
 # 15526: __all_virtual_wr_sql_histogram
-# 15527: __all_virtual_backup_validate_job
-# 15528: __all_virtual_backup_validate_job_history
-# 15529: __all_virtual_backup_validate_task
-# 15530: __all_virtual_backup_validate_task_history
+#backup validate virtual table
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15527', all_def_keywords['__all_virtual_backup_validate_job'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15528', all_def_keywords['__all_virtual_backup_validate_job_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15529', all_def_keywords['__all_virtual_backup_validate_task'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15530', all_def_keywords['__all_virtual_backup_validate_task_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15531', all_def_keywords['__all_virtual_tenant_ss_storage_stat'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15532', all_def_keywords['__all_virtual_hms_client_pool_stat']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_source']))
@@ -44763,6 +45006,333 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+#backup validate view
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'CDB_OB_BACKUP_VALIDATE_JOBS',
+  table_id        = '21673',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      JOB_ID,
+      INCARNATION,
+      INITIATOR_TENANT_ID,
+      INITIATOR_JOB_ID,
+      EXECUTOR_TENANT_ID,
+      TYPE,
+      PATH,
+      PATH_TYPE,
+      ID,
+      VALIDATE_LEVEL,
+      USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          USEC_TO_TIME(END_TS)
+        END AS END_TIMESTAMP,
+      STATUS,
+      RETRY_COUNT,
+      TASK_COUNT,
+      SUCCESS_TASK_COUNT,
+      RESULT,
+      DESCRIPTION,
+      COMMENT
+    FROM oceanbase.__all_virtual_backup_validate_job
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'CDB_OB_BACKUP_VALIDATE_JOB_HISTORY',
+  table_id        = '21674',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      JOB_ID,
+      INCARNATION,
+      INITIATOR_TENANT_ID,
+      INITIATOR_JOB_ID,
+      EXECUTOR_TENANT_ID,
+      TYPE,
+      PATH,
+      PATH_TYPE,
+      ID,
+      VALIDATE_LEVEL,
+      USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          USEC_TO_TIME(END_TS)
+        END AS END_TIMESTAMP,
+      STATUS,
+      RETRY_COUNT,
+      TASK_COUNT,
+      SUCCESS_TASK_COUNT,
+      RESULT,
+      DESCRIPTION,
+      COMMENT
+    FROM oceanbase.__all_virtual_backup_validate_job_history
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'CDB_OB_BACKUP_VALIDATE_TASKS',
+  table_id        = '21675',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      TASK_ID,
+      INCARNATION,
+      JOB_ID,
+      TASK_TYPE,
+      ID,
+      PATH,
+      PATH_TYPE,
+      DEST_ID,
+      PLUS_ARCHIVELOG,
+      INITIATOR_TASK_ID,
+      VALIDATE_LEVEL,
+      ROUND_ID,
+      USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          USEC_TO_TIME(END_TS)
+        END AS END_TIMESTAMP,
+      STATUS,
+      TOTAL_LS_COUNT,
+      FINISH_LS_COUNT,
+      TOTAL_BYTES,
+      VALIDATED_BYTES,
+      RESULT,
+      COMMENT
+    FROM oceanbase.__all_virtual_backup_validate_task
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'CDB_OB_BACKUP_VALIDATE_TASK_HISTORY',
+  table_id        = '21676',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      TASK_ID,
+      INCARNATION,
+      JOB_ID,
+      TASK_TYPE,
+      ID,
+      PATH,
+      PATH_TYPE,
+      DEST_ID,
+      PLUS_ARCHIVELOG,
+      INITIATOR_TASK_ID,
+      VALIDATE_LEVEL,
+      ROUND_ID,
+      USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          USEC_TO_TIME(END_TS)
+        END AS END_TIMESTAMP,
+      STATUS,
+      TOTAL_LS_COUNT,
+      FINISH_LS_COUNT,
+      TOTAL_BYTES,
+      VALIDATED_BYTES,
+      RESULT,
+      COMMENT
+    FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_VALIDATE_TASK_HISTORY
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'DBA_OB_BACKUP_VALIDATE_JOBS',
+  table_id        = '21677',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      JOB_ID,
+      INCARNATION,
+      INITIATOR_TENANT_ID,
+      INITIATOR_JOB_ID,
+      EXECUTOR_TENANT_ID,
+      TYPE,
+      PATH,
+      PATH_TYPE,
+      ID,
+      VALIDATE_LEVEL,
+      USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          USEC_TO_TIME(END_TS)
+        END AS END_TIMESTAMP,
+      STATUS,
+      RETRY_COUNT,
+      TASK_COUNT,
+      SUCCESS_TASK_COUNT,
+      RESULT,
+      DESCRIPTION,
+      COMMENT
+    FROM oceanbase.__all_virtual_backup_validate_job
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'DBA_OB_BACKUP_VALIDATE_JOB_HISTORY',
+  table_id        = '21678',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      JOB_ID,
+      INCARNATION,
+      INITIATOR_TENANT_ID,
+      INITIATOR_JOB_ID,
+      EXECUTOR_TENANT_ID,
+      TYPE,
+      PATH,
+      PATH_TYPE,
+      ID,
+      VALIDATE_LEVEL,
+      USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          USEC_TO_TIME(END_TS)
+        END AS END_TIMESTAMP,
+      STATUS,
+      RETRY_COUNT,
+      TASK_COUNT,
+      SUCCESS_TASK_COUNT,
+      RESULT,
+      COMMENT,
+      DESCRIPTION
+    FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_VALIDATE_JOB_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'DBA_OB_BACKUP_VALIDATE_TASKS',
+  table_id        = '21679',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      TASK_ID,
+      INCARNATION,
+      JOB_ID,
+      TASK_TYPE,
+      ID,
+      PATH,
+      PATH_TYPE,
+      DEST_ID,
+      PLUS_ARCHIVELOG,
+      INITIATOR_TASK_ID,
+      VALIDATE_LEVEL,
+      ROUND_ID,
+      USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          USEC_TO_TIME(END_TS)
+        END AS END_TIMESTAMP,
+      STATUS,
+      TOTAL_LS_COUNT,
+      FINISH_LS_COUNT,
+      TOTAL_BYTES,
+      VALIDATED_BYTES,
+      RESULT,
+      COMMENT
+    FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_VALIDATE_TASK
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'DBA_OB_BACKUP_VALIDATE_TASK_HISTORY',
+  table_id        = '21680',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      TASK_ID,
+      INCARNATION,
+      JOB_ID,
+      TASK_TYPE,
+      ID,
+      PATH,
+      PATH_TYPE,
+      PLUS_ARCHIVELOG,
+      DEST_ID,
+      INITIATOR_TASK_ID,
+      VALIDATE_LEVEL,
+      ROUND_ID,
+      USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          USEC_TO_TIME(END_TS)
+        END AS END_TIMESTAMP,
+      STATUS,
+      TOTAL_LS_COUNT,
+      FINISH_LS_COUNT,
+      TOTAL_BYTES,
+      VALIDATED_BYTES,
+      RESULT,
+      COMMENT
+    FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_VALIDATE_TASK_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
 def_table_schema(
   owner           = 'xuqijia.xqj',
   table_name      = 'GV$OB_HNSW_INDEX_INFO',
@@ -44937,7 +45507,6 @@ WHERE
 
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
-
 # 21669: GV$OB_SQL_HISTOGRAM
 # 21670: V$OB_SQL_HISTOGRAM
 # 21671: CDB_WR_SQL_HISTOGRAM
@@ -68447,10 +69016,177 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25311: DBA_OB_BACKUP_VALIDATE_JOBS
-# 25312: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
-# 25313: DBA_OB_BACKUP_VALIDATE_TASKS
-# 25314: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
+#backup validate view
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'DBA_OB_BACKUP_VALIDATE_JOBS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25311',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      JOB_ID,
+      INCARNATION,
+      INITIATOR_TENANT_ID,
+      INITIATOR_JOB_ID,
+      EXECUTOR_TENANT_ID,
+      TYPE,
+      PATH,
+      PATH_TYPE,
+      ID,
+      VALIDATE_LEVEL,
+      TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
+        END AS END_TIMESTAMP,
+      STATUS,
+      TASK_COUNT,
+      SUCCESS_TASK_COUNT,
+      RESULT,
+      "COMMENT"
+    FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_JOB
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'DBA_OB_BACKUP_VALIDATE_JOB_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25312',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      JOB_ID,
+      INCARNATION,
+      INITIATOR_TENANT_ID,
+      INITIATOR_JOB_ID,
+      EXECUTOR_TENANT_ID,
+      TYPE,
+      PATH,
+      PATH_TYPE,
+      ID,
+      VALIDATE_LEVEL,
+      TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
+        END AS END_TIMESTAMP,
+      STATUS,
+      TASK_COUNT,
+      SUCCESS_TASK_COUNT,
+      RESULT,
+      "COMMENT"
+    FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_JOB_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'DBA_OB_BACKUP_VALIDATE_TASKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25313',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      TASK_ID,
+      INCARNATION,
+      JOB_ID,
+      TASK_TYPE,
+      ID,
+      PATH,
+      PATH_TYPE,
+      DEST_ID,
+      PLUS_ARCHIVELOG,
+      INITIATOR_TASK_ID,
+      VALIDATE_LEVEL,
+      ROUND_ID,
+      TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
+        END AS END_TIMESTAMP,
+      STATUS,
+      TOTAL_LS_COUNT,
+      FINISH_LS_COUNT,
+      TOTAL_BYTES,
+      VALIDATED_BYTES,
+      RESULT,
+      "COMMENT"
+    FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_TASK
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cl449488.cl',
+  table_name      = 'DBA_OB_BACKUP_VALIDATE_TASK_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25314',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      TENANT_ID,
+      TASK_ID,
+      INCARNATION,
+      JOB_ID,
+      TASK_TYPE,
+      ID,
+      PATH,
+      PATH_TYPE,
+      DEST_ID,
+      PLUS_ARCHIVELOG,
+      INITIATOR_TASK_ID,
+      VALIDATE_LEVEL,
+      ROUND_ID,
+      TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
+      CASE
+        WHEN END_TS = 0
+          THEN NULL
+        ELSE
+          TO_CHAR(END_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss')
+        END AS END_TIMESTAMP,
+      STATUS,
+      TOTAL_LS_COUNT,
+      FINISH_LS_COUNT,
+      TOTAL_BYTES,
+      VALIDATED_BYTES,
+      RESULT,
+      "COMMENT"
+    FROM SYS.ALL_VIRTUAL_BACKUP_VALIDATE_TASK_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
 
 def_table_schema(
   owner = 'zk250686',

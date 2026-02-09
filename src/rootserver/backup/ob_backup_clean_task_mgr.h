@@ -35,7 +35,7 @@ public:
       common::ObISQLClient &sql_proxy,
       obrpc::ObSrvRpcProxy &rpc_proxy,
       ObBackupTaskScheduler &task_scheduler,
-      ObBackupCleanService &backup_service);
+      ObBackupMgrService &backup_service);
   int persist_ls_task();
   int do_ls_task();
   int do_cleanup();
@@ -118,7 +118,7 @@ private:
   common::ObISQLClient *sql_proxy_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupTaskScheduler *task_scheduler_;
-  ObBackupCleanService *backup_service_;
+  ObBackupMgrService *backup_service_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanTaskMgr); 
 };

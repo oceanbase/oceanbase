@@ -67,7 +67,7 @@ int ObBackupDataScheduler::init(
   return ret;
 }
 
-int ObBackupDataScheduler::force_cancel(const uint64_t &tenant_id)
+int ObBackupDataScheduler::force_cancel(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObSArray<uint64_t> empty_tenant_array;

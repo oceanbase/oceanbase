@@ -262,6 +262,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObDeletePolicyP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRecoverTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCloneTenantP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObBackupValidateP, *gctx_.root_service_);
 
     // auto part ddl
     RPC_PROCESSOR(rootserver::ObRpcCleanSplittedTabletP, *gctx_.root_service_);

@@ -442,8 +442,6 @@ private:
   int check_backup_items_valid_(const common::ObIArray<ObBackupProviderItem> &items);
   int get_prev_backup_set_desc_(const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &cur_backup_set_desc,
       share::ObBackupSetFileDesc &prev_backup_set_info);
-  int get_tenant_macro_index_retry_id_(const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &prev_backup_set_desc,
-      const share::ObBackupDataType &backup_data_type, const int64_t turn_id, int64_t &retry_id);
   int get_need_copy_item_list_(common::ObIArray<ObBackupProviderItem> &list,
       common::ObIArray<ObBackupProviderItem> &need_copy_list, common::ObIArray<ObBackupProviderItem> &no_need_copy_list,
       common::ObIArray<ObBackupDeviceMacroBlockId> &no_need_copy_macro_index_list);

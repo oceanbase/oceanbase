@@ -913,6 +913,48 @@ private:
   common::ObArray<uint64_t> archive_tenant_ids_;
 };
 
+class ObBackupValidateStmt : public ObSystemCmdStmt
+{
+public:
+  ObBackupValidateStmt()
+    : ObSystemCmdStmt(stmt::T_BACKUP_VALIDATE),
+      tenant_id_(OB_INVALID_ID),
+      validate_type_(),
+      set_or_piece_ids_(),
+      validate_level_(),
+      path_(),
+      description_(),
+      execute_tenant_ids_()
+  {
+  }
+  virtual ~ObBackupValidateStmt() {}
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const share::ObBackupValidateType &get_validate_type() const { return validate_type_; }
+  const common::ObSArray<uint64_t> &get_set_or_piece_ids() const { return set_or_piece_ids_; }
+  const share::ObBackupValidateLevel &get_validate_level() const { return validate_level_; }
+  const share::ObBackupPathString &get_backup_dest() const { return path_; }
+  const share::ObBackupDescription &get_backup_description() const { return description_; }
+  const common::ObSArray<uint64_t> &get_execute_tenant_ids() const { return execute_tenant_ids_; }
+  int set_param(
+      const uint64_t tenant_id,
+      const uint64_t validate_type_value,
+      const common::ObSArray<uint64_t> &set_or_piece_ids,
+      const share::ObBackupValidateLevel validate_level,
+      const share::ObBackupPathString &path,
+      const share::ObBackupDescription &description,
+      const common::ObSArray<uint64_t> &execute_tenant_ids);
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(validate_type), K_(set_or_piece_ids),
+      K_(validate_level), K_(path), K_(description), K_(execute_tenant_ids));
+private:
+  uint64_t tenant_id_;
+  share::ObBackupValidateType validate_type_;
+  common::ObSArray<uint64_t> set_or_piece_ids_;
+  share::ObBackupValidateLevel validate_level_;
+  share::ObBackupPathString path_;
+  share::ObBackupDescription description_;
+  common::ObSArray<uint64_t> execute_tenant_ids_;
+};
+
 class ObBackupDatabaseStmt : public ObSystemCmdStmt
 {
 public:

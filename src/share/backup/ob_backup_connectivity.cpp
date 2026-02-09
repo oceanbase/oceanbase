@@ -1094,8 +1094,8 @@ int ObBackupStorageInfoOperator::insert_backup_storage_info(
     const ObBackupDest &backup_dest,
     const ObBackupDestType::TYPE &dest_type,
     const int64_t dest_id,
-    const int64_t max_iops,
-    const int64_t max_bandwidth)
+    const ObBackupIOInfo &io_info,
+    const bool can_update)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1104,9 +1104,9 @@ int ObBackupStorageInfoOperator::insert_backup_storage_info(
   char *root_path = NULL;
   char authorization[OB_MAX_BACKUP_AUTHORIZATION_LENGTH] = { 0 };
   uint64_t compat_version = 0;
-  if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid()) {
+  if (OB_INVALID_ID == tenant_id || !backup_dest.is_valid() || !io_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(backup_dest), K(io_info));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), compat_version))) {
     LOG_WARN("failed to get min data version", K(ret), K(tenant_id));
   } else if (compat_version < DATA_VERSION_4_3_3_0) {
@@ -1121,11 +1121,13 @@ int ObBackupStorageInfoOperator::insert_backup_storage_info(
       || OB_FAIL(dml.add_column(OB_STR_DEST_TYPE, ObBackupDestType::get_str(dest_type))) 
       || OB_FAIL(dml.add_column(OB_STR_BACKUP_DEST_AUTHORIZATION, authorization))
       || OB_FAIL(dml.add_column(OB_STR_BACKUP_DEST_EXTENSION, backup_dest.get_storage_info()->extension_))
-      || OB_FAIL(dml.add_column(OB_STR_MAX_IOPS, max_iops))
-      || OB_FAIL(dml.add_column(OB_STR_MAX_BANDWIDTH, max_bandwidth))) {
+      || OB_FAIL(dml.add_column(OB_STR_MAX_IOPS, io_info.max_iops_))
+      || OB_FAIL(dml.add_column(OB_STR_MAX_BANDWIDTH, io_info.max_bandwidth_))) {
     LOG_WARN("fail to fill backup dest info", K(ret));
-  } else if (OB_FAIL(dml.splice_insert_update_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
+  } else if (can_update && OB_FAIL(dml.splice_insert_update_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
     LOG_WARN("failed to splice insert update sql", K(ret));
+  } else if (!can_update && OB_FAIL(dml.splice_insert_sql(OB_ALL_BACKUP_STORAGE_INFO_TNAME, sql))) {
+    LOG_WARN("failed to splice insert sql", K(ret));
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql));
   } else if (0 != affected_rows && 1 != affected_rows && 2 != affected_rows) {
@@ -1211,6 +1213,34 @@ int ObBackupStorageInfoOperator::update_backup_dest_extension(
     LOG_WARN("invalid affected_rows", K(ret), K(affected_rows), K(sql), K(extension));
   } else {
     LOG_INFO("succ update backup storage info", K(sql), K(tenant_id), K(backup_dest));
+  }
+  return ret;
+}
+
+int ObBackupStorageInfoOperator::remove_backup_storage_info(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const ObBackupDestType::TYPE &backup_dest_type,
+    const ObBackupPathString &backup_path)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  char path[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  char endpoint[OB_MAX_BACKUP_ENDPOINT_LENGTH] = { 0 };
+  if (OB_INVALID_ID == tenant_id || !ObBackupDestType::is_valid(backup_dest_type) || backup_path.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(backup_dest_type), K(backup_path));
+  } else if (OB_FAIL(parse_backup_path(backup_path.ptr(), path, sizeof(path), endpoint, sizeof(endpoint)))) {
+    LOG_WARN("failed to parse backup path", KR(ret), K(backup_path));
+  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu "
+      "AND dest_type = '%s' AND path = '%s' AND endpoint = '%s'", OB_ALL_BACKUP_STORAGE_INFO_TNAME,
+      tenant_id, ObBackupDestType::get_str(backup_dest_type), path, endpoint))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(backup_dest_type), K(backup_path));
+  } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(backup_dest_type), K(backup_path), K(sql));
+  } else {
+    LOG_INFO("succ delete backup storage info", K(sql), K(tenant_id), K(affected_rows), K(backup_dest_type), K(backup_path));
   }
   return ret;
 }
@@ -1866,6 +1896,65 @@ int ObBackupStorageInfoOperator::get_backup_dest(
     LOG_WARN("fail to set backup dest", K(ret), K(tenant_id)); 
   } else {
     LOG_INFO("success get backup dest", K(sql), K(tenant_id), K(backup_dest)); 
+  }
+  return ret;
+}
+
+int ObBackupStorageInfoOperator::get_backup_dest_by_dest_id(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const int64_t dest_id,
+    ObBackupDest &backup_dest)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  sqlclient::ObMySQLResult *result = NULL;
+  backup_dest.reset();
+  char path[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  char endpoint[OB_MAX_BACKUP_ENDPOINT_LENGTH] = { 0 };
+  char encrypt_authorization[OB_MAX_BACKUP_AUTHORIZATION_LENGTH] = { 0 };
+  char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = { 0 };
+
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == dest_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(dest_id));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT %s,%s,%s,%s FROM %s WHERE tenant_id = %lu AND dest_id = %ld",
+      OB_STR_PATH, OB_STR_BACKUP_DEST_ENDPOINT, OB_STR_BACKUP_DEST_AUTHORIZATION, OB_STR_BACKUP_DEST_EXTENSION,
+      OB_ALL_BACKUP_STORAGE_INFO_TNAME, tenant_id, dest_id))) {
+    LOG_WARN("fail to assign sql", K(ret), K(tenant_id), K(dest_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("fail to execute sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+      } else if (OB_SUCC(result->next())) {
+        int64_t tmp_real_str_len = 0;
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_PATH, path,
+          OB_MAX_BACKUP_PATH_LENGTH, tmp_real_str_len);
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_BACKUP_DEST_ENDPOINT, endpoint,
+          OB_MAX_BACKUP_ENDPOINT_LENGTH, tmp_real_str_len);
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_BACKUP_DEST_AUTHORIZATION, encrypt_authorization,
+          OB_MAX_BACKUP_AUTHORIZATION_LENGTH, tmp_real_str_len);
+        EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_BACKUP_DEST_EXTENSION, extension,
+          OB_MAX_BACKUP_EXTENSION_LENGTH, tmp_real_str_len);
+        UNUSED(tmp_real_str_len);
+      } else if (OB_LIKELY(OB_ITER_END == ret)) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("no exist row", K(ret), K(sql));
+      } else {
+        LOG_WARN("fail to get next row", K(ret), K(sql));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(backup_dest.set(path, endpoint, encrypt_authorization, extension))) {
+    LOG_WARN("fail to set backup dest", K(ret), K(tenant_id), K(dest_id));
+  } else {
+    LOG_INFO("success get backup dest by dest id", K(sql), K(tenant_id), K(dest_id), K(backup_dest));
   }
   return ret;
 }

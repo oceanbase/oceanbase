@@ -315,3 +315,5 @@
   RPC_AP(PR5 check_backup_dest_rw_consistency, OB_CHECK_BACKUP_DEST_RW_CONSISTENCY, (obrpc::ObCheckBackupDestRWConsistencyArg), obrpc::Int64);
   RPC_S(PR5 check_backup_dest_validity, OB_CHECK_BACKUP_DEST_VALIDITY, (obrpc::ObRemoteCheckBackupDestValidityArg));
   RPC_S(PR5 write_backup_dest_format_file, OB_WRITE_BACKUP_DEST_FORMAT_FILE, (obrpc::ObRemoteCheckBackupDestValidityArg));
+  RPC_S(PR5 validate_backup_ls_task, OB_VALIDATE_BACKUP_LS_TASK, (ObBackupValidateLSArg));
+  RPC_S(PR5 report_backup_validate_over, OB_VALIDATE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));

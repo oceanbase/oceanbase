@@ -95,6 +95,9 @@ public:
   static int get_ls_file_info_path(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path);
 
+  // oss://archive/file_info.obarc
+  static int get_piece_info_file_path(const ObBackupDest &dest, ObBackupPath &path);
+
   // oss://[user_specified_path]/logstream_[ls_id]/file_info.obarc
   static int get_ls_file_info_path(const ObBackupDest &dest, const ObLSID &ls_id, ObBackupPath &path);
 

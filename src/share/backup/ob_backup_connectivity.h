@@ -151,8 +151,8 @@ public:
       const share::ObBackupDest &backup_dest,
       const ObBackupDestType::TYPE &dest_type,
       const int64_t dest_id,
-      const int64_t max_iops,
-      const int64_t max_bandwidth);
+      const ObBackupIOInfo &io_info,
+      const bool can_update);
   static int remove_backup_storage_info(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -161,6 +161,11 @@ public:
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
       const ObBackupDestType::TYPE &dest_type);
+  static int remove_backup_storage_info(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const ObBackupDestType::TYPE &dest_type,
+      const ObBackupPathString &backup_path);
   static int update_backup_authorization(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -200,6 +205,11 @@ public:
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
       const ObBackupPathString &backup_path,
+      share::ObBackupDest &backup_dest);
+  static int get_backup_dest_by_dest_id(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t dest_id,
       share::ObBackupDest &backup_dest);
   static int get_dest_id(
       common::ObISQLClient &proxy,

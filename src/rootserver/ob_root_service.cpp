@@ -10401,6 +10401,19 @@ int ObRootService::handle_backup_database(const obrpc::ObBackupDatabaseArg &in_a
   return ret;
 }
 
+int ObRootService::handle_backup_validate(const obrpc::ObBackupValidateArg &in_arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_validate(in_arg))) {
+    LOG_WARN("failed to handle backup validate", K(ret), K(in_arg));
+  }
+  FLOG_INFO("handle_backup_validate", K(ret), K(in_arg));
+  return ret;
+}
+
 int ObRootService::handle_validate_database(const obrpc::ObBackupManageArg &arg)
 {
   int ret = OB_NOT_SUPPORTED;
@@ -10473,6 +10486,12 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg &arg)
       }
       break;
     };
+    case ObBackupManageArg::CANCEL_BACKUP_VALIDATE: {
+      if (OB_FAIL(handle_backup_validate_cancel(arg))) {
+        LOG_WARN("failed to handle cancel backup validate", K(ret), K(arg));
+      }
+      break;
+    };
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("invalid backup manage arg", K(ret), K(arg));
@@ -10482,6 +10501,31 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg &arg)
   }
 
   FLOG_INFO("finish handle_backup_manage", K(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::handle_backup_validate_cancel(const obrpc::ObBackupManageArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ObBackupManageArg::CANCEL_BACKUP_VALIDATE != arg.type_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("handle backup validate cancel get invalid argument", K(ret), K(arg));
+  } else {
+    const uint64_t tenant_id = arg.tenant_id_;
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id));
+    } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported with current data version", K(ret), K(tenant_data_version), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cancel validate backup with data version less than 4.5.1");
+    } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_validate_cancel(arg))) {
+      LOG_WARN("failed to handle backup validate cancel", K(ret), K(arg));
+    }
+  }
   return ret;
 }
 

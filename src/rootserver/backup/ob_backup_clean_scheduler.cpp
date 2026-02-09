@@ -52,7 +52,7 @@ int ObBackupCleanScheduler::init(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     schema::ObMultiVersionSchemaService &schema_service,
     ObBackupTaskScheduler &task_scheduler,
-    ObBackupCleanService &backup_service)
+    ObBackupMgrService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -70,7 +70,7 @@ int ObBackupCleanScheduler::init(
   return ret;
 }
 
-int ObBackupCleanScheduler::force_cancel(const uint64_t &tenant_id)
+int ObBackupCleanScheduler::force_cancel(const uint64_t tenant_id)
 {
   // Backup clean tasks do not need to update external file, this interface is not implemented
   return OB_SUCCESS;
@@ -1033,7 +1033,7 @@ int ObIBackupDeleteMgr::init(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     ObBackupTaskScheduler &task_scheduler,
     schema::ObMultiVersionSchemaService &schema_service,
-    ObBackupCleanService &backup_service)
+    ObBackupMgrService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -2461,7 +2461,7 @@ int ObBackupAutoObsoleteDeleteTrigger::init(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     schema::ObMultiVersionSchemaService &schema_service,
     ObBackupTaskScheduler &task_scheduler,
-    ObBackupCleanService &backup_service)
+    ObBackupMgrService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {

@@ -48,7 +48,7 @@ int ObBackupCleanTaskMgr::init(
     common::ObISQLClient &sql_proxy,
     obrpc::ObSrvRpcProxy &rpc_proxy,
     ObBackupTaskScheduler &task_scheduler,
-    ObBackupCleanService &backup_service)
+    ObBackupMgrService &backup_service)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -609,7 +609,7 @@ int ObBackupCleanTaskMgr::parse_ls_id_(const char *dir_name, int64_t &id_val)
         break;
       } else if (0 == strncmp(LOGSTREAM, token, strlen(LOGSTREAM))) {
         continue;
-      } else if (OB_FAIL(parse_int_(token, id_val))){
+      } else if (OB_FAIL(parse_int_(token, id_val))) {
         LOG_WARN("invalid number", K(token), K(id_val)); 
       }
     }
@@ -1028,10 +1028,10 @@ int ObBackupCleanTaskMgr::delete_backup_set_meta_info_files_()
     LOG_WARN("failed to delete tenant backup set infos", K(ret)); 
   } else if (OB_FAIL(delete_backup_set_inner_placeholder_())) {
     LOG_WARN("failed to delete backup set inner placeholder", K(ret)); 
-  } else if (OB_FAIL(check_backup_set_dir_empty_())) { // check if then anyting left in the backup set dir
-    LOG_INFO("failed to check backup set dir empty", K(ret));
   } else if (OB_FAIL(delete_backup_set_dir_())) {
     LOG_WARN("failed to delete backup set dir", K(ret)); 
+  } else if (OB_FAIL(check_backup_set_dir_empty_())) { // check if then anyting left in the backup set dir
+    LOG_INFO("failed to check backup set dir empty", K(ret));
   } else if (OB_FAIL(delete_backup_set_start_file_())) {
     LOG_WARN("failed to delete backup set start file", K(ret)); 
   }
@@ -1148,10 +1148,10 @@ int ObBackupCleanTaskMgr::delete_backup_piece_meta_info_files_()
       backup_dest_, backup_piece_info_.key_.dest_id_, backup_piece_info_.key_.round_id_,
       backup_piece_info_.key_.piece_id_, path))) {
     LOG_WARN("failed to get tenant backup piece dir path", K(ret));  
-  } else if (OB_FAIL(check_backup_piece_dir_empty_())) { // check if anything left in the backup piece dir
-    LOG_INFO("failed to check backup piece dir empty", K(ret));
   } else if (OB_FAIL(delete_backup_dir_(path))) {
     LOG_WARN("failed to delete backup infos dir", K(ret));
+  } else if (OB_FAIL(check_backup_piece_dir_empty_())) { // check if anything left in the backup piece dir
+    LOG_INFO("failed to check backup piece dir empty", K(ret));
   } else if (OB_FAIL(delete_backup_piece_start_file_())) {
     LOG_WARN("failed to delete backup set start file", K(ret)); 
   }

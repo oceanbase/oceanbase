@@ -413,6 +413,7 @@ public:
 
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/file_info.obarc
   int is_piece_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const;
+  int read_piece_info(ObPieceInfoDesc &desc) const;
   int read_piece_info(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, ObPieceInfoDesc &desc) const;
   int write_piece_info(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObPieceInfoDesc &desc) const;
 
@@ -658,6 +659,14 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObArchiveStore);
 };
 
+class ObArchiveStoreUtil final
+{
+public:
+  static int parse_piece_file(const ObString &dir_name, int64_t &dest_id, int64_t &round_id, int64_t &piece_id);
+  static int is_piece_start_file_name(const ObString &file_name, bool &is_piece_start);
+  static int is_round_start_file_name(ObString &file_name, bool &is_round_start);
+  static int parse_round_file(const ObString &dir_name, int64_t &dest_id, int64_t &round_id);
+};
 
 }
 }

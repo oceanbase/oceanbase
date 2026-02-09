@@ -646,7 +646,7 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(ObICopyMacroBlockReader:
     const int64_t align_size = DIO_READ_ALIGN_SIZE;
     backup::ObBackupMacroBlockIndex macro_index;
     share::ObBackupStorageInfo storage_info;
-    share::ObRestoreBackupSetBriefInfo backup_set_brief_info;
+    share::ObBackupSetBriefInfo backup_set_brief_info;
     share::ObBackupDest backup_set_dest;
     MacroBlockId macro_block_id;
     ObStorageIdMod mod;
@@ -842,7 +842,7 @@ int ObCopyDDLMacroBlockRestoreReader::prepare_link_item_()
   const int64_t align_size = DIO_READ_ALIGN_SIZE;
   backup::ObBackupMacroBlockIndex macro_index;
   share::ObBackupStorageInfo storage_info;
-  share::ObRestoreBackupSetBriefInfo backup_set_brief_info;
+  share::ObBackupSetBriefInfo backup_set_brief_info;
   share::ObBackupDest backup_set_dest;
   ObStorageIdMod mod;
   mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
@@ -938,7 +938,7 @@ int ObCopyDDLMacroBlockRestoreReader::get_next_macro_block(ObICopyMacroBlockRead
     const int64_t align_size = DIO_READ_ALIGN_SIZE;
     backup::ObBackupMacroBlockIndex macro_index;
     share::ObBackupStorageInfo storage_info;
-    share::ObRestoreBackupSetBriefInfo backup_set_brief_info;
+    share::ObBackupSetBriefInfo backup_set_brief_info;
     share::ObBackupDest backup_set_dest;
     ObStorageIdMod mod;
     mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
@@ -3196,7 +3196,7 @@ int ObCopySSTableMacroRestoreReader::get_next_shared_ddl_sstable_range_info_(
   const backup::ObBackupMetaType meta_type = backup::ObBackupMetaType::BACKUP_SSTABLE_META;
   backup::ObBackupMetaIndex meta_index;
   share::ObBackupStorageInfo storage_info;
-  share::ObRestoreBackupSetBriefInfo backup_set_brief_info;
+  share::ObBackupSetBriefInfo backup_set_brief_info;
   share::ObBackupDest backup_set_dest;
   ObStorageIdMod mod;
   mod.storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_RESTORE;
@@ -4495,7 +4495,7 @@ int ObCopyRemoteSSTableMacroBlockRestoreReader::do_read_backup_macro_block_data_
   const int64_t align_size = DIO_READ_ALIGN_SIZE;
   share::ObBackupDataType data_type;
   share::ObBackupStorageInfo storage_info;
-  share::ObRestoreBackupSetBriefInfo backup_set_brief_info;
+  share::ObBackupSetBriefInfo backup_set_brief_info;
   share::ObBackupDest backup_set_dest;
   share::ObBackupPath backup_path;
   ObStorageIdMod mod;

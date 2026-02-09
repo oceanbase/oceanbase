@@ -41,7 +41,7 @@ struct ObTenantRestoreCtx
   uint64_t get_tenant_id() const { return tenant_id_; }
   uint64_t get_backup_cluster_version() const { return backup_cluster_version_; }
   uint64_t get_backup_data_version() const { return backup_data_version_; }
-  const common::ObArray<share::ObRestoreBackupSetBriefInfo> &get_backup_set_list() const { return backup_set_list_; }
+  const common::ObArray<share::ObBackupSetBriefInfo> &get_backup_set_list() const { return backup_set_list_; }
   const common::ObArray<share::ObBackupPiecePath> &get_backup_piece_list() const { return backup_piece_list_; }
   const share::ObRestoreProgressDisplayMode &get_progress_display_mode() const { return progress_display_mode_; }
   TO_STRING_KV(
@@ -66,7 +66,7 @@ struct ObTenantRestoreCtx
   uint64_t backup_data_version_;
   share::ObBackupSetFileDesc::Compatible backup_compatible_;
   // every set path is integral.
-  common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
+  common::ObArray<share::ObBackupSetBriefInfo> backup_set_list_;
   // every piece path is integral.
   common::ObArray<share::ObBackupPiecePath> backup_piece_list_;
   share::ObRestoreProgressDisplayMode progress_display_mode_;

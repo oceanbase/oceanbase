@@ -934,23 +934,6 @@ int ObLSBackupCleanTask::delete_meta_info_(const ObBackupPath &path)
   return ret;
 }
 
-int ObLSBackupCleanTask::delete_log_stream_dir_(const share::ObBackupPath &ls_path)
-{
-  int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator(ObModIds::BACKUP);
-  ObArray<common::ObString> file_names;
-  ObBackupIoAdapter util;
-  ObFileListArrayOp file_name_op(file_names, allocator);
-  if (OB_FAIL(util.list_files(ls_path.get_ptr(), backup_dest_.get_storage_info(), file_name_op))) {
-    LOG_WARN("failed to list files", K(ret), K(ls_path));
-  } else if (0 != file_names.count()) {
-    // do nothing
-  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir(ls_path, backup_dest_.get_storage_info()))) {
-    LOG_WARN("failed to delete backup dir", K(ret));
-  }
-  return ret;
-}
-
 int ObLSBackupCleanTask::delete_backup_set_ls_files_(const ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -969,13 +952,8 @@ int ObLSBackupCleanTask::delete_backup_set_ls_files_(const ObBackupPath &path)
     LOG_WARN("failed to delete user data", K(ret));
   } else if (OB_FAIL(delete_meta_info_(path))) {
     LOG_WARN("failed to delete meta info", K(ret)); 
-  } else if (OB_FAIL(delete_log_stream_dir_(path))) {
-    if (OB_DIR_NOT_EXIST == ret) {
-      LOG_INFO("dir is not exist", K(ret), K(path), K(*this));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to delete backup log stream dir", K(ret), K(path));
-    }
+  } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup logstream dir", K(ret), K(path));
   } else {
     LOG_INFO("[BACKUP_CLEAN]success finish delete backup set files", K(path)); 
   }

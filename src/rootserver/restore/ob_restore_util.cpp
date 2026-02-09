@@ -240,7 +240,7 @@ int ObRestoreUtil::fill_multi_backup_path(
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   ObArray<ObString> multi_path_array;
-  ObArray<ObRestoreBackupSetBriefInfo> backup_set_list;
+  ObArray<ObBackupSetBriefInfo> backup_set_list;
   ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list;
   ObArray<ObBackupPathString> log_path_list;
   ObString backup_dest_list;
@@ -330,7 +330,7 @@ int ObRestoreUtil::fill_compat_backup_path(
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   ObArray<ObString> tenant_path_array;
-  ObArray<ObRestoreBackupSetBriefInfo> backup_set_list;
+  ObArray<ObBackupSetBriefInfo> backup_set_list;
   ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list;
   ObArray<ObBackupPathString> log_path_list;
   ObString tenant_dest_list;
@@ -632,7 +632,7 @@ int ObRestoreUtil::get_restore_source(
     const ObIArray<ObString>& tenant_path_array,
     const common::ObString &passwd_array,
     const SCN &restore_scn,
-    ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+    ObIArray<ObBackupSetBriefInfo> &backup_set_list,
     ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list,
     ObIArray<ObBackupPathString> &log_path_list)
 {
@@ -663,7 +663,7 @@ int ObRestoreUtil::get_restore_source_from_multi_path(
              const ObIArray<ObString>& multi_path_array,
              const common::ObString &passwd_array,
              const share::SCN &restore_scn,
-             ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
+             ObIArray<share::ObBackupSetBriefInfo> &backup_set_list,
              ObIArray<share::ObRestoreLogPieceBriefInfo> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list)
 {
@@ -818,7 +818,7 @@ int ObRestoreUtil::get_restore_backup_set_array_(
     const common::ObString &passwd_array,
     const SCN &restore_scn,
     SCN &restore_start_scn,
-    ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list)
+    ObIArray<ObBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
   if (tenant_path_array.empty()) {
@@ -855,7 +855,7 @@ int ObRestoreUtil::get_restore_backup_set_array_from_multi_path_(
     const common::ObString &passwd_array,
     const SCN &restore_scn,
     SCN &restore_start_scn,
-    ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+    ObIArray<ObBackupSetBriefInfo> &backup_set_list,
     ObTimeZoneInfoWrap &time_zone_wrap)
 {
   int ret = OB_SUCCESS;
@@ -1024,13 +1024,13 @@ int ObRestoreUtil::get_backup_set_info_from_multi_path_(const ObString &multi_pa
 int ObRestoreUtil::get_restore_backup_set_array_from_backup_set_map_(
     const common::hash::ObHashMap<int64_t, ObString> &backup_set_path_map,
     ObBackupSetFilter::BackupSetMap &backup_set_map,
-    ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list)
+    ObIArray<ObBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
   ObString backup_set_path;
   char encrypt_backup_set_dest[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ObBackupDest backup_dest;
-  ObRestoreBackupSetBriefInfo tmp_backup_set_brief_info;
+  ObBackupSetBriefInfo tmp_backup_set_brief_info;
   ObBackupSetFilter::BackupSetMap::iterator iter = backup_set_map.begin();
   for ( ; OB_SUCC(ret) && iter != backup_set_map.end(); ++iter) {
     // construct path which is include root_path, host and storage info
@@ -1543,7 +1543,7 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
 }
 
 int ObRestoreUtil::get_restore_log_array_for_complement_log_(
-    const ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+    const ObIArray<ObBackupSetBriefInfo> &backup_set_list,
     const share::SCN &restore_start_scn,
     const share::SCN &restore_end_scn,
     ObIArray<share::ObRestoreLogPieceBriefInfo> &backup_piece_list,
@@ -1554,7 +1554,7 @@ int ObRestoreUtil::get_restore_log_array_for_complement_log_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invaldi argument", K(ret), K(backup_set_list));
   } else {
-    const ObRestoreBackupSetBriefInfo &info = backup_set_list.at(backup_set_list.count() - 1);
+    const ObBackupSetBriefInfo &info = backup_set_list.at(backup_set_list.count() - 1);
     ObBackupDest dest;
     ObBackupDest compl_dest;
     ObArchiveStore archive_store;
@@ -1579,7 +1579,7 @@ int ObRestoreUtil::get_restore_log_array_for_complement_log_(
 }
 
 int ObRestoreUtil::do_fill_backup_path_(
-    const ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+    const ObIArray<ObBackupSetBriefInfo> &backup_set_list,
     const ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list,
     const ObIArray<ObBackupPathString> &log_path_list,
     share::ObPhysicalRestoreJob &job)
@@ -1604,7 +1604,7 @@ int ObRestoreUtil::do_fill_backup_path_(
 }
 
 int ObRestoreUtil::do_fill_backup_path_with_full_pieces_(
-    const ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+    const ObIArray<ObBackupSetBriefInfo> &backup_set_list,
     const ObIArray<share::ObSinglePieceDesc> &backup_piece_array,
     const ObIArray<ObBackupPathString> &log_path_list,
     share::ObPhysicalRestoreJob &job)
@@ -2408,15 +2408,16 @@ int ObRestoreStorageInfoFiller::insert_backup_storage_info_for_set_(
   if (OB_FAIL(backup_set_dest.set(backup_set_path.str()))) {
     LOG_WARN("failed to set backup set dest", K(ret), K(backup_set_path));
   } else {
-    max_iops = backup_set_dest.get_storage_info()->max_iops_;
-    max_bandwidth = backup_set_dest.get_storage_info()->max_bandwidth_;
+    ObBackupIOInfo io_info;
+    io_info.max_iops_ = backup_set_dest.get_storage_info()->max_iops_;
+    io_info.max_bandwidth_ = backup_set_dest.get_storage_info()->max_bandwidth_;
     if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(*sql_proxy_,
                                                                         tenant_id_,
                                                                         backup_set_dest,
                                                                         backup_dest_type,
                                                                         dest_id,
-                                                                        max_iops,
-                                                                        max_bandwidth))) {
+                                                                        io_info,
+                                                                        true/*can_update*/))) {
       LOG_WARN("failed to insert backup storage info", K(ret));
     }
   }
@@ -2436,15 +2437,16 @@ int ObRestoreStorageInfoFiller::insert_backup_storage_info_for_piece_(
   if (OB_FAIL(backup_piece_dest.set(backup_piece_path.str()))) {
     LOG_WARN("failed to set backup set dest", K(ret), K(backup_piece_info));
   } else {
-    max_iops = backup_piece_dest.get_storage_info()->max_iops_;
-    max_bandwidth = backup_piece_dest.get_storage_info()->max_bandwidth_;
+    ObBackupIOInfo io_info;
+    io_info.max_iops_ = backup_piece_dest.get_storage_info()->max_iops_;
+    io_info.max_bandwidth_ = backup_piece_dest.get_storage_info()->max_bandwidth_;
     if (OB_FAIL(ObBackupStorageInfoOperator::insert_backup_storage_info(*sql_proxy_,
                                                                         tenant_id_,
                                                                         backup_piece_dest,
                                                                         backup_dest_type,
                                                                         dest_id,
-                                                                        max_iops,
-                                                                        max_bandwidth))) {
+                                                                        io_info,
+                                                                        true/*can_update*/))) {
       LOG_WARN("failed to insert backup storage info", K(ret));
     }
   }

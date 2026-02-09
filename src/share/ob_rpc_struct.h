@@ -66,6 +66,7 @@
 #include "storage/tx/ob_multi_data_source.h"
 #include "share/unit/ob_unit_info.h" //ObUnit*
 #include "share/backup/ob_backup_clean_struct.h"
+#include "share/backup/ob_backup_validate_struct.h"
 #include "logservice/palf/palf_options.h"//access mode
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "logservice/palf/log_define.h"//INVALID_PROPOSAL_ID
@@ -5918,6 +5919,48 @@ public:
   share::ObBackupPathString backup_path_;
 };
 
+struct ObBackupValidateLSArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupValidateLSArg()
+    : trace_id_(),
+      job_id_(0),
+      tenant_id_(0),
+      incarnation_(0),
+      task_id_(0),
+      ls_id_(0),
+      task_type_(),
+      validate_id_(0),
+      dest_id_(0),
+      round_id_(0),
+      validate_level_(),
+      validate_path_()
+  {
+  }
+public:
+  bool is_valid() const;
+  int assign(const ObBackupValidateLSArg &arg);
+  TO_STRING_KV(K_(trace_id), K_(job_id), K_(tenant_id), K_(incarnation), K_(task_id),
+                K_(ls_id), K_(task_type), K_(validate_id), K_(dest_id), K_(round_id),
+                K_(validate_level), K_(validate_path));
+public:
+  share::ObTaskId trace_id_;
+  int64_t job_id_;
+  uint64_t tenant_id_;
+  int64_t incarnation_;
+  uint64_t task_id_;
+  share::ObLSID ls_id_;
+  share::ObBackupValidateType task_type_;
+  int64_t validate_id_;
+  int64_t dest_id_;
+  int64_t round_id_;
+  share::ObBackupValidateLevel validate_level_;
+  share::ObBackupPathString validate_path_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupValidateLSArg);
+};
+
 struct ObBackupCheckTabletArg
 {
   OB_UNIS_VERSION(1);
@@ -10561,6 +10604,27 @@ public:
   bool enable_;
   uint64_t tenant_id_;
   common::ObSArray<uint64_t> archive_tenant_ids_;
+};
+
+struct ObBackupValidateArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupValidateArg();
+  int assign(const ObBackupValidateArg &arg);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id),
+      K_(set_or_piece_ids), K_(validate_type), K_(validate_level),
+      K_(validate_dest), K_(description), K_(execute_tenant_ids));
+  uint64_t tenant_id_; // target tenant to do backup
+  uint64_t initiator_tenant_id_; // the tenant id who initiate the backup
+  int64_t initiator_job_id_; // only used when sys tenant send rpc to user teannt to insert a backup job
+  share::ObBackupValidateType validate_type_;
+  common::ObSArray<uint64_t> set_or_piece_ids_;
+  share::ObBackupValidateLevel validate_level_;
+  share::ObBackupPathString validate_dest_;
+  share::ObBackupDescription description_;
+  common::ObSArray<uint64_t> execute_tenant_ids_; // tenants which need to do validating task
 };
 
 struct ObBackupDatabaseArg

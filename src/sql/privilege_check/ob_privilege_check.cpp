@@ -3200,7 +3200,8 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type() &&
              stmt::T_REPLACE_TENANT != basic_stmt->get_stmt_type() &&
              stmt::T_TRIGGER_STORAGE_CACHE != basic_stmt->get_stmt_type() &&
-             stmt::T_FLASHBACK_STANDBY_LOG != basic_stmt->get_stmt_type()) {
+             stmt::T_FLASHBACK_STANDBY_LOG != basic_stmt->get_stmt_type() &&
+             stmt::T_BACKUP_VALIDATE != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation",
              K(ret), "stmt type", basic_stmt->get_stmt_type());

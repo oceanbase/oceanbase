@@ -16,6 +16,7 @@
 #include "ob_backup_base_service.h"
 #include "ob_backup_data_scheduler.h"
 #include "ob_backup_clean_scheduler.h"
+#include "ob_backup_validate_scheduler.h"
 #include "share/ob_rpc_struct.h"
 namespace oceanbase 
 {
@@ -92,13 +93,13 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataService);
 };
 
-class ObBackupCleanService final : public ObBackupService
+class ObBackupMgrService final : public ObBackupService
 {
 public:
-  ObBackupCleanService() : ObBackupService(), backup_clean_scheduler_(), backup_auto_obsolete_delete_trigger_(),
-    jobs_(), triggers_() {}
-  virtual ~ObBackupCleanService() {}
-  DEFINE_MTL_FUNC(ObBackupCleanService);
+  ObBackupMgrService() : ObBackupService(), backup_clean_scheduler_(), backup_validate_scheduler_(),
+  backup_auto_obsolete_delete_trigger_(), jobs_(), triggers_() {}
+  virtual ~ObBackupMgrService() {}
+  DEFINE_MTL_FUNC(ObBackupMgrService);
   int process(int64_t &last_schedule_ts) override;
 
   ObIBackupJobScheduler *get_scheduler(const BackupJobType &type);
@@ -107,6 +108,8 @@ public:
 
   int handle_backup_delete(const obrpc::ObBackupCleanArg &arg);
   int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
+  int handle_backup_validate(const obrpc::ObBackupValidateArg &arg);
+  int handle_backup_validate_cancel(const uint64_t tenant_id, const ObIArray<uint64_t> &managed_tenant_ids);
 private:
   obrpc::ObNotifyTenantThreadArg::TenantThreadType get_tenant_thread_type_() const override;
   int handle_backup_delete_(const obrpc::ObBackupCleanArg &arg);
@@ -123,12 +126,12 @@ private:
 
 private:
   ObBackupCleanScheduler backup_clean_scheduler_;
+  ObBackupValidateScheduler backup_validate_scheduler_;
   ObBackupAutoObsoleteDeleteTrigger backup_auto_obsolete_delete_trigger_;
   common::ObSEArray<ObIBackupJobScheduler *, 8> jobs_;
   common::ObSEArray<ObIBackupTrigger *, 2> triggers_;
-  DISALLOW_COPY_AND_ASSIGN(ObBackupCleanService);
+  DISALLOW_COPY_AND_ASSIGN(ObBackupMgrService);
 };
-
 
 }  // end namespace rootserver
 }  // namespace oceanbase

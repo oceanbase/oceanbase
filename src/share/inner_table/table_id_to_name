@@ -416,6 +416,12 @@
 # 560: __all_sensitive_rule_privilege
 # 561: __all_sensitive_rule_privilege_history
 # 561: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
+# 563: __all_backup_validate_job
+# 564: __all_backup_validate_job_history
+# 565: __all_backup_validate_task
+# 566: __all_backup_validate_task_history
+# 567: __all_backup_validate_ls_task
+# 568: __all_backup_validate_ls_task_history
 # 569: __all_tenant_ss_storage_stat
 # 570: __all_ai_model
 # 571: __all_ai_model_history
@@ -1339,6 +1345,18 @@
 # 12560: __all_virtual_sensitive_rule_privilege_history
 # 12560: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
 # 12560: __all_sensitive_rule_privilege_history  # BASE_TABLE_NAME1
+# 12563: __all_virtual_backup_validate_job
+# 12563: __all_backup_validate_job  # BASE_TABLE_NAME
+# 12564: __all_virtual_backup_validate_job_history
+# 12564: __all_backup_validate_job_history  # BASE_TABLE_NAME
+# 12565: __all_virtual_backup_validate_task
+# 12565: __all_backup_validate_task  # BASE_TABLE_NAME
+# 12566: __all_virtual_backup_validate_task_history
+# 12566: __all_backup_validate_task_history  # BASE_TABLE_NAME
+# 12567: __all_virtual_backup_validate_ls_task
+# 12567: __all_backup_validate_ls_task  # BASE_TABLE_NAME
+# 12568: __all_virtual_backup_validate_ls_task_history
+# 12568: __all_backup_validate_ls_task_history  # BASE_TABLE_NAME
 # 12569: __all_virtual_tenant_ss_storage_stat
 # 12569: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
 # 12570: __all_virtual_hms_client_pool_stat
@@ -2100,6 +2118,18 @@
 # 15523: __all_virtual_ss_existing_sstable_mgr  # BASE_TABLE_NAME
 # 15524: ALL_VIRTUAL_UNIT_SYS_AGENT
 # 15524: __all_unit  # BASE_TABLE_NAME
+# 15527: ALL_VIRTUAL_BACKUP_VALIDATE_JOB
+# 15527: __all_backup_validate_job  # BASE_TABLE_NAME
+# 15527: __all_virtual_backup_validate_job  # BASE_TABLE_NAME1
+# 15528: ALL_VIRTUAL_BACKUP_VALIDATE_JOB_HISTORY
+# 15528: __all_backup_validate_job_history  # BASE_TABLE_NAME
+# 15528: __all_virtual_backup_validate_job_history  # BASE_TABLE_NAME1
+# 15529: ALL_VIRTUAL_BACKUP_VALIDATE_TASK
+# 15529: __all_backup_validate_task  # BASE_TABLE_NAME
+# 15529: __all_virtual_backup_validate_task  # BASE_TABLE_NAME1
+# 15530: ALL_VIRTUAL_BACKUP_VALIDATE_TASK_HISTORY
+# 15530: __all_backup_validate_task_history  # BASE_TABLE_NAME
+# 15530: __all_virtual_backup_validate_task_history  # BASE_TABLE_NAME1
 # 15531: ALL_VIRTUAL_TENANT_SS_STORAGE_STAT
 # 15531: __all_tenant_ss_storage_stat  # BASE_TABLE_NAME
 # 15531: __all_virtual_tenant_ss_storage_stat  # BASE_TABLE_NAME1
@@ -2687,6 +2717,14 @@
 # 21666: CDB_OB_SENSITIVE_COLUMNS
 # 21667: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 # 21668: CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 21673: CDB_OB_BACKUP_VALIDATE_JOBS
+# 21674: CDB_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 21675: CDB_OB_BACKUP_VALIDATE_TASKS
+# 21676: CDB_OB_BACKUP_VALIDATE_TASK_HISTORY
+# 21677: DBA_OB_BACKUP_VALIDATE_JOBS
+# 21678: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 21679: DBA_OB_BACKUP_VALIDATE_TASKS
+# 21680: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
 # 21681: GV$OB_HNSW_INDEX_INFO
 # 21682: V$OB_HNSW_INDEX_INFO
 # 21683: GV$OB_IVF_INDEX_INFO
@@ -3008,6 +3046,10 @@
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
 # 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
+# 25311: DBA_OB_BACKUP_VALIDATE_JOBS
+# 25312: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 25313: DBA_OB_BACKUP_VALIDATE_TASKS
+# 25314: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
 # 25315: DBA_OB_SS_SPACE_USAGE
 # 25316: DBA_OB_SOURCE
 # 25317: ALL_OB_SOURCE

@@ -155,6 +155,9 @@ ob_set_subtarget(ob_share backup
   backup/ob_log_restore_config.cpp
   backup/ob_log_restore_struct.cpp
   backup/ob_archive_checkpoint_mgr.cpp
+  backup/ob_backup_validate_struct.cpp
+  backup/ob_backup_validate_table_operator.cpp
+  backup/ob_backup_util.cpp
 )
 
 ob_set_subtarget(ob_share cache

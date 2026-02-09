@@ -8885,6 +8885,94 @@ int ObBackupCheckTabletArg::assign(const ObBackupCheckTabletArg &arg)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObBackupValidateArg, tenant_id_, initiator_tenant_id_, initiator_job_id_, validate_type_,
+  set_or_piece_ids_, validate_level_, validate_dest_, description_, execute_tenant_ids_);
+
+ObBackupValidateArg::ObBackupValidateArg()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    initiator_tenant_id_(OB_INVALID_TENANT_ID),
+    initiator_job_id_(0),
+    validate_type_(),
+    set_or_piece_ids_(),
+    validate_level_(),
+    validate_dest_(),
+    description_(),
+    execute_tenant_ids_()
+{
+}
+
+bool ObBackupValidateArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && validate_type_.is_valid() && validate_level_.is_valid();
+}
+
+int ObBackupValidateArg::assign(const ObBackupValidateArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(append(set_or_piece_ids_, arg.set_or_piece_ids_))) {
+    LOG_WARN("fail to append set or piece ids", K(ret));
+  } else if (OB_FAIL(validate_dest_.assign(arg.validate_dest_))) {
+    LOG_WARN("fail to assign backup dest", K(arg.validate_dest_));
+  } else if (OB_FAIL(description_.assign(arg.description_))) {
+    LOG_WARN("fail to assign description_", K(ret));
+  } else if (OB_FAIL(append(execute_tenant_ids_, arg.execute_tenant_ids_))) {
+    LOG_WARN("fail to append execute tenant ids", K(ret));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    initiator_tenant_id_ = arg.initiator_tenant_id_;
+    initiator_job_id_ = arg.initiator_job_id_;
+    validate_type_ = arg.validate_type_;
+    validate_level_ = arg.validate_level_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBackupValidateLSArg, trace_id_, job_id_, tenant_id_, incarnation_, task_id_,
+                    ls_id_, task_type_, validate_id_, dest_id_, round_id_, validate_level_,
+                    validate_path_);
+
+bool ObBackupValidateLSArg::is_valid() const
+{
+  return trace_id_.is_valid()
+        && job_id_ > 0
+        && OB_INVALID_TENANT_ID != tenant_id_
+        && task_id_ > 0
+        && ls_id_.is_valid()
+        && task_type_.is_valid()
+        && validate_id_ > 0
+        && dest_id_ > 0
+        && validate_level_.is_valid()
+        && !validate_path_.is_empty();
+}
+
+int ObBackupValidateLSArg::assign(const ObBackupValidateLSArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(validate_path_.assign(arg.validate_path_))) {
+    LOG_WARN("fail to assign validate path", KR(ret), K(arg.validate_path_));
+  } else {
+    trace_id_ = arg.trace_id_;
+    job_id_ = arg.job_id_;
+    tenant_id_ = arg.tenant_id_;
+    incarnation_ = arg.incarnation_;
+    task_id_ = arg.task_id_;
+    ls_id_ = arg.ls_id_;
+    task_type_.type_ = arg.task_type_.type_;
+    validate_id_ = arg.validate_id_;
+    dest_id_ = arg.dest_id_;
+    round_id_ = arg.round_id_;
+    validate_level_.level_ = arg.validate_level_.level_;
+    validate_path_.assign(arg.validate_path_);
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObBackupDatabaseArg, tenant_id_, initiator_tenant_id_, initiator_job_id_, backup_tenant_ids_, is_incremental_,
     is_compl_log_, backup_dest_, backup_description_, encryption_mode_, passwd_);
 

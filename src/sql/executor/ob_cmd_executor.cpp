@@ -1052,6 +1052,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObBackupDatabaseStmt, ObBackupDatabaseExecutor);
         break;
       }
+      case stmt::T_BACKUP_VALIDATE: {
+        DEFINE_EXECUTE_CMD(ObBackupValidateStmt, ObBackupValidateExecutor);
+        break;
+      }
       case stmt::T_CANCEL_RESTORE: {
         DEFINE_EXECUTE_CMD(ObCancelRestoreStmt, ObCancelRestoreExecutor);
         break;

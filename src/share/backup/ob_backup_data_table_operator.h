@@ -220,12 +220,18 @@ public:
       const ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id);
   static int get_statistics_info(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
       const ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, ObIArray<ObBackupLSTaskInfoAttr> &task_infos);
+  static int get_all_ls_ids_by_task(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id,
+      ObIArray<ObLSID> &ls_ids);
+  static int get_turn_and_retry_info(common::ObISQLClient &proxy,
+      const int64_t task_id, const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const share::ObBackupDataType &backup_data_type, common::ObIArray<ObBackupTurnRetryInfo> &info_array);
   static int move_ls_task_info_to_his(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id);
   static int get_distinct_ls_ids(common::ObISQLClient &proxy, const int64_t task_id,
       const uint64_t tenant_id, ObIArray<ObLSID> &ls_ids);
 private:
   static int parse_ls_task_info_(sqlclient::ObMySQLResult &result, ObIArray<ObBackupLSTaskInfoAttr> &task_infos);
   static int do_parse_ls_task_info_(sqlclient::ObMySQLResult &result, ObBackupLSTaskInfoAttr &task_info);
+  static int parse_ls_ids_(sqlclient::ObMySQLResult &result, ObIArray<ObLSID> &ls_ids);
 };
 
 class ObLSBackupInfoOperator : public ObBackupBaseTableOperator
