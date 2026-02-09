@@ -664,44 +664,13 @@ int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(const ObIArra
 int ObOptStatMonitorManager::update_dml_stat_info(const ObIArray<ObOptDmlStat *> &dml_stats)
 {
   int ret = OB_SUCCESS;
-  ObSqlString value_sql;
-  int64_t count = 0;
-  LOG_TRACE("begin to update dml stat info from direct load", K(dml_stats));
-  ObSEArray<ObOptDmlStat, 16> tmp_dml_stats;
   for (int64_t i = 0; OB_SUCC(ret) && i < dml_stats.count(); ++i) {
     if (OB_ISNULL(dml_stats.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpcted error", K(ret), K(dml_stats.at(i)));
-    } else if (OB_FAIL(tmp_dml_stats.push_back(*dml_stats.at(i)))) {
-      LOG_WARN("failed to push back", K(ret));
-    } else {
-      if (OB_FAIL(get_dml_stat_sql(*dml_stats.at(i), 0 != count, value_sql))) {
-        LOG_WARN("failed to get dml stat sql", K(ret));
-      } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
-        if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql))) {
-          LOG_WARN("failed to exec insert sql", K(ret));
-        } else {
-          count = 0;
-          value_sql.reset();
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && count != 0) {
-    if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql))) {
-      LOG_WARN("failed to exec insert sql", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && !tmp_dml_stats.empty()) {
-    bool no_check = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
-    uint64_t data_version = 0;
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tmp_dml_stats.at(0).tenant_id_, data_version))) {
-      LOG_WARN("fail to get tenant data version", KR(ret), K(tmp_dml_stats.at(0).tenant_id_), K(data_version));
-    } else if (data_version < DATA_VERSION_4_2_4_0 || no_check) {
-      //do nothing
-    } else if (OB_FAIL(check_opt_stats_expired(tmp_dml_stats, true/*is_from_direct_load*/))) {
-      LOG_WARN("failed to check opt stats expired", K(ret));
-    } else {/*do nohting*/}
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(update_local_cache(*dml_stats.at(i)))) {
+      LOG_WARN("failed to update local cache", K(ret));
+    } else {/*do nothing*/}
   }
   return ret;
 }

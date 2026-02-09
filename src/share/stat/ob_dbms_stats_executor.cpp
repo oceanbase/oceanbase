@@ -676,6 +676,7 @@ int ObDbmsStatsExecutor::do_gather_stats(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObOptTableStat *, 4> tmp_all_tstats;
+  sqlclient::ObISQLConnection *conn = trans.get_connection();
   if (OB_FAIL(THIS_WORKER.check_status())) {
     LOG_WARN("check status failed", KR(ret));
   } else if (OB_FAIL(param.partition_infos_.assign(gather_partition_infos))) {
@@ -693,7 +694,7 @@ int ObDbmsStatsExecutor::do_gather_stats(ObExecContext &ctx,
   } else if (param.is_split_gather_) {//avoid memory use too much, write current gather stats.
     if (OB_FAIL(ObDbmsStatsUtils::merge_split_gather_tab_stats(all_tstats, tmp_all_tstats))) {
       LOG_WARN("failed to merge split gather tab stats", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, trans.get_connection(),
+    } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write_with_trx_lock_timeout(ctx, trans.get_connection(),
                                                            is_all_columns_gather ? all_tstats : tmp_all_tstats,
                                                            all_cstats))) {
       LOG_WARN("failed to split batch write", K(ret));
@@ -1494,8 +1495,6 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
         LOG_WARN("fail to merge col stats", K(ret), K(cur_column_stats));
       } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, conn, table_stats, column_stats, false, true))) {
         LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
-      } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(conn, param))) {
-        LOG_WARN("failed to update last modified count", K(ret));
       } else {
         succ_to_write_stats = true;
       }

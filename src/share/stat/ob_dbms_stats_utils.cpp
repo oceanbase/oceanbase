@@ -423,6 +423,32 @@ int ObDbmsStatsUtils::split_batch_write(sql::ObExecContext &ctx,
   return ret;
 }
 
+int ObDbmsStatsUtils::split_batch_write_with_trx_lock_timeout(sql::ObExecContext &ctx,
+                                                               sqlclient::ObISQLConnection *conn,
+                                                               ObIArray<ObOptTableStat *> &table_stats,
+                                                               ObIArray<ObOptColumnStat *> &column_stats,
+                                                               const bool is_index_stat /*default false*/,
+                                                               const bool is_online_stat /*default false*/)
+{
+  int ret = OB_SUCCESS;
+  int64_t trx_lock_timeout = 60 * 1000 * 1000; // 60 seconds
+  int64_t old_trx_lock_timeout = 0;
+  bool need_restore = false;
+  if (OB_FAIL(set_trx_lock_timeout(conn, trx_lock_timeout, old_trx_lock_timeout, need_restore))) {
+    LOG_WARN("failed to set trx lock timeout for write", K(ret));
+  } else if (OB_FAIL(split_batch_write(ctx, conn, table_stats, column_stats, is_index_stat, is_online_stat))) {
+    LOG_WARN("failed to split batch write", K(ret));
+  }
+  if (need_restore) {
+    int tmp_ret = set_trx_lock_timeout(conn, old_trx_lock_timeout, trx_lock_timeout, need_restore);
+    if (tmp_ret != OB_SUCCESS) {
+      ret = COVER_SUCC(tmp_ret);
+      LOG_WARN("failed to restore trx lock timeout", K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
 int ObDbmsStatsUtils::split_batch_write(sqlclient::ObISQLConnection *conn,
                                         share::schema::ObSchemaGetterGuard *schema_guard,
                                         sql::ObSQLSessionInfo *session_info,
@@ -1814,6 +1840,27 @@ int ObDbmsStatsUtils::copy_prefix_column_stat_to_text(ObIAllocator &allocator,
     meta.set_has_lob_header();
     text_col_stat->get_max_value().set_meta_type(meta);
     text_col_stat->get_min_value().set_meta_type(meta);
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::set_trx_lock_timeout(sqlclient::ObISQLConnection *conn,
+                                           int64_t trx_lock_timeout,
+                                           int64_t &old_trx_lock_timeout,
+                                           bool &need_restore)
+{
+  int ret = OB_SUCCESS;
+  need_restore = false;
+  ObString var_name(share::OB_SV_TRX_LOCK_TIMEOUT);
+  if (OB_ISNULL(conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null connection", K(ret));
+  } else if (OB_FAIL(conn->get_session_variable(var_name, old_trx_lock_timeout))) {
+    LOG_WARN("failed to get trx lock timeout", K(ret));
+  } else if (OB_FAIL(conn->set_session_variable(var_name, trx_lock_timeout))) {
+    LOG_WARN("failed to set trx lock timeout", K(ret), K(trx_lock_timeout));
+  } else {
+    need_restore = true;
   }
   return ret;
 }
