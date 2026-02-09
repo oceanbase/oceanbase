@@ -278,14 +278,6 @@ int ObSequenceDDLProxy::drop_sequence(
   int64_t new_schema_version = OB_INVALID_VERSION;
   bool exists = false;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
-  
-  OZ (rootserver::ObDDLOperator::drop_obj_privs(
-                                tenant_id,
-                                seq_schema.get_sequence_id(),
-                                static_cast<uint64_t>(ObObjectType::SEQUENCE),
-                                trans,
-                                schema_service_,
-                                schema_guard));
 
   if (OB_FAIL(schema_guard.check_sequence_exist_with_name(
               seq_schema.get_tenant_id(),
@@ -308,6 +300,14 @@ int ObSequenceDDLProxy::drop_sequence(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(rootserver::ObDDLOperator::drop_obj_privs(
+                                tenant_id,
+                                seq_schema.get_sequence_id(),
+                                static_cast<uint64_t>(ObObjectType::SEQUENCE),
+                                trans,
+                                schema_service_,
+                                schema_guard))) {
+    LOG_WARN("fail to drop obj privs", K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service->get_sequence_sql_service().drop_sequence(
