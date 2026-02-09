@@ -474,8 +474,6 @@ int ObPLRouter::check_expr_sql_transpiler_eligible(const ObRawExpr &expr, bool &
     eligible = false;
   } else if (ObRawExpr::EXPR_PL_QUERY_REF == expr.get_expr_class()) {
     eligible = false;
-  } else if (T_OP_GET_PACKAGE_VAR == expr.get_expr_type()) {
-    eligible = false;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && eligible && i < expr.get_param_count(); ++i) {
       if (OB_ISNULL(expr.get_param_expr(i))) {

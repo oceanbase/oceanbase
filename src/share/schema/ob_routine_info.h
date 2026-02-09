@@ -545,6 +545,7 @@ public:
     flag_ &= ~(uint64_t)SP_FLAG_HAS_SEQUENCE;
     flag_ &= ~(uint64_t)SP_FLAG_HAS_OUT_PARAM;
     flag_ &= ~(uint64_t)SP_FLAG_EXTERNAL_STATE;
+    flag_ &= ~(uint64_t)SP_FLAG_SQL_TRANSPILER_ELIGIBLE;
   }
 
   OB_INLINE bool is_wps() const { return SP_FLAG_WPS == (flag_ & SP_FLAG_WPS); }
