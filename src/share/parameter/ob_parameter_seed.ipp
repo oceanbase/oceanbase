@@ -3348,6 +3348,14 @@ DEF_CAP(_replay_pending_log_memory_limit, OB_TENANT_PARAMETER, "128M", "[1M, 102
 DEF_BOOL(_enable_randomize_redo_logging_slot, OB_CLUSTER_PARAMETER, "False",
         "specifies whether enable randomize redo logging slot when parallel logging is enabled",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(ob_vector_index_active_segment_max_size, OB_TENANT_PARAMETER, "0", "[0,)",
+        "The maximum memory usage of the Active Segment in a single partition's vector index."
+        "When this limit is exceeded, a forced freeze and persistence operation will be triggered",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ob_vector_index_merge_trigger_percentage, OB_TENANT_PARAMETER, "20", "[0, 100)",
+        "Maximum ratio of Incremental Segment memory usage to total partition index. "
+        "When this value is exceeded, the system will automatically trigger a merge operation with the base segment.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 DEF_STR_WITH_CHECKER(system_protected_tenant_parameters, OB_CLUSTER_PARAMETER, "",
   common::ObConfigCommaSeparatedStringChecker,
   "tenant parameters that are not allowed to be modified by regular users, "
@@ -3390,6 +3398,9 @@ DEF_CAP(_write_throttle_by_pending_log_size_limit, OB_TENANT_PARAMETER, "0", "[0
 DEF_TIME(_write_throttle_by_pending_log_sleep_interval, OB_TENANT_PARAMETER, "20ms", "[0ms, 1h]",
          "the sleep interval when write throttle by pending log size. Range: [0ms, 1h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_persist_vector_index_incremental, OB_TENANT_PARAMETER, "False",
+        "Controls whether to enable incremental persistence for vector indexes",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_hash_gby_limit_pushdown, OB_TENANT_PARAMETER, "True",
          "Enable or disable hash group by limit pushdown.",

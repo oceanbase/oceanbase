@@ -46,6 +46,34 @@ CREATE OR REPLACE PACKAGE BODY dbms_vector
     CALL do_rebuild_index(idx_name, table_name, idx_vector_col, delta_rate_threshold, idx_organization, idx_distance_metrics, idx_parameters, idx_parallel_creation);
   END;
 
+  PROCEDURE do_flush_index(
+    IN     table_name             VARCHAR(65535),
+    IN     idx_name               VARCHAR(65535)
+  );
+  PRAGMA INTERFACE(C, DBMS_VECTOR_MYSQL_FLUSH_INDEX);
+
+  PROCEDURE flush_index(
+    IN     table_name             VARCHAR(65535),
+    IN     idx_name               VARCHAR(65535))
+  BEGIN
+    COMMIT;
+    CALL do_flush_index(table_name, idx_name);
+  END;
+
+  PROCEDURE do_compact_index(
+    IN     table_name             VARCHAR(65535),
+    IN     idx_name               VARCHAR(65535)
+  );
+  PRAGMA INTERFACE(C, DBMS_VECTOR_MYSQL_COMPACT_INDEX);
+
+  PROCEDURE compact_index(
+    IN     table_name             VARCHAR(65535),
+    IN     idx_name               VARCHAR(65535))
+  BEGIN
+    COMMIT;
+    CALL do_compact_index(table_name, idx_name);
+  END;
+
   PROCEDURE do_refresh_index_inner(
     IN     idx_table_id           BIGINT,
     IN     refresh_threshold      INT DEFAULT 10000,

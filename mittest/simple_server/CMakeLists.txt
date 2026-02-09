@@ -192,3 +192,11 @@ ob_truncate_case(test_mds_filter_mgr test_mds_filter_mgr.cpp)
 ob_truncate_case(test_mds_cache_valid test_mds_cache_valid.cpp)
 ob_truncate_case(test_min_merged_trans_version test_min_merged_trans_version.cpp)
 ####### truncate case #########
+
+####### vector index case #########
+set(VECTOR_INDEX_TEST_SHARE
+        vector_index/test_vector_index_utils.cpp
+        )
+ob_unittest_observer(test_vector_index_freeze vector_index/test_vector_index_freeze.cpp ${VECTOR_INDEX_TEST_SHARE})
+ob_unittest_observer(test_vector_index_freeze_with_base vector_index/test_vector_index_freeze_with_base.cpp ${VECTOR_INDEX_TEST_SHARE})
+####### vector index case #########

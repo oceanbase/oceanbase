@@ -121,6 +121,63 @@ int ObDBMSVectorMySql::rebuild_index(ObPLExecCtx &ctx, ParamStore &params, ObObj
   return ret;
 }
 
+/*
+PROCEDURE flush_index(
+  IN       TABLE_NAME          VARCHAR(65535),               ---- 表名
+  IN       IDX_NAME            VARCHAR(65535)                ---- 索引名
+);
+*/
+int ObDBMSVectorMySql::flush_index(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0);
+  CK(OB_LIKELY(2 == params.count()));
+  if (!params.at(0).is_varchar()
+      || !params.at(1).is_varchar()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for flush index", KR(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObVectorRefreshIndexArg refresh_arg;
+    ObVectorRefreshIndexExecutor refresh_executor;
+    refresh_arg.table_name_ = params.at(0).get_varchar();
+    refresh_arg.idx_name_ = params.at(1).get_varchar();
+    if (OB_FAIL(refresh_executor.execute_flush(ctx, refresh_arg))) {
+      LOG_WARN("fail to execute flush index", KR(ret), K(refresh_arg));
+    }
+  }
+  return ret;
+}
+
+/*
+PROCEDURE compact_index(
+  IN      TABLE_NAME     VARCHAR(65535),                      ---- 表名
+  IN      IDX_NAME       VARCHAR(65535)                       ---- 索引名
+);
+*/
+int ObDBMSVectorMySql::compact_index(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0);
+  CK(OB_LIKELY(2 == params.count()));
+  if (!params.at(0).is_varchar()
+      || !params.at(1).is_varchar()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for compact index", KR(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObVectorRefreshIndexArg refresh_arg;
+    ObVectorRefreshIndexExecutor refresh_executor;
+    refresh_arg.table_name_ = params.at(0).get_varchar();
+    refresh_arg.idx_name_ = params.at(1).get_varchar();
+    if (OB_FAIL(refresh_executor.execute_compact(ctx, refresh_arg))) {
+      LOG_WARN("fail to execute compact index", KR(ret), K(refresh_arg));
+    }
+  }
+  return ret;
+}
 
 /*
 PROCEDURE set_attribute (

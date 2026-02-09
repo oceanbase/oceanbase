@@ -225,6 +225,7 @@
 #include "observer/virtual_table/ob_all_virtual_sql_stat.h"
 #include "observer/virtual_table/ob_all_virtual_ss_local_cache_info.h"
 #include "observer/virtual_table/ob_all_virtual_vector_index_info.h"
+#include "observer/virtual_table/ob_all_virtual_vector_segment_info.h"
 #include "observer/virtual_table/ob_all_virtual_tmp_file.h"
 #include "observer/virtual_table/ob_all_virtual_log_transport_dest_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
@@ -3088,6 +3089,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               all_virtual_vector_index_info->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_vector_index_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID:
+          {
+            ObAllVirtualVectorSegmentInfo *all_virtual_vector_segment_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualVectorSegmentInfo, all_virtual_vector_segment_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualVectorSegmentInfo construct failed", K(ret));
+            } else {
+              all_virtual_vector_segment_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_vector_segment_info);
             }
             break;
           }

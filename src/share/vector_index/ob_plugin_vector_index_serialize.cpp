@@ -15,6 +15,7 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "storage/access/ob_table_scan_iterator.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -176,25 +177,49 @@ int ObIStreamBuf::do_callback()
   }
   return ret;
 }
+
+int ObVectorIndexSerializer::serialize_meta(ObVectorIndexSegment *segment, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb)
+{
+  int ret = OB_SUCCESS;
+  int64_t serde_size = segment->get_serialize_meta_size();
+  char* serde_buf = nullptr;
+  int64_t pos = 0;
+  if (OB_ISNULL(serde_buf = reinterpret_cast<char*>(allocator_.alloc(serde_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory fail", K(ret), K(serde_size));
+  } else if (OB_FAIL(segment->serialize_meta(serde_buf, serde_size, pos))) {
+    LOG_WARN("serialize meta fail", K(ret), K(serde_size), KP(serde_buf), K(segment->get_serialize_meta_size()), KPC(segment));
+  } else if (OB_FAIL(cb(serde_buf, pos, cb_param))) {
+    LOG_WARN("failed to do callback", K(ret), K(serde_size), K(pos));
+  } else {
+    LOG_INFO("[VECTOR INDEX] build segment meta serde data success",
+        K(serde_size), K(pos), KP(serde_buf), KPC(segment));
+  }
+  return ret;
+}
+
 /*
  * ObVectorIndexSerializer implement
  * */
-int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, uint64_t tenant_id, const int64_t capacity)
+int ObVectorIndexSerializer::serialize(ObVectorIndexSegment *segment, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, uint64_t tenant_id, const int64_t capacity)
 {
   int ret = OB_SUCCESS;
+  ObHNSWSerializeCallback::CbParam &param = static_cast<ObHNSWSerializeCallback::CbParam&>(cb_param);
   char *data = nullptr;
-  if (OB_ISNULL(index) || 0 > capacity) {
+  if (OB_ISNULL(segment) || 0 > capacity) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(index), K(capacity));
+    LOG_WARN("invalid argument", K(ret), K(segment), K(capacity));
   } else if (OB_ISNULL(data = static_cast<char*>(allocator_.alloc(capacity * sizeof(char))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc serialize buffer", K(ret), K(capacity));
+  } else if (param.need_serde_meta_ && OB_FAIL(serialize_meta(segment, cb_param, cb))) {
+    LOG_WARN("serialize segment meta fail", K(ret), KPC(segment));
   } else {
     ObOStreamBuf streambuf(data, capacity, cb_param, cb);
     std::ostream out(&streambuf);
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
     lib::ObLightBacktraceGuard light_backtrace_guard(false);
-    if (OB_FAIL(obvectorutil::fserialize(index, out))) {
+    if (OB_FAIL(segment->fserialize(out))) {
       LOG_WARN("fail to do vsag serialize", K(ret));
       if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
         ret = streambuf.get_error_code();
@@ -210,7 +235,7 @@ int ObVectorIndexSerializer::serialize(void *index, ObOStreamBuf::CbParam &cb_pa
   return ret;
 }
 
-int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb, uint64_t tenant_id)
+int ObVectorIndexSerializer::deserialize(ObVectorIndexSegmentHandle &segment_handle, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   char *data = nullptr;
@@ -226,12 +251,68 @@ int ObVectorIndexSerializer::deserialize(void *&index, ObIStreamBuf::CbParam &cb
   } else {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
     lib::ObLightBacktraceGuard light_backtrace_guard(false);
-    if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
+    if (OB_FAIL(segment_handle->fdeserialize(in))) {
       LOG_WARN("fail to do vsag deserialize", K(ret));
       if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
         ret = streambuf.get_error_code();
         LOG_WARN("deserialize streambuf has fail", K(ret));
       }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(streambuf.get_error_code())) {
+    if (ret == OB_ITER_END) {
+      LOG_INFO("[vec index deserialize] read table finish, just return");
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to deserialize", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObVectorIndexSerializer::deserialize(ObVectorIndexMeta& meta, ObIStreamBuf::CbParam &cb_param, ObHNSWDeserializeCallback &callback, uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObIStreamBuf::Callback cb = callback;
+  char *data = nullptr;
+  ObIStreamBuf streambuf(nullptr, 0, cb_param, cb);
+  std::istream in(&streambuf);
+  ObHNSWDeserializeCallback::CbParam &param = static_cast<ObHNSWDeserializeCallback::CbParam&>(cb_param);
+  ObPluginVectorIndexAdaptor *adp_ptr = static_cast<ObPluginVectorIndexAdaptor*>(callback.adp_);
+  if (OB_FAIL(streambuf.init())) {
+    if (ret == OB_ITER_END) {
+      LOG_INFO("[vec index deserialize] read table is empty, just return");
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to init istreambuf", K(ret));
+    }
+  } else if (OB_ISNULL(adp_ptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid adp", K(ret));
+  } else if (meta.incrs_.count() > 0 || meta.bases_.count() != 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("meta is invalid for old format", K(ret), K(meta));
+  } else {
+    // TODO: add old index segment compatibility logic here
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
+    lib::ObLightBacktraceGuard light_backtrace_guard(false);
+    ObVectorIndexSegmentMeta &seg_meta = meta.bases_.at(0);
+    if (OB_FAIL(seg_meta.segment_handle_->fdeserialize(in))) {
+      LOG_WARN("fail to do vsag deserialize", K(ret));
+      if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
+        ret = streambuf.get_error_code();
+        LOG_WARN("deserialize streambuf has fail", K(ret));
+      }
+    } else if (OB_FALSE_IT(seg_meta.segment_handle_->set_is_base())) {
+    } else if (OB_FAIL(seg_meta.segment_handle_->immutable_optimize())) {
+      LOG_WARN("fail to index immutable_optimize", K(ret));
+    } else if (OB_FAIL(seg_meta.deep_copy_seg_key(param.start_key_, param.end_key_))) {
+      LOG_WARN("failed to deep copy seg key", K(ret), K(seg_meta));
+    } else {
+      // MARK AS legacy base segment (backward compatibility)
+      seg_meta.seg_type_ = ObVectorIndexSegmentType::LEGACY_BASE;
+      seg_meta.index_type_ = param.index_type_;
     }
   }
   if (OB_FAIL(ret)) {
@@ -259,6 +340,7 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
   ObTextStringIter *&str_iter = param.str_iter_;
   bool is_vec_tablet_rebuild = param.is_vec_tablet_rebuild_;
   bool is_need_unvisible_row = param.is_need_unvisible_row_;
+  ObVectorIndexSegmentMeta *seg_meta = param.seg_meta_;
   ObTextStringIterState state;
   ObString src_block_data;
   if (!param.is_valid()) {
@@ -301,21 +383,37 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid row", K(ret), K(row));
         } else {
+          // TODO: old index segment compatibility, count execute times as blocks_cnt
           bool skip_this_row = false;
           key_datum = row->storage_datums_[0];
           data_datum = row->storage_datums_[1];
 
           LOG_INFO("[vec index debug] show key and data for vsag deserialize", K(key_datum), K(data_datum), K(is_need_unvisible_row), K(is_vec_tablet_rebuild));
 
+          const ObString key_data = key_datum.get_string();
+          MEMCPY(param.end_key_buf_, key_data.ptr(), key_data.length());
+          param.end_key_.assign(param.end_key_buf_, key_data.length());
+
           if (OB_FALSE_IT(ObVecIndexAsyncTaskUtil::get_row_need_skip_for_compatibility(*row, is_need_unvisible_row, skip_this_row))) {
           } else if (skip_this_row) {
             LOG_INFO("skip deseriable row", K(key_datum), K(is_need_unvisible_row), K(is_vec_tablet_rebuild)); // continue;
+          } else if (key_datum.get_string().suffix_match("_meta_data")) {
+            ObPluginVectorIndexAdaptor *adp_ptr = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
+            ObString meta_data = data_datum.get_string();
+            if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(allocator, ObLongTextType, true, meta_data, nullptr))) {
+              LOG_WARN("read real data fail", K(ret), K(meta_data.length()));
+            } else if (OB_FAIL(adp_ptr->deserialize_snap_meta(meta_data))) {
+              LOG_WARN("derserialize meta data fail", K(ret), K(meta_data.length()));
+            } else {
+              LOG_INFO("vector index meta data", K(key_datum.get_string()));
+            }
           } else if (OB_ISNULL(str_iter = OB_NEWx(ObTextStringIter, allocator, ObLongTextType, CS_TYPE_BINARY, data_datum.get_string(), true))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("fail to new ObTextStringIter", KR(ret));
           } else if (OB_FAIL(str_iter->init(0, NULL, allocator))) {
             LOG_WARN("init lob str iter failed ", K(ret));
           } else if (index_type_ == VIAT_MAX) {
+            // TODO: old index segment compatibility, use startkey/index_type get index_type
             ObPluginVectorIndexAdaptor *adp = static_cast<ObPluginVectorIndexAdaptor*>(adp_);
             ObCollationType calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
             uint32_t idx_ipivf_sq = ObCharset::locate(calc_cs_type, key_datum.get_string().ptr(), key_datum.get_string().length(),
@@ -331,36 +429,45 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
             if (OB_ISNULL(adp)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get invalid adp", K(ret));
+            } else if (OB_FALSE_IT(MEMCPY(param.start_key_buf_, key_data.ptr(), key_data.length()))) {
+            } else if (OB_FALSE_IT(param.start_key_.assign(param.start_key_buf_, key_data.length()))) {
+            } else if (nullptr != seg_meta && key_datum.get_string().compare(seg_meta->start_key_) != 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("first row of vector index is not expected row", K(ret), KPC(seg_meta), KPC(row));
             } else if (idx_ipivf_sq > 0) {
               index_type_ = VIAT_IPIVF_SQ;
-              if (OB_FAIL(adp->try_init_snap_data(VIAT_IPIVF_SQ))) {
-                LOG_WARN("failed to init sparse vector sq snap data", K(ret), K(index_type_));
-              }
             } else if (idx_ipivf > 0) {
               index_type_ = VIAT_IPIVF;
-              if (OB_FAIL(adp->try_init_snap_data(VIAT_IPIVF))) {
-                LOG_WARN("failed to init sparse vector snap data", K(ret), K(index_type_));
-              }
             } else if (idx_sq > 0) {
               index_type_ = VIAT_HNSW_SQ;
-              if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW_SQ))) {
-                LOG_WARN("failed to init snap data", K(ret), K(index_type_));
-              }
             } else if (idx_bq > 0) {
               index_type_ = VIAT_HNSW_BQ;
-              if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW_BQ))) {
-                LOG_WARN("failed to init snap data", K(ret), K(index_type_));
-              }
             } else if (hgraph_idx > 0) {
               index_type_ = VIAT_HGRAPH;
-              if (OB_FAIL(adp->try_init_snap_data(VIAT_HGRAPH))) {
-                LOG_WARN("failed to init snap data", K(ret), K(index_type_));
-              }
             } else {
               index_type_ = VIAT_HNSW;
-              if (OB_FAIL(adp->try_init_snap_data(VIAT_HNSW))) {
-                LOG_WARN("failed to init snap data", K(ret), K(index_type_));
+            }
+            if (OB_FAIL(ret)) {
+            } else if (nullptr != seg_meta) {
+              ObString real_data;
+              int64_t pos = 0;
+              if (OB_FAIL(adp->create_snap_segment(index_type_, *seg_meta))) {
+                LOG_WARN("init seg data fail", K(ret), K(index_type_), KPC(seg_meta));
+              } else if (! seg_meta->has_segment_meta_row_) { // skip if no segment meta row
+              } else if (OB_FAIL(str_iter->get_full_data(real_data))) {
+                LOG_WARN("get full data fail", K(ret));
+              } else if (OB_FAIL(seg_meta->segment_handle_->deserialize_meta(real_data.ptr(), real_data.length(), pos))) {
+                LOG_WARN("deserialize meta fail", K(ret), K(real_data.length()), K(pos));
+              } else {
+                str_iter->~ObTextStringIter();
+                allocator->free(str_iter);
+                str_iter = nullptr;
+                allocator->reuse();
               }
+            } else if (OB_FAIL(adp->try_init_snap_for_deserialize(index_type_))) {
+              LOG_WARN("failed to init vector snap data", K(ret), K(index_type_));
+            } else {
+              param.index_type_ = index_type_;
             }
 
             LOG_INFO("HgraphIndex vector index get key data from snap_index_table", K(ret), K(is_vec_tablet_rebuild), K(index_type_), K(key_datum.get_string()));
@@ -383,7 +490,10 @@ int ObHNSWDeserializeCallback::operator()(char*& data, const int64_t data_size, 
       if (OB_ISNULL(adp_ptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid adp", K(ret));
-      } else if (!adp_ptr->is_mem_data_init_atomic(VIRT_SNAP) && !is_vec_tablet_rebuild) {
+      } else if (nullptr != seg_meta && index_type_ == VIAT_MAX) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("segment donot read data", KPC(seg_meta));
+      } else if (!adp_ptr->is_snap_inited() && !is_vec_tablet_rebuild) {
         // If it’s vec tablet rebuild and nothing was deserialized, then there’s no need to create snap_index here; the outer layer will create it.
         // Otherwise, it may cause a mismatch between the index data and the index type.
         if (OB_FAIL(adp_ptr->init_snap_data_without_lock(VIAT_HNSW))) {
@@ -439,7 +549,7 @@ int ObHNSWSerializeCallback::operator()(const char *data, const int64_t data_siz
     LOG_INFO("[vec index debug] success write one data into lob tablet", K(src_lob),
               K(lob_param.lob_meta_tablet_id_), KPC(lob_param.tx_desc_));
     ObString dest_str(lob_param.handle_size_, (char*)lob_param.lob_common_);
-    if (OB_FAIL(vctx->get_vals().push_back(dest_str))) {
+    if (OB_FAIL(vctx->get_vals().push_back(ObVecIdxSnapshotBlockData(false/*is_meta*/, dest_str)))) {
       LOG_WARN("fail to push dest lob into ctx val array", K(ret));
     }
   }

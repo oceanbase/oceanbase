@@ -629,6 +629,73 @@ public:
 private:
 };
 
+static int test_serialize(ObIAllocator &allocator, void *index, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb, uint64_t tenant_id, const int64_t capacity = 2LL * 1024LL * 1024LL /*2MB*/)
+{
+  int ret = OB_SUCCESS;
+  char *data = nullptr;
+  if (OB_ISNULL(index) || 0 > capacity) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(index), K(capacity));
+  } else if (OB_ISNULL(data = static_cast<char*>(allocator.alloc(capacity * sizeof(char))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc serialize buffer", K(ret), K(capacity));
+  } else {
+    ObOStreamBuf streambuf(data, capacity, cb_param, cb);
+    std::ostream out(&streambuf);
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
+    lib::ObLightBacktraceGuard light_backtrace_guard(false);
+    if (OB_FAIL(obvectorutil::fserialize(index, out))) {
+      LOG_WARN("fail to do vsag serialize", K(ret));
+      if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
+        ret = streambuf.get_error_code();
+        LOG_WARN("serialize streambuf has fail", K(ret));
+      }
+    } else {
+      streambuf.check_finish(); // do last callback to ensure all the data is written
+      if (OB_FAIL(streambuf.get_error_code())) {
+        LOG_WARN("failed to serialize", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+static int test_deserialize(void *&index, ObIStreamBuf::CbParam &cb_param, ObIStreamBuf::Callback &cb, uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  char *data = nullptr;
+  ObIStreamBuf streambuf(nullptr, 0, cb_param, cb);
+  std::istream in(&streambuf);
+  if (OB_FAIL(streambuf.init())) {
+    if (ret == OB_ITER_END) {
+      LOG_INFO("[vec index deserialize] read table is empty, just return");
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to init istreambuf", K(ret));
+    }
+  } else {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "VIndexVsagADP"));
+    lib::ObLightBacktraceGuard light_backtrace_guard(false);
+    if (OB_FAIL(obvectorutil::fdeserialize(index, in))) {
+      LOG_WARN("fail to do vsag deserialize", K(ret));
+      if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
+        ret = streambuf.get_error_code();
+        LOG_WARN("deserialize streambuf has fail", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(streambuf.get_error_code())) {
+    if (ret == OB_ITER_END) {
+      LOG_INFO("[vec index deserialize] read table finish, just return");
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to deserialize", K(ret));
+    }
+  }
+  return ret;
+}
+
 TEST_F(TestVectorIndexAdaptor, test_ser_deser)
 {
   void* raw_memory = (void*)malloc(sizeof(common::obvectorutil::ObVsagLogger));
@@ -676,13 +743,12 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
 
   // do serialize
   ObArenaAllocator allocator;
-  ObVectorIndexSerializer index_seri(allocator);
   ObTestHNSWSerializeCallback ser_callback;
   ObOStreamBuf::Callback ser_cb = ser_callback;
 
   ObTestHNSWSerializeCallback::CbParam ser_param;
   ser_param.allocator_ = &allocator;
-  ASSERT_EQ(0, index_seri.serialize(index_handler, ser_param, ser_cb, MTL_ID()));
+  ASSERT_EQ(0, test_serialize(allocator, index_handler, ser_param, ser_cb, MTL_ID()));
 
   // do deserialize
   obvsag::VectorIndexPtr des_index_handler = nullptr;
@@ -703,7 +769,7 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-  ASSERT_EQ(0, index_seri.deserialize(des_index_handler, des_param, des_cb, MTL_ID()));
+  ASSERT_EQ(0, test_deserialize(des_index_handler, des_param, des_cb, MTL_ID()));
   // check vector count
   ASSERT_EQ(0, obvectorutil::get_index_number(des_index_handler, index_size));
   ASSERT_EQ(index_size, num_vectors);
@@ -1450,21 +1516,19 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
   ASSERT_EQ(OB_SUCCESS, test_knn_search(index_handler, ids, vecs, dim, num_vectors, ef_search, &test_filter));
   // do serialize
   ObArenaAllocator allocator;
-  ObVectorIndexSerializer index_seri(allocator);
   ObTestHNSWSerializeCallback ser_callback;
   ObOStreamBuf::Callback ser_cb = ser_callback;
 
   ObTestHNSWSerializeCallback::CbParam ser_param;
   ser_param.allocator_ = &allocator;
-  ASSERT_EQ(0, index_seri.serialize(index_handler, ser_param, ser_cb, MTL_ID()));
+  ASSERT_EQ(0, test_serialize(allocator, index_handler, ser_param, ser_cb, MTL_ID()));
   std::cout << "serialize size " << ser_param.size_ << std::endl;
 
-  ObVectorIndexSerializer flat_index_seri(allocator);
   ObTestHNSWSerializeCallback flat_ser_callback;
   ObOStreamBuf::Callback flat_ser_cb = flat_ser_callback;
   ObTestHNSWSerializeCallback::CbParam flat_ser_param;
   flat_ser_param.allocator_ = &allocator;
-  ASSERT_EQ(0, flat_index_seri.serialize(index_handler_flat, flat_ser_param, flat_ser_cb, MTL_ID()));
+  ASSERT_EQ(0, test_serialize(allocator, index_handler_flat, flat_ser_param, flat_ser_cb, MTL_ID()));
   std::cout << "flat serialize size " << flat_ser_param.size_ << std::endl;
 
   // do deserialize
@@ -1486,7 +1550,7 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
                                       max_degree,
                                       ef_construction,
                                       ef_search), 0);
-  ASSERT_EQ(0, index_seri.deserialize(des_index_handler, des_param, des_cb, MTL_ID()));
+  ASSERT_EQ(0, test_deserialize(des_index_handler, des_param, des_cb, MTL_ID()));
   // check vector count
   ASSERT_EQ(0, obvectorutil::get_index_number(des_index_handler, index_size));
   ASSERT_EQ(index_size, num_vectors);
@@ -1716,13 +1780,12 @@ TEST_F(TestVectorIndexAdaptor, test_sparse_vector_index_serial)
 
   // do serialize
   ObArenaAllocator allocator;
-  ObVectorIndexSerializer index_seri(allocator);
   ObTestHNSWSerializeCallback ser_callback;
   ObOStreamBuf::Callback ser_cb = ser_callback;
 
   ObTestHNSWSerializeCallback::CbParam ser_param;
   ser_param.allocator_ = &allocator;
-  ASSERT_EQ(0, index_seri.serialize(index_handler, ser_param, ser_cb, MTL_ID()));
+  ASSERT_EQ(0, test_serialize(allocator, index_handler, ser_param, ser_cb, MTL_ID()));
   std::cout << "serialize size " << ser_param.size_ << std::endl;
 
   // do deserialize
@@ -1744,7 +1807,7 @@ TEST_F(TestVectorIndexAdaptor, test_sparse_vector_index_serial)
                                       doc_prune_ratio,
                                       window_size,
                                       &vsag_mem_context), 0);
-  ASSERT_EQ(0, index_seri.deserialize(des_index_handler, des_param, des_cb, MTL_ID()));
+  ASSERT_EQ(0, test_deserialize(des_index_handler, des_param, des_cb, MTL_ID()));
   // check vector count
   ASSERT_EQ(0, obvectorutil::get_index_number(des_index_handler, index_size));
   ASSERT_EQ(index_size, num_vectors);

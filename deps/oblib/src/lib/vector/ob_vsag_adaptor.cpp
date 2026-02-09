@@ -266,7 +266,13 @@ int HnswIndexHandler::build_index(const vsag::DatasetPtr &base)
   int ret = OB_SUCCESS;
   tl::expected<std::vector<int64_t>, Error> result = index_->Build(base);
   if (result.has_value()) {
-    LOG_DEBUG("build index success");
+    const std::vector<int64_t>& failed_id = result.value();
+    if (! failed_id.empty()) {
+      ret = OB_ERR_VSAG_RETURN_ERROR;
+      LOG_WARN("some vector add fail", K(ret), "failed_id", ObArrayWrap<int64_t>(failed_id.data(), failed_id.size()));
+    } else {
+      LOG_DEBUG("build index success");
+    }
   } else {
     ret = vsag_errcode2ob(result.error().type);
   }
@@ -283,7 +289,13 @@ int HnswIndexHandler::add_index(const vsag::DatasetPtr &incremental)
   int ret = OB_SUCCESS;
   tl::expected<std::vector<int64_t>, Error> result = index_->Add(incremental);
   if (result.has_value()) {
-    LOG_DEBUG("add index success", K(get_index_number()));
+    const std::vector<int64_t>& failed_id = result.value();
+    if (! failed_id.empty()) {
+      // currently don't return error
+      LOG_WARN("some vector add fail", K(ret), "failed_id", ObArrayWrap<int64_t>(failed_id.data(), failed_id.size()));
+    } else {
+      LOG_DEBUG("add index success", K(get_index_number()));
+    }
   } else {
     ret = vsag_errcode2ob(result.error().type);
   }
@@ -939,6 +951,7 @@ int create_index(VectorIndexPtr &index_handler,
           LOG_WARN("new HnswIndexHandler fail", K(ret), K(index_type));
         } else {
           index_handler = static_cast<VectorIndexPtr>(hnsw_index);
+          LOG_INFO("create vsag index success", KP(index_handler), KPC(hnsw_index));
         }
       } else {
         ret = vsag_errcode2ob(index.error().type);
@@ -1003,6 +1016,7 @@ int create_index(VectorIndexPtr &index_handler, IndexType index_type, const char
           LOG_WARN("new HnswIndexHandler fail", K(ret), K(index_type));
         } else {
           index_handler = static_cast<VectorIndexPtr>(hnsw_index);
+          LOG_INFO("create sparse vsag index success", KP(index_handler), KPC(hnsw_index));
         }
       } else {
         ret = vsag_errcode2ob(index.error().type);
@@ -1090,7 +1104,7 @@ int add_index(VectorIndexPtr &index_handler, float *vector,
       incremental->ExtraInfos(extra_info);
     }
     if (OB_FAIL(hnsw->add_index(incremental))) {
-      LOG_WARN("[OBVSAG] add index error happend", K(ret));
+      LOG_WARN("[OBVSAG] add index error happend", K(ret), KP(index_handler), K(dim), K(size), "vids", ObArrayWrap<int64_t>(ids, size));
     }
   }
   return ret;
@@ -1138,7 +1152,7 @@ int add_index(VectorIndexPtr &index_handler, uint32_t *lens, uint32_t *dims, flo
         incremental->ExtraInfos(extra_info);
       }
       if (OB_FAIL(hnsw->add_index(incremental))) {
-        LOG_WARN("[OBVSAG] add index error happend", K(ret));
+        LOG_WARN("[OBVSAG] add index error happend", K(ret), KP(index_handler), K(size), "vids", ObArrayWrap<int64_t>(ids, size));
       }
     }
   }
@@ -1356,72 +1370,21 @@ int fserialize(VectorIndexPtr &index_handler, std::ostream &out_stream)
   return ret;
 }
 
-int fdeserialize(VectorIndexPtr &index_handler,
-                 std::istream &in_stream)
+int fdeserialize(VectorIndexPtr &index_handler, std::istream &in_stream)
 {
   int ret = OB_SUCCESS;
-  if (index_handler == nullptr) {
+  HnswIndexHandler *hnsw = nullptr;
+  if (OB_ISNULL(hnsw = static_cast<HnswIndexHandler *>(index_handler))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("[OBVSAG] null pointer addr", K(index_handler));
+    LOG_WARN("[OBVSAG] null pointer addr", KP(index_handler));
   } else {
-    HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
-    std::shared_ptr<vsag::Index> hnsw_index;
-    bool use_static = hnsw->get_use_static();
-    const char *metric = hnsw->get_metric();
-    const char *dtype = hnsw->get_dtype();
-    int max_degree = hnsw->get_max_degree();
-    int ef_construction = hnsw->get_ef_construction();
-    int ef_search = hnsw->get_ef_search();
-    int dim = hnsw->get_dim();
-    int index_type = hnsw->get_index_type();
-    uint64_t extra_info_size = hnsw->get_extra_info_size();
-    const char* index_type_str = get_index_type_str(index_type);
-    int16_t refine_type = hnsw->get_refine_type();
-    int16_t bq_bits_query = hnsw->get_bq_bits_query();
-    bool bq_use_fht = hnsw->get_bq_use_fht();
-    bool use_reorder = hnsw->get_use_reorder();
-    float doc_prune_ratio = hnsw->get_doc_prune_ratio();
-    int window_size = hnsw->get_window_size();
-
-    char result_param_str[1024] = {0};
-    if ((IndexType)index_type == IndexType::IPIVF_TYPE || (IndexType)index_type == IndexType::IPIVF_SQ_TYPE) {
-      if (OB_FAIL(construct_vsag_sindi_create_param(uint8_t(index_type),
-              dtype,
-              metric,
-              hnsw->get_allocator(),
-              extra_info_size,
-              use_reorder,
-              doc_prune_ratio,
-              window_size,
-              result_param_str))) {
-        LOG_WARN("construct_vsag_create_param fail", K(ret), K(index_type));
-      }
+    std::shared_ptr<vsag::Index> &hnsw_index = hnsw->get_index();
+    tl::expected<void, Error> res = hnsw_index->Deserialize(in_stream);
+    if (res.has_value()) {
+      LOG_INFO("[OBVSAG] fdeserialize success", KPC(hnsw));
     } else {
-      if (OB_FAIL(construct_vsag_create_param(
-        uint8_t(index_type), dtype, metric, dim, max_degree,
-        ef_construction, ef_search, hnsw->get_allocator(),
-        extra_info_size, refine_type, bq_bits_query, bq_use_fht, false, result_param_str))) {
-        LOG_WARN("construct_vsag_create_param fail", K(ret), K(index_type));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else {
-      const std::string input_json_str(result_param_str);
-      tl::expected<std::shared_ptr<Index>, Error> index = vsag::Factory::CreateIndex(index_type_str, input_json_str, hnsw->get_allocator());
-      if (index.has_value()) {
-        hnsw_index = index.value();
-        tl::expected<void, Error> bs = hnsw_index->Deserialize(in_stream);
-        if (bs.has_value()) {
-          hnsw->set_index(hnsw_index);
-          LOG_INFO("[OBVSAG] fdeserialize success", KCSTRING(result_param_str));
-        } else {
-          ret = vsag_errcode2ob(bs.error().type);
-          LOG_WARN("[OBVSAG] fdeserialize error", K(ret), K(bs.error().type));
-        }
-      } else {
-        ret = vsag_errcode2ob(index.error().type);
-        LOG_WARN("[OBVSAG] create index error", K(ret), K(index.error().type));
-      }
+      ret = vsag_errcode2ob(res.error().type);
+      LOG_WARN("[OBVSAG] fdeserialize error", K(ret), K(res.error().type), KPC(hnsw));
     }
   }
   return ret;
@@ -1430,7 +1393,7 @@ int fdeserialize(VectorIndexPtr &index_handler,
 int delete_index(VectorIndexPtr &index_handler)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("[OBVSAG] delete index ",
+  LOG_INFO("[OBVSAG] delete index ", KP(index_handler),
       KP((void *)static_cast<HnswIndexHandler *>(index_handler)->get_index().get()),
       K(static_cast<HnswIndexHandler *>(index_handler)->get_index().use_count()), K(lbt()));
   if (index_handler != nullptr) {

@@ -96,7 +96,7 @@ int ObAllVirtualTenantVectorMemInfo::inner_get_next_row(ObNewRow *&row)
         MTL_SWITCH(tenant_id) {
           ObPluginVectorIndexService *service = MTL(ObPluginVectorIndexService*);
           ObSharedMemAllocMgr *shared_mem_mgr = MTL(ObSharedMemAllocMgr*);
-          manage_used = service->get_allocator().used();
+          manage_used = service->get_adaptor_allocator().used();
           vector_hold = shared_mem_mgr->vector_allocator().hold();
           int64_t rb_used = shared_mem_mgr->vector_allocator().get_rb_mem_used();
           int64_t vector_used = shared_mem_mgr->vector_allocator().used();

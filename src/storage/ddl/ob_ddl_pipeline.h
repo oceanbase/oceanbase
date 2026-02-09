@@ -18,6 +18,7 @@
 #include "storage/ddl/ob_ddl_tablet_context.h"
 #include "common/ob_tablet_id.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/vector_index/ob_vector_kmeans_ctx.h"
 #include "share/vector_index/ob_vector_embedding_handler.h"
 #include "storage/ddl/ob_hnsw_embedmgr.h"
@@ -166,7 +167,7 @@ public:
   ObIvfBuildHelper *helper_;
   int64_t ddl_task_id_;
   bool is_vec_tablet_rebuild_;
-  ObPluginVectorIndexAdaptor *adapter_;
+  ObPluginVectorIndexAdapterGuard adapter_guard_;
   transaction::ObTxDesc *tx_desc_;
   common::ObArenaAllocator allocator_;
   lib::MemoryContext &memory_context_;

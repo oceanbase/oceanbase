@@ -43,7 +43,8 @@ private:
 class ObTenantVectorAllocator : public ObVectorMemContext,
                                 public ObIAllocator {
 public:
-  ObTenantVectorAllocator() : is_inited_(false), all_used_mem_(0), throttle_tool_(nullptr), memory_context_(nullptr) {}
+  ObTenantVectorAllocator() : is_inited_(false), all_used_mem_(0), throttle_tool_(nullptr), memory_context_(nullptr),
+    pre_alloc_mem_size_(0) {}
   ~ObTenantVectorAllocator() { destroy(); }
   DEFINE_CUSTOM_FUNC_FOR_THROTTLE(Vector);
 
@@ -58,15 +59,22 @@ public:
   inline lib::MemoryContext get_mem_context() { return memory_context_;}
   inline uint64_t* get_used_mem_ptr() { return &all_used_mem_; }
   int64_t get_rb_mem_used();
+
+  int pre_alloc(const int64_t size);
+  int pre_free(const int64_t size);
+  int64_t get_left_pre_alloc_size();
+  int64_t get_pre_alloc_mem_size() const { return pre_alloc_mem_size_; }
+
   static void get_vector_mem_config(int64_t &resource_limit, int64_t &max_duration);
   static int64_t get_vector_mem_limit_percentage(omt::ObTenantConfigGuard &tenant_config, uint64_t tenant_id = MTL_ID());
-  TO_STRING_KV(K(is_inited_), KP(throttle_tool_), KP(memory_context_.ref_context()));
+  TO_STRING_KV(K(is_inited_), KP(throttle_tool_), KP(memory_context_.ref_context()), K_(pre_alloc_mem_size));
 
 private:
   bool is_inited_;
   uint64_t all_used_mem_;
   share::TxShareThrottleTool *throttle_tool_;
   lib::MemoryContext memory_context_;
+  int64_t pre_alloc_mem_size_;
 };
 
 class ObVsagMemContext : public vsag::Allocator,

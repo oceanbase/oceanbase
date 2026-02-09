@@ -831,6 +831,10 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_vector_embedding_handler.cpp
   vector_index/ob_json_helper.cpp
   vector_index/ob_hybrid_vector_refresh_task.cpp
+  vector_index/ob_vector_index_segment.cpp
+  vector_index/ob_vector_index_freeze_task.cpp
+  vector_index/ob_vector_index_merge_task.cpp
+  vector_index/ob_vector_index_aux_table_handler.cpp
   vector_index/ob_vector_recall_calc_util.cpp
 )
 

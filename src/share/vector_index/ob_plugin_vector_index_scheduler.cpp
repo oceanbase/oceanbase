@@ -32,6 +32,10 @@ int ObPluginVectorIndexLoadScheduler::init_task_executors(uint64_t tenant_id, Ob
     LOG_WARN("fail to init async task exec", K(ret), K(ls));
   } else if (OB_FAIL(ivf_task_exec_.init(tenant_id, &ls))) {
     LOG_WARN("fail to init async task exec", K(ret), K(ls));
+  } else if (OB_FAIL(freeze_exec_.init(tenant_id, &ls))) {
+    LOG_WARN("fail to init async task exec", K(ret), K(ls));
+  } else if (OB_FAIL(merge_exec_.init(tenant_id, &ls))) {
+    LOG_WARN("fail to init async task exec", K(ret), K(ls));
   }
   return ret;
 }
@@ -736,6 +740,10 @@ int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors(bool &has_iv
     LOG_WARN("fail to load tenant sync task", K(ret));
   } else if (OB_FAIL(embedding_task_exec_.load_task(task_trace_base_num))) {
     LOG_WARN("fail to load tenant sync task", K(ret));
+  } else if (can_schedule(ObVectorTaskScheduleType::HNSW_FREEZE) && OB_FAIL(freeze_exec_.load_task(task_trace_base_num))) {
+    LOG_WARN("fail to load tenant sync task", K(ret));
+  } else if (can_schedule(ObVectorTaskScheduleType::HNSW_MERGE) && OB_FAIL(merge_exec_.load_task(task_trace_base_num))) {
+    LOG_WARN("fail to load tenant sync task", K(ret));
   } else if (can_schedule(ObVectorTaskScheduleType::IVF_TASK)) {
     if (OB_FAIL(ivf_task_exec_.check_schema_version_changed(schema_changed))) {
       //only when schema changed, load ivf task
@@ -1326,6 +1334,10 @@ int ObPluginVectorIndexLoadScheduler::start_task_executors()
     LOG_WARN("fail to start index async task", K(ret));
   } else if (OB_FAIL(embedding_task_exec_.start_task())) {
     LOG_WARN("fail to start hybrid index async task", K(ret));
+  } else if (can_schedule(ObVectorTaskScheduleType::HNSW_FREEZE) && OB_FAIL(freeze_exec_.start_task())) {
+    LOG_WARN("fail to start freeze task", K(ret));
+  } else if (can_schedule(ObVectorTaskScheduleType::HNSW_MERGE) && OB_FAIL(merge_exec_.start_task())) {
+    LOG_WARN("fail to start merge task", K(ret));
   }
   return ret;
 }
@@ -1402,6 +1414,10 @@ int ObPluginVectorIndexLoadScheduler::resume_task_executors()
   if (OB_FAIL(async_task_exec_.resume_task())) {
     LOG_WARN("fail to resume async task", K(ret));
   } else if (OB_FAIL(ivf_task_exec_.resume_task())) {
+    LOG_WARN("fail to resume async task", K(ret));
+  } else if (OB_FAIL(freeze_exec_.resume_task())) {
+    LOG_WARN("fail to resume async task", K(ret));
+  } else if (OB_FAIL(merge_exec_.resume_task())) {
     LOG_WARN("fail to resume async task", K(ret));
   }
   return ret;
@@ -1589,13 +1605,7 @@ void ObPluginVectorIndexLoadScheduler::refresh_adapter_rb_flag()
     RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
     FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
       ObPluginVectorIndexAdaptor *adapter = iter->second;
-      if (OB_ISNULL(adapter->get_snap_data_()) || !adapter->get_snap_data_()->is_inited()) {
-        LOG_INFO("snap_data index is empty or not init, won't set rb_flag");
-      } else {
-        ObVectorIndexMemData *snap_memdata = adapter->get_snap_data_();
-        TCWLockGuard lock_guard(snap_memdata->mem_data_rwlock_);
-        snap_memdata->rb_flag_ = true;
-      }
+      adapter->try_set_snap_data_rb_flag();
     }
     LOG_INFO("finish refresh adapter rb flag", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   }

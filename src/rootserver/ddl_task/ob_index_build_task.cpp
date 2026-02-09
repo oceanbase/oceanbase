@@ -152,6 +152,7 @@ int ObIndexSSTableBuildTask::process()
                                                             nullptr,
                                                             partition_names,
                                                             false/*is_alter_clustering_key_tbl_partition_by*/,
+                                                            ObString()/*filter_sql_str*/,
                                                             sql_string))) {
         LOG_WARN("fail to generate build replica sql", K(ret));
       } else if (OB_FAIL(data_schema->is_need_padding_for_generated_column(need_padding))) {

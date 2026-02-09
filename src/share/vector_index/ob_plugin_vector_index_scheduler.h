@@ -24,6 +24,8 @@
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
 #include "share/vector_index/ob_ivf_async_task_executor.h"
+#include "share/vector_index/ob_vector_index_freeze_task.h"
+#include "share/vector_index/ob_vector_index_merge_task.h"
 
 namespace oceanbase
 {
@@ -38,12 +40,14 @@ static const int64_t VECTOR_INDEX_TABLET_ID_COUNT = 100;
 typedef ObSEArray<ObTabletID, VECTOR_INDEX_TABLET_ID_COUNT> ObVectorIndexTabletIDArray;
 typedef ObSEArray<uint64_t, VECTOR_INDEX_TABLET_ID_COUNT> ObVectorIndexTableIDArray;
 
-enum ObVectorTaskScheduleType
+enum ObVectorTaskScheduleType // FARM COMPAT WHITELIST
 {
   ADAPTER_MAINTENANCE = 0,
   FOLLOWER_SYNC = 1,
   HNSW_OPTIMIZE = 2,
   IVF_TASK = 3,
+  HNSW_FREEZE = 4,
+  HNSW_MERGE = 5,
   SCHEDULE_MAX,
 };
 
@@ -52,6 +56,8 @@ static const int schedule_interval[SCHEDULE_MAX] = {
   10 * 1000 * 1000,            // follower_sync_task: 10s
   10 * 1000 * 1000,            // hnsw_optimize_task: 10s
   10 * 1000 * 1000,            // ivf_task: 10s
+  10 * 1000 * 1000,            // hnsw_freeze_task: 10s
+  10 * 1000 * 1000,            // hnsw_merge_task: 10s
 };
 
 class ObVectorIndexSyncLog
@@ -383,6 +389,8 @@ private:
   ObVecAsyncTaskExector async_task_exec_;
   ObIvfAsyncTaskExector ivf_task_exec_;
   ObVecEmbeddingAsyncTaskExecutor embedding_task_exec_;
+  ObVecIdxFreezeTaskExecutor freeze_exec_;
+  ObVecIdxMergeTaskExecutor merge_exec_;
 };
 
 class ObVectorIndexTask : public share::ObITask

@@ -140,6 +140,10 @@ public:
                       const ObVectorRebuildIndexArg &arg);
   int execute_rebuild_inner(pl::ObPLExecCtx &ctx,
                       const ObVectorRebuildIndexInnerArg &arg);
+  int execute_flush(pl::ObPLExecCtx &ctx,
+                    const ObVectorRefreshIndexArg &arg);
+  int execute_compact(pl::ObPLExecCtx &ctx,
+                      const ObVectorRefreshIndexArg &arg);
 
 
   int set_attribute(pl::ObPLExecCtx &ctx, const ObVectorRebuildIndexArg &arg);

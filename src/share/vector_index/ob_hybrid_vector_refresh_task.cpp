@@ -1136,7 +1136,7 @@ int ObHybridVectorRefreshTask::after_embedding(ObPluginVectorIndexAdaptor &adapt
   timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   if (OB_NOT_NULL(tx_desc) && trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, ret != OB_SUCCESS, timeout_us))) {
     ret = tmp_ret;
-    LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
+    LOG_WARN("fail to end trans", K(ret));
   }
   if (OB_FAIL(ret) || !embedding_finish) {
     // do nothing.

@@ -14,6 +14,8 @@
 
 #include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
 #include "storage/vector_index/ob_vector_index_refresh.h"
+#include "share/vector_index/ob_vector_index_async_task.h"
+#include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "pl/ob_pl.h"
 #include "share/ob_vec_index_builder_util.h"
 
@@ -78,6 +80,124 @@ int ObVectorRefreshIndexExecutor::execute_refresh_inner(
     LOG_DEBUG("delta buffer table is in recyclebin, do nothing");
   } else if (OB_FAIL(do_refresh_with_retry())) {
     LOG_WARN("fail to do refresh", KR(ret));
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::execute_flush(
+    pl::ObPLExecCtx &ctx, const ObVectorRefreshIndexArg &arg)
+{
+  int ret = OB_SUCCESS;
+  bool in_recycle_bin = false;
+  ctx_ = ctx.exec_ctx_;
+  pl_ctx_ = &ctx;
+  CK(OB_NOT_NULL(ctx_));
+  CK(OB_NOT_NULL(session_info_ = ctx_->get_my_session()));
+  CK(OB_NOT_NULL(ctx_->get_sql_ctx()));
+  CK(OB_NOT_NULL(ctx_->get_sql_ctx()->schema_guard_));
+  OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
+  OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
+                          session_info_->get_server_sid()));
+  OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
+      tenant_id_, DATA_VERSION_4_5_1_0,
+      "tenant's data version is below 4.5.1.0, vector index task is not "
+      "supported."));
+  if (OB_SUCC(ret) &&
+      !share::ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("persist_vector_index_incremental is false, flush is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "_persist_vector_index_incremental is false, flush is");
+  }
+  OZ(resolve_refresh_arg(arg));
+
+  if (OB_FAIL(ret)) {
+  } else {
+    const share::schema::ObTableSchema *base_table_schema = nullptr;
+    const share::schema::ObTableSchema *domain_table_schema = nullptr;
+    const share::schema::ObTableSchema *index_id_table_schema = nullptr;
+    if (OB_FAIL(resolve_table_id_and_check_table_valid(
+                domain_tb_id_, base_table_schema, domain_table_schema,
+                index_id_table_schema, in_recycle_bin))) {
+      LOG_WARN("fail to resolve table id and check table valid", KR(ret), K(domain_tb_id_));
+    } else if (!domain_table_schema->is_vec_hnsw_index()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("flush index which is not hnsw index is not supported", KR(ret), K(domain_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "flush index which is not hnsw index is");
+    } else if (OB_UNLIKELY(in_recycle_bin)) {
+      LOG_DEBUG("delta buffer table is in recyclebin, do nothing");
+    } else if (OB_ISNULL(domain_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_schema is null", K(ret), KP(domain_table_schema));
+    } else {
+      share::ObVecTaskManager manager(
+          tenant_id_, domain_table_schema->get_table_id(),
+          share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_FREEZE);
+      if (OB_FAIL(manager.create_task())) {
+        LOG_WARN("failed to create flush task", K(ret), K(manager));
+      } else {
+        LOG_INFO("flush index task created", K(ret), K(domain_table_schema->get_table_id()), K(arg.table_name_), K(arg.idx_name_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::execute_compact(
+    pl::ObPLExecCtx &ctx, const ObVectorRefreshIndexArg &arg)
+{
+  int ret = OB_SUCCESS;
+  bool in_recycle_bin = false;
+  ctx_ = ctx.exec_ctx_;
+  pl_ctx_ = &ctx;
+  CK(OB_NOT_NULL(ctx_));
+  CK(OB_NOT_NULL(session_info_ = ctx_->get_my_session()));
+  CK(OB_NOT_NULL(ctx_->get_sql_ctx()));
+  CK(OB_NOT_NULL(ctx_->get_sql_ctx()->schema_guard_));
+  OV(OB_LIKELY(arg.is_valid()), OB_INVALID_ARGUMENT, arg);
+  OZ(schema_checker_.init(*(ctx_->get_sql_ctx()->schema_guard_),
+                          session_info_->get_server_sid()));
+  OX(tenant_id_ = session_info_->get_effective_tenant_id());
+  OZ(ObVectorRefreshIndexExecutor::check_min_data_version(
+      tenant_id_, DATA_VERSION_4_5_1_0,
+      "tenant's data version is below 4.5.1.0, vector index task is not "
+      "supported."));
+  if (OB_SUCC(ret) &&
+      !share::ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("persist_vector_index_incremental is false, compact is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "_persist_vector_index_incremental is false, compact is");
+  }
+  OZ(resolve_refresh_arg(arg));
+
+  if (OB_FAIL(ret)) {
+  } else {
+    const share::schema::ObTableSchema *base_table_schema = nullptr;
+    const share::schema::ObTableSchema *domain_table_schema = nullptr;
+    const share::schema::ObTableSchema *index_id_table_schema = nullptr;
+    if (OB_FAIL(resolve_table_id_and_check_table_valid(
+                domain_tb_id_, base_table_schema, domain_table_schema,
+                index_id_table_schema, in_recycle_bin))) {
+      LOG_WARN("fail to resolve table id and check table valid", KR(ret), K(domain_tb_id_));
+    } else if (!domain_table_schema->is_vec_hnsw_index()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("compact index which is not hnsw index is not supported", KR(ret), K(domain_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "compact index which is not hnsw index is");
+    } else if (OB_UNLIKELY(in_recycle_bin)) {
+      LOG_DEBUG("delta buffer table is in recyclebin, do nothing");
+    } else if (OB_ISNULL(index_id_table_schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("index id table is invalid", KR(ret), KP(index_id_table_schema));
+    } else {
+      share::ObVecTaskManager manager(
+          tenant_id_, index_id_table_schema->get_table_id(),
+          share::ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_MERGE);
+      if (OB_FAIL(manager.create_task())) {
+        LOG_WARN("failed to create compact task", K(ret), K(manager));
+      } else {
+        LOG_INFO("compact index task created", K(ret), K(index_id_table_schema->get_table_id()), K(arg.table_name_), K(arg.idx_name_));
+      }
+    }
   }
   return ret;
 }

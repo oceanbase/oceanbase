@@ -40,6 +40,7 @@ public:
   virtual ~ObVectorIndexInfoIterator() { reset(); }
   int open();
   int get_next_info(ObVectorIndexInfo &info);
+  int get_next_index_all_segments(ObLSID &ls_id, ObTabletID &tablet_id, common::ObIArray<ObVectorSegmentInfo> &segment_infos);
   void reset();
   bool is_opened() const { return is_opened_; }
 

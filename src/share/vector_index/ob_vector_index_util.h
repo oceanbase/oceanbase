@@ -1078,6 +1078,29 @@ private:
 };
 
 // For vector index snapshot write data
+struct ObVecIdxSnapshotBlockData
+{
+  ObVecIdxSnapshotBlockData():
+    is_meta_(false), data_()
+  {}
+
+  ObVecIdxSnapshotBlockData(const bool is_meta, const ObString &data):
+    is_meta_(is_meta), data_(data)
+  {}
+
+  bool is_meta_block() const { return is_meta_; }
+  int get_key(const ObVectorIndexAlgorithmType index_type, const ObTabletID &tablet_id,
+      const int64_t snapshot_version, const int64_t row_id, ObIAllocator &allocator, ObString &key) const;
+  const ObString& get_data() const { return data_; }
+  ObString& get_data() { return data_; }
+
+  TO_STRING_KV(K_(is_meta), "data_length", data_.length(), KP(data_.ptr()));
+
+private:
+  bool is_meta_;
+  ObString data_;
+};
+
 class ObVecIdxSnapshotDataWriteCtx final
 {
 public:
@@ -1096,17 +1119,20 @@ public:
   const ObTabletID& get_lob_piece_tablet_id() const { return lob_piece_tablet_id_; }
   ObTabletID& get_snap_tablet_id() { return snap_tablet_id_; }
   const ObTabletID& get_snap_tablet_id() const { return snap_tablet_id_; }
-  ObIArray<ObString>& get_vals() { return vals_; }
+  ObIArray<ObVecIdxSnapshotBlockData>& get_vals() { return vals_; }
   void reset();
-  TO_STRING_KV(K(ls_id_), K(data_tablet_id_), K(lob_meta_tablet_id_),
-      K(lob_piece_tablet_id_), K_(snap_tablet_id), K(vals_));
+  int get_key_and_data(
+      const ObVectorIndexAlgorithmType index_type, const ObTabletID &tablet_id,
+      const int64_t snapshot_version, const int64_t row_id, ObIAllocator &allocator,
+      ObString &key, ObString &data);
+  TO_STRING_KV(K(ls_id_), K(data_tablet_id_), K(lob_meta_tablet_id_), K(lob_piece_tablet_id_), K_(snap_tablet_id), K(vals_));
 public:
   ObLSID ls_id_;
   ObTabletID data_tablet_id_;
   ObTabletID lob_meta_tablet_id_;
   ObTabletID lob_piece_tablet_id_;
+  ObArray<ObVecIdxSnapshotBlockData> vals_;
   ObTabletID snap_tablet_id_;
-  ObArray<ObString> vals_;
 };
 
 typedef struct ObExtraInfoIdxType {

@@ -684,6 +684,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ss_object_type_io_stat.cpp
   virtual_table/ob_all_virtual_tablet_replica_info.cpp
   virtual_table/ob_all_virtual_tablet_window_loop_info.cpp
+  virtual_table/ob_all_virtual_vector_segment_info.cpp
 )
 
 ob_server_add_target(ob_server)

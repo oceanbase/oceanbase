@@ -160,6 +160,7 @@ public:
   void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
 
   int get_adapter_inst_guard(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
+  int get_adapter_inst_guard_in_lock(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
   int get_build_helper_inst_guard(const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
   int create_partial_adapter(ObTabletID idx_tablet_id,
                              ObTabletID data_tablet_id,
@@ -393,7 +394,7 @@ public:
   int switch_to_follower_gracefully();
   int resume_leader() { return switch_to_leader(); }
   int alloc_tenant_vec_async_task_sched();
-  ObFIFOAllocator &get_allocator() { return allocator_; }
+  ObFIFOAllocator &get_adaptor_allocator() { return adaptor_allocator_; }
 
   // feature interfaces
   int get_kmeans_tg_id() { return kmeans_tg_id_; }
@@ -520,7 +521,10 @@ private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
   storage::ObLSService *ls_service_;
   common::ObMySQLProxy *sql_proxy_;
-  ObFIFOAllocator allocator_;
+  ObFIFOAllocator ivf_allocator_;
+  ObFIFOAllocator index_mgr_allocator_;
+  ObFIFOAllocator adaptor_allocator_;
+  ObFIFOAllocator tmp_info_allocator_;
   // do not use this memory context directly
   // use wrapped memory context in ob_tenant_vector_allocator.h and init by this memory context
   lib::MemoryContext memory_context_;

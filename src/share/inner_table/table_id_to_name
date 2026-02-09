@@ -1382,6 +1382,7 @@
 # 12587: __all_virtual_tablet_replica_info
 # 12588: __all_virtual_routine_load_job
 # 12588: __all_routine_load_job  # BASE_TABLE_NAME
+# 12592: __all_virtual_vector_segment_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2754,6 +2755,8 @@
 # 21709: V$OB_TABLET_REPLICA_INFO
 # 21710: DBA_OB_ROUTINE_LOAD_JOBS
 # 21711: CDB_OB_ROUTINE_LOAD_JOBS
+# 21716: GV$OB_HNSW_INDEX_SEGMENT_INFO
+# 21717: V$OB_HNSW_INDEX_SEGMENT_INFO
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS

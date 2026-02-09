@@ -978,6 +978,10 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
       LOG_WARN("failed to init rel map", K(ret));
     } else if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id_, ls_leader))) {
       LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id_));
+    } else if (OB_ISNULL(snapshot_) || ! snapshot_->core_.version_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("snapshot is null", K(ret), KPC(snapshot_));
+    } else if (OB_FALSE_IT(ada_ctx.set_scn(snapshot_->core_.version_))) {
     } else if (OB_FALSE_IT(ada_ctx.set_ls_leader(ls_leader))) {
     } else if (OB_FALSE_IT(ada_ctx.set_sparse_vector(is_ipivf()))) {
     } else if (!ls_leader) {
@@ -1011,7 +1015,7 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
 }
 
 int ObDASHNSWScanIter::do_get_extra_info_by_vids(ObPluginVectorIndexAdaptor *adaptor, const ObSimpleMaxHeap &heap,
-                                                 int64_t *vids_idx, int64_t *vids, bool get_snap,
+                                                 int64_t *vids_idx, int64_t *vids, ObVectorIndexSegment *segment,
                                                  ObVecExtraInfoPtr &extra_info_ptr)
 {
   int ret = OB_SUCCESS;
@@ -1028,8 +1032,7 @@ int ObDASHNSWScanIter::do_get_extra_info_by_vids(ObPluginVectorIndexAdaptor *ada
     int64_t vids_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < heap_size; ++i) {
       int64_t vid = heap.at(i);
-      bool is_snap = heap.is_snap(i);
-      if (is_snap == get_snap) {
+      if (heap.segment_at(i) == segment) {
         vids[vids_cnt] = vid;
         vids_idx[vids_cnt++] = i;
       }
@@ -1040,7 +1043,7 @@ int ObDASHNSWScanIter::do_get_extra_info_by_vids(ObPluginVectorIndexAdaptor *ada
                              vec_op_alloc_.alloc(vids_cnt * extra_info_ptr.extra_info_actual_size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc extra info buf.", K(ret), K(vids_cnt), K(extra_info_ptr.extra_info_actual_size_));
-    } else if (OB_FAIL(adaptor->get_extra_info_by_ids(vids, vids_cnt, extra_info_buf, get_snap))) {
+    } else if (OB_FAIL(segment->get_extra_info_by_ids(vids, vids_cnt, extra_info_buf))) {
       LOG_WARN("failed to get extra info by ids.", K(ret), KP(vids), K(vids_cnt));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < vids_cnt; ++i) {
@@ -1055,7 +1058,9 @@ int ObDASHNSWScanIter::do_get_extra_info_by_vids(ObPluginVectorIndexAdaptor *ada
   return ret;
 }
 
-int ObDASHNSWScanIter::get_extra_info_by_vids(ObPluginVectorIndexAdaptor *adaptor, const ObSimpleMaxHeap &heap, ObVecExtraInfoPtr &extra_info_ptr) {
+int ObDASHNSWScanIter::get_extra_info_by_vids(
+    ObPluginVectorIndexAdaptor *adaptor, const ObSimpleMaxHeap &heap,
+    ObVecIdxQueryResult &dist_result, ObVecExtraInfoPtr &extra_info_ptr) {
   int ret = OB_SUCCESS;
 
   int64_t heap_size = heap.get_size();
@@ -1073,13 +1078,13 @@ int ObDASHNSWScanIter::get_extra_info_by_vids(ObPluginVectorIndexAdaptor *adapto
                              mem_context_->get_arena_allocator().alloc(sizeof(int64_t) * heap_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc snap vids.", K(ret));
-    } else if (OB_FAIL(do_get_extra_info_by_vids(adaptor, heap, vids_idx, vids, true, extra_info_ptr))) {
-      LOG_WARN("failed to get_extra_info_by_vid in snap.", K(ret));
     } else {
-      MEMSET(vids_idx, 0, sizeof(sizeof(int64_t) * heap_size));
-      MEMSET(vids, 0, sizeof(sizeof(int64_t) * heap_size));
-      if (OB_FAIL(do_get_extra_info_by_vids(adaptor, heap, vids_idx, vids, false, extra_info_ptr))) {
-        LOG_WARN("failed to get_extra_info_by_vid in snap.", K(ret));
+      for (int64_t i = 0; i < dist_result.segments_.count() && OB_SUCC(ret); ++i) {
+        MEMSET(vids_idx, 0, sizeof(sizeof(int64_t) * heap_size));
+        MEMSET(vids, 0, sizeof(sizeof(int64_t) * heap_size));
+        if (OB_FAIL(do_get_extra_info_by_vids(adaptor, heap, vids_idx, vids, dist_result.segments_.at(i).get(), extra_info_ptr))) {
+          LOG_WARN("failed to get_extra_info_by_vid in snap.", K(ret));
+        }
       }
     }
   }
@@ -1119,8 +1124,8 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
   INIT_SUCC(ret);
   ObString search_vec = query_cond_.query_vector_;
   need_complete_data = false;
-  const float* distances_inc = nullptr;
-  const float* distances_snap = nullptr;
+  ObVecIdxQueryResult dist_result;
+
   uint64_t limit = limit_param_.limit_ + limit_param_.offset_;
   uint64_t capaticy = limit > brute_cnt ? brute_cnt : limit;
   ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
@@ -1134,30 +1139,36 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
     LOG_WARN("shouldn't be null.", K(ret));
   } else if (OB_FAIL(max_heap.init())) {
     LOG_WARN("failed to init max heap.", K(ret));
-  } else if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(search_vec.ptr()), brute_vids, brute_cnt, distances_inc, false, search_vec.length()))) {
+  } else if (OB_FAIL(query_brute_force_distances(adaptor, search_vec, brute_vids, brute_cnt, dist_result))) {
     LOG_WARN("failed to query vids.", K(ret), K(brute_cnt));
-  } else if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(search_vec.ptr()), brute_vids, brute_cnt, distances_snap, true, search_vec.length()))) {
-    LOG_WARN("failed to query vids.", K(ret), K(brute_cnt));
-  } else if (distances_inc == nullptr && distances_snap == nullptr) {
+  } else if (dist_result.distances_.count() != dist_result.segments_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("distances_list count is not equal segment_list count", K(ret),
+      K(dist_result.distances_.count()), K(dist_result.segments_.count()));
+  } else if (dist_result.distances_.count() == 0) {
     need_complete_data = check_need_complete_data ? true : false;
-  } else if (distances_inc == nullptr || distances_snap == nullptr) {
-    bool is_snap = distances_inc == nullptr;
+  } else if (dist_result.distances_.count() == 1) {
+    const float* distances = dist_result.distances_.at(0);
+    ObVectorIndexSegmentHandle &segment = dist_result.segments_.at(0);
     for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
-      double distance = distances_inc == nullptr ? distances_snap[i] : distances_inc[i];
+      double distance = distances[i];
       // if distances == -1, means vid not exist
       if (distance != -1 && distance <= distance_threshold_) {
-        max_heap.push(brute_vids[i], distance, is_snap);
+        max_heap.push(brute_vids[i], distance, segment.get());
       } else {
         need_complete_data = check_need_complete_data ? true : false;
       }
     }
   } else {
+    const int64_t segment_cnt = dist_result.segments_.count();
     for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
-      bool is_snap = distances_inc[i] == -1;
-      double distance = distances_inc[i] == -1 ? distances_snap[i] : distances_inc[i];
+      double distance = -1;
+      int64_t k = 0;
+      for (; k < segment_cnt && (distance = dist_result.distances_.at(k)[i]) == -1; ++k);
+
       // if distances == -1, means vid not exist
       if (distance != -1 && distance <= distance_threshold_) {
-        max_heap.push(brute_vids[i], distance, is_snap);
+        max_heap.push(brute_vids[i], distance, dist_result.segments_.at(k).get());
       } else {
         need_complete_data = check_need_complete_data ? true : false;
       }
@@ -1212,7 +1223,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
       void *iter_buff = nullptr;
       if (OB_FAIL(ret)) {
       } else if (extra_column_count_ > 0 &&
-                 OB_FAIL(get_extra_info_by_vids(adaptor, max_heap, extra_info_ptr))) {
+                 OB_FAIL(get_extra_info_by_vids(adaptor, max_heap, dist_result, extra_info_ptr))) {
         LOG_WARN("failed to get extra info by vids.", K(ret));
       } else if (OB_ISNULL(iter_buff = vec_op_alloc_.alloc(sizeof(ObVectorQueryVidIterator)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1224,17 +1235,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_not_bq(
       }
     }
   }
-
-  // release distances
-  if (OB_NOT_NULL(distances_inc)) {
-    adaptor->get_incr_data()->mem_ctx_->Deallocate((void *)distances_inc);
-    distances_inc = nullptr;
-  }
-
-  if (OB_NOT_NULL(distances_snap)) {
-    adaptor->get_snap_data_()->mem_ctx_->Deallocate((void *)distances_snap);
-    distances_snap = nullptr;
-  }
+  adaptor->free_result(dist_result);
   return ret;
 }
 
@@ -1268,7 +1269,7 @@ int ObDASHNSWScanIter::query_brute_force_distances(ObPluginVectorIndexAdaptor* a
                                                    const ObString& search_vec,
                                                    int64_t* brute_vids,
                                                    int brute_cnt,
-                                                   DistanceResult& dist_result)
+                                                   ObVecIdxQueryResult& dist_result)
 {
   INIT_SUCC(ret);
 
@@ -1278,30 +1279,15 @@ int ObDASHNSWScanIter::query_brute_force_distances(ObPluginVectorIndexAdaptor* a
   } else {
     dist_result.brute_cnt = brute_cnt;
     if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(const_cast<char*>(search_vec.ptr())),
-                                         brute_vids, brute_cnt, dist_result.distances_inc, false))) {
-      LOG_WARN("failed to query incremental vids", K(ret), K(brute_cnt));
-    } else if (OB_FAIL(adaptor->vsag_query_vids(reinterpret_cast<float *>(const_cast<char*>(search_vec.ptr())),
-                                           brute_vids, brute_cnt, dist_result.distances_snap, true))) {
-      LOG_WARN("failed to query snapshot vids", K(ret), K(brute_cnt));
+                                         brute_vids, brute_cnt, dist_result, search_vec.length()))) {
+      LOG_WARN("failed to brute force query", K(ret), K(brute_cnt));
     }
   }
 
   return ret;
 }
 
-void ObDASHNSWScanIter::release_brute_force_distance_memory(ObPluginVectorIndexAdaptor* adaptor,
-                                                           const DistanceResult& dist_result)
-{
-  if (OB_NOT_NULL(dist_result.distances_inc)) {
-    adaptor->get_incr_data()->mem_ctx_->Deallocate((void *)dist_result.distances_inc);
-  }
-
-  if (OB_NOT_NULL(dist_result.distances_snap)) {
-    adaptor->get_snap_data_()->mem_ctx_->Deallocate((void *)dist_result.distances_snap);
-  }
-}
-
-int ObDASHNSWScanIter::merge_and_sort_brute_force_results_bq(const DistanceResult& dist_result,
+int ObDASHNSWScanIter::merge_and_sort_brute_force_results_bq(const ObVecIdxQueryResult& dist_result,
                                                              int64_t* brute_vids,
                                                              int brute_cnt,
                                                              ObSimpleMaxHeap& snap_heap,
@@ -1315,26 +1301,28 @@ int ObDASHNSWScanIter::merge_and_sort_brute_force_results_bq(const DistanceResul
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(brute_vids), K(brute_cnt));
   } else {
-    if (dist_result.distances_inc == nullptr && dist_result.distances_snap == nullptr) {
+    if (dist_result.distances_.count() == 0) {
       need_complete_data = check_need_complete_data ? true : false;
     } else {
+      const int64_t segment_cnt = dist_result.segments_.count();
       for (int i = 0; i < brute_cnt && OB_SUCC(ret) && !need_complete_data; ++i) {
-        bool has_incr = (dist_result.distances_inc != nullptr && dist_result.distances_inc[i] != -1.0);
-        bool has_snap = (dist_result.distances_snap != nullptr && dist_result.distances_snap[i] != -1.0);
+        double distance = -1;
+        int64_t k = 0;
+        for (; k < segment_cnt && (distance = dist_result.distances_.at(k)[i]) == -1; ++k);
 
-        if (!has_incr && !has_snap) {
+        if (distance == -1) {
           need_complete_data = check_need_complete_data ? true : false;
-        } else if (has_incr && has_snap) {
-          if (dist_result.distances_inc[i] <= distance_threshold_) {
-            incr_heap.push(brute_vids[i], dist_result.distances_inc[i], false);
+        } else if (segment_cnt > 1) {
+          if (distance <= distance_threshold_ && ! dist_result.segments_.at(k)->is_base()) {
+            incr_heap.push(brute_vids[i], distance, dist_result.segments_.at(k).get());
           }
-          if (dist_result.distances_snap[i] <= distance_threshold_) {
-            snap_heap.push(brute_vids[i], dist_result.distances_snap[i], true);
+          if (distance <= distance_threshold_ && dist_result.segments_.at(k)->is_base()) {
+            snap_heap.push(brute_vids[i], distance, dist_result.segments_.at(k).get());
           }
-        } else if (has_incr && dist_result.distances_inc[i] <= distance_threshold_) {
-          incr_heap.push(brute_vids[i], dist_result.distances_inc[i], false);
-        } else if (has_snap && dist_result.distances_snap[i] <= distance_threshold_) {
-          snap_heap.push(brute_vids[i], dist_result.distances_snap[i], true);
+        } else if (! dist_result.segments_.at(k)->is_base() && distance <= distance_threshold_) {
+          incr_heap.push(brute_vids[i], distance, dist_result.segments_.at(k).get());
+        } else if (dist_result.segments_.at(k)->is_base() && distance <= distance_threshold_) {
+          snap_heap.push(brute_vids[i], distance, dist_result.segments_.at(k).get());
         }
       }
     }
@@ -1346,6 +1334,7 @@ int ObDASHNSWScanIter::merge_and_sort_brute_force_results_bq(const DistanceResul
 int ObDASHNSWScanIter::build_brute_force_result_iterator_bq(ObPluginVectorIndexAdaptor* adaptor,
                                                             const ObSimpleMaxHeap& snap_heap,
                                                             const ObSimpleMaxHeap& incr_heap,
+                                                            ObVecIdxQueryResult &dist_result,
                                                             ObVectorQueryVidIterator*& result_iter)
 {
   INIT_SUCC(ret);
@@ -1363,6 +1352,7 @@ int ObDASHNSWScanIter::build_brute_force_result_iterator_bq(ObPluginVectorIndexA
     } else {
       int64_t *vids = nullptr;
       float *distances = nullptr;
+      ObVectorIndexSegment** segment_ptrs = nullptr;
       int64_t extra_info_actual_size = 0;
       ObVecExtraInfoPtr extra_info_ptr;
 
@@ -1372,6 +1362,9 @@ int ObDASHNSWScanIter::build_brute_force_result_iterator_bq(ObPluginVectorIndexA
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate vids", K(ret));
       } else if (OB_ISNULL(distances = static_cast<float *>(vec_op_alloc_.alloc(sizeof(float) * total_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate distances", K(ret));
+      } else if (OB_ISNULL(segment_ptrs = static_cast<ObVectorIndexSegment**>(vec_op_alloc_.alloc(sizeof(ObVectorIndexSegment*) * total_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate distances", K(ret));
       }
@@ -1386,6 +1379,7 @@ int ObDASHNSWScanIter::build_brute_force_result_iterator_bq(ObPluginVectorIndexA
             int64_t vid = incr_heap.at(i);
             vids[idx] = vid;
             distances[idx] = static_cast<float>(incr_heap.value_at(i));
+            segment_ptrs[idx] = incr_heap.segment_at(i);
             idx++;
 
             if (OB_FAIL(added_vids.set_refactored(vid, true))) {
@@ -1408,6 +1402,7 @@ int ObDASHNSWScanIter::build_brute_force_result_iterator_bq(ObPluginVectorIndexA
             if (OB_SUCC(ret) && !exists) {
               vids[idx] = vid;
               distances[idx] = static_cast<float>(snap_heap.value_at(i));
+              segment_ptrs[idx] = snap_heap.segment_at(i);
               idx++;
             }
           }
@@ -1427,11 +1422,10 @@ int ObDASHNSWScanIter::build_brute_force_result_iterator_bq(ObPluginVectorIndexA
             LOG_WARN("failed to init merged heap for extra info", K(ret));
           } else {
             for (int64_t i = 0; i < total_size; ++i) {
-              bool is_snap = (i >= incr_size);
-              merged_heap.push(vids[i], distances[i], is_snap);
+              merged_heap.push(vids[i], distances[i], segment_ptrs[i]);
             }
 
-            if (OB_FAIL(get_extra_info_by_vids(adaptor, merged_heap, extra_info_ptr))) {
+            if (OB_FAIL(get_extra_info_by_vids(adaptor, merged_heap, dist_result, extra_info_ptr))) {
               LOG_WARN("failed to get extra info by vids", K(ret));
             }
           }
@@ -1473,7 +1467,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_bq(
       ret = OB_ITER_END;
     } else {
       ObArenaAllocator &allocator = mem_context_->get_arena_allocator();
-      DistanceResult dist_result; // initialized by the constructor
+      ObVecIdxQueryResult dist_result; // initialized by the constructor
       ObSimpleMaxHeap snap_heap(&allocator, capacity);
       ObSimpleMaxHeap incr_heap(&allocator, capacity);
 
@@ -1487,11 +1481,11 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_brute_force_bq(
                                                           snap_heap, incr_heap, need_complete_data, check_need_complete_data))) {
         LOG_WARN("failed to merge and sort bq results", K(ret));
       } else if (OB_SUCC(ret) && !need_complete_data) {
-        if (OB_FAIL(build_brute_force_result_iterator_bq(adaptor, snap_heap, incr_heap, adaptor_vid_iter_))) {
+        if (OB_FAIL(build_brute_force_result_iterator_bq(adaptor, snap_heap, incr_heap, dist_result, adaptor_vid_iter_))) {
           LOG_WARN("failed to build bq result iterator", K(ret));
         }
       }
-      release_brute_force_distance_memory(adaptor, dist_result);
+      adaptor->free_result(dist_result);
     }
   }
 
@@ -3021,7 +3015,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter_once(
       if (OB_FAIL(ada_ctx->init_bitmaps())) {
         LOG_WARN("failed to init bitmaps", K(ret));
       } else {
-        if (adaptor->get_snap_data_()->rb_flag_) {
+        if (adaptor->get_snap_rb_flag()) {
           ada_ctx->set_status(PVQ_LACK_SCN);
           ada_ctx->set_flag(PVQP_SECOND);
           cur_state = ObVidAdaLookupStatus::QUERY_SNAPSHOT_TBL;
@@ -3949,9 +3943,9 @@ int ObSimpleMaxHeap::release()
   return ret;
 }
 
-void ObSimpleMaxHeap::push(int64_t vid, double distiance, bool is_snap)
+void ObSimpleMaxHeap::push(int64_t vid, double distiance, const ObVectorIndexSegment *segment)
 {
-  ObSortItem item(vid, distiance, is_snap);
+  ObSortItem item(vid, distiance, segment);
 
   if (size_ < capacity_) {
     heap_[size_] = item;
@@ -3986,13 +3980,13 @@ double ObSimpleMaxHeap::value_at(uint64_t idx) const
   return value;
 }
 
-bool ObSimpleMaxHeap::is_snap(uint64_t idx) const
+ObVectorIndexSegment* ObSimpleMaxHeap::segment_at(uint64_t idx) const
 {
-  bool is_snap = false;
+  const ObVectorIndexSegment *segment = nullptr;
   if (idx < size_) {
-    is_snap = heap_[idx].is_snap_;
+    segment = heap_[idx].segment_;
   }
-  return is_snap;
+  return const_cast<ObVectorIndexSegment*>(segment);
 }
 
 void ObSimpleMaxHeap::heapify_up(int idx) {

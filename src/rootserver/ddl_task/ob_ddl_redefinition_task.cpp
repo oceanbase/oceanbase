@@ -155,6 +155,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                                                       &col_name_map_,
                                                       partition_names,
                                                       is_alter_clustering_key_tbl_partition_by_,
+                                                      ObString()/*filter_sql_str*/,
                                                       sql_string))) {
       LOG_WARN("fail to generate build replica sql", K(ret));
     }

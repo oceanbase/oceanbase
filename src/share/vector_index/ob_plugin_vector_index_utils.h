@@ -157,6 +157,17 @@ public:
                                const bool need_all_columns = false,
                                const bool is_reverse_scan = false,
                                const bool need_ora_scn = false);
+  static int open_segment_data_iter(
+                                  ObPluginVectorIndexAdaptor *adaptor,
+                                  ObIAllocator &allocator,
+                                  const ObLSID& ls_id,
+                                  const ObTabletID &tablet_id,
+                                  const ObString &start_key,
+                                  const ObString &end_key,
+                                  const share::SCN &target_scn,
+                                  ObTableScanParam &scan_param,
+                                  ObTableParam &table_param,
+                                  common::ObNewRowIterator *&iter);
   static int get_snap_index_visible_row_iter(ObAccessService *tsc_service,
                                             ObLSID &ls_id,
                                             ObPluginVectorIndexAdaptor *adapter,
@@ -170,7 +181,9 @@ public:
                                             ObPluginVectorIndexAdaptor *adapter,
                                             share::SCN &target_scn,
                                             ObIAllocator &allocator,
-                                            ObString &row_key);
+                                            ObString &row_key,
+                                            bool &is_meta_data,
+                                            int64_t &meta_scn);
 
   static int test_read_local_data(ObLSID &ls_id,
                                   ObPluginVectorIndexAdaptor *adapter,
@@ -183,7 +196,13 @@ public:
                                          ObIArray<ObLSTabletPair> &partial_tablet_ids,
                                          ObIArray<ObLSTabletPair> &cache_tablet_ids,
                                          char *buf, int64_t buf_len, int64_t &pos);
+  static int try_sync_vbitmap_memdata(ObLSID &ls_id,
+                                      ObPluginVectorIndexAdaptor *adapter,
+                                      SCN &target_scn,
+                                      ObIAllocator &allocator,
+                                      ObVectorQueryAdaptorResultContext &ada_ctx);
   static int get_tenant_vector_index_ids(const uint64_t tenant_id, bool &has_ivf_index, common::ObIArray<uint64_t> &table_id_array);
+  static int get_current_read_scn(share::SCN &current_scn);
 
 private:
   static const int EMBEDDED_TABLE_BASE_COLUMN_CNT = 2;
@@ -220,11 +239,6 @@ private:
                                        const bool create_new_adp,
                                        SCN &target_scn,
                                        ObIAllocator &allocator);
-  static int try_sync_vbitmap_memdata(ObLSID &ls_id,
-                                      ObPluginVectorIndexAdaptor *adapter,
-                                      SCN &target_scn,
-                                      ObIAllocator &allocator,
-                                      ObVectorQueryAdaptorResultContext &ada_ctx);
   static int fill_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos);
   static int fill_ivf_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos);
 

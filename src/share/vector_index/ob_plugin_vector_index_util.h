@@ -128,23 +128,37 @@ private:
 
 struct ObVsagQueryResult
 {
+  ObVsagQueryResult():
+    total_(0), vids_(nullptr), distances_(nullptr), extra_info_buf_ptr_(nullptr),
+    extra_info_ptr_(), mem_ctx_(nullptr), idx_(0) {}
+
+  TO_STRING_KV(K_(total), KP_(vids), KP_(distances), KP_(extra_info_buf_ptr),
+      K_(extra_info_ptr), KP_(mem_ctx), K_(idx))
+
   int64_t total_;
   const int64_t *vids_;
   const float *distances_;
+  const char *extra_info_buf_ptr_;
   ObVecExtraInfoPtr extra_info_ptr_;
+  // for free vsag result memory when use sparse vector
+  ObVsagMemContext *mem_ctx_;
+  // for result merge
+  int64_t idx_;
 };
+
+typedef ObSEArray<ObVsagQueryResult*, 4> ObVsagQueryResultArray;
 
 class ObPluginVectorIndexHelper final
 {
 public:
-  static int driect_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
-                                              const ObVsagQueryResult &second,
+  static int driect_merge_delta_and_snap_vids(
+                                              const ObVsagQueryResultArray &results,
                                               int64_t &actual_cnt,
                                               int64_t *&vids_result,
                                               float *&float_result,
                                               ObVecExtraInfoPtr &extra_info_result);
-  static int sort_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
-                                            const ObVsagQueryResult &second,
+  static int sort_merge_delta_and_snap_vids(
+                                            ObVsagQueryResultArray &results,
                                             const int64_t total,
                                             int64_t &actual_cnt,
                                             int64_t *&vids_result,
@@ -152,6 +166,9 @@ public:
                                             ObVecExtraInfoPtr &extra_info_result);
   static int get_vector_memory_limit_size(const uint64_t tenant_id,
                                           int64_t& memory_limit);
+  static int get_active_segment_max_size(const uint64_t tenant_id, int64_t &size);
+  static int get_merge_base_percentage(const uint64_t tenant_id, int64_t &percentage);
+  static bool enable_persist_vector_index_incremental(const uint64_t tenant_id);
 };
 
 };

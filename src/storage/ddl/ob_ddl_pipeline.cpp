@@ -231,8 +231,8 @@ int ObVectorIndexTabletContext::init_hnsw_index(const ObDDLTableSchema &ddl_tabl
       ObVectorIndexTmpInfo *tmp_info = nullptr;
       if (OB_FAIL(MTL(ObPluginVectorIndexService *)->get_vector_index_tmp_info(ddl_task_id_, tmp_info))) {
         LOG_WARN("fail to get vector index tmp info", K(ret), K(tablet_id_));
-      } else {
-        adapter_ = tmp_info->adapter_;
+      } else if (OB_FAIL(adapter_guard_.set_adapter(tmp_info->adapter_))) {
+        LOG_WARN("fail to set new adapter guard", K(ret));
       }
       LOG_INFO("init_hnsw_index", KPC(this), K(is_vec_tablet_rebuild_), K(ddl_table_schema));
     }
@@ -509,33 +509,19 @@ int ObHNSWIndexRowIterator::get_next_row(
              K(vector_vid_col_idx_), K(vector_col_idx_));
   } else {
     // set vec key
-    int64_t key_pos = 0;
+    ObString key;
+    ObString data;
     row_allocator_.reuse();
-    char *key_str = static_cast<char*>(row_allocator_.alloc(OB_VEC_IDX_SNAPSHOT_KEY_LENGTH));
-    if (OB_ISNULL(key_str)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc vec key", K(ret));
-    } else if (index_type_ == VIAT_HNSW && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_data_part%05ld", tablet_id_.id(), snapshot_version_, cur_row_pos_))) {
+    if (OB_FAIL(ctx_->get_key_and_data(index_type_, tablet_id_, snapshot_version_, cur_row_pos_, row_allocator_, key, data))) {
       LOG_WARN("fail to build vec snapshot key str", K(ret), K_(index_type));
-    } else if (index_type_ == VIAT_HGRAPH &&
-      OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hgraph_data_part%05ld", tablet_id_.id(), snapshot_version_, cur_row_pos_))) {
-      LOG_WARN("fail to build vec hgraph snapshot key str", K(ret), K_(index_type));
-    } else if (index_type_ == VIAT_HNSW_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_sq_data_part%05ld", tablet_id_.id(), snapshot_version_, cur_row_pos_))) {
-      LOG_WARN("fail to build sq vec snapshot key str", K(ret), K_(index_type));
-    } else if (index_type_ == VIAT_HNSW_BQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_bq_data_part%05ld", tablet_id_.id(), snapshot_version_, cur_row_pos_))) {
-      LOG_WARN("fail to build bq vec snapshot key str", K(ret), K_(index_type));
-    } else if (index_type_ == VIAT_IPIVF && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_ipivf_data_part%05ld", tablet_id_.id(), snapshot_version_, cur_row_pos_))) {
-      LOG_WARN("fail to build ipivf vec snapshot key str", K(ret), K_(index_type));
-    } else if (index_type_ == VIAT_IPIVF_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_ipivf_sq_data_part%05ld", tablet_id_.id(), snapshot_version_, cur_row_pos_))) {
-      LOG_WARN("fail to build ipivf_sq vec snapshot key str", K(ret), K_(index_type));
     } else {
-      current_row_.storage_datums_[vector_key_col_idx_].set_string(key_str, key_pos);
+      current_row_.storage_datums_[vector_key_col_idx_].set_string(key);
     }
     // set vec data
     if (OB_FAIL(ret)) {
     } else {
       // TODO @lhd maybe we should do deep copy
-      current_row_.storage_datums_[vector_data_col_idx_].set_string(ctx_->vals_.at(cur_row_pos_));
+      current_row_.storage_datums_[vector_data_col_idx_].set_string(data);
     }
 
     // set vid and vec to null
@@ -1000,10 +986,8 @@ int ObHNSWIndexAppendBufferOperator::append_row(
                                                       &tablet_context->vector_index_ctx_->vec_idx_param_,
                                                       tablet_context->vector_index_ctx_->vec_dim_))) {
       LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
-    } else if (OB_ISNULL(adapter = is_vec_tablet_rebuild ? tablet_context->vector_index_ctx_->adapter_ : adaptor_guard.get_adatper())) {
+    } else if (OB_ISNULL(adapter = is_vec_tablet_rebuild ? tablet_context->vector_index_ctx_->adapter_guard_.get_adatper() : adaptor_guard.get_adatper())) {
       LOG_WARN("error unexpected, adapter is nullptr", K(ret), K(tablet_context->vector_index_ctx_->ls_id_), K(tablet_id_));
-    } else if (is_vec_tablet_rebuild && OB_FAIL(adaptor_guard.set_adapter(tablet_context->vector_index_ctx_->adapter_))) {
-      LOG_WARN("fail to set new adapter guard", K(ret));
     } else if (OB_FAIL(adapter->get_extra_info_actual_size(extra_info_actual_size))) {
       LOG_WARN("failed to get extra info actual size", K(ret));
     } else if (extra_column_count > 0 && extra_info_actual_size > 0) { //no primary key /cluster table not support extra info right now
@@ -1150,9 +1134,6 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
                                                               ctx.vec_dim_))) {
     LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(ctx.ls_id_), K(tablet_id_));
   } else {
-    ObHNSWSerializeCallback callback;
-    ObOStreamBuf::Callback cb = callback;
-
     ObHNSWSerializeCallback::CbParam param;
     param.vctx_ = &ctx.ctx_;
     param.allocator_ = allocator;
@@ -1171,17 +1152,18 @@ int ObHNSWIndexBuildOperator::serialize_vector_index(
       param.timeout_ = timeout;
       param.snapshot_ = &snapshot;
       param.tx_desc_ = tx_desc;
-      ObPluginVectorIndexAdaptor *adp = is_vec_tablet_rebuild ? ctx.adapter_ : adaptor_guard.get_adatper();
+      param.tablet_id_ = tablet_id_;
+      param.snapshot_version_ = ctx.snapshot_version_;
+      param.is_vec_tablet_rebuild_ = is_vec_tablet_rebuild;
+      ObPluginVectorIndexAdaptor *adp = is_vec_tablet_rebuild ? ctx.adapter_guard_.get_adatper() : adaptor_guard.get_adatper();
       if (OB_ISNULL(adp)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret), KP(adp), K(is_vec_tablet_rebuild));
-      } else if (is_vec_tablet_rebuild && OB_FAIL(adaptor_guard.set_adapter(adp))) {
-        LOG_WARN("fail to set new adapter guard", K(ret));
-      } else if (OB_FAIL(adp->check_snap_hnswsq_index())) {
+      } else if (OB_FAIL(adp->check_snap_index())) {
         LOG_WARN("failed to check snap hnswsq index", K(ret));
       } else if (OB_FAIL(adp->set_snapshot_key_prefix(tablet_id_.id(), ctx.snapshot_version_, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH))) {
         LOG_WARN("failed to set snapshot key prefix", K(ret), K(tablet_id_.id()), K(ctx.snapshot_version_));
-      } else if (OB_FAIL(adp->serialize(&row_allocator_, param, cb))) {
+      } else if (OB_FAIL(adp->serialize_snapshot(param))) {
         if (OB_NOT_INIT == ret) {
           // ignore // no data in slice store
           ret = OB_SUCCESS;
@@ -1362,7 +1344,7 @@ int ObHNSWIndexDMLWriteOperator::dml_write(const ObChunk &input_chunk, ObVectorI
     LOG_WARN("unexpected dml write chunk", K(ret), K(tablet_context->vector_index_ctx_));
   } else {
     transaction::ObTxDesc *tx_desc = tablet_context->vector_index_ctx_->tx_desc_;
-    ObPluginVectorIndexAdaptor *adapter = tablet_context->vector_index_ctx_->adapter_;
+    ObPluginVectorIndexAdaptor *adapter = tablet_context->vector_index_ctx_->adapter_guard_.get_adatper();
 
     if (OB_ISNULL(tx_desc)) {
       ret = OB_ERR_UNEXPECTED;

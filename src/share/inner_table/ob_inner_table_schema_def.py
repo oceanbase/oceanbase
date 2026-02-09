@@ -18010,6 +18010,39 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12595: __all_virtual_java_policy_history
 # 12596: __all_virtual_catalog_table_opt_stat_gather_history
 
+def_table_schema(
+  owner = 'huhaosheng.hhs',
+  table_name = '__all_virtual_vector_segment_info',
+  table_id = '12592',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('data_table_id', 'int'),
+    ('data_tablet_id', 'int'),
+    ('vbitmap_tablet_id', 'int'),
+    ('inc_index_tablet_id', 'int'),
+    ('snapshot_index_tablet_id', 'int'),
+    ('block_count', 'int'),
+    ('segment_type', 'int'),
+    ('index_type', 'int'),
+    ('mem_used', 'int'),
+    ('min_vid', 'int'),
+    ('max_vid', 'int'),
+    ('vector_cnt', 'int'),
+    ('ref_cnt', 'int'),
+    ('segment_state', 'int'),
+    ('scn', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -44149,7 +44182,8 @@ def_table_schema(
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
       trace_id as TRACE_ID,
-      progress_info as PROGRESS_INFO
+      progress_info as PROGRESS_INFO,
+      task_info as TASK_INFO
   FROM oceanbase.__all_virtual_vector_index_task
 """.replace("\n", " ")
 )
@@ -44218,7 +44252,8 @@ def_table_schema(
       task_type as TASK_TYPE,
       target_scn as TASK_SCN,
       ret_code as RET_CODE,
-      trace_id as TRACE_ID
+      trace_id as TRACE_ID,
+      task_info as TASK_INFO
   FROM oceanbase.__all_virtual_vector_index_task_history
 """.replace("\n", " ")
 )
@@ -46519,8 +46554,97 @@ ORDER BY A.create_time
 # 21713: V$OB_SS_LOCAL_CACHE_DIAGNOSE
 # 21714: GV$OB_SINDI_INDEX_INFO
 # 21715: V$OB_SINDI_INDEX_INFO
-# 21716: GV$OB_HNSW_INDEX_SEGMENT_INFO
-# 21717: V$OB_HNSW_INDEX_SEGMENT_INFO
+
+def_table_schema(
+  owner = 'yutong.lzs',
+  table_name      = 'GV$OB_HNSW_INDEX_SEGMENT_INFO',
+  table_id        = '21716',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      DATA_TABLE_ID,
+      DATA_TABLET_ID,
+      VBITMAP_TABLET_ID,
+      INC_INDEX_TABLET_ID,
+      SNAPSHOT_INDEX_TABLET_ID,
+      BLOCK_COUNT,
+      CASE SEGMENT_TYPE
+        WHEN 0 THEN 'INVALID'
+        WHEN 1 THEN 'IN_MEMORY'
+        WHEN 2 THEN 'PERSISTED_INCR'
+        WHEN 3 THEN 'MERGED_INCR'
+        WHEN 4 THEN 'PERSISTED_BASE'
+        WHEN 5 THEN 'LEGACY_BASE'
+        ELSE 'UNKNOWN'
+      END AS SEGMENT_TYPE,
+      CASE INDEX_TYPE
+        WHEN 0 THEN 'HNSW'
+        WHEN 1 THEN 'HNSW_SQ'
+        WHEN 5 THEN 'HNSW_BQ'
+        WHEN 6 THEN 'HGRAPH'
+        WHEN 8 THEN 'SINDI'
+        WHEN 9 THEN 'SINDI_SQ'
+        ELSE 'UNKNOWN'
+      END AS INDEX_TYPE,
+      MEM_USED,
+      MIN_VID,
+      MAX_VID,
+      VECTOR_CNT,
+      REF_CNT,
+      CASE SEGMENT_STATE
+        WHEN 0 THEN 'DEFAULT'
+        WHEN 1 THEN 'ACTIVE'
+        WHEN 2 THEN 'FROZEN'
+        WHEN 3 THEN 'FLUSHING'
+        WHEN 4 THEN 'PERSISTED'
+        ELSE 'UNKNOWN'
+      END AS SEGMENT_STATE,
+      SCN_TO_TIMESTAMP(SCN) AS PERSISTENCE_TIME
+    FROM oceanbase.__all_virtual_vector_segment_info
+    WHERE INDEX_TYPE IN (0, 1, 5, 6, 8, 9)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'yutong.lzs',
+  table_name      = 'V$OB_HNSW_INDEX_SEGMENT_INFO',
+  table_id        = '21717',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      DATA_TABLE_ID,
+      DATA_TABLET_ID,
+      VBITMAP_TABLET_ID,
+      INC_INDEX_TABLET_ID,
+      SNAPSHOT_INDEX_TABLET_ID,
+      BLOCK_COUNT,
+      SEGMENT_TYPE,
+      INDEX_TYPE,
+      MEM_USED,
+      MIN_VID,
+      MAX_VID,
+      VECTOR_CNT,
+      REF_CNT,
+      SEGMENT_STATE,
+      PERSISTENCE_TIME
+    FROM OCEANBASE.GV$OB_HNSW_INDEX_SEGMENT_INFO
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " ")
+)
 # 21718: DBA_JAVA_POLICY
 # 21719: USER_JAVA_POLICY
 

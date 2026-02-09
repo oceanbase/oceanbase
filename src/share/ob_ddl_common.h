@@ -1170,6 +1170,7 @@ public:
       const ObColumnNameMap *col_name_map,
       const ObString &partition_names,
       const bool is_alter_clustering_key_tbl_partition_by,
+      const ObString &filter_sql_str,
       ObSqlString &sql_string);
 
   static int generate_build_mview_replica_sql(

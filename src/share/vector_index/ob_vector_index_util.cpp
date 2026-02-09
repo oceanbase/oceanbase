@@ -740,7 +740,7 @@ int ObVectorIndexUtil::resolve_query_param(
         } else if (value_node->type_ != T_INT && value_node->type_ != T_NUMBER) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_));
-        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 160000)) {
+        } else if (! (value_node->value_ >= 1 && value_node->value_ <= OB_VSAG_MAX_EF_SEARCH)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_), K(value_node->value_));
         } else {
@@ -4397,6 +4397,45 @@ int ObVectorIndexUtil::get_vector_index_type(
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(param));
+    }
+  }
+  return ret;
+}
+
+int ObVecIdxSnapshotBlockData::get_key(const ObVectorIndexAlgorithmType index_type, const ObTabletID &tablet_id,
+    const int64_t snapshot_version, const int64_t row_id, ObIAllocator &allocator, ObString &key) const
+{
+  int ret = OB_SUCCESS;
+  if (is_meta_) {
+    if (OB_FAIL(ObVectorIndexSegmentMeta::get_vector_index_meta_key(allocator, tablet_id, key))) {
+      LOG_WARN("fail to build vec meta key str", K(ret), K(index_type));
+    }
+  } else if (OB_FAIL(ObVectorIndexSegmentMeta::get_segment_persist_key(index_type, tablet_id, snapshot_version, row_id, allocator, key))) {
+    LOG_WARN("fail to build vec data key str", K(ret), K(index_type));
+  }
+  return ret;
+}
+
+int ObVecIdxSnapshotDataWriteCtx::get_key_and_data(
+    const ObVectorIndexAlgorithmType index_type, const ObTabletID &tablet_id,
+    const int64_t snapshot_version, const int64_t row_id, ObIAllocator &allocator,
+    ObString &key, ObString &data)
+{
+  int ret = OB_SUCCESS;
+  if (row_id < 0 || row_id >= vals_.count()) {
+    ret = OB_ARRAY_OUT_OF_RANGE;
+    LOG_WARN("out of vals range", K(ret), K(row_id), K(vals_.count()));
+  } else {
+    const ObVecIdxSnapshotBlockData& block = vals_.at(row_id);
+    const int64_t idx = vals_.at(0).is_meta_block() ? row_id - 1 : row_id;
+    if (row_id > 1 && block.is_meta_block()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("non first block should not be meta block", K(ret), K(row_id), K(block));
+    } else if (OB_FAIL(block.get_key(index_type, tablet_id, snapshot_version, idx, allocator, key))) {
+      LOG_WARN("get block key fail", K(ret), K(row_id), K(idx));
+    } else {
+      data = block.get_data();
+      LOG_INFO("[VECTOR INDEX]", K(key), K(row_id), K(idx), K(data.length()), K(block.is_meta_block()));
     }
   }
   return ret;

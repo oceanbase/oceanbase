@@ -17,6 +17,14 @@ CREATE OR REPLACE PACKAGE dbms_vector AUTHID CURRENT_USER
     IN     idx_parameters          LONGTEXT DEFAULT NULL,
     IN     idx_parallel_creation   INT DEFAULT 1);
 
+  PROCEDURE flush_index(
+    IN     table_name             VARCHAR(65535),
+    IN     idx_name               VARCHAR(65535));
+
+  PROCEDURE compact_index(
+    IN     table_name             VARCHAR(65535),
+    IN     idx_name               VARCHAR(65535));
+
   PROCEDURE refresh_index_inner(
     IN     idx_table_id           BIGINT,
     IN     refresh_threshold      INT DEFAULT 10000,

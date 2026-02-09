@@ -4229,9 +4229,6 @@ int ObVectorIndexSliceStore::serialize_vector_index(
                                                               vec_dim_))) {
     LOG_WARN("fail to get ObMockPluginVectorIndexAdapter", K(ret), K(ctx_.ls_id_), K(tablet_id_));
   } else {
-    ObHNSWSerializeCallback callback;
-    ObOStreamBuf::Callback cb = callback;
-
     ObHNSWSerializeCallback::CbParam param;
     param.vctx_ = &ctx_;
     param.allocator_ = allocator;
@@ -4250,12 +4247,14 @@ int ObVectorIndexSliceStore::serialize_vector_index(
       param.timeout_ = timeout;
       param.snapshot_ = &snapshot;
       param.tx_desc_ = tx_desc;
+      param.tablet_id_ = tablet_id_;
+      param.snapshot_version_ = snapshot_version;
       ObPluginVectorIndexAdaptor *adp = adaptor_guard.get_adatper();
-      if (OB_FAIL(adp->check_snap_hnswsq_index())) {
+      if (OB_FAIL(adp->check_snap_index())) {
         LOG_WARN("failed to check snap hnswsq index", K(ret));
       } else if (OB_FAIL(adp->set_snapshot_key_prefix(tablet_id_.id(), snapshot_version, ObVectorIndexSliceStore::OB_VEC_IDX_SNAPSHOT_KEY_LENGTH))) {
         LOG_WARN("failed to set snapshot key prefix", K(ret), K(tablet_id_.id()), K(snapshot_version));
-      } else if (OB_FAIL(adp->serialize(allocator, param, cb))) {
+      } else if (OB_FAIL(adp->serialize_snapshot(param))) {
         if (OB_NOT_INIT == ret) {
           // ignore // no data in slice store
           ret = OB_SUCCESS;
@@ -4317,32 +4316,18 @@ int ObVectorIndexSliceStore::get_next_vector_data_row(
              K(vector_vid_col_idx_), K(vector_col_idx_));
   } else {
     // set vec key
-    int64_t key_pos = 0;
-    char *key_str = static_cast<char*>(vec_allocator_.alloc(OB_VEC_IDX_SNAPSHOT_KEY_LENGTH));
-    if (OB_ISNULL(key_str)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc vec key", K(ret));
-    } else if (index_type == VIAT_HNSW && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
+    ObString key;
+    ObString data;
+    if (OB_FAIL(ctx_.get_key_and_data(index_type, tablet_id_, snapshot_version, cur_row_pos_, vec_allocator_, key, data))) {
       LOG_WARN("fail to build vec snapshot key str", K(ret), K(index_type));
-    } else if (index_type == VIAT_HGRAPH &&
-      OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hgraph_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
-      LOG_WARN("fail to build vec hgraph snapshot key str", K(ret), K(index_type));
-    } else if (index_type == VIAT_HNSW_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_sq_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
-      LOG_WARN("fail to build sq vec snapshot key str", K(ret), K(index_type));
-    } else if (index_type == VIAT_HNSW_BQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_hnsw_bq_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
-      LOG_WARN("fail to build bq vec snapshot key str", K(ret), K(index_type));
-    } else if (index_type == VIAT_IPIVF && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_ipivf_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
-      LOG_WARN("fail to build ipivf vec snapshot key str", K(ret), K(index_type));
-    } else if (index_type == VIAT_IPIVF_SQ && OB_FAIL(databuff_printf(key_str, OB_VEC_IDX_SNAPSHOT_KEY_LENGTH, key_pos, "%lu_%ld_ipivf_sq_data_part%05ld", tablet_id_.id(), snapshot_version, cur_row_pos_))) {
-      LOG_WARN("fail to build ipivf_sq vec snapshot key str", K(ret), K(index_type));
     } else {
-      current_row_.storage_datums_[vector_key_col_idx_].set_string(key_str, key_pos);
+      current_row_.storage_datums_[vector_key_col_idx_].set_string(key);
     }
     // set vec data
     if (OB_FAIL(ret)) {
     } else {
       // TODO @lhd maybe we should do deep copy
-      current_row_.storage_datums_[vector_data_col_idx_].set_string(ctx_.vals_.at(cur_row_pos_));
+      current_row_.storage_datums_[vector_data_col_idx_].set_string(data);
     }
     if (OB_FAIL(ret)) {
     } else if (vector_visible_col_idx_ > 0 && vector_visible_col_idx_ < current_row_.get_column_count()) {
