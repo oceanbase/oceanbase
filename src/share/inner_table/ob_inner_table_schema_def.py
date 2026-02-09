@@ -8970,6 +8970,9 @@ def_table_schema(
 # 585: __all_table_archive_history
 # 586: __all_java_policy
 # 587: __all_java_policy_history
+# 588: __all_catalog_table_stat
+# 589: __all_catalog_column_stat
+# 590: __all_catalog_table_opt_stat_gather_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -18005,6 +18008,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12593: __all_virtual_sql_group_commit_stat
 # 12594: __all_virtual_java_policy
 # 12595: __all_virtual_java_policy_history
+# 12596: __all_virtual_catalog_table_opt_stat_gather_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位

@@ -1092,6 +1092,8 @@ typedef enum ObItemType
   T_FUN_SYS_PARSE_DATE_TIME = 2098,
   T_FUN_SYS_COUNT_INROW = 2099,
   T_FUN_WINDOW_FUNNEL = 2100,
+  T_FUN_SYS_EXT_MIN = 2101,
+  T_FUN_SYS_EXT_MAX = 2102,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -3231,7 +3233,9 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_ARBITRARY || \
                          (op) == T_FUN_SYS_COUNT_INROW || \
                          ((op) >= T_FUN_CK_GROUPCONCAT && (op) <= T_FUN_CK_UNIQ) || \
-                         (op) == T_FUN_WINDOW_FUNNEL)
+                         (op) == T_FUN_WINDOW_FUNNEL || \
+                         (op) == T_FUN_SYS_EXT_MIN || \
+                         (op) == T_FUN_SYS_EXT_MAX)
 
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
