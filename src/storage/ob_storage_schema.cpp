@@ -2329,7 +2329,8 @@ void ObStorageSchema::update_column_cnt_and_schema_version(
   column_cnt_ = MAX(column_cnt_, input_col_cnt);
   store_column_cnt_ = MAX(store_column_cnt_, input_store_col_cnt);
   schema_version_ = MAX(schema_version_, input_schema_version);
-  if (column_cnt_ != column_array_.count() || origin_store_column_cnt != store_column_cnt_ || origin_schema_version < schema_version_) {
+  if (column_cnt_ != column_array_.count() || origin_store_column_cnt != store_column_cnt_ ||
+      (!is_fts_index() && origin_schema_version < schema_version_)) {
     column_info_simplified_ = true;
     STORAGE_LOG(INFO, "update column cnt",
       K(origin_column_cnt), K_(column_cnt),
