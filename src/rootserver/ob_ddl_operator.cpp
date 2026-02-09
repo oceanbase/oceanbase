@@ -2419,6 +2419,11 @@ int ObDDLOperator::truncate_table(const ObString *ddl_stmt_str,
                                                         is_truncate_table))) {
       LOG_WARN("add part info failed", KR(ret), K(table_id), K(schema_version));
     }
+  } else {
+    if (OB_FAIL(schema_service->get_table_sql_service()
+                                .truncate_table_stats_info(trans, orig_table_schema))) {
+      LOG_WARN("truncate table stats info failed", KR(ret), K(orig_table_schema.get_table_id()));
+    }
   }
   if (FAILEDx(schema_service->get_table_sql_service()
                             .update_table_attribute(trans,
