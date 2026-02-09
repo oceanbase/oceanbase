@@ -22320,7 +22320,8 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
                                            oceanbase::rootserver::ObDDLOperator &ddl_operator, 
                                            common::ObMySQLTransaction &trans, 
                                            ObSArray<ObTableSchema> &new_table_schemas,
-                                           ObSArray<uint64_t> &index_ids)
+                                           ObSArray<uint64_t> &index_ids,
+                                           hash::ObHashMap<uint64_t, uint64_t> &vec_id_map)
 {
   int ret = OB_SUCCESS;
   const uint64_t src_tenant_id = orig_table_schema.get_tenant_id();
@@ -22544,6 +22545,9 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
                          OB_FAIL(ObVectorIndexUtil::update_param_extra_actual_size(hidden_table_schema,
                                                                                    new_index_schema))) {
                 LOG_WARN("update index param failed", K(ret));
+              } else if (new_index_schema.is_vec_delta_buffer_type() &&
+                         OB_FAIL(vec_id_map.set_refactored(new_index_schema.get_table_id(), index_table_schema->get_table_id()))) {
+                LOG_WARN("fail to set hash map", K(ret), K(new_index_schema));
               } else if (OB_FAIL(new_table_schemas.push_back(new_index_schema))) {
                 LOG_WARN("failed to add table schema!", K(ret));
               } else if (OB_FAIL(index_ids.push_back(new_idx_tid))) {
@@ -22694,6 +22698,7 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
   const uint64_t src_tenant_id = alter_table_schema.get_tenant_id();
   const uint64_t dst_tenant_id = alter_table_arg.exec_tenant_id_;
   ObColumnNameMap col_name_map;
+  common::hash::ObHashMap<uint64_t, uint64_t> vec_id_map;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_ISNULL(tz_info_wrap.get_time_zone_info())) {
@@ -22746,6 +22751,8 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       if (OB_FAIL(col_name_map.init(*orig_table_schema, *hidden_table_schema, alter_table_schema))) {
         LOG_WARN("failed to init column name map", K(ret), K(alter_table_schema), KPC(orig_table_schema));
+      } else if (OB_FAIL(vec_id_map.create(16, "HashVecId"))) {
+        LOG_WARN("failed to add create ObHashMap", K(ret));
       } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
         LOG_WARN("fail to get drop cols id set", K(ret));
       } else if (OB_FAIL(reconstruct_index_schema(alter_table_arg,
@@ -22760,7 +22767,8 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
                                                   ddl_operator,
                                                   trans,
                                                   new_table_schemas,
-                                                  index_ids))) {
+                                                  index_ids,
+                                                  vec_id_map))) {
         LOG_WARN("failed to reconstruct index schema", K(ret));
       } else if (OB_FAIL(add_new_index_schema(alter_table_arg,
                                               *orig_table_schema,
@@ -22790,6 +22798,12 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
                                                     *orig_table_schema,
                                                     new_table_schemas))) {
         LOG_WARN("failed to rebuild hidden table index and mlog", K(ret));
+      }
+      if (OB_SUCC(ret)) { // only for vector index
+        if (OB_FAIL(ObVectorIndexUtil::resume_dbms_vector_job_attribute_if_need(
+            trans, dst_tenant_id, new_table_schemas, vec_id_map))) {
+          LOG_WARN("failed to resume dbms jobs attribute", K(ret), K(dst_tenant_id));
+        }
       }
     }
     if (trans.is_started()) {

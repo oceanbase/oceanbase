@@ -1755,7 +1755,8 @@ int check_will_be_having_domain_index_operation(
       oceanbase::rootserver::ObDDLOperator &ddl_operator, 
       common::ObMySQLTransaction &trans, 
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas,
-      common::ObSArray<uint64_t> &index_ids);
+      common::ObSArray<uint64_t> &index_ids,
+      hash::ObHashMap<uint64_t, uint64_t> &vec_id_map);
   int gen_hidden_index_schema_columns(
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &orig_index_schema,

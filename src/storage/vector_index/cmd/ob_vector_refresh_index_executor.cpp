@@ -16,12 +16,13 @@
 #include "storage/vector_index/ob_vector_index_refresh.h"
 #include "pl/ob_pl.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "storage/vector_index/ob_vector_index_sched_job_utils.h"
 
 namespace oceanbase {
 namespace storage {
 
 ObVectorRefreshIndexExecutor::ObVectorRefreshIndexExecutor()
-  : ctx_(nullptr), session_info_(nullptr), tenant_id_(OB_INVALID_TENANT_ID) {}
+  : ctx_(nullptr), session_info_(nullptr), tenant_id_(OB_INVALID_TENANT_ID), allocator_(lib::ObLabel("VecRefreshExec")) {}
 
 ObVectorRefreshIndexExecutor::~ObVectorRefreshIndexExecutor() {}
 
@@ -1044,24 +1045,24 @@ DBMS_VECTOR.rebuild_index_inner(500013, 0.200000, "", "", "", 8)
 
 */
 
-int ObVectorRefreshIndexExecutor::get_parallel_value(const ObString &parallel_str, int64_t &parallel_int)
+int ObVectorRefreshIndexExecutor::parse_string_value_to_int(const ObString &string_value, int64_t &int_value)
 {
   int ret = OB_SUCCESS;
-  if (parallel_str.empty()) {
+  if (string_value.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid parallel number", K(ret), K(parallel_str));
+    LOG_WARN("invalid parallel number", K(ret), K(string_value));
   } else {
-    ObString tmp_parallel_str = parallel_str.trim();
-    const char *str = tmp_parallel_str.ptr();
-    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_parallel_str.length(); ++i) {
+    ObString tmp_str_val = string_value.trim();
+    const char *str = tmp_str_val.ptr();
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_str_val.length(); ++i) {
       if (str[i] < '0' || str[i] > '9') {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid parallel number", K(ret), K(parallel_str));
+        LOG_WARN("invalid parallel number", K(ret), K(string_value));
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObSchemaUtils::str_to_int(tmp_parallel_str, parallel_int))) {
-        LOG_WARN("fail to get str value", K(ret), K(tmp_parallel_str));
+      if (OB_FAIL(ObSchemaUtils::str_to_int(tmp_str_val, int_value))) {
+        LOG_WARN("fail to get str value", K(ret), K(tmp_str_val));
       }
     }
   }
@@ -1084,11 +1085,12 @@ int ObVectorRefreshIndexExecutor::set_attribute(pl::ObPLExecCtx &ctx, const ObVe
       tenant_id_, DATA_VERSION_4_3_5_5,
       "tenant's data version is below 4.3.5.5, refreshing vector index is not "
       "supported."));
-  
   const share::schema::ObTableSchema *base_table_schema = nullptr;
   const share::schema::ObTableSchema *domain_table_schema = nullptr;
   const share::schema::ObTableSchema *index_id_table_schema = nullptr;
-  ObSqlString rebuild_job_name;
+  ObSqlString target_job_name;
+  ObString attribute_str_trim = arg.attribute_.trim();
+  ObString attribute_str("");
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(resolve_and_check_table_valid(
@@ -1097,10 +1099,116 @@ int ObVectorRefreshIndexExecutor::set_attribute(pl::ObPLExecCtx &ctx, const ObVe
     LOG_WARN("failed to resolver and check table valid", K(ret), K(arg));
   } else if (!domain_table_schema->is_vec_delta_buffer_type()) {
     LOG_WARN("failed to set attribute", K(ret));
-  } else if (OB_FAIL(rebuild_job_name.assign_fmt("%lu_rebuild", domain_table_schema->get_table_id()))) {
-    LOG_WARN("failed to generate refresh job name", K(ret));
-  } else if (OB_FAIL(set_attribute_inner(rebuild_job_name.string(), arg.attribute_, arg.value_))) {
-    LOG_WARN("fail to do refresh", KR(ret), K(arg));
+  } else if (OB_FAIL(ObVectorIndexUtil::check_index_rebuild_conflit(tenant_id_, 
+      domain_table_schema->get_data_table_id(), domain_table_schema->get_table_id()))) {
+    LOG_WARN("fail to check index rebuild conflit", K(ret));
+  } else if (OB_FAIL(ob_simple_low_to_up(allocator_, attribute_str_trim, attribute_str))) {
+    LOG_WARN("string low to up failed", K(ret), K(arg.attribute_));
+  } else if (OB_FAIL(get_target_dbms_job_name(attribute_str, domain_table_schema->get_table_id(), target_job_name))) {
+    LOG_WARN("fail to get target job name", K(ret), K(attribute_str));
+  } else if (OB_FAIL(set_attribute_inner(target_job_name.string(), attribute_str, arg.value_))) {
+    LOG_WARN("failed to do refresh", KR(ret), K(arg));
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::get_target_dbms_job_name(
+    const ObString &attribute, const int64_t domain_table_id, ObSqlString &target_job_name)
+{
+  int ret = OB_SUCCESS;
+  if (attribute.empty() || OB_INVALID_ID == domain_table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(attribute), K(domain_table_id));
+  } else if (0 == attribute.compare("PARALLEL") || 
+             0 == attribute.compare("REBUILD_TRIGGER_PERCENTAGE") ||
+             0 == attribute.compare("REBUILD_REPEAT_INTERVAL")) {
+    if (OB_FAIL(target_job_name.assign_fmt("%lu_rebuild", domain_table_id))) {
+      LOG_WARN("failed to generate refresh job name", K(ret));
+    } 
+  } else if (0 == attribute.compare("REFRESH_TRIGGER_THRESHOLD") || 
+             0 == attribute.compare("REFRESH_REPEAT_INTERVAL")) {
+    if (OB_FAIL(target_job_name.assign_fmt("%lu_refresh", domain_table_id))) {
+      LOG_WARN("failed to generate refresh job name", K(ret));
+    } 
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected attribute", K(ret), K(attribute), K(domain_table_id));
+  }
+  return ret; 
+}
+
+/*
+  e.g. FREQ=SECONDLY; INTERVAL=86400
+*/
+int ObVectorRefreshIndexExecutor::check_time_interval_is_valid(
+    const int64_t tenant_id, const ObString &value, const bool is_rebuild)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id == OB_INVALID_TENANT_ID || value.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(value));
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::check_is_valid_repeat_interval(tenant_id, value))) {
+    LOG_WARN("invalid repeat_interval", KR(ret), K(value));
+  } else {
+    ObArray<ObString> tmp_value_strs;
+    ObString tmp_value("");
+    
+    if (OB_FAIL(ob_write_string(allocator_, value, tmp_value))) {
+      LOG_WARN("fail to write string", K(ret), K(value));
+    } else if (tmp_value.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected repeat interval", K(ret), K(value));
+    } else if (OB_FAIL(split_on(tmp_value, ';', tmp_value_strs))) {
+      LOG_WARN("fail to split func expr", K(ret), K(tmp_value));
+    } else if (tmp_value_strs.count() < 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected repeat interval", K(ret), K(tmp_value_strs), K(value));
+    } else {
+      ObArray<ObString> tmp_first_value_strs;
+      ObArray<ObString> tmp_second_value_strs;
+      ObString first_value_str = tmp_value_strs.at(0).trim();
+      ObString second_value_str = tmp_value_strs.at(1).trim();
+
+      if (first_value_str.empty() || second_value_str.empty()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid repeat interval", K(ret), K(tmp_value_strs));
+      } else if (OB_FAIL(split_on(first_value_str, '=', tmp_first_value_strs))) {
+        LOG_WARN("fail to split func expr", K(ret), K(first_value_str));
+      } else if (OB_FAIL(split_on(second_value_str, '=', tmp_second_value_strs))) {
+        LOG_WARN("fail to split func expr", K(ret), K(second_value_str));
+      } else if (tmp_first_value_strs.count() != 2 || tmp_second_value_strs.count() != 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected count", K(ret), K(tmp_first_value_strs), K(tmp_second_value_strs));
+      } else {
+        ObString freq_value = tmp_first_value_strs.at(1).trim();
+        ObString interval_value = tmp_second_value_strs.at(1).trim();
+        int64_t interval = -1;
+  
+        if (OB_FAIL(parse_string_value_to_int(interval_value, interval))) {
+          LOG_WARN("fail to parse string to int", K(ret), K(interval_value));
+        } else if (freq_value.compare("SECONDLY") == 0) {
+          if (is_rebuild && interval < REBUILD_TIME_INTERVAL_SECOND_LOWER_LIMIT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid rebuild interval", K(ret), K(interval), K(value));
+          } else if (!is_rebuild && interval < REFRESH_TIME_INTERVAL_SECOND_LOWER_LIMIT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid refresh interval", K(ret), K(interval), K(value));
+          }
+        } else if (freq_value.compare("MINUTELY") == 0) {
+          if (is_rebuild && interval * 60 < REBUILD_TIME_INTERVAL_SECOND_LOWER_LIMIT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid rebuild interval", K(ret), K(interval), K(value));
+          } 
+          // large than 1min, refresh no need check
+        } else if (freq_value.compare("HOURLY") == 0) {
+          if (is_rebuild && interval * 3600 < REBUILD_TIME_INTERVAL_SECOND_LOWER_LIMIT) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid rebuild interval", K(ret), K(interval), K(value));
+          }
+          // large than 1hour, refresh no need check
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1110,7 +1218,7 @@ int ObVectorRefreshIndexExecutor::set_attribute_inner(
 {
   int ret = OB_SUCCESS;
   int64_t tenant_id = MTL_ID();
-  ObArenaAllocator allocator;
+
   dbms_scheduler::ObDBMSSchedJobInfo job_info;
   ObMySQLTransaction trans;
   if (rebuild_job_name.empty() || value.empty() || attribute.empty()) {
@@ -1122,88 +1230,37 @@ int ObVectorRefreshIndexExecutor::set_attribute_inner(
                                                                               tenant_id, 
                                                                               false, // is_oracle_tenant
                                                                               rebuild_job_name,
-                                                                              allocator,
+                                                                              allocator_,
                                                                               job_info))) {
     LOG_WARN("get job failed", K(ret));
     if (ret == OB_ENTRY_NOT_EXIST) {
       ret = OB_ERR_EVENT_NOT_EXIST;
     }
   } else {
-    ObString attribute_str;
-    if (OB_FAIL(ob_simple_low_to_up(allocator, attribute, attribute_str))) {
-      LOG_WARN("string low to up failed", K(ret), K(attribute));
-    } else if (0 == attribute_str.compare("PARALLEL")) {
-      ObString &job_action = job_info.get_job_action();
-      ObString tmp_job_action;
-      ObArray<ObString> tmp_param_strs;
-      ObSqlString new_job_action_str;
-      int64_t parallel_value = 0; // default 1
-
-      if (OB_FAIL(get_parallel_value(value, parallel_value))) {
-        LOG_WARN("fail to get parallel value", K(ret), K(value));
-      } else if (OB_FAIL(ob_write_string(allocator, job_action, tmp_job_action))) {
-        LOG_WARN("fail to write string", K(ret), K(job_action));
-      } else if (tmp_job_action.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected job action", K(ret), K(tmp_job_action));
-      } else if (OB_FAIL(split_on(tmp_job_action, ',', tmp_param_strs))) {
-        LOG_WARN("fail to split func expr", K(ret), K(tmp_job_action));
-      } else if (tmp_param_strs.count() < 2) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected job action", K(ret), K(tmp_param_strs));
-      } else {
-        ObString split_str_first = tmp_param_strs.at(0).trim();
-        ObString split_str_second = tmp_param_strs.at(1).trim();
-        if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", split_str_first.length(), split_str_first.ptr()))) {
-          LOG_WARN("fail to append fmt", K(ret), K(split_str_first));
-        } else {
-          ObArray<ObString> split_str_second_strs;
-          if (OB_FAIL(split_on(split_str_second, ')', split_str_second_strs))) {
-            LOG_WARN("fail to split func expr", K(ret), K(split_str_second));
-          } else if (split_str_second_strs.count() == 0) { // use split_str_second
-            if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", split_str_second.length(), split_str_second.ptr()))) {
-              LOG_WARN("fail to append fmt", K(ret), K(split_str_second));
-            }
-          } else { // split_str_second="xxx)"
-            ObString tmp_split_str_second = split_str_second_strs.at(0).trim();
-            if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", tmp_split_str_second.length(), tmp_split_str_second.ptr()))) {
-              LOG_WARN("fail to append fmt", K(ret), K(tmp_split_str_second), K(split_str_first));
-            }
-          }
-        }
-        // set rest
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(new_job_action_str.append_fmt("\"\", \"\", \"\", %ld)", parallel_value))) {
-            LOG_WARN("fail to append fmt", K(ret), K(value), K(parallel_value));
-          }
-        }
+    if (0 == attribute.compare("PARALLEL")) {
+      if (OB_FAIL(set_rebuild_parallel(trans, job_info, value))) {
+        LOG_WARN("fail to set rebuild parallel", K(ret), K(attribute), K(value));
       }
-      if (OB_SUCC(ret)) {
-        ObString job_action("job_action");
-        ObObj job_action_str;
-        job_action_str.set_char(new_job_action_str.string());
-        OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, job_action, job_action_str));
+    } else if (0 == attribute.compare("REBUILD_REPEAT_INTERVAL")) {
+      if (OB_FAIL(check_time_interval_is_valid(tenant_id, value, true /* rebuild */))) {
+        LOG_WARN("fail to check time interval is valid", K(ret), K(value));
+      } else if (OB_FAIL(ObVectorIndexUtil::set_rebuild_repeat_interval(trans, job_info, value))) {
+        LOG_WARN("fail to set rebuild repeat interval", K(ret), K(attribute), K(value));
       }
-
-    } else if (0 == attribute_str.compare("REBUILD_REPEAT_INTERVAL")) {
-      const int64_t start_date_usec = ObTimeUtility::current_time();
-      ObObj start_date_obj;
-      start_date_obj.set_timestamp(start_date_usec);
-      if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, ObString("start_date"), start_date_obj))) {
-        LOG_WARN("failed to update start_date", K(ret), K(job_info), K(start_date_usec));
-      } else {
-        job_info.start_date_ = start_date_usec;
+    } else if (0 == attribute.compare("REBUILD_TRIGGER_PERCENTAGE")) {
+      if (OB_FAIL(set_rebuild_trigger_percentage(trans, job_info, value))) {
+        LOG_WARN("fail to set refresh trigger threshold", K(ret), K(attribute), K(value));
       }
-      // if not set by user, we dont need change start time of job
-      if (OB_SUCC(ret)) {
-        ObString repeat_interval("repeat_interval");
-        ObObj repeat_interval_obj;
-        repeat_interval_obj.set_char(value);
-        if(OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, repeat_interval, repeat_interval_obj))) {
-          LOG_WARN("failed to update start_date", K(ret), K(job_info), K(value));
-        }
+    } else if (0 == attribute.compare("REFRESH_TRIGGER_THRESHOLD")) {
+      if (OB_FAIL(set_refresh_trigger_threshold(trans, job_info, value))) {
+        LOG_WARN("fail to set refresh trigger threshold", K(ret), K(attribute), K(value));
       }
-      
+    } else if (0 == attribute.compare("REFRESH_REPEAT_INTERVAL")) {
+      if (OB_FAIL(check_time_interval_is_valid(tenant_id, value, false /* refresh */))) {
+        LOG_WARN("fail to check time interval is valid", K(ret), K(value));
+      } else if (OB_FAIL(ObVectorIndexUtil::set_rebuild_repeat_interval(trans, job_info, value))) {
+        LOG_WARN("fail to set rebuild repeat interval", K(ret), K(attribute), K(value));
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support attribute", K(ret), K(attribute));
@@ -1218,6 +1275,209 @@ int ObVectorRefreshIndexExecutor::set_attribute_inner(
     }
   }
   LOG_INFO("set repeat interval", K(ret), K(rebuild_job_name), K(attribute), K(value));
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::set_rebuild_parallel(
+    common::ObISQLClient &trans, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &value)
+{
+  int ret = OB_SUCCESS;
+  ObString &job_action = job_info.get_job_action();
+  ObString tmp_job_action;
+  ObArray<ObString> tmp_param_strs;
+  ObSqlString new_job_action_str;
+  int64_t parallel_value = 0; // default 1
+
+  if (OB_FAIL(parse_string_value_to_int(value, parallel_value))) {
+    LOG_WARN("fail to get parallel value", K(ret), K(value));
+  } else if (OB_FAIL(ob_write_string(allocator_, job_action, tmp_job_action))) {
+    LOG_WARN("fail to write string", K(ret), K(job_action));
+  } else if (tmp_job_action.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected job action", K(ret), K(tmp_job_action));
+  } else if (OB_FAIL(split_on(tmp_job_action, ',', tmp_param_strs))) {
+    LOG_WARN("fail to split func expr", K(ret), K(tmp_job_action));
+  } else if (tmp_param_strs.count() < 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected job action", K(ret), K(tmp_param_strs));
+  } else {
+    ObString split_str_first = tmp_param_strs.at(0).trim();
+    ObString split_str_second = tmp_param_strs.at(1).trim();
+    if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", split_str_first.length(), split_str_first.ptr()))) {
+      LOG_WARN("fail to append fmt", K(ret), K(split_str_first));
+    } else {
+      ObArray<ObString> split_str_second_strs;
+      if (OB_FAIL(split_on(split_str_second, ')', split_str_second_strs))) {
+        LOG_WARN("fail to split func expr", K(ret), K(split_str_second));
+      } else if (split_str_second_strs.count() == 0) { // use split_str_second
+        if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", split_str_second.length(), split_str_second.ptr()))) {
+          LOG_WARN("fail to append fmt", K(ret), K(split_str_second));
+        }
+      } else { // split_str_second="xxx)"
+        ObString tmp_split_str_second = split_str_second_strs.at(0).trim();
+        if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", tmp_split_str_second.length(), tmp_split_str_second.ptr()))) {
+          LOG_WARN("fail to append fmt", K(ret), K(tmp_split_str_second), K(split_str_first));
+        }
+      }
+    }
+    // set rest
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(new_job_action_str.append_fmt("\"\", \"\", \"\", %ld)", parallel_value))) {
+        LOG_WARN("fail to append fmt", K(ret), K(value), K(parallel_value));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObString job_action("job_action");
+    ObObj job_action_str;
+    job_action_str.set_char(new_job_action_str.string());
+    OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, job_action, job_action_str));
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::copy_string(
+    common::ObIAllocator &allocator, const ObString &src, ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  if (src.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(src));
+  } else {
+    const char *src_ptr = src.ptr();
+    const int64_t src_len = src.length();
+    char *dst_ptr = nullptr;
+    void *ptr = nullptr;
+    if (nullptr == (ptr = allocator.alloc(src_len + 1))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(src_len));
+    } else {
+      dst_ptr = static_cast<char *>(ptr);
+      for (int64_t i = 0; i < src_len; ++i) {
+        dst_ptr[i] = src_ptr[i];
+      }
+      dst_ptr[src_len] = '\0';
+      dst.assign_ptr(dst_ptr, src_len + 1);
+      LOG_INFO("end copy_string", K(src), K(dst));
+    }
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::set_rebuild_trigger_percentage(
+    common::ObISQLClient &trans, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &value)
+{
+  int ret = OB_SUCCESS;
+  ObString &job_action = job_info.get_job_action();
+  ObString tmp_job_action;
+  ObArray<ObString> tmp_param_strs;
+  ObSqlString new_job_action_str;
+  double d_value = ObVectorIndexSchedJobUtils::DEFAULT_REBUILD_TRIGGER_THRESHOLD;
+  ObString trim_value = value.trim();
+  ObString tmp_trim_value;
+
+  if (value.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(value));
+  } else if (OB_FAIL(copy_string(allocator_, trim_value, tmp_trim_value))) {
+    LOG_WARN("fail to copy float string", K(ret), K(trim_value));
+  } else {
+    char* endptr = nullptr;
+    
+    d_value = std::strtod(tmp_trim_value.ptr(), &endptr);
+    if (OB_ISNULL(endptr) || OB_UNLIKELY('\0' != *endptr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(tmp_trim_value), K(value));
+    } else if (d_value > 1.0 || d_value <= 0.0) { // low limit > 0
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(d_value), K(trim_value), K(value));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ob_write_string(allocator_, job_action, tmp_job_action))) {
+    LOG_WARN("fail to write string", K(ret), K(job_action));
+  } else if (tmp_job_action.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected job action", K(ret), K(tmp_job_action));
+  } else if (OB_FAIL(split_on(tmp_job_action, ',', tmp_param_strs))) {
+    LOG_WARN("fail to split func expr", K(ret), K(tmp_job_action));
+  } else if (tmp_param_strs.count() < 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected job action", K(ret), K(tmp_param_strs));
+  } else {
+    ObString tmp_split_str = tmp_param_strs.at(0).trim();
+    if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", tmp_split_str.length(), tmp_split_str.ptr()))) {
+      LOG_WARN("fail to append fmt", K(ret), K(tmp_split_str), K(tmp_param_strs));
+    } else {
+      if (tmp_param_strs.count() == 2) {  // str=DBMS_VECTOR.rebuild_index_inner(500009, 0.200000)
+        if (OB_FAIL(new_job_action_str.append_fmt("%lf)", d_value))) {
+          LOG_WARN("fail to append fmt", K(ret), K(value), K(tmp_param_strs));
+        }
+      } else { // str=DBMS_VECTOR.rebuild_index_inner(500009, 0.200000, "", "", "", 1)
+        if (OB_FAIL(new_job_action_str.append_fmt("%lf", d_value))) {
+          LOG_WARN("fail to append fmt", K(ret), K(value), K(tmp_param_strs));
+        }
+      }
+    }
+    // set rest
+    for (int64_t i = 2; OB_SUCC(ret) && i < tmp_param_strs.count(); ++i) {
+      ObString tmp_split_str = tmp_param_strs.at(i).trim();
+      if (OB_FAIL(new_job_action_str.append_fmt(", %.*s", tmp_split_str.length(), tmp_split_str.ptr()))) {
+        LOG_WARN("fail to append fmt", K(ret), K(tmp_split_str), K(tmp_param_strs));
+      }
+    }
+    LOG_INFO("print new_job_action_str", K(new_job_action_str));
+  }
+  if (OB_SUCC(ret)) {
+    ObString job_action("job_action");
+    ObObj job_action_str;
+    job_action_str.set_char(new_job_action_str.string());
+    OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, job_action, job_action_str));
+  }
+  return ret;
+}
+
+int ObVectorRefreshIndexExecutor::set_refresh_trigger_threshold(
+    common::ObISQLClient &trans, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &value)
+{
+  int ret = OB_SUCCESS;
+  ObString &job_action = job_info.get_job_action();
+  ObString tmp_job_action;
+  ObArray<ObString> tmp_param_strs;
+  ObSqlString new_job_action_str;
+  int64_t refresh_trigger_value = ObVectorIndexSchedJobUtils::DEFAULT_REFRESH_TRIGGER_THRESHOLD;
+
+  if (OB_FAIL(parse_string_value_to_int(value, refresh_trigger_value))) {
+    LOG_WARN("fail to get parallel value", K(ret), K(value));
+  } else if (refresh_trigger_value < REFRESH_TRIGGER_THRESHOLD_LOWER_LIMIT) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid refresh_trigger_value", K(refresh_trigger_value));
+  } else if (OB_FAIL(ob_write_string(allocator_, job_action, tmp_job_action))) {
+    LOG_WARN("fail to write string", K(ret), K(job_action));
+  } else if (tmp_job_action.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected job action", K(ret), K(tmp_job_action));
+  } else if (OB_FAIL(split_on(tmp_job_action, ',', tmp_param_strs))) {
+    LOG_WARN("fail to split func expr", K(ret), K(tmp_job_action));
+  } else if (tmp_param_strs.count() != 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected job action", K(ret), K(tmp_param_strs));
+  } else {
+    // set param 1 and param 2
+    ObString tmp_split_str = tmp_param_strs.at(0).trim();
+    if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", tmp_split_str.length(), tmp_split_str.ptr()))) {
+      LOG_WARN("fail to append fmt", K(ret), K(tmp_split_str), K(tmp_param_strs));
+    } else if (OB_FAIL(new_job_action_str.append_fmt("%ld)", refresh_trigger_value))) {
+      LOG_WARN("fail to append fmt", K(ret), K(value), K(refresh_trigger_value), K(tmp_param_strs));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObString job_action("job_action");
+    ObObj job_action_str;
+    job_action_str.set_char(new_job_action_str.string());
+    OZ (dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, job_action, job_action_str));
+  }
   return ret;
 }
 
@@ -1247,8 +1507,6 @@ int ObVectorRefreshIndexExecutor::do_rebuild() {
     LOG_WARN("fail to init refresher", KR(ret), K(refresh_ctx));
   } else if (OB_FAIL(refresher.refresh())) {
     LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
-  } else if (OB_FAIL(update_repeat_interval_if_need(refresh_ctx))) {
-    LOG_WARN("fail to update repeat interval if need", K(ret));
   }
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -1294,8 +1552,6 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
       LOG_WARN("fail to init refresher", KR(ret), K(refresh_ctx));
     } else if (OB_FAIL(refresher.refresh())) {
       LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
-    } else if (OB_FAIL(update_repeat_interval_if_need(refresh_ctx))) {
-      LOG_WARN("fail to update repeat interval if need", K(ret));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -1318,51 +1574,6 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
   }
   int64_t cost_ms = (common::ObTimeUtility::fast_current_time() - start_time_us) / 1000;
   FLOG_INFO("[VEC_INDEX][REBUILD] rebuild index with retry cost", K(ret), K(cost_ms), K(refresh_ctx));
-  return ret;
-}
-
-int ObVectorRefreshIndexExecutor::update_repeat_interval_if_need(ObVectorRefreshIndexCtx &refresh_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (refresh_ctx.tmp_repeat_interval_.empty() || refresh_ctx.database_id_ == OB_INVALID_ID) {
-    LOG_INFO("do not update repeat interval", K(ret), K(refresh_ctx));
-  } else {
-    ObSchemaGetterGuard schema_guard;
-    ObRefreshSchemaStatus schema_status;
-    schema_status.tenant_id_ = tenant_id_;
-    int64_t lastest_schema_version = OB_INVALID_VERSION;
-    const ObTableSchema *domain_table_schema = nullptr;
-
-    if (OB_FAIL(GCTX.schema_service_->get_schema_version_in_inner_table(*GCTX.sql_proxy_, schema_status, lastest_schema_version))) {
-      LOG_WARN("fail to get latest schema version in inner table", K(ret));
-    } else if (OB_FAIL(GCTX.schema_service_->async_refresh_schema(tenant_id_, lastest_schema_version))) {
-      LOG_WARN("fail to async refresh schema", K(ret), K(tenant_id_), K(lastest_schema_version));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
-      LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, 
-                                                     refresh_ctx.database_id_, 
-                                                     refresh_ctx.domain_index_name_,
-                                                     true, /* is index */
-                                                     domain_table_schema))) {
-      LOG_WARN("fail to get table schema", K(ret), K(tenant_id_), K(refresh_ctx.domain_index_name_));
-    }
-    
-    if (OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(domain_table_schema) && domain_table_schema->is_vec_delta_buffer_type()) {
-      const uint64_t domain_table_id = domain_table_schema->get_table_id();
-      ObSqlString rebuild_job_name;
-      ObString attribute("rebuild_repeat_interval");
-      if (!domain_table_schema->is_vec_delta_buffer_type()) {
-        LOG_WARN("failed to set attribute", K(ret));
-      } else if (OB_FAIL(rebuild_job_name.assign_fmt("%lu_rebuild", domain_table_id))) {
-        LOG_WARN("failed to generate refresh job name", K(ret));
-      } else if (OB_FAIL(set_attribute_inner(rebuild_job_name.string(), attribute, refresh_ctx.tmp_repeat_interval_))) {
-        LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
-      } else {
-        LOG_INFO("update repeat interval", K(refresh_ctx), K(rebuild_job_name.string()));
-      }
-    }
-  }
   return ret;
 }
 

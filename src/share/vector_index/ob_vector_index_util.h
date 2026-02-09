@@ -642,7 +642,29 @@ public:
       const ObTableSchema &data_table_schema,
       const uint64_t tenant_id,
       common::ObIArray<common::ObTabletID> &tablet_ids);
-
+  static int resume_dbms_vector_job_attribute_if_need(
+      common::ObISQLClient &trans, 
+      const int64_t tenant_id, 
+      ObIArray<ObTableSchema> &new_table_schemas, 
+      hash::ObHashMap<uint64_t, uint64_t> &vec_id_map);
+  static int resume_dbms_vector_job_attribute(
+      common::ObISQLClient &trans, 
+      const int64_t tenant_id, 
+      const int64_t domain_table_id, 
+      const int64_t old_index_id);
+  static int reset_new_job_action(
+      common::ObISQLClient &trans,
+      ObIAllocator &allocator,
+      dbms_scheduler::ObDBMSSchedJobInfo &job_info, 
+      const ObString &old_job_action);
+  static int set_rebuild_repeat_interval(
+      common::ObISQLClient &trans, 
+      dbms_scheduler::ObDBMSSchedJobInfo &job_info, 
+      const ObString &value);
+  static int check_index_rebuild_conflit(
+      const uint64_t tenant_id, 
+      const uint64_t table_id, 
+      const uint64_t index_id);
   static int add_dbms_vector_jobs(common::ObISQLClient &sql_client, const uint64_t tenant_id,
                                   const uint64_t vidx_table_id,
                                   const common::ObString &exec_env,
@@ -654,7 +676,9 @@ public:
                                       const uint64_t vidx_table_id, 
                                       common::ObIAllocator &allocator,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
-                                      dbms_scheduler::ObDBMSSchedJobInfo &job_info);
+                                      dbms_scheduler::ObDBMSSchedJobInfo &job_info,
+                                      const bool is_get_rebuild = false);
+
   static bool has_multi_index_on_same_column(
       ObIArray<uint64_t> &vec_index_cols, 
       const uint64_t col_id);
@@ -858,6 +882,13 @@ private:
   static bool check_is_match_index_type(
       const ObIndexType type1, const ObIndexType type2);
   static int is_int_val(const ObString &str, bool &is_int);
+  
+  static int resume_dbms_vector_job_attribute_inner(
+      common::ObISQLClient &trans, 
+      const int64_t tenant_id, 
+      const int64_t domain_table_id, 
+      const int64_t old_index_id, 
+      const bool is_rebuild);
 };
 
 // For vector index snapshot write data

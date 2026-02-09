@@ -22,6 +22,7 @@
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
+#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 #include "lib/file/ob_string_util.h"
 
@@ -4190,18 +4191,229 @@ int ObVectorIndexUtil::remove_dbms_vector_jobs(common::ObISQLClient &sql_client,
 
 int ObVectorIndexUtil::get_dbms_vector_job_info(common::ObISQLClient &sql_client,
                                                     const uint64_t tenant_id,
-                                                    const uint64_t vidx_table_id, 
+                                                    const uint64_t vidx_table_id,
                                                     common::ObIAllocator &allocator,
                                                     share::schema::ObSchemaGetterGuard &schema_guard,
-                                                    dbms_scheduler::ObDBMSSchedJobInfo &job_info)
+                                                    dbms_scheduler::ObDBMSSchedJobInfo &job_info,
+                                                    const bool is_get_rebuild)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObVectorIndexSchedJobUtils::get_vector_index_job_info(sql_client, tenant_id, 
                                                                     vidx_table_id,
                                                                     allocator,
                                                                     schema_guard,
-                                                                    job_info))) {
+                                                                    job_info,
+                                                                    is_get_rebuild))) {
     LOG_WARN("fail to get vector index job info", K(ret), K(tenant_id), K(vidx_table_id));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::resume_dbms_vector_job_attribute_if_need(
+    common::ObISQLClient &trans, const int64_t tenant_id, 
+    ObIArray<ObTableSchema> &new_table_schemas, hash::ObHashMap<uint64_t, uint64_t> &vec_id_map) 
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id == OB_INVALID_TENANT_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (vec_id_map.size() <= 0) {
+    // skip
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_table_schemas.count(); i++) {
+      const share::schema::ObTableSchema &tmp_schema = new_table_schemas.at(i);
+      if (tmp_schema.is_vec_delta_buffer_type()) {
+        uint64_t new_index_id = tmp_schema.get_table_id();
+        uint64_t old_index_id = OB_INVALID_ID;
+        if (OB_FAIL(vec_id_map.get_refactored(new_index_id, old_index_id))) {
+          LOG_WARN("fail to get old index id", K(ret), K(new_index_id));
+        } else if (OB_FAIL(resume_dbms_vector_job_attribute(trans, tenant_id, new_index_id, old_index_id))) {
+          LOG_WARN("fail to resume vector dbms job attribute", K(ret), K(new_index_id), K(old_index_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::resume_dbms_vector_job_attribute(
+    common::ObISQLClient &trans, const int64_t tenant_id, const int64_t domain_table_id, 
+    const int64_t old_index_id) 
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id == OB_INVALID_TENANT_ID || domain_table_id == OB_INVALID_ID || old_index_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(domain_table_id), K(old_index_id));
+  } else if (OB_FAIL(resume_dbms_vector_job_attribute_inner(trans, tenant_id, domain_table_id, old_index_id, true /* rebuild */))) {
+    LOG_WARN("fail to resume dbms vector rebuild job attribute", K(ret), K(domain_table_id), K(old_index_id));
+  } else if (OB_FAIL(resume_dbms_vector_job_attribute_inner(trans, tenant_id, domain_table_id, old_index_id, false /* refresh */))) {
+    LOG_WARN("fail to resume dbms vector refresh job attribute", K(ret), K(domain_table_id), K(old_index_id));
+  } else {
+    LOG_INFO("resume dbms vector job attribute success", K(ret), K(tenant_id), K(domain_table_id), K(old_index_id));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::resume_dbms_vector_job_attribute_inner(
+    common::ObISQLClient &trans, const int64_t tenant_id, const int64_t domain_table_id, 
+    const int64_t old_index_id, const bool is_rebuild)
+{
+  int ret = OB_SUCCESS;
+  dbms_scheduler::ObDBMSSchedJobInfo new_job_info;
+  dbms_scheduler::ObDBMSSchedJobInfo old_job_info;
+  ObArenaAllocator allocator("vec_dbms_job");
+
+  ObSqlString new_job_name;
+  ObSqlString old_job_name;
+  
+  if (tenant_id == OB_INVALID_TENANT_ID || domain_table_id == OB_INVALID_ID || old_index_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(domain_table_id), K(old_index_id));
+  } else if (is_rebuild) {
+    if (OB_FAIL(new_job_name.assign_fmt("%lu_rebuild", domain_table_id))) {
+      LOG_WARN("failed to generate rebuild job name", K(ret));
+    } else if (OB_FAIL(old_job_name.assign_fmt("%lu_rebuild", old_index_id))) {
+      LOG_WARN("failed to generate rebuild job name", K(ret));
+    }
+  } else {
+    if (OB_FAIL(new_job_name.assign_fmt("%lu_refresh", domain_table_id))) {
+      LOG_WARN("failed to generate refresh job name", K(ret));
+    } else if (OB_FAIL(old_job_name.assign_fmt("%lu_refresh", old_index_id))) {
+      LOG_WARN("failed to generate refresh job name", K(ret));
+    }
+  }
+  
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::get_dbms_sched_job_info(trans, tenant_id, 
+                                                                          false, // is_oracle_tenant
+                                                                          new_job_name.string(),
+                                                                          allocator,
+                                                                          new_job_info))) {
+    LOG_WARN("get job failed", K(ret), K(new_job_name), K(new_job_info));
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::get_dbms_sched_job_info(trans, tenant_id, 
+                                                                          false, // is_oracle_tenant
+                                                                          old_job_name.string(),
+                                                                          allocator,
+                                                                          old_job_info))) {
+    LOG_WARN("get job failed", K(ret), K(old_job_name), K(old_job_name));
+  }
+  
+  ObString &old_repeat_interval = old_job_info.get_repeat_interval();
+  ObString &old_job_action = old_job_info.get_job_action();
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObVectorIndexUtil::set_rebuild_repeat_interval(trans, new_job_info, old_repeat_interval))) {
+    LOG_WARN("fail to do refresh", KR(ret), K(old_repeat_interval));
+  } else if (OB_FAIL(ObVectorIndexUtil::reset_new_job_action(trans, allocator, new_job_info, old_job_action))) {
+    LOG_WARN("fail to reset new job action", KR(ret), K(old_job_action));
+  } else {
+    LOG_INFO("update attribute success", K(old_repeat_interval), K(old_job_action), K(new_job_info));
+  }
+  
+  return ret;
+}
+
+int ObVectorIndexUtil::set_rebuild_repeat_interval(
+    common::ObISQLClient &trans, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &value)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_date_usec = ObTimeUtility::current_time();
+  ObObj start_date_obj;
+  start_date_obj.set_timestamp(start_date_usec);
+  if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, ObString("start_date"), start_date_obj))) {
+    LOG_WARN("failed to update start_date", K(ret), K(job_info), K(start_date_usec));
+  } else {
+    job_info.start_date_ = start_date_usec;
+  }
+  // if not set by user, we dont need change start time of job
+  if (OB_SUCC(ret)) {
+    ObString repeat_interval("repeat_interval");
+    ObObj repeat_interval_obj;
+    repeat_interval_obj.set_char(value);
+    if(OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, repeat_interval, repeat_interval_obj))) {
+      LOG_WARN("failed to update start_date", K(ret), K(job_info), K(value));
+    }
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::reset_new_job_action(
+    common::ObISQLClient &trans, ObIAllocator &allocator, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &old_job_action)
+{
+  int ret = OB_SUCCESS;
+  
+  if (old_job_action.empty() || !job_info.valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(old_job_action), K(job_info));
+  } else {
+    ObArray<ObString> tmp_old_param_strs;
+    ObArray<ObString> tmp_new_param_strs;
+    ObSqlString new_job_action_str;
+    ObString tmp_old_job_action("");
+    ObString tmp_new_job_action("");
+    ObString new_job_action = job_info.get_job_action();
+    
+    if (OB_FAIL(ob_write_string(allocator, old_job_action, tmp_old_job_action))) {
+      LOG_WARN("fail to write string", K(ret), K(old_job_action));
+    } else if (OB_FAIL(ob_write_string(allocator, new_job_action, tmp_new_job_action))) {
+      LOG_WARN("fail to write string", K(ret), K(old_job_action));
+    } else if (tmp_old_job_action.empty() || tmp_new_job_action.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected job action", K(ret), K(tmp_old_job_action), K(tmp_new_job_action));
+    } else if (OB_FAIL(split_on(tmp_old_job_action, ',', tmp_old_param_strs))) {
+      LOG_WARN("fail to split func expr", K(ret), K(tmp_old_job_action));
+    } else if (OB_FAIL(split_on(tmp_new_job_action, ',', tmp_new_param_strs))) {
+      LOG_WARN("fail to split func expr", K(ret), K(tmp_new_job_action));
+    } else if (tmp_old_param_strs.count() < 2 || tmp_new_param_strs.count() < 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected job action", K(ret), K(tmp_old_param_strs), K(tmp_new_param_strs));
+    } else {
+      // tmp_job_action = DBMS_VECTOR.rebuild_index_inner(500009, 0.332220, "", "", "", 1)
+      // tmp_job_action = DBMS_VECTOR.refresh_index_inner(500009, 10000)
+      ObString new_split_str = tmp_new_param_strs.at(0).trim();
+      if (OB_FAIL(new_job_action_str.append_fmt("%.*s", new_split_str.length(), new_split_str.ptr()))) {
+        LOG_WARN("fail to append fmt", K(ret), K(new_split_str), K(tmp_new_param_strs));
+      } 
+      
+      for (int64_t i = 1; OB_SUCC(ret) && i < tmp_old_param_strs.count(); ++i) {
+        ObString old_split_str = tmp_old_param_strs.at(i).trim();
+        if (OB_FAIL(new_job_action_str.append_fmt(", %.*s", old_split_str.length(), old_split_str.ptr()))) {
+          LOG_WARN("fail to append fmt", K(ret), K(old_split_str), K(tmp_old_param_strs));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObString job_action("job_action");
+        ObObj job_action_str;
+        job_action_str.set_char(new_job_action_str.string());
+        if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::update_dbms_sched_job_info(trans, job_info, job_action, job_action_str))) {
+          LOG_WARN("fail to update dbms job info", K(ret), K(job_action_str), K(job_action));
+        }
+      }
+      LOG_INFO("end resume job action", K(ret), K(new_job_action_str));
+    }
+  }
+  
+  return ret;
+}
+
+int ObVectorIndexUtil::check_index_rebuild_conflit(
+    const uint64_t tenant_id, const uint64_t table_id, const uint64_t index_id)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(lib::ObLabel("tmpDbmsAlloc"));
+  ObArray<rootserver::ObDDLTaskRecord> task_records;
+  if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::get_ddl_task_record_by_table_id(
+      tenant_id, table_id, *GCTX.sql_proxy_, allocator, task_records))) {
+    LOG_WARN("get task record failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
+      const rootserver::ObDDLTaskRecord &cur_record = task_records.at(i);
+      if (cur_record.ddl_type_ == ObDDLType::DDL_REBUILD_INDEX && 
+          cur_record.target_object_id_ == index_id) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("vector index is rebuilding, please retry later", K(ret), K(table_id), K(index_id), K(cur_record));
+      }
+    }
   }
   return ret;
 }

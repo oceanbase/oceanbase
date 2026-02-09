@@ -658,24 +658,6 @@ int ObVectorIndexRefresher::do_rebuild() {
   }
 
   if (OB_FAIL(ret)) {
-  } else if (domain_table_schema->is_vec_delta_buffer_type() &&          // only hnsw index here, because ivf not support refresh 
-             OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(*GCTX.sql_proxy_, tenant_id,
-                                                                 domain_table_schema->get_table_id(), 
-                                                                 refresh_ctx_->allocator_,
-                                                                 schema_guard,
-                                                                 job_info))) {
-    LOG_WARN("fail to get dbms_vector job info", K(ret), K(tenant_id), K(domain_table_schema->get_table_id()));
-  } else {
-    if (OB_FAIL(ob_write_string(refresh_ctx_->allocator_, domain_table_schema->get_table_name_str(), refresh_ctx_->domain_index_name_))) {
-      LOG_WARN("fail to write string", K(ret), K(domain_table_schema->get_table_name_str()));
-    } else {
-      refresh_ctx_->tmp_repeat_interval_ = job_info.get_repeat_interval();
-      refresh_ctx_->database_id_ = domain_table_schema->get_database_id();
-      LOG_INFO("[VEC_INDEX][REBUILD] get last repeat interval and database_id", K(ret), K(*refresh_ctx_));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, 
                                                       domain_table_schema->get_database_id(), 
                                                       db_schema))) {
@@ -716,7 +698,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   } else if (OB_FAIL(lock_domain_table_for_refresh())) { // lock table 3
     LOG_WARN("fail to lock domain for rebuild", KR(ret));
   } 
-  
+
   if (OB_FAIL(ret)) {
   } else if (domain_table_schema->is_vec_hnsw_index() &&
              !idx_parameters.empty() &&

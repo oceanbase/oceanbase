@@ -77,7 +77,8 @@ public:
                                        const uint64_t vidx_table_id,
                                        common::ObIAllocator &allocator,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
-                                       dbms_scheduler::ObDBMSSchedJobInfo &job_info);
+                                       dbms_scheduler::ObDBMSSchedJobInfo &job_info,
+                                       const bool is_get_rebuild);
 };
 
 } // namespace storage

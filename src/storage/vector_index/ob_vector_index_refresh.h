@@ -27,10 +27,7 @@ public:
       : allocator_("VecRefCtx"), tenant_id_(OB_INVALID_TENANT_ID),
         base_tb_id_(OB_INVALID_ID), domain_tb_id_(OB_INVALID_ID),
         index_id_tb_id_(OB_INVALID_ID), trans_(nullptr),
-        refresh_method_(share::schema::ObVectorRefreshMethod::MAX),
-        tmp_repeat_interval_(),
-        domain_index_name_(),
-        database_id_(OB_INVALID_ID) {}
+        refresh_method_(share::schema::ObVectorRefreshMethod::MAX) {}
   bool is_valid() const {
     return OB_INVALID_TENANT_ID != tenant_id_ &&
            OB_INVALID_ID != domain_tb_id_ && OB_INVALID_ID != base_tb_id_ &&
@@ -43,7 +40,7 @@ public:
   }
   TO_STRING_KV(K_(tenant_id), K_(base_tb_id), K_(domain_tb_id),
                K_(index_id_tb_id), K_(refresh_method), K_(delta_rate_threshold),
-               K_(refresh_threshold), K_(idx_parameters), K_(database_id));
+               K_(refresh_threshold), K_(idx_parameters));
 
 public:
   ObArenaAllocator allocator_;
@@ -61,9 +58,6 @@ public:
 
   double delta_rate_threshold_;
   int64_t refresh_threshold_;
-  ObString tmp_repeat_interval_;
-  ObString domain_index_name_;
-  uint64_t database_id_;
 };
 
 class ObVectorIndexRefresher {

@@ -184,7 +184,8 @@ int ObVectorIndexSchedJobUtils::get_vector_index_job_info(common::ObISQLClient &
                                                           const uint64_t vidx_table_id,
                                                           common::ObIAllocator &allocator,
                                                           share::schema::ObSchemaGetterGuard &schema_guard,
-                                                          dbms_scheduler::ObDBMSSchedJobInfo &job_info)
+                                                          dbms_scheduler::ObDBMSSchedJobInfo &job_info,
+                                                          const bool is_get_rebuild)
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTenantSchema *tenant_schema = NULL;
@@ -194,7 +195,9 @@ int ObVectorIndexSchedJobUtils::get_vector_index_job_info(common::ObISQLClient &
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant schema is null", K(tenant_id)); // skip
-  } else if (OB_FAIL(rebuild_job_name.assign_fmt("%lu_rebuild", vidx_table_id))) {
+  } else if (is_get_rebuild && OB_FAIL(rebuild_job_name.assign_fmt("%lu_rebuild", vidx_table_id))) {
+    LOG_WARN("failed to generate refresh job name", K(ret));
+  } else if (!is_get_rebuild && OB_FAIL(rebuild_job_name.assign_fmt("%lu_refresh", vidx_table_id))) {
     LOG_WARN("failed to generate refresh job name", K(ret));
   } else if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(sql_client, tenant_id, 
                                                                   tenant_schema->is_oracle_tenant(),

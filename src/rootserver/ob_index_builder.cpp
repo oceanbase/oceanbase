@@ -1428,6 +1428,14 @@ int ObIndexBuilder::do_create_local_index(
         }
       }
 
+      if (OB_FAIL(ret)) {
+      } else if (create_index_arg.is_rebuild_index_ && 
+                 index_schema.is_vec_delta_buffer_type()) {
+        if (OB_FAIL(ObVectorIndexUtil::resume_dbms_vector_job_attribute(trans, tenant_id, index_schema.get_table_id(), create_index_arg.index_table_id_))) {
+          LOG_WARN("fail to resume vector dbms job attribute", K(ret), K(index_schema.get_table_id()));
+        }
+      } 
+
       if (OB_ERR_TABLE_EXIST == ret && my_arg.if_not_exist_) {
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(check_index_for_if_not_exist_(tenant_id, my_arg.database_name_, index_schema.get_table_name(),

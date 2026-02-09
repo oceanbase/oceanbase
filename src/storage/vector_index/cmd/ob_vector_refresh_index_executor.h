@@ -121,7 +121,10 @@ public:
 class ObVectorRefreshIndexExecutor {
 public:
   static const int MAX_REFRESH_RETRY_THRESHOLD = 3;
-  
+  static const int64_t REFRESH_TRIGGER_THRESHOLD_LOWER_LIMIT = 1000;
+  static const int64_t REBUILD_TIME_INTERVAL_SECOND_LOWER_LIMIT = 1 * 60 * 60; // 3600s / 1h
+  static const int64_t REFRESH_TIME_INTERVAL_SECOND_LOWER_LIMIT = 30; // 30s 
+
   enum class VectorIndexAuxType : int8_t {
     DOMAIN_INDEX = 0,   // FARM COMPAT WHITELIST
     INDEX_ID_INDEX = 1,
@@ -169,8 +172,15 @@ private:
       const share::schema::ObTableSchema *base_table_schema,
       const share::schema::ObTableSchema *index_id_schema, ObString &col_name);
   
-  int get_parallel_value(const ObString &parallel_str, int64_t &parallel_int);
-  int update_repeat_interval_if_need(ObVectorRefreshIndexCtx &refresh_ctx);
+  int copy_string(common::ObIAllocator &allocator, const ObString &src, ObString &dst);
+  int reset_new_job_action(const ObString &new_job_name, const ObString &old_job_action);
+  int get_target_dbms_job_name(const ObString &attribute, const int64_t domain_table_id, ObSqlString &target_job_name);
+  int set_rebuild_parallel(common::ObISQLClient &trans, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &value);
+  int set_rebuild_repeat_interval(common::ObISQLClient &trans, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &value);
+  int set_refresh_trigger_threshold(common::ObISQLClient &trans, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &value);
+  int set_rebuild_trigger_percentage(common::ObISQLClient &trans, dbms_scheduler::ObDBMSSchedJobInfo &job_info, const ObString &value);
+  int parse_string_value_to_int(const ObString &parallel_str, int64_t &parallel_int);
+  int check_time_interval_is_valid(const int64_t tenant_id, const ObString &value, const bool is_rebuild);
   int set_attribute_inner(const ObString &rebuild_job_name, const ObString &attribute, const ObString &value);
   int generate_vector_aux_index_name(VectorIndexAuxType index_type,
                                      const uint64_t data_table_id,
@@ -236,6 +246,7 @@ private:
 
   double delta_rate_threshold_; // for rebuild index
   int64_t refresh_threshold_;   // for refresh index
+  ObArenaAllocator allocator_;
 };
 
 } // namespace storage
