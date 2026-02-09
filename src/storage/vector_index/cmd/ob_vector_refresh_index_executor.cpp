@@ -1144,13 +1144,26 @@ int ObVectorRefreshIndexExecutor::set_attribute_inner(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected job action", K(ret), K(tmp_param_strs));
       } else {
-        // need param 1 and param2
-        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_param_strs.count(); ++i) {
-          ObString tmp_split_str = tmp_param_strs.at(i).trim();
-          if (i < 2 && OB_FAIL(new_job_action_str.append_fmt("%.*s, ", tmp_split_str.length(), tmp_split_str.ptr()))) {
-            LOG_WARN("fail to append fmt", K(ret), K(tmp_split_str));
+        ObString split_str_first = tmp_param_strs.at(0).trim();
+        ObString split_str_second = tmp_param_strs.at(1).trim();
+        if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", split_str_first.length(), split_str_first.ptr()))) {
+          LOG_WARN("fail to append fmt", K(ret), K(split_str_first));
+        } else {
+          ObArray<ObString> split_str_second_strs;
+          if (OB_FAIL(split_on(split_str_second, ')', split_str_second_strs))) {
+            LOG_WARN("fail to split func expr", K(ret), K(split_str_second));
+          } else if (split_str_second_strs.count() == 0) { // use split_str_second
+            if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", split_str_second.length(), split_str_second.ptr()))) {
+              LOG_WARN("fail to append fmt", K(ret), K(split_str_second));
+            }
+          } else { // split_str_second="xxx)"
+            ObString tmp_split_str_second = split_str_second_strs.at(0).trim();
+            if (OB_FAIL(new_job_action_str.append_fmt("%.*s, ", tmp_split_str_second.length(), tmp_split_str_second.ptr()))) {
+              LOG_WARN("fail to append fmt", K(ret), K(tmp_split_str_second), K(split_str_first));
+            }
           }
         }
+        // set rest
         if (OB_SUCC(ret)) {
           if (OB_FAIL(new_job_action_str.append_fmt("\"\", \"\", \"\", %ld)", parallel_value))) {
             LOG_WARN("fail to append fmt", K(ret), K(value), K(parallel_value));
