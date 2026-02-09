@@ -100,7 +100,8 @@ public:
                        share::schema::ObSchemaGetterGuard *schema_guard,
                        const int64_t original_param_cnt,
                        int64_t param_cnt,
-                       const uint64_t cur_cluster_version)
+                       const uint64_t cur_cluster_version,
+                       const uint64_t phy_plan_min_cluster_version = UINT64_MAX)
     : allocator_(allocator),
       original_param_cnt_(original_param_cnt),
       param_cnt_(param_cnt),
@@ -111,7 +112,8 @@ public:
       need_flatten_gen_col_(true),
       cur_cluster_version_(cur_cluster_version),
       gen_questionmarks_(allocator, param_cnt),
-      contain_dynamic_eval_rt_qm_(false)
+      contain_dynamic_eval_rt_qm_(false),
+      phy_plan_min_cluster_version_(phy_plan_min_cluster_version)
   {
   }
   virtual ~ObStaticEngineExprCG() {}
@@ -538,6 +540,7 @@ private:
   uint64_t cur_cluster_version_;
   common::ObFixedArray<ObRawExpr *, common::ObIAllocator> gen_questionmarks_;
   bool contain_dynamic_eval_rt_qm_;
+  uint64_t phy_plan_min_cluster_version_;
 };
 
 } // end namespace sql

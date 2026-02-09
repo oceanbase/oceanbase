@@ -271,9 +271,12 @@ int ObExpr::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
     }
 
     if (OB_SUCC(ret)) {
+      bool use_420_compat_func =  GET_PHY_PLAN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0
+                                    && GET_PHY_PLAN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
       basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_,
                                                   datum_meta_.scale_, lib::is_oracle_mode(),
-                                                  obj_meta_.has_lob_header(), datum_meta_.precision_);
+                                                  obj_meta_.has_lob_header(), datum_meta_.precision_,
+                                                  use_420_compat_func);
       CK(NULL != basic_funcs_);
     }
     if (is_batch_result()) {

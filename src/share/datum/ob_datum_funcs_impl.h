@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_SHARE_DATUM_FUNCS_UTIL_H_
 #define OCEANBASE_SHARE_DATUM_FUNCS_UTIL_H_
 
+#include <utility>
+
 #include "share/ob_lob_access_utils.h"
 #include "share/rc/ob_tenant_base.h"
 
@@ -311,9 +313,9 @@ struct DefHashMethod
 };
 
 template <typename T, bool IS_VEC>
-struct VectorIter
+struct VecIter
 {
-  explicit VectorIter(T *vec) : vec_(vec) {}
+  explicit VecIter(T *vec) : vec_(vec) {}
   T &operator[](const int64_t i) const { return IS_VEC ? vec_[i] : vec_[0]; }
 private:
   T *vec_;
@@ -370,17 +372,17 @@ struct DefHashFunc
                          const bool is_batch_seed)
   {
     if (is_batch_datum && !is_batch_seed) {
-      do_hash_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
-                    VectorIter<const uint64_t, false>(seeds));
+      do_hash_batch(hash_values, VecIter<const ObDatum, true>(datums), skip, size,
+                    VecIter<const uint64_t, false>(seeds));
     } else if (is_batch_datum && is_batch_seed) {
-      do_hash_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
-                    VectorIter<const uint64_t, true>(seeds));
+      do_hash_batch(hash_values, VecIter<const ObDatum, true>(datums), skip, size,
+                    VecIter<const uint64_t, true>(seeds));
     } else if (!is_batch_datum && is_batch_seed) {
-      do_hash_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
-                    VectorIter<const uint64_t, true>(seeds));
+      do_hash_batch(hash_values, VecIter<const ObDatum, false>(datums), skip, size,
+                    VecIter<const uint64_t, true>(seeds));
     } else {
-      do_hash_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
-                    VectorIter<const uint64_t, false>(seeds));
+      do_hash_batch(hash_values, VecIter<const ObDatum, false>(datums), skip, size,
+                    VecIter<const uint64_t, false>(seeds));
     }
   }
 
@@ -409,17 +411,17 @@ struct DefHashFunc
                          const bool is_batch_seed)
   {
     if (is_batch_datum && !is_batch_seed) {
-      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
-                    VectorIter<const uint64_t, false>(seeds));
+      do_hash_v2_batch(hash_values, VecIter<const ObDatum, true>(datums), skip, size,
+                    VecIter<const uint64_t, false>(seeds));
     } else if (is_batch_datum && is_batch_seed) {
-      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
-                    VectorIter<const uint64_t, true>(seeds));
+      do_hash_v2_batch(hash_values, VecIter<const ObDatum, true>(datums), skip, size,
+                    VecIter<const uint64_t, true>(seeds));
     } else if (!is_batch_datum && is_batch_seed) {
-      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
-                    VectorIter<const uint64_t, true>(seeds));
+      do_hash_v2_batch(hash_values, VecIter<const ObDatum, false>(datums), skip, size,
+                    VecIter<const uint64_t, true>(seeds));
     } else {
-      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
-                    VectorIter<const uint64_t, false>(seeds));
+      do_hash_v2_batch(hash_values, VecIter<const ObDatum, false>(datums), skip, size,
+                    VecIter<const uint64_t, false>(seeds));
     }
   }
 };
@@ -532,17 +534,17 @@ struct DefStrHashFunc
                          const hash_algo hash_al)
   {
     if (is_batch_datum && !is_batch_seed) {
-      do_hash_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
-                    VectorIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
+      do_hash_batch(hash_values, VecIter<const ObDatum, true>(datums), skip, size,
+                    VecIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
     } else if (is_batch_datum && is_batch_seed) {
-      do_hash_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
-                    VectorIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
+      do_hash_batch(hash_values, VecIter<const ObDatum, true>(datums), skip, size,
+                    VecIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
     } else if (!is_batch_datum && is_batch_seed) {
-      do_hash_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
-                    VectorIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
+      do_hash_batch(hash_values, VecIter<const ObDatum, false>(datums), skip, size,
+                    VecIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
     } else {
-      do_hash_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
-                    VectorIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
+      do_hash_batch(hash_values, VecIter<const ObDatum, false>(datums), skip, size,
+                    VecIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
     }
   }
 
@@ -577,17 +579,17 @@ struct DefStrHashFunc
                          const hash_algo hash_al)
   {
     if (is_batch_datum && !is_batch_seed) {
-      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
-                    VectorIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
+      do_hash_v2_batch(hash_values, VecIter<const ObDatum, true>(datums), skip, size,
+                    VecIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
     } else if (is_batch_datum && is_batch_seed) {
-      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, true>(datums), skip, size,
-                    VectorIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
+      do_hash_v2_batch(hash_values, VecIter<const ObDatum, true>(datums), skip, size,
+                    VecIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
     } else if (!is_batch_datum && is_batch_seed) {
-      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
-                    VectorIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
+      do_hash_v2_batch(hash_values, VecIter<const ObDatum, false>(datums), skip, size,
+                    VecIter<const uint64_t, true>(seeds), cs, calc_end_space, hash_al);
     } else {
-      do_hash_v2_batch(hash_values, VectorIter<const ObDatum, false>(datums), skip, size,
-                    VectorIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
+      do_hash_v2_batch(hash_values, VecIter<const ObDatum, false>(datums), skip, size,
+                    VecIter<const uint64_t, false>(seeds), cs, calc_end_space, hash_al);
     }
   }
 };
@@ -761,6 +763,49 @@ struct DatumHashCalculator : public DefHashMethod<T>
   }
 };
 
+template<ObCollationType cs_type, bool calc_end_space>
+struct CompatStrHashFunc
+{
+  static void hash_v2_batch(uint64_t *hash_values,
+                           ObDatum *datums,
+                           const bool is_batch_datum,
+                           const ObBitVector &skip,
+                           const int64_t size,
+                           const uint64_t *seeds,
+                           const bool is_batch_seed)
+  {
+    int ret = OB_SUCCESS;
+    if (is_batch_datum && !is_batch_seed) {
+      ret = inner_do_hash_v2_batch(hash_values, skip, size, VecIter<const ObDatum, true>(datums), VecIter<const uint64_t, false>(seeds));
+    } else if (is_batch_datum && is_batch_seed) {
+      ret = inner_do_hash_v2_batch(hash_values, skip, size, VecIter<const ObDatum, true>(datums), VecIter<const uint64_t, true>(seeds));
+    } else if (!is_batch_datum && is_batch_seed) {
+      ret = inner_do_hash_v2_batch(hash_values, skip, size, VecIter<const ObDatum, false>(datums), VecIter<const uint64_t, true>(seeds));
+    } else {
+      ret = inner_do_hash_v2_batch(hash_values, skip, size, VecIter<const ObDatum, false>(datums), VecIter<const uint64_t, false>(seeds));
+    }
+    if (OB_FAIL(ret)) {
+      COMMON_LOG(ERROR, "failed to calc datum hash v2", K(ret), K(cs_type), K(calc_end_space));
+    }
+  }
+private:
+  template <typename DatumVec, typename SeedVec>
+  OB_NOINLINE static int inner_do_hash_v2_batch(uint64_t *hash_values, const ObBitVector &skip,
+                                                const int64_t size, const DatumVec &datum_vec,
+                                                const SeedVec &seed_vec)
+  {
+    int ret = OB_SUCCESS;
+    for (int i = 0; OB_SUCC(ret) && i < size; i++) {
+      if (skip.at(i)) {
+      } else {
+        ret = DatumStrHashCalculator<cs_type, calc_end_space, ObMurmurHash, false>::calc_datum_hash_v2(
+                datum_vec[i], seed_vec[i], hash_values[i]);
+      }
+    }
+    return ret;
+  }
+};
+
 #define DEF_DATUM_TIMESTAMP_HASH_FUNCS(OBJTYPE, TYPE, DESC, VTYPE)              \
   template <typename T>                                                         \
   struct DatumHashCalculator<OBJTYPE, T> : public DefHashMethod<T>              \
@@ -827,6 +872,7 @@ extern ObDatumCmpFuncType DECINT_CMP_FUNCS[DECIMAL_INT_MAX][DECIMAL_INT_MAX][2];
 
 extern ObExprBasicFuncs EXPR_BASIC_FUNCS[ObMaxType];
 extern ObExprBasicFuncs EXPR_BASIC_STR_FUNCS[CS_TYPE_MAX][2][2];
+extern ObExprBasicFuncs COMPAT_EXPR_BASIC_STR_FUNCS[CS_TYPE_MAX][2];
 extern ObExprBasicFuncs EXPR_BASIC_JSON_FUNCS[2];
 extern ObExprBasicFuncs EXPR_BASIC_GEO_FUNCS[2];
 extern ObExprBasicFuncs FIXED_DOUBLE_BASIC_FUNCS[OB_NOT_FIXED_SCALE];
@@ -1003,6 +1049,22 @@ struct InitBasicStrFuncArray<X, Y, true>
       basic_funcs[X][Y][1].null_last_cmp_ = DefText::defined_ ? &TextCmp<0>::cmp : NULL;
       basic_funcs[X][Y][1].murmur_hash_v2_ = Hash<ObMurmurHash, true>::hash_v2;
       basic_funcs[X][Y][1].murmur_hash_v2_batch_ = HashBatch<ObMurmurHash, true>::hash_v2_batch;
+
+      // init basic funcs compatible with 4.2
+      auto &compat_basic_funcs = COMPAT_EXPR_BASIC_STR_FUNCS;
+      compat_basic_funcs[X][Y].default_hash_ = Hash<ObDefaultHash, false>::hash;
+      compat_basic_funcs[X][Y].default_hash_batch_ = HashBatch<ObDefaultHash, false>::hash_batch;
+      compat_basic_funcs[X][Y].murmur_hash_ = Hash<ObMurmurHash, false>::hash;
+      compat_basic_funcs[X][Y].murmur_hash_batch_ = HashBatch<ObMurmurHash, false>::hash_batch;
+      compat_basic_funcs[X][Y].xx_hash_ = Hash<ObXxHash, false>::hash;
+      compat_basic_funcs[X][Y].xx_hash_batch_ = HashBatch<ObXxHash, false>::hash_batch;
+      compat_basic_funcs[X][Y].wy_hash_ = Hash<ObWyHash, false>::hash;
+      compat_basic_funcs[X][Y].wy_hash_batch_ = HashBatch<ObWyHash, false>::hash_batch;
+      compat_basic_funcs[X][Y].null_first_cmp_ = Def::defined_ ? &StrCmp<1>::cmp : NULL;
+      compat_basic_funcs[X][Y].null_last_cmp_ = Def::defined_ ? &StrCmp<0>::cmp : NULL;
+      compat_basic_funcs[X][Y].murmur_hash_v2_ = Hash<ObMurmurHash, false>::hash_v2;
+      compat_basic_funcs[X][Y].murmur_hash_v2_batch_ =
+          CompatStrHashFunc<static_cast<ObCollationType>(X), static_cast<bool>(Y)>::hash_v2_batch;
     }
   }
 };
@@ -1578,6 +1640,10 @@ struct InitDecintCmpArray
                           static_cast<ObDecimalIntWideType>(width2), true>::cmp;
   }
 };
+
+using CompatStrHashFnRecord = std::pair<sql::ObBatchDatumHashFunc, sql::ObBatchDatumHashFunc>; // <compat_str_hash_fn, new_hash_fn>
+extern CompatStrHashFnRecord NEW_TO_COMPAT_STR_HASH_MAPPING[CS_TYPE_MAX * 2];
+extern CompatStrHashFnRecord COMPAT_TO_NEW_STR_HASH_MAPPING[CS_TYPE_MAX * 2];
 
 } // end common
 } // end oceanbase

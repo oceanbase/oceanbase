@@ -579,10 +579,13 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
     filter_ctx.filter_count_++;
     filter_ctx.check_count_++;
   } else {
+    bool bypass = false;
     if (!use_rich_format_) {
       for (int i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
         if (OB_FAIL(expr.args_[i]->eval(ctx, datum))) {
           LOG_WARN("failed to eval datum", K(ret));
+        } else if (datum->is_null()) {
+          bypass = true;
         } else {
           hash_func.hash_func_ = filter_ctx.hash_funcs_.at(i).hash_func_;
           if (OB_FAIL(hash_func.hash_func_(*datum, hash_val, hash_val))) {
@@ -609,7 +612,7 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
     }
     if (OB_SUCC(ret)) {
       bool is_match = true;
-      if (OB_FAIL(bloom_filter_.might_contain(hash_val, is_match))) {
+      if (!bypass && OB_FAIL(bloom_filter_.might_contain(hash_val, is_match))) {
         LOG_WARN("fail to check filter might contain value", K(ret), K(hash_val));
       } else {
         if (!is_match) {
@@ -2019,9 +2022,12 @@ int ObRFInFilterMsg::might_contain(const ObExpr &expr,
     filter_ctx.filter_count_++;
     filter_ctx.check_count_++;
   } else {
+    bool bypass = false;
     for (int i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
       if (OB_FAIL(expr.args_[i]->eval(ctx, datum))) {
         LOG_WARN("failed to eval datum", K(ret));
+      } else if (datum->is_null()) {
+        bypass = true;
       } else {
         cur_row.at(i) = *datum;
         ObHashFunc hash_func;
@@ -2033,7 +2039,7 @@ int ObRFInFilterMsg::might_contain(const ObExpr &expr,
     }
     if (OB_SUCC(ret)) {
       ObRFInFilterNode node(&filter_ctx.cmp_funcs_, nullptr, &cur_row, hash_val);
-      if (OB_FAIL(rows_set_.exist_refactored(node))) {
+      if (!bypass && OB_FAIL(rows_set_.exist_refactored(node))) {
         if (OB_HASH_NOT_EXIST == ret) {
           is_match = false;
           ret = OB_SUCCESS;

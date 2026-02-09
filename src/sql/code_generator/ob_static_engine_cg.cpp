@@ -161,7 +161,6 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
 {
   int ret = OB_SUCCESS;
   phy_plan_ = &phy_plan;
-  phy_plan_->set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
   opt_ctx_ = &log_plan.get_optimizer_context();
   ObOpSpec *root_spec = NULL;
   if (OB_INVALID_ID != log_plan.get_max_op_id()) {
@@ -4880,7 +4879,7 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxDistTransmitSpec &spe
              (ObPQDistributeMethod::HYBRID_HASH_BROADCAST == op.get_dist_method()
              || ObPQDistributeMethod::HYBRID_HASH_RANDOM == op.get_dist_method())) {
     if (OB_ISNULL(op.get_popular_values())) {
-      // no popular values, skip hybrid hash dist method, use traditional hash-hash dist
+    // no popular values, skip hybrid hash dist method, use traditional hash-hash dist
     } else if (OB_FAIL(generate_popular_values_hash(
                 spec.dist_hash_funcs_.at(0), *op.get_popular_values(), spec.popular_values_hash_))){
       LOG_WARN("fail generate popular values", K(ret));

@@ -9488,8 +9488,14 @@ int JoinPath::compute_hash_hash_sharding_info()
       // determine if hybrid hash dm can be enabled
       // should check is_naaj - #issue/46230785
       if (OB_SUCC(ret) && !is_naaj_ && 1 == equal_join_conditions_.count()) {
+        bool non_rich_batch_format = opt_ctx.get_rowsets_enabled() && !opt_ctx.get_enable_rich_vector_format();
         ObArray<ObObj> popular_values;
-        if (OB_FAIL(log_plan->check_if_use_hybrid_hash_distribution(
+        if (non_rich_batch_format
+            && (OB_ISNULL(equal_join_conditions_.at(0))
+                || T_OP_NSEQ == equal_join_conditions_.at(0)->get_expr_type()
+                || T_OP_SQ_NSEQ == equal_join_conditions_.at(0)->get_expr_type())) {
+          LOG_TRACE("disable hybrid hash due to nullsafe compare");
+        } else if (OB_FAIL(log_plan->check_if_use_hybrid_hash_distribution(
                     log_plan->get_optimizer_context(),
                     log_plan->get_stmt(),
                     join_type_,

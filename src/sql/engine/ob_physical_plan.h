@@ -820,6 +820,36 @@ private:
   bool is_gtt_temp_table_v2_;
 };
 
+struct ObPhyPlanClusterVersion
+{
+  ObPhyPlanClusterVersion(): version_(UINT64_MAX) {}
+  uint64_t get() const { return version_; }
+  void update(uint64_t version) { version_ = version; }
+  static ObPhyPlanClusterVersion &get_instance()
+  {
+    static thread_local ObPhyPlanClusterVersion THE_ONE;
+    return THE_ONE;
+  }
+private:
+  uint64_t version_;
+};
+struct ObPhyPlanVersionGuard
+{
+  ObPhyPlanVersionGuard(const ObPhysicalPlan &plan)
+  {
+    org_version_ = ObPhyPlanClusterVersion::get_instance().get();
+    ObPhyPlanClusterVersion::get_instance().update(plan.get_min_cluster_version());
+  }
+  ~ObPhyPlanVersionGuard()
+  {
+    ObPhyPlanClusterVersion::get_instance().update(org_version_);
+  }
+private:
+  uint64_t org_version_;
+};
+
+#define GET_PHY_PLAN_CLUSTER_VERSION() (ObPhyPlanClusterVersion::get_instance().get())
+
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)
 {
   affected_last_insert_id_ = affected_last_insert_id;

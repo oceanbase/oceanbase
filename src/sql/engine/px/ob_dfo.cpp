@@ -494,7 +494,7 @@ OB_DEF_SERIALIZE(ObPxRpcInitSqcArgs)
   }
   LST_DO_CODE(OB_UNIS_ENCODE, sqc_);
   if (OB_SUCC(ret) && OB_FAIL(serialize_common_parts_2(buf, buf_len, pos))) {
-      LOG_WARN("fail serialize common parts 2", K(ret));
+      LOG_WARN("fail serialize common parts 2", K(ret), K(ser_phy_plan_->get_plan_id()));
   }
   // can reuse cache from now on
   (const_cast<ObSqcSerializeCache &>(ser_cache_)).cache_serialized_ = ser_cache_.enable_serialize_cache_;
@@ -614,6 +614,7 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
       lib::CompatModeGuard g(ORACLE_MODE == exec_ctx_->get_my_session()->get_compatibility_mode()
           ? lib::Worker::CompatMode::ORACLE
           : lib::Worker::CompatMode::MYSQL);
+      ObPhyPlanVersionGuard guard(*des_phy_plan_);
 
       LST_DO_CODE(OB_UNIS_DECODE, sqc_);
 
@@ -706,6 +707,7 @@ OB_DEF_SERIALIZE(ObPxRpcInitTaskArgs)
     LST_DO_CODE(OB_UNIS_ENCODE, sqc_handler_ptr_val);
 
     LOG_TRACE("serialize task", KP_(sqc_task_ptr), KP_(sqc_handler), K_(task));
+    ObPhyPlanVersionGuard plan_cluster_version_guard(*ser_phy_plan_);
     // 序列化Task的核心部分到执行端：sub plan tree
     if (OB_SUCC(ret)) {
       const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();

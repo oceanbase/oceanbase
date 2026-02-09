@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 
+#include <algorithm>
+
 #include "ob_datum_funcs.h"
 #include "ob_datum_cmp_func_def.h"
 #include "common/object/ob_obj_funcs.h"
@@ -20,6 +22,7 @@
 #include "share/ob_cluster_version.h"
 #include "ob_datum_funcs_impl.h"
 #include "share/vector/expr_cmp_func.h"
+#include "sql/engine/ob_physical_plan.h"
 
 namespace oceanbase {
 using namespace sql;
@@ -144,6 +147,7 @@ ObExprBasicFuncs EXPR_BASIC_FUNCS[ObMaxType];
 
 // [CS_TYPE][CALC_END_SPACE][IS_LOB_LOCATOR]
 ObExprBasicFuncs EXPR_BASIC_STR_FUNCS[CS_TYPE_MAX][2][2];
+ObExprBasicFuncs COMPAT_EXPR_BASIC_STR_FUNCS[CS_TYPE_MAX][2];
 
 ObExprBasicFuncs EXPR_BASIC_JSON_FUNCS[2];
 
@@ -191,23 +195,32 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
                                                const ObScale scale,
                                                const bool is_oracle_mode,
                                                const bool has_lob_locator,
-                                               const ObPrecision precision)
+                                               const ObPrecision precision,
+                                               const bool use_420_compat_func)
 {
   ObExprBasicFuncs *res = NULL;
   if ((type >= ObNullType && type < ObMaxType)) {
     if (is_string_type(type)) {
       OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
       bool calc_end_space = is_varying_len_char_type(type, cs_type) && is_oracle_mode;
-      if (ob_is_large_text(type)) {
-        res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][has_lob_locator];
+      if (ob_is_large_text(type) && has_lob_locator) {
+        res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][true];
       } else {
         // string is always without lob locator
-        res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][false];
+        res = use_420_compat_func ?
+                &COMPAT_EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space] :
+                &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][false];
       }
     } else if (ob_is_lob_locator(type)) {
       OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
       bool calc_end_space = false;
-      res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][has_lob_locator];
+      if (has_lob_locator) {
+        res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][true];
+      } else {
+        res = use_420_compat_func ?
+                &COMPAT_EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space] :
+                &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][false];
+      }
     } else if (ob_is_json(type)) {
       res = &EXPR_BASIC_JSON_FUNCS[has_lob_locator];
     } else if (ob_is_geometry(type)) {
@@ -240,6 +253,45 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
     LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid obj type", K(type));
   }
   return res;
+}
+
+bool compat_hash_cmp(const CompatStrHashFnRecord &lhs, const CompatStrHashFnRecord &rhs)
+{
+  if (lhs.first == nullptr) {
+    return false;
+  } else if (rhs.first == nullptr) {
+    return true;
+  } else {
+    return reinterpret_cast<uint64_t>(lhs.first) < reinterpret_cast<uint64_t>(rhs.first);
+  }
+}
+
+sql::ObBatchDatumHashFunc ObDatumFuncs::new_to_compat_str_hash_func(const sql::ObBatchDatumHashFunc new_hash_fn)
+{
+  sql::ObBatchDatumHashFunc ret = new_hash_fn;
+  CompatStrHashFnRecord record = std::make_pair(new_hash_fn, nullptr);
+  CompatStrHashFnRecord *it = std::lower_bound(std::begin(NEW_TO_COMPAT_STR_HASH_MAPPING), std::end(NEW_TO_COMPAT_STR_HASH_MAPPING), record, compat_hash_cmp);
+  if (it != std::end(NEW_TO_COMPAT_STR_HASH_MAPPING) && it->first == new_hash_fn) {
+    ret = it->second;
+  }
+  if (OB_ISNULL(ret)) {
+    LOG_WARN_RET(common::OB_NOT_SUPPORTED, "invalid null compat str hash func", K(new_hash_fn));
+  }
+  return ret;
+}
+
+sql::ObBatchDatumHashFunc ObDatumFuncs::compat_to_new_str_hash_func(const sql::ObBatchDatumHashFunc compat_hash_fn)
+{
+  sql::ObBatchDatumHashFunc ret = compat_hash_fn;
+  CompatStrHashFnRecord record = std::make_pair(compat_hash_fn, nullptr);
+  CompatStrHashFnRecord *it = std::lower_bound(std::begin(COMPAT_TO_NEW_STR_HASH_MAPPING), std::end(COMPAT_TO_NEW_STR_HASH_MAPPING), record, compat_hash_cmp);
+  if (it != std::end(COMPAT_TO_NEW_STR_HASH_MAPPING) && it->first == compat_hash_fn) {
+    ret = it->second;
+  }
+  if (OB_ISNULL(ret)) {
+    LOG_WARN_RET(common::OB_NOT_SUPPORTED, "invalid null compat str hash func", K(compat_hash_fn));
+  }
+  return ret;
 }
 
 bool ObDatumFuncs::is_string_type(const ObObjType type)
@@ -280,8 +332,85 @@ bool ObDatumFuncs::is_null_aware_hash_type(const ObObjType type)
 }
 
 OB_SERIALIZE_MEMBER(ObCmpFunc, ser_cmp_func_);
-OB_SERIALIZE_MEMBER(ObHashFunc, ser_hash_func_, ser_batch_hash_func_);
+// OB_SERIALIZE_MEMBER(ObHashFunc, ser_hash_func_, ser_batch_hash_func_);
+OB_DEF_SERIALIZE(ObHashFunc)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(ser_hash_func_);
+  if OB_SUCC(ret) {
+    OB_UNIS_ENCODE(ser_batch_hash_func_);
+    if (OB_UNLIKELY(OB_INVALID_ARGUMENT == ret)) {
+      if (OB_LIKELY(OB_INVALID_INDEX == sql::ObFuncSerialization::get_serialize_index(reinterpret_cast<void *>(ser_batch_hash_func_)))) {
+        // replace and serialize again.
+        ret = OB_SUCCESS;
+	sql::ObBatchDatumHashFunc new_hash_fn = ObDatumFuncs::compat_to_new_str_hash_func(batch_hash_func_);
+        sql::serializable_function ser_new_hash_fn = reinterpret_cast<sql::serializable_function>(new_hash_fn);
+        OB_UNIS_ENCODE(ser_new_hash_fn);
+      }
+    }
+  }
+  return ret;
+}
 
+OB_DEF_SERIALIZE_SIZE(ObHashFunc)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(ser_hash_func_);
+  OB_UNIS_ADD_LEN(ser_batch_hash_func_);
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObHashFunc)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(ser_hash_func_);
+  OB_UNIS_DECODE(ser_batch_hash_func_);
+  if (GET_PHY_PLAN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0
+      && GET_PHY_PLAN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
+    sql::ObBatchDatumHashFunc compat_hash_fn = ObDatumFuncs::new_to_compat_str_hash_func(batch_hash_func_);
+    if (OB_ISNULL(batch_hash_func_) || OB_ISNULL(compat_hash_fn)) {
+      // do nothing
+    } else if (batch_hash_func_ != compat_hash_fn) {
+      batch_hash_func_ = compat_hash_fn;
+    }
+  }
+  return ret;
+}
+
+CompatStrHashFnRecord NEW_TO_COMPAT_STR_HASH_MAPPING[CS_TYPE_MAX * 2];
+
+CompatStrHashFnRecord COMPAT_TO_NEW_STR_HASH_MAPPING[CS_TYPE_MAX * 2];
+
+// setup compat str hash record
+template<int X, int Y>
+struct InitCompatStrHashFunc
+{
+
+  static void init_array()
+  {
+    constexpr ObCollationType cs_type = static_cast<ObCollationType>(X);
+    constexpr bool calc_end_space = static_cast<bool>(Y);
+    sql::ObBatchDatumHashFunc new_hash_fn = StrDatumHashBatchHelper<cs_type, calc_end_space, ObMurmurHash, false>::hash_v2_batch;
+    if constexpr (CollationDefined<cs_type>::value_) {
+      sql::ObBatchDatumHashFunc compat_str_hash_fn = CompatStrHashFunc<cs_type, calc_end_space>::hash_v2_batch;
+      NEW_TO_COMPAT_STR_HASH_MAPPING[X + Y * CS_TYPE_MAX] = std::make_pair(new_hash_fn, compat_str_hash_fn);
+      COMPAT_TO_NEW_STR_HASH_MAPPING[X + Y * CS_TYPE_MAX] = std::make_pair(compat_str_hash_fn, new_hash_fn);
+    } else {
+      NEW_TO_COMPAT_STR_HASH_MAPPING[X + Y * CS_TYPE_MAX] = std::make_pair(nullptr, nullptr);
+      COMPAT_TO_NEW_STR_HASH_MAPPING[X + Y * CS_TYPE_MAX] = std::make_pair(nullptr, nullptr);
+    }
+  }
+};
+
+static int sort_compat_hash_records()
+{
+  lib::ob_sort(std::begin(NEW_TO_COMPAT_STR_HASH_MAPPING), std::end(NEW_TO_COMPAT_STR_HASH_MAPPING), compat_hash_cmp);
+  lib::ob_sort(std::begin(COMPAT_TO_NEW_STR_HASH_MAPPING), std::end(COMPAT_TO_NEW_STR_HASH_MAPPING), compat_hash_cmp);
+  return OB_SUCCESS;
+}
+
+bool g_init_compat_str_hash_record = Ob2DArrayConstIniter<CS_TYPE_MAX, 2, InitCompatStrHashFunc>::init();
+int g_sort_compat_hash_record = sort_compat_hash_records();
 } // end namespace common
 
 
@@ -474,6 +603,9 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_BASIC_PART2,
 
 static_assert(CS_TYPE_MAX * 2 * 2 * EXPR_BASIC_FUNC_MEMBER_CNT
                 == sizeof(EXPR_BASIC_STR_FUNCS) / sizeof(void *),
+              "unexpected size");
+static_assert(CS_TYPE_MAX * 2 * EXPR_BASIC_FUNC_MEMBER_CNT
+                == sizeof(COMPAT_EXPR_BASIC_STR_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_STR_BASIC_PART1,
                    EXPR_BASIC_STR_FUNCS_PART1,

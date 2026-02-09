@@ -31,6 +31,7 @@ int ObCodeGenerator::generate(const ObLogPlan &log_plan,
     log_plan.get_optimizer_context().set_batch_size(batch_size);
     phy_plan.set_batch_size(batch_size);
   }
+  phy_plan.set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_exprs(log_plan, phy_plan, cur_cluster_version))) {
     LOG_WARN("fail to get all raw exprs", K(ret));
@@ -62,7 +63,8 @@ int ObCodeGenerator::generate_exprs(const ObLogPlan &log_plan,
         exec_ctx->get_sql_ctx()->schema_guard_,
         exec_ctx->get_physical_plan_ctx()->get_original_param_cnt(),
         param_store_->count(),
-        min_cluster_version_);
+        min_cluster_version_,
+        phy_plan.get_min_cluster_version());
     // init ctx for operator cg
     expr_cg.set_batch_size(phy_plan.get_batch_size());
     expr_cg.set_log_plan(&log_plan);

@@ -1434,12 +1434,15 @@ int ObStaticEngineExprCG::cg_expr_basic_funcs(const ObIArray<ObRawExpr *> &raw_e
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rt expr is null", K(ret), K(*raw_exprs.at(i)));
     } else {
+      bool use_420_compat_func = phy_plan_min_cluster_version_ < CLUSTER_VERSION_4_3_0_0
+                                 && phy_plan_min_cluster_version_ >= CLUSTER_VERSION_4_1_0_0;
       rt_expr->basic_funcs_ = ObDatumFuncs::get_basic_func(rt_expr->datum_meta_.type_,
                                                         rt_expr->datum_meta_.cs_type_,
                                                         rt_expr->datum_meta_.scale_,
                                                         lib::is_oracle_mode(),
                                                         rt_expr->obj_meta_.has_lob_header(),
-                                                        rt_expr->datum_meta_.precision_);
+                                                        rt_expr->datum_meta_.precision_,
+                                                        use_420_compat_func);
       CK(NULL != rt_expr->basic_funcs_);
     }
   }

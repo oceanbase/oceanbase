@@ -60,7 +60,10 @@ public:
                                                const ObScale scale = SCALE_UNKNOWN_YET,
                                                const bool is_oracle_mode = lib::is_oracle_mode(),
                                                const bool is_lob_locator = true,
-                                               const ObPrecision prec = PRECISION_UNKNOWN_YET);
+                                               const ObPrecision prec = PRECISION_UNKNOWN_YET,
+                                               const bool use_420_compat_func = false);
+  static sql::ObBatchDatumHashFunc new_to_compat_str_hash_func(const sql::ObBatchDatumHashFunc new_hash_fn);
+  static sql::ObBatchDatumHashFunc compat_to_new_str_hash_func(const sql::ObBatchDatumHashFunc compat_hash_fn);
 };
 
 struct ObCmpFunc
@@ -90,6 +93,7 @@ public:
     sql::serializable_function ser_batch_hash_func_;
   };
   TO_STRING_KV(K_(hash_func), K_(batch_hash_func));
+
 };
 
 typedef common::ObFixedArray<ObCmpFunc, common::ObIAllocator> ObCmpFuncs;
