@@ -73,7 +73,8 @@ public:
       vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
       vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
       can_extract_range_(false),
-      is_primary_index_(false) {}
+      is_primary_index_(false),
+      strategy_(ObVecIdxQueryStrategy::RECALL_FIRST) {}
 
   virtual bool is_valid() const override
   {
@@ -104,7 +105,8 @@ public:
                K_(vec_index_type),
                K_(vec_idx_try_path),
                K_(can_extract_range),
-               K_(is_primary_index));
+               K_(is_primary_index),
+               K_(strategy));
 
   share::ObLSID ls_id_;
   transaction::ObTxDesc *tx_desc_;
@@ -131,6 +133,7 @@ public:
   ObVecIdxAdaTryPath vec_idx_try_path_;
   bool can_extract_range_;
   bool is_primary_index_;
+  ObVecIdxQueryStrategy strategy_;
 };
 class ObSimpleMaxHeap;
 
@@ -272,7 +275,8 @@ public:
       adaptive_ctx_(),
       can_retry_(false),
       idx_iter_first_scan_(true),
-      distance_threshold_(FLT_MAX) {
+      distance_threshold_(FLT_MAX),
+      strategy_(ObVecIdxQueryStrategy::RECALL_FIRST) {
         extra_in_rowkey_idxs_.set_attr(ObMemAttr(MTL_ID(), "ExtraIdx"));
       }
   
@@ -413,7 +417,9 @@ private:
   inline bool is_iter_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
                       || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER);}
   inline bool check_if_can_retry() { return is_adaptive_filter() && (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER 
-                                                                 || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
+                                                                 || vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER)
+                                                                 && (strategy_ == ObVecIdxQueryStrategy::RECALL_FIRST || 
+                                                                    (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER));;}
   bool is_parallel_with_block_granule();
   bool check_need_force_switch_run_path();
   int check_iter_filter_need_retry();
@@ -505,7 +511,8 @@ private:
   bool can_retry_;
   bool idx_iter_first_scan_;
   float distance_threshold_;
-
+  ObVecIdxQueryStrategy strategy_;
+  
 private:
 
   struct BruteForceContext {

@@ -25,6 +25,7 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
+  
 #define IVF_GET_NEXT_ROWS_BEGIN(iter)                                    \
   bool index_end = false;                                                \
   iter->clear_evaluated_flag();                                          \
@@ -491,6 +492,7 @@ protected:
   int check_pre_filter_need_retry();
   int updata_vec_exec_ctx(ObPlanStat* plan_stat);
   inline double get_default_selectivity_rate() const { return ObVecIdxExtraInfo::get_default_selectivity_rate(vec_index_param_.type_); }
+  virtual void reuse_cid_ctx();
 
 protected:
   static const int64_t CENTROID_PRI_KEY_CNT = 1;
@@ -636,6 +638,7 @@ protected:
     const int64_t rowkey_cnt,
     ObRowkey &main_rowkey,
     ObString &com_key);
+  virtual void reuse_cid_ctx() override;
 protected:
   // cid is begin with 0, so near_cid_vec_dist_ count is nlist + 1
   common::ObArrayWrap<bool> near_cid_dist_;
@@ -744,6 +747,7 @@ protected:
     ObIvfCacheMgrGuard &pre_cache_guard,
     ObIvfCentCache *&pre_cent_cache,
     bool &pre_compute_table);
+  virtual void reuse_cid_ctx() override;
 private:
   // in pq_code table
   static const int64_t PQ_CENTROID_VEC_IDX = 1;

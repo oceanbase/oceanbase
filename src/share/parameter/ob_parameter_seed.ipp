@@ -2784,7 +2784,7 @@ DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
 DEF_BOOL(_enable_routine_call_param_defend, OB_TENANT_PARAMETER, "True",
          "Enable or disable routine call parameter defend.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000", 
+DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "1000", 
                     common::ObHNSWIterFilterScanNumChecker,
                     "The upper limit of hnsw iter-filter search nums. Range: [0,)",
                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2888,3 +2888,12 @@ DEF_CAP(_write_throttle_by_pending_log_size_limit, OB_TENANT_PARAMETER, "0", "[0
 DEF_TIME(_write_throttle_by_pending_log_sleep_interval, OB_TENANT_PARAMETER, "20ms", "[0ms, 1h]",
          "the sleep interval when write throttle by pending log size. Range: [0ms, 1h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "RECALL_FIRST",
+        "The strategy of vector index searching. If it is set to RECALL_FIRST, which is default value, the search strategy is deep-search mode."
+        "If it is set to LATENCY_FIRST, the search strategy is response-first mode.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "RECALL_FIRST, LATENCY_FIRST");
+DEF_TIME(_vector_pre_filtering_timeout, OB_TENANT_PARAMETER, "50ms", "[10ms,)",
+        "Control the period of pre-filtering stage in vector index search. Range: [10ms, )",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

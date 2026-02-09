@@ -141,6 +141,14 @@ struct ObVectorIndexAlgorithmHeader
   OB_UNIS_VERSION(1);
 };
 
+struct ObVectorTenantSearchStrategy
+{
+  static constexpr const char *RECALL_FIRST = "RECALL_FIRST";
+  static constexpr const char *LATENCY_FIRST = "LATENCY_FIRST";
+  static const ObString RECALL_FIRST_STR;
+  static const ObString LATENCY_FIRST_STR;
+};
+
 // TODO: opt struct
 struct ObVectorIndexParam
 {

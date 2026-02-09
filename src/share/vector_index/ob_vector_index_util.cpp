@@ -31,6 +31,10 @@ using namespace sql;
 using namespace common;
 namespace share
 {
+
+const ObString ObVectorTenantSearchStrategy::RECALL_FIRST_STR = ObString::make_string(ObVectorTenantSearchStrategy::RECALL_FIRST);
+const ObString ObVectorTenantSearchStrategy::LATENCY_FIRST_STR = ObString::make_string(ObVectorTenantSearchStrategy::LATENCY_FIRST);
+
 /*
   预期 index_param_str 是大写的字串
 */
@@ -432,6 +436,24 @@ int ObVectorIndexUtil::resolve_query_param(
         } else {
           param.similarity_threshold_ = out_val;
           param.is_set_similarity_threshold_ = 1;
+        }
+      } else if (param_name.case_compare("STRATEGY") == 0) {
+        if (param.is_set_strategy_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate strategy param", K(ret), K(i));
+        } else {
+          // "LATENCY_FIRST" or "RECALL_FIRST"
+          ObString value_str(static_cast<int32_t>(value_node->str_len_), value_node->str_value_);
+          if (value_str.case_compare(ObVectorTenantSearchStrategy::LATENCY_FIRST_STR) == 0) {
+            param.strategy_ = ObVecIdxQueryStrategy::LATENCY_FIRST;
+            param.is_set_strategy_ = 1;
+          } else if (value_str.case_compare(ObVectorTenantSearchStrategy::RECALL_FIRST_STR) == 0) {
+            param.strategy_ = ObVecIdxQueryStrategy::RECALL_FIRST;
+            param.is_set_strategy_ = 1;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid vector query strategy param, should be LATENCY_FIRST or RECALL_FIRST", K(ret), K(i), K(param_name), K(value_str));
+          }
         }
       } else {
         ret = OB_INVALID_ARGUMENT;

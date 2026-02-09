@@ -46,7 +46,9 @@ public:
       adaptive_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
       is_multi_value_index_(false),
       is_spatial_index_(false),
-      can_extract_range_(false) {}
+      can_extract_range_(false),
+      strategy_(ObVecIdxQueryStrategy::RECALL_FIRST),
+      pre_filtering_timeout_(-1) {}
   
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
   inline bool is_vec_adaptive_scan() const { return ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_ && ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN != adaptive_try_path_; }
@@ -56,6 +58,13 @@ public:
   inline bool filter_in_hnsw_iter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   inline bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
+  inline bool is_hnsw() const
+  {
+    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
+           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
+  }
 
   int64_t get_inv_scan_idx() const { return ObVecAuxTableIdx::VALID_VID_SCAN_IDX; }
   int64_t get_delta_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
@@ -108,7 +117,8 @@ public:
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        KPC_(inv_scan_vec_id_col), K_(vec_index_param), K_(dim), 
                        K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count), 
-                       K_(extra_column_count), K_(vector_index_param), K_(vec_query_param), K_(adaptive_try_path), K_(can_extract_range));
+                       K_(extra_column_count), K_(vector_index_param), K_(vec_query_param), K_(adaptive_try_path), K_(can_extract_range),
+                       K_(strategy), K_(pre_filtering_timeout));
 
   ObExpr *inv_scan_vec_id_col_;
   ObString vec_index_param_;
@@ -128,6 +138,8 @@ public:
   bool is_multi_value_index_;
   bool is_spatial_index_;
   bool can_extract_range_;
+  ObVecIdxQueryStrategy strategy_;
+  int64_t pre_filtering_timeout_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef

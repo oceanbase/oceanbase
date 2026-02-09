@@ -26,7 +26,9 @@ OB_SERIALIZE_MEMBER((ObDASVecAuxScanCtDef, ObDASAttachCtDef),
                     adaptive_try_path_, // FARM COMPAT WHITELIST
                     is_multi_value_index_, // FARM COMPAT WHITELIST
                     is_spatial_index_, // FARM COMPAT WHITELIST
-                    can_extract_range_// FARM COMPAT WHITELIST
+                    can_extract_range_, // FARM COMPAT WHITELIST
+                    strategy_, // FARM COMPAT WHITELIST
+                    pre_filtering_timeout_ // FARM COMPAT WHITELIST
                     );
 OB_SERIALIZE_MEMBER(ObDASVecAuxScanRtDef);
 

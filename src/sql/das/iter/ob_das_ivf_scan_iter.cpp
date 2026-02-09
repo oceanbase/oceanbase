@@ -604,6 +604,7 @@ int ObDASIvfBaseScanIter::reset_filter_path()
     LOG_WARN("failed to updata vec exec ctx", K(ret), K(vec_idx_try_path_));
   } else {
     can_retry_ = false;
+    reuse_cid_ctx();
   }
   return ret;
 }
@@ -1588,6 +1589,10 @@ int ObDASIvfBaseScanIter::do_table_post_filter(bool is_vectorized, ObIVFRowkeyDi
   return ret;
 }
 
+void ObDASIvfBaseScanIter::reuse_cid_ctx()
+{
+  iterative_filter_ctx_.reuse();
+}
 /*************************** implement ObDASIvfScanIter ****************************/
 int ObDASIvfScanIter::inner_init(ObDASIterParam &param)
 {
@@ -2304,6 +2309,12 @@ int ObDASIvfScanIter::check_cid_exist(const ObString &src_cid, bool &src_cid_exi
   }
 
   return ret;
+}
+
+void ObDASIvfScanIter::reuse_cid_ctx()
+{
+  ObDASIvfBaseScanIter::reuse_cid_ctx();
+  near_cid_.reuse();
 }
 /************************************************** ObDASIvfPQScanIter ******************************************************/
 
@@ -4006,6 +4017,13 @@ int ObDASIvfPQScanIter::pre_compute_inner_prod_table(
     LOG_WARN("fail to get pq center cache", K(ret));
   }
   return ret;
+}
+
+void ObDASIvfPQScanIter::reuse_cid_ctx()
+{
+  ObDASIvfBaseScanIter::reuse_cid_ctx();
+  near_cid_vec_.reuse();
+  near_cid_vec_dis_.reuse();
 }
 
 uint64_t ObDASIvfBaseScanIter::hash_val_for_rk(const common::ObRowkey& rk)

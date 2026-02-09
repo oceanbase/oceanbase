@@ -2165,6 +2165,25 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         vec_scan_ctdef->can_extract_range_ = vc_info.can_extract_range_;
         vec_scan_ctdef->is_spatial_index_ = vc_info.is_spatial_index_;
         vec_scan_ctdef->is_multi_value_index_ = vc_info.is_multi_value_index_;
+        if (vec_scan_ctdef->vec_query_param_.is_set_strategy_ && vec_scan_ctdef->vec_query_param_.strategy_ == ObVecIdxQueryStrategy::RECALL_FIRST) {
+          vec_scan_ctdef->strategy_ = vec_scan_ctdef->vec_query_param_.strategy_;
+        } else {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+          if (OB_UNLIKELY(!tenant_config.is_valid())) {
+            LOG_TRACE("tenant config is invalid", K(ret));
+            vec_scan_ctdef->strategy_ = ObVecIdxQueryStrategy::RECALL_FIRST;
+          } else {
+            if (vec_scan_ctdef->vec_query_param_.is_set_strategy_) {
+              vec_scan_ctdef->strategy_ = vec_scan_ctdef->vec_query_param_.strategy_;
+            } else {
+              ObString tenant_strategy(tenant_config->ob_vector_search_strategy.get_value());
+              vec_scan_ctdef->strategy_ = tenant_strategy.compare(ObVectorTenantSearchStrategy::LATENCY_FIRST_STR) == 0 ?
+                                          ObVecIdxQueryStrategy::LATENCY_FIRST :
+                                          ObVecIdxQueryStrategy::RECALL_FIRST;
+            }
+            vec_scan_ctdef->pre_filtering_timeout_ = tenant_config->_vector_pre_filtering_timeout;
+          }
+        }
         cg_.phy_plan_->stat_.vec_index_exec_ctx_.cur_path_ = vc_info.adaptive_try_path_;
       }
     }

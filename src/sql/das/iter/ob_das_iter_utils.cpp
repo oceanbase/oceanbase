@@ -151,11 +151,11 @@ int ObDASIterUtils::create_das_scan_iter_tree(ObDASIterTreeType tree_type,
       break;
     }
     case ITER_TREE_MVI_LOOKUP: {
-      ret = create_mvi_lookup_tree(scan_param, alloc, attach_ctdef, attach_rtdef, related_tablet_ids, trans_desc, snapshot, iter_tree);
+      ret = create_mvi_lookup_tree(scan_param, alloc, attach_ctdef, attach_rtdef, nullptr /* vec_aux_ctdef */, related_tablet_ids, trans_desc, snapshot, iter_tree);
       break;
     }
     case ITER_TREE_GIS_LOOKUP: {
-      ret = create_gis_lookup_tree(scan_param, alloc, attach_ctdef, attach_rtdef, related_tablet_ids, trans_desc, snapshot, iter_tree);
+      ret = create_gis_lookup_tree(scan_param, alloc, attach_ctdef, attach_rtdef, nullptr /* vec_aux_ctdef */, related_tablet_ids, trans_desc, snapshot, iter_tree);
       break;
     }
     case ITER_TREE_VEC_LOOKUP: {
@@ -2168,11 +2168,11 @@ int ObDASIterUtils::create_mvi_lookup_tree(ObTableScanParam &scan_param,
                                            common::ObIAllocator &alloc,
                                            const ObDASBaseCtDef *attach_ctdef,
                                            ObDASBaseRtDef *attach_rtdef,
+                                           const ObDASVecAuxScanCtDef *vec_aux_ctdef,
                                            const ObDASRelatedTabletID &related_tablet_ids,
                                            transaction::ObTxDesc *trans_desc,
                                            transaction::ObTxReadSnapshot *snapshot,
-                                           ObDASIter *&iter_tree,
-                                           const bool in_vec_pre_filter)
+                                           ObDASIter *&iter_tree)
 {
   int ret = OB_SUCCESS;
 
@@ -2189,6 +2189,8 @@ int ObDASIterUtils::create_mvi_lookup_tree(ObTableScanParam &scan_param,
   ObDASScanIter *docid_rowkey_table_iter = nullptr;
   ObDASMVILookupIter *mvi_lookup_iter = nullptr;
   ObDASIter *sort_iter = nullptr;
+  const bool in_vec_pre_filter = (vec_aux_ctdef != nullptr); // only construction of prefilter will set vec_aux_ctdef
+  const bool is_vec_hnsw = (vec_aux_ctdef != nullptr) ? vec_aux_ctdef->is_hnsw() : false;
   
   if (OB_ISNULL(attach_ctdef) || OB_ISNULL(attach_rtdef)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2243,6 +2245,10 @@ int ObDASIterUtils::create_mvi_lookup_tree(ObTableScanParam &scan_param,
         mvi_lookup_iter->get_children()[0] = index_table_iter;
         mvi_lookup_iter->get_children()[1] = docid_rowkey_table_iter;
         index_table_iter->set_scan_param(scan_param);
+        if (OB_NOT_NULL(vec_aux_ctdef) && is_vec_hnsw // only set prefiltering timeout for HNSW
+            && vec_aux_ctdef->strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST) {
+          index_table_iter->set_pre_filtering_timeout(vec_aux_ctdef->pre_filtering_timeout_);
+        }
         docid_rowkey_table_iter->set_scan_param(mvi_lookup_iter->get_lookup_param());
         mvi_lookup_iter->set_tablet_id(related_tablet_ids.doc_rowkey_tablet_id_);
         mvi_lookup_iter->set_ls_id(scan_param.ls_id_);
@@ -2271,11 +2277,11 @@ int ObDASIterUtils::create_gis_lookup_tree(ObTableScanParam &scan_param,
                                            common::ObIAllocator &alloc,
                                            const ObDASBaseCtDef *attach_ctdef,
                                            ObDASBaseRtDef *attach_rtdef,
+                                           const ObDASVecAuxScanCtDef *vec_aux_ctdef,
                                            const ObDASRelatedTabletID &related_tablet_ids,
                                            transaction::ObTxDesc *trans_desc,
                                            transaction::ObTxReadSnapshot *snapshot,
-                                           ObDASIter *&iter_tree,
-                                           const bool in_vec_pre_filter)
+                                           ObDASIter *&iter_tree)
 {
   int ret = OB_SUCCESS;
 
@@ -2283,6 +2289,8 @@ int ObDASIterUtils::create_gis_lookup_tree(ObTableScanParam &scan_param,
   ObDASTableLookupRtDef *lookup_rtdef = nullptr;
   const ObDASSortCtDef *sort_ctdef = nullptr;
   ObDASSortRtDef *sort_rtdef = nullptr;
+  const bool in_vec_pre_filter = (vec_aux_ctdef != nullptr); // only construction of prefilter will set vec_aux_ctdef
+  const bool is_vec_hnsw = (vec_aux_ctdef != nullptr) ? vec_aux_ctdef->is_hnsw() : false;
   
   if (OB_ISNULL(attach_ctdef) || OB_ISNULL(attach_rtdef)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2303,6 +2311,10 @@ int ObDASIterUtils::create_gis_lookup_tree(ObTableScanParam &scan_param,
     if (OB_FAIL(create_das_spatial_scan_iter(alloc, index_table_param, index_table_iter))) {
       LOG_WARN("failed to create index table scan iter", K(ret));
     } else if (OB_FALSE_IT(index_table_iter->set_scan_param(scan_param))) {
+    } else if (OB_NOT_NULL(vec_aux_ctdef)
+               && is_vec_hnsw // only set prefiltering timeout for HNSW
+               && vec_aux_ctdef->strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST
+               && OB_FALSE_IT(index_table_iter->set_pre_filtering_timeout(vec_aux_ctdef->pre_filtering_timeout_))) {
     } else if (OB_FAIL(create_sort_sub_tree(alloc, sort_ctdef, sort_rtdef, false/*need_rewind*/,
                                             true/*need_distinct*/, index_table_iter, sort_iter))) {
       LOG_WARN("failed to create sort sub tree", K(ret));
@@ -3130,11 +3142,11 @@ int ObDASIterUtils::create_vec_spiv_lookup_tree(ObTableScanParam &scan_param,
 
     bool is_primary_index = false;
     if (scan_param.table_param_->is_spatial_index()) {
-      if (OB_FAIL(create_gis_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter, true))) {
+      if (OB_FAIL(create_gis_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, vec_aux_ctdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter))) {
         LOG_WARN("failed to create gis lookup tree", K(ret));
       }
     } else if (scan_param.table_param_->is_multivalue_index()) {
-      if (OB_FAIL(create_mvi_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter, true))) {
+      if (OB_FAIL(create_mvi_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, vec_aux_ctdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter))) {
         LOG_WARN("failed to create multivalue lookup tree", K(ret));
       }
     } else {
@@ -3320,11 +3332,11 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
 
     bool is_primary_index = false;
     if (scan_param.table_param_->is_spatial_index()) {
-      if (OB_FAIL(create_gis_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter, true))) {
+      if (OB_FAIL(create_gis_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, vec_aux_ctdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter))) {
         LOG_WARN("failed to create gis lookup tree", K(ret));
       }
     } else if (scan_param.table_param_->is_multivalue_index()) {
-      if (OB_FAIL(create_mvi_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter, true))) {
+      if (OB_FAIL(create_mvi_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, vec_aux_ctdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter))) {
         LOG_WARN("failed to create gis lookup tree", K(ret));
       }
     } else {
@@ -3335,6 +3347,9 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
       LOG_WARN("failed to create inv idx scan iter", K(ret));
       } else { 
         inv_idx_scan_iter->set_scan_param(scan_param);
+        if (vec_aux_ctdef->strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST) {
+          inv_idx_scan_iter->set_pre_filtering_timeout(vec_aux_ctdef->pre_filtering_timeout_);
+        }
         inv_idx_iter = inv_idx_scan_iter;
         is_primary_index = inv_idx_scan_ctdef->ref_table_id_ == data_table_ctdef->ref_table_id_;
       }
@@ -3368,7 +3383,10 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
     } else if ((vec_aux_ctdef->is_iter_filter() || can_use_adaptive_path) 
       && OB_FAIL(create_das_scan_iter(alloc, data_table_ctdef, data_table_rtdef, data_filter_iter))) {
       LOG_WARN("failed to create data filter scan iter", K(ret));
-    } 
+    } else if (OB_NOT_NULL(rowkey_vid_table_iter)
+               && vec_aux_ctdef->can_use_vec_pri_opt() && vec_aux_ctdef->strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST) {
+      rowkey_vid_table_iter->set_pre_filtering_timeout(vec_aux_ctdef->pre_filtering_timeout_);
+    }
 
 
     if (OB_SUCC(ret)) {
@@ -3412,6 +3430,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
         hnsw_scan_param.can_extract_range_ = vec_aux_ctdef->can_extract_range_;
         hnsw_scan_param.is_primary_index_ = is_primary_index;
         hnsw_scan_param.pre_scan_param_ = &scan_param;
+        hnsw_scan_param.strategy_ = vec_aux_ctdef->strategy_;
         uint64_t batch_count = hnsw_scan_param.max_size_;
 
         if (OB_SUCC(ret) && (vec_aux_ctdef->is_iter_filter() || can_use_adaptive_path)) {
@@ -3425,7 +3444,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
           K(hnsw_scan_param.snapshot_), K(hnsw_scan_param.delta_buf_iter_), K(hnsw_scan_param.index_id_iter_), K(hnsw_scan_param.snapshot_iter_), 
           K(hnsw_scan_param.com_aux_vec_iter_), K(hnsw_scan_param.rowkey_vid_iter_), K(hnsw_scan_param.vec_aux_ctdef_),
           K(hnsw_scan_param.vec_aux_rtdef_), K(hnsw_scan_param.vec_index_type_), K(hnsw_scan_param.vec_idx_try_path_), K(hnsw_scan_param.vid_rowkey_iter_),
-          K(hnsw_scan_param.vid_rowkey_ctdef_), K(hnsw_scan_param.vid_rowkey_rtdef_));
+          K(hnsw_scan_param.vid_rowkey_ctdef_), K(hnsw_scan_param.vid_rowkey_rtdef_), K(hnsw_scan_param.strategy_));
         } else if (FALSE_IT(batch_count = hnsw_scan_iter->adjust_batch_count(vec_aux_rtdef->eval_ctx_->is_vectorized(), hnsw_scan_param.max_size_))) {
         } else if (OB_FALSE_IT(hnsw_scan_iter->set_related_tablet_ids(related_tablet_ids))) {
         } else if (vec_aux_ctdef->extra_column_count_ > 0) {
@@ -3525,15 +3544,15 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
                                          alloc,
                                          inv_idx_ctdef,
                                          inv_idx_rtdef,
+                                         vec_aux_ctdef,
                                          related_tablet_ids,
                                          trans_desc,
                                          snapshot,
-                                         inv_idx_iter,
-                                         true))) {
+                                         inv_idx_iter))) {
         LOG_WARN("failed to create gis lookup tree", K(ret));
       }
     } else if (scan_param.table_param_->is_multivalue_index()) {
-      if (OB_FAIL(create_mvi_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter, true))) {
+      if (OB_FAIL(create_mvi_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, vec_aux_ctdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter))) {
         LOG_WARN("failed to create multivalue lookup tree", K(ret));
       }
     } else {
