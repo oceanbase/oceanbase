@@ -411,6 +411,8 @@ private:
   int filter_lateral_correlated_preds(TableItem &table_item, ObIArray<ObRawExpr*> &preds);
   void reset();
 
+  int check_validity_for_like_predicate(ObRawExpr *expr,
+                                        bool &is_valid_for_like);
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;
   ObArenaAllocator allocator_;

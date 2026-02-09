@@ -1286,7 +1286,7 @@ int ObTransformConstPropagate::replace_internal(ObRawExpr *&cur_expr,
     } else if (expr_const_infos.at(i).mem_equal_) {
       can_replace = true;
     } else if (OB_FAIL(ObTransformUtils::check_can_replace(cur_expr, parent_exprs,
-                                                           used_in_compare, can_replace))) {
+                                                           used_in_compare, can_replace, true))) {
       LOG_WARN("failed to check can replace", K(ret));
     }
 
