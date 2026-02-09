@@ -22461,7 +22461,20 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
               }
             }
           }
-
+          // set vector index dbms exec env
+          if (OB_FAIL(ret)) {
+          } else if (new_index_schema.is_vec_delta_buffer_type()) {
+            dbms_scheduler::ObDBMSSchedJobInfo job_info;
+            if (OB_FAIL(ObVectorIndexUtil::get_dbms_vector_job_info(*GCTX.sql_proxy_, src_tenant_id,
+                                                                    index_table_schema->get_table_id(), 
+                                                                    allocator, schema_guard,
+                                                                    job_info))) {
+              LOG_WARN("fail to get dbms_vector job info", K(ret), K(src_tenant_id), K(index_table_schema->get_table_id()));
+            } else {
+              new_index_schema.set_exec_env(job_info.get_exec_env());
+              LOG_INFO("set exec env", K(job_info.get_exec_env()), K(new_index_schema.get_exec_env()), K(new_index_schema.get_table_id()));
+            }
+          }
           if (OB_FAIL(ret)) {
           } else if ((new_index_schema.is_vec_index() && !new_index_schema.is_vec_spiv_index()) && OB_FAIL(ObVecIndexBuilderUtil::generate_vec_index_aux_columns(
               orig_table_schema, *index_table_schema, new_table_schema, new_index_schema, allocator, ddl_operator, trans, domain_index_columns, domain_store_columns))) {
