@@ -18637,7 +18637,6 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15542', all_def_keyword
 # 15545: __all_virtual_macro_block_copy_task_history
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15546', all_def_keywords['__all_routine_load_job']))
-# 15547: idx_routine_load_job_name_real_agent
 # 15548: __all_virtual_ss_local_cache_diagnose_info
 # 15549: __all_virtual_sql_group_commit_stat
 # 15550: __all_external_resource
@@ -46505,8 +46504,8 @@ SELECT A.job_id AS JOB_ID,
        A.last_ret_code AS LAST_RET_CODE,
        A.last_error_msg AS LAST_ERROR_MSG
 FROM oceanbase.__all_routine_load_job A
-JOIN oceanbase.__all_database B ON A.database_id = B.database_id
-JOIN oceanbase.__all_table C ON A.table_id = C.table_id
+LEFT JOIN oceanbase.__all_database B ON A.database_id = B.database_id
+LEFT JOIN oceanbase.__all_table C ON A.table_id = C.table_id
 ORDER BY A.create_time
 """.replace("\n", " ")
 )
@@ -46540,8 +46539,8 @@ SELECT A.tenant_id AS TENANT_ID,
        A.last_ret_code AS LAST_RET_CODE,
        A.last_error_msg AS LAST_ERROR_MSG
 FROM oceanbase.__all_virtual_routine_load_job A
-JOIN oceanbase.__all_virtual_database B ON A.tenant_id = B.tenant_id AND A.database_id = B.database_id
-JOIN oceanbase.__all_virtual_table C ON A.tenant_id = C.tenant_id AND A.table_id = C.table_id
+LEFT JOIN oceanbase.__all_virtual_database B ON A.tenant_id = B.tenant_id AND A.database_id = B.database_id
+LEFT JOIN oceanbase.__all_virtual_table C ON A.tenant_id = C.tenant_id AND A.table_id = C.table_id
 ORDER BY A.create_time
 """.replace("\n", " ")
 )
@@ -81682,8 +81681,8 @@ SELECT A.job_id AS JOB_ID,
        A.last_ret_code AS LAST_RET_CODE,
        A.last_error_msg AS LAST_ERROR_MSG
 FROM SYS.ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT A
-JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B ON A.database_id = B.database_id
-JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C ON A.table_id = C.table_id
+LEFT JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B ON A.database_id = B.database_id
+LEFT JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C ON A.table_id = C.table_id
 ORDER BY A.create_time
 """.replace("\n", " ")
 )
@@ -83691,14 +83690,5 @@ def_agent_index_table(
   real_index_name = 'idx_objauth_mysql_obj_name',
   keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA'])
 
-def_agent_index_table(
-  index_name = 'idx_routine_load_job_name_real_agent',
-  index_table_id = 15547,
-  index_columns = ['job_name'],
-  index_using_type = 'USING_BTREE',
-  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
-  real_table_name = '__all_routine_load_job' ,
-  real_index_name = 'idx_routine_load_job_name',
-  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT_ORA'])
 # End Oracle Agent table Index
 ################################################################################

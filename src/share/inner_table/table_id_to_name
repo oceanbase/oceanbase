@@ -4128,7 +4128,3 @@
 # 15515: idx_objauth_mysql_obj_name_real_agent  # INDEX_NAME
 # 15515: __all_tenant_objauth_mysql  # DATA_BASE_TABLE_NAME
 # 15515: ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT  # DATA_BASE_TABLE_NAME1
-# 15547: __idx_15546_idx_routine_load_job_name_real_agent
-# 15547: idx_routine_load_job_name_real_agent  # INDEX_NAME
-# 15547: __all_routine_load_job  # DATA_BASE_TABLE_NAME
-# 15547: ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT  # DATA_BASE_TABLE_NAME1

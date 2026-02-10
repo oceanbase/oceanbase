@@ -56,6 +56,10 @@ int ObCreateRoutineLoadResolver::resolve(const ParseNode &parse_tree)
   //TODO: 权限检查，判断系统租户、普通租户、login_tenant_id等。
   //      是否能在系统租户下创建？
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("must be user tenant", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, create routine load");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (data_version < DATA_VERSION_4_5_1_0) {
@@ -474,10 +478,20 @@ int ObCreateRoutineLoadResolver::resolve_job_properties(
                   LOG_WARN("fail to resolve file format", KR(ret), K(format));
                 }
               }
-              if (OB_SUCC(ret) && ObExternalFileFormat::CSV_FORMAT != format.format_type_) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("not support this format type", KR(ret), K(format));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
+              if (OB_SUCC(ret)) {
+                if (ObExternalFileFormat::CSV_FORMAT != format.format_type_) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("not support this format type", KR(ret), K(format));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
+                } else if (format.csv_format_.parse_header_) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("not support parse header", KR(ret), K(format));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "format contains PARSE_HEADER");
+                } else if (0 != format.csv_format_.skip_header_lines_) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("not support skip header lines", KR(ret), K(format));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "format contains SKIP_HEADER");
+                }
               }
               if (FAILEDx(file_format_to_str(format, buf, buf_len, pos))) {
                 LOG_WARN("fail to file format to str", KR(ret), K(format), KP(buf), K(buf_len), K(pos));
@@ -596,6 +610,10 @@ int ObPauseRoutineLoadResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create pause routine load stmt", KR(ret));
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("must be user tenant", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, pause routine load");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (data_version < DATA_VERSION_4_5_1_0) {
@@ -645,6 +663,10 @@ int ObResumeRoutineLoadResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create resume routine load stmt", KR(ret));
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("must be user tenant", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, resume routine load");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (data_version < DATA_VERSION_4_5_1_0) {
@@ -694,6 +716,10 @@ int ObStopRoutineLoadResolver::resolve(const ParseNode &parse_tree)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create stop routine load stmt", KR(ret));
   } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("must be user tenant", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, stop routine load");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (data_version < DATA_VERSION_4_5_1_0) {

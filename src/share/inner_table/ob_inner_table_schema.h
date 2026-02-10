@@ -3599,7 +3599,6 @@ public:
   static int all_virtual_tenant_location_real_agent_ora_idx_location_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_user_id_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_obj_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
-  static int all_virtual_routine_load_job_real_agent_ora_idx_routine_load_job_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_mgr_ora_all_virtual_table_mgr_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_ora_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -5150,7 +5149,6 @@ const schema_create_func virtual_table_index_schema_creators [] = {
   ObInnerTableSchema::all_virtual_tenant_location_real_agent_ora_idx_location_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_user_id_real_agent_schema,
   ObInnerTableSchema::all_virtual_tenant_objauth_mysql_real_agent_ora_idx_objauth_mysql_obj_name_real_agent_schema,
-  ObInnerTableSchema::all_virtual_routine_load_job_real_agent_ora_idx_routine_load_job_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_mgr_ora_all_virtual_table_mgr_i1_schema,
   ObInnerTableSchema::all_virtual_ash_ora_all_virtual_ash_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_monitor_i1_schema,
@@ -8650,7 +8648,6 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_IDX_LOCATION_NAME_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_USER_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_OBJ_NAME_REAL_AGENT_TID,
-  OB_ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT_ORA_IDX_ROUTINE_LOAD_JOB_NAME_REAL_AGENT_TID,
   OB_ALL_TABLE_AUX_LOB_META_TID,
   OB_ALL_COLUMN_AUX_LOB_META_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_META_TID,
@@ -11937,7 +11934,6 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TENANT_LOCATION_REAL_AGENT_ORA_IDX_LOCATION_NAME_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_USER_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TENANT_OBJAUTH_MYSQL_REAL_AGENT_ORA_IDX_OBJAUTH_MYSQL_OBJ_NAME_REAL_AGENT_TNAME,
-  OB_ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT_ORA_IDX_ROUTINE_LOAD_JOB_NAME_REAL_AGENT_TNAME,
   OB_ALL_TABLE_AUX_LOB_META_TNAME,
   OB_ALL_COLUMN_AUX_LOB_META_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_META_TNAME,
