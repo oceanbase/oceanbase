@@ -1958,6 +1958,16 @@ int ObIvfPqBuildHelper::build(const common::ObTableID &table_id, const common::O
   } else if (OB_FAIL(executor_->build(insert_monitor))) {
     LOG_WARN("failed to build clusters", K(ret));
   }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(common::EventTable::EN_VEC_INDEX_IVF_PQ_BUILD_ERR) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[ERRSIM] fail to build ivf pq", K(ret));
+    }
+  }
+#endif
+
   return ret;
 }
 

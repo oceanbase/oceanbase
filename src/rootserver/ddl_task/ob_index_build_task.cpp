@@ -128,7 +128,19 @@ int ObIndexSSTableBuildTask::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, index schema must not be nullptr", K(ret), K(tenant_id_), K(dest_table_id_));
   } else {
-    if (is_partitioned_local_index_task()) {
+    #ifdef ERRSIM
+      if (OB_SUCC(ret)
+          && (index_schema->is_vec_ivfflat_rowkey_cid_index()
+            || index_schema->is_vec_ivfpq_rowkey_cid_index()
+            || index_schema->is_vec_ivfsq8_rowkey_cid_index())) {
+        ret = OB_E(EventTable::EN_VEC_INDEX_IVF_ROWKEY_CID_BUILD_ERR) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          LOG_WARN("errsim ddl execute building the subtask of vector index rowkey cid table failed", KR(ret));
+        }
+      }
+    #endif
+    if (OB_FAIL(ret)) {
+    } else if (is_partitioned_local_index_task()) {
       bool is_oracle_mode = false;
       if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(tenant_id_, data_table_id_, is_oracle_mode))) {
         LOG_WARN("check if oracle mode failed", K(ret), K(data_table_id_));
