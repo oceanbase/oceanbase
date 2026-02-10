@@ -585,8 +585,8 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
                                             update_info.table_id_ != update_info.loc_table_id_,
                                             index_update))) {
         LOG_WARN("failed to check index update", K(ret), K(update_info));
-      } else if (!index_update) {
-          // do nothing
+      } else if (!index_update && !index_dml_info->is_compaction_scn_ttl_di_table_) {
+        // do nothing
       } else if (OB_FAIL(generate_index_column_exprs(update_info.table_id_,
                                                      *index_schema,
                                                      update_info.assignments_,

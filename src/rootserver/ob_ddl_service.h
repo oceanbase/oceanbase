@@ -2753,6 +2753,9 @@ private:
       ObMySQLTransaction &trans,
       const share::schema::ObDatabaseSchema &new_database_schema);
 
+  bool check_change_to_compaction_scn_ttl_di_table(const AlterTableSchema &alter_table_schema, const ObTableSchema &orig_table_schema) const;
+  int update_being_scn_ttl_time(ObTableSchema &new_table_schema);
+
 private:
   bool inited_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

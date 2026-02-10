@@ -1144,7 +1144,9 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
           } else if (OB_FAIL(ob_write_string(*allocator_, ObString::make_string(ttl_buffer), ttl_definition_))) {
             SQL_RESV_LOG(WARN, "failed to write ttl definition string when use tracepoint", K(ret));
           } else {
-            ttl_flag_.had_rowscn_as_ttl_ = 1;
+            ttl_flag_.version_ = ObTTLFlag::TTL_FLAG_VERSION_V2;
+            ttl_flag_.ttl_column_type_ = ObTTLFlag::TTLColumnType::ROWSCN;
+            ttl_flag_.was_compaction_ttl_ = 1;
             ttl_flag_.ttl_type_ = ObTTLDefinition::COMPACTION;
             FLOG_INFO("EN_CREATE_TABLE_WITH_TTL Tracepoint! create table with ttl", K(time_s), K(ttl_definition_), K(ttl_flag_));
           }
@@ -13920,7 +13922,7 @@ int ObDDLResolver::check_ttl_expr(const ParseNode *ttl_expr_node,
         LOG_WARN("rowscn column as ttl column is not supported in data version less than 4.5.1", K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn column as ttl column in this version is");
       } else {
-        tmp_ttl_flag.had_rowscn_as_ttl_ = true;
+        tmp_ttl_flag.ttl_column_type_ = ObTTLFlag::TTLColumnType::ROWSCN;
         FLOG_INFO("[COMPACTION TTL] use rowscn column as TTL column", KR(ret), K(column_name));
       }
     } else if (OB_ISNULL(tbl_schema)) {
@@ -13938,15 +13940,17 @@ int ObDDLResolver::check_ttl_expr(const ParseNode *ttl_expr_node,
                 K(ret), K(column_name), K(column_schema->get_data_type()));
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION == ttl_type && !tmp_ttl_flag.had_rowscn_as_ttl_)) {
+    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION == ttl_type && tmp_ttl_flag.ttl_column_type_ != ObTTLFlag::TTLColumnType::ROWSCN)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("compaction ttl only support rowscn column", K(ret), K(tbl_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "compaction ttl only support rowscn column");
-    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION != ttl_type && tmp_ttl_flag.had_rowscn_as_ttl_)) {
+    } else if (OB_UNLIKELY(ObTTLDefinition::COMPACTION != ttl_type && tmp_ttl_flag.ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("rowscn column as ttl column is not supported in row ttl type", K(ret), K(tbl_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn column as ttl column is not supported in row ttl type");
     } else {
+      tmp_ttl_flag.version_ = ObTTLFlag::TTL_FLAG_VERSION_V2;
+      tmp_ttl_flag.was_compaction_ttl_ = ttl_type == ObTTLDefinition::COMPACTION;
       tmp_ttl_flag.ttl_type_ = ttl_type;
       ttl_flag_.fuse(tmp_ttl_flag);
     }

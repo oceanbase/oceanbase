@@ -12,8 +12,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "src/share/ob_rpc_struct.h"
 #include "share/schema/ob_latest_schema_guard.h"
-#include "lib/json/ob_json.h"
-#include "lib/utility/ob_print_utils.h"
+#include "ob_ttl_definition.h"
 
 namespace oceanbase
 {
@@ -23,43 +22,6 @@ namespace schema
 {
 class ObSchemaGetterGuard;
 }
-
-struct ObTTLDefinition final
-{
-  enum ObTTLType : uint8_t {
-    NONE = 0, // no ttl definition on schema NOW or compat for old DELETING mode table
-    DELETING = 1,
-    COMPACTION = 2,
-    INVALID,
-  };
-  static const char *ttl_type_to_string(const ObTTLType ttl_type) { // only for print schema
-    const char *ret_str = "INVALID";
-    switch (ttl_type) {
-      case DELETING:
-      case NONE:
-        ret_str = "DELETING";
-        break;
-      case COMPACTION:
-        ret_str = "COMPACTION";
-        break;
-      default:
-        break;
-    }
-    return ret_str;
-  }
-  ObTTLDefinition()
-      : ttl_definition_(), ttl_type_(INVALID) {}
-  ObTTLDefinition(const ObString &ttl_definition, const uint64_t ttl_type)
-      : ttl_definition_(ttl_definition), ttl_type_(static_cast<ObTTLType>(ttl_type)) {}
-  bool is_valid() const { return ttl_type_ != INVALID && !ttl_definition_.empty(); }
-  void reset() { ttl_definition_.reset(); ttl_type_ = INVALID; }
-  void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
-  TO_STRING_KV("ttl", ttl_definition_, "type", ttl_type_to_string(ttl_type_));
-
-  ObString ttl_definition_;
-  ObTTLType ttl_type_;
-};
-
 
 struct ObCompactionTTLUtil final
 {

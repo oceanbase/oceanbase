@@ -2720,7 +2720,7 @@ int ObDmlCgService::generate_related_upd_ctdef(ObLogDelUpd &op,
                                                           related_ctdef->updated_column_ids_,
                                                           *related_ctdef))) {
       LOG_WARN("fail to check is update uk", K(ret), K(related_tid));
-    } else if (related_ctdef->updated_column_ids_.empty()) {
+    } else if (related_ctdef->updated_column_ids_.empty() && !index_dml_info.is_compaction_scn_ttl_di_table_) {
       //ignore invalid update ctdef
     } else if (OB_FAIL(upd_ctdefs.push_back(related_ctdef))) {
       LOG_WARN("store related ctdef failed", K(ret));

@@ -1142,8 +1142,7 @@ int ObAccessService::update_rows(
       || OB_UNLIKELY(!tablet_id.is_valid())
       || OB_UNLIKELY(!tx_desc.is_valid())
       || OB_UNLIKELY(!dml_param.is_valid())
-      || OB_UNLIKELY(column_ids.count() <= 0)
-      || OB_UNLIKELY(updated_column_ids.count() <= 0)) {
+      || OB_UNLIKELY(column_ids.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(tx_desc),
              K(dml_param), K(column_ids), K(updated_column_ids));

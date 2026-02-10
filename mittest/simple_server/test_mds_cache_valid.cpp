@@ -101,6 +101,9 @@ TEST_F(ObMDSCacheValidTest, mds_cache_valid_after_ttl_and_dump_test)
   int64_t affected_rows = 0;
   const char *table_name = "mds_cache_test_table";
 
+  sql.assign_fmt("alter system set enable_ttl=true");
+  EXEC_SUCC(sql);
+
   // 1. 建立 rowscn 的 ttl 表
   sql.assign_fmt("create table %s (c1 int primary key, c2 varchar(200)) "
                  "merge_engine=append_only TTL ora_rowscn + INTERVAL 1 second BY COMPACTION",
@@ -120,9 +123,6 @@ TEST_F(ObMDSCacheValidTest, mds_cache_valid_after_ttl_and_dump_test)
   ASSERT_EQ(OB_SUCCESS,
             CompactionBasicFunc::get_table_id(*sys_conn, table_name, false /*is_index*/, table_id));
   COMMON_LOG(INFO, "get table id", K(table_id));
-
-  sql.assign_fmt("alter system set enable_ttl=true");
-  EXEC_SUCC(sql);
   sql.assign_fmt("alter system trigger ttl");
   EXEC_SUCC(sql);
   COMMON_LOG(INFO, "trigger ttl service");

@@ -119,6 +119,7 @@ public:
   OB_INLINE ObMvMode get_mv_mode() const { return mv_mode_; }
   OB_INLINE bool is_delete_insert() const { return static_cast<ObMergeEngineType>(merge_engine_type_) == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT; }
   OB_INLINE bool is_append_only() const { return static_cast<ObMergeEngineType>(merge_engine_type_) == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
+  OB_INLINE bool is_rowscn_ttl_table() const { return is_rowscn_ttl_table_; }
   OB_INLINE const common::ObString &get_index_name() const { return index_name_; }
 
   const ObColumnParam * get_column(const uint64_t column_id) const;
@@ -176,6 +177,7 @@ private:
   uint64_t vec_vector_col_id_;
   ObMvMode mv_mode_;
   bool is_delete_insert_;
+  bool is_rowscn_ttl_table_;
   ObMergeEngineType merge_engine_type_;
   uint64_t inc_pk_doc_id_col_id_;
   uint64_t vec_chunk_col_id_;

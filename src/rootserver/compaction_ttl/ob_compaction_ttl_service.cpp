@@ -94,6 +94,7 @@ int ObCompactionTTLService::execute(
     const ObTableSchema *schema_before_trans = nullptr;
     int64_t schema_version_before_trans = OB_INVALID_VERSION;
     const ObTableSchema *latest_data_table_schema = nullptr;
+    int64_t minimum_safe_ttl_value = max_ddl_create_snapshot_;
     if (OB_FAIL(get_latest_schema_guard(sql_proxy, schema_guard_before, schema_before_trans))) {
       if (OB_TABLE_IS_DELETED != ret) {
         LOG_WARN("failed to get latest schema guard", KR(ret));
@@ -125,28 +126,25 @@ int ObCompactionTTLService::execute(
       task_status = ObTTLTaskStatus::OB_TTL_TASK_PENDING;
       LOG_WARN("[COMPACTION TTL] schema version is not the same, exist DDL after check meta table", KR(ret),
         K(schema_version_before_trans), KPC(latest_data_table_schema));
-    } else if (latest_data_table_schema->is_delete_insert_merge_engine() && (latest_data_table_schema->get_simple_index_infos().count() > 0 || latest_data_table_schema->has_lob_aux_table())) {
-      task_status = ObTTLTaskStatus::OB_TTL_TASK_SKIP;
-      LOG_INFO("[COMPACTION TTL] index table count is greater than 0, skip trigger ttl", KR(ret), KPC(latest_data_table_schema));
-    } else if (OB_FAIL(ObTTLFilterInfoHelper::generate_ttl_filter_info(
-        *latest_data_table_schema, ttl_filter_arg_.ttl_filter_info_))) {
+    } else if (OB_FAIL(ObTTLFilterInfoHelper::generate_ttl_filter_info(*latest_data_table_schema, ttl_filter_arg_.ttl_filter_info_))) {
       LOG_WARN("failed to prepare ttl filter info", KR(ret));
+    } else if (FALSE_IT(minimum_safe_ttl_value = get_minimum_safe_ttl_value(*latest_data_table_schema))) {
     } else if (OB_UNLIKELY(ttl_filter_arg_.ttl_filter_info_.is_rowscn_filter()
-        && ttl_filter_arg_.ttl_filter_info_.ttl_filter_value_ <= max_ddl_create_snapshot_)) {
+        && ttl_filter_arg_.ttl_filter_info_.ttl_filter_value_ <= minimum_safe_ttl_value)) {
       const int64_t tenant_task_deadline_ns = tenant_task_start_us * 1000L + TTL_SYNC_WAIT_DDL_CREATE_SNAPSHOT_INTERVAL_NS;
       const int64_t predicted_ttl_filter_value = ttl_filter_arg_.ttl_filter_info_.ttl_filter_value_
                                                 + TTL_SYNC_WAIT_DDL_CREATE_SNAPSHOT_INTERVAL_NS;
-      if (tenant_task_deadline_ns > max_ddl_create_snapshot_
-          && predicted_ttl_filter_value > max_ddl_create_snapshot_) {
+      if (tenant_task_deadline_ns > minimum_safe_ttl_value
+          && predicted_ttl_filter_value > minimum_safe_ttl_value) {
         ret = OB_EAGAIN;
         task_status = ObTTLTaskStatus::OB_TTL_TASK_PENDING;
         LOG_WARN("[COMPACTION TTL] ttl filter value will be valid within 1 hour, pending for retry",
-          KR(ret), K(ttl_filter_arg_.ttl_filter_info_), K(max_ddl_create_snapshot_),
+          KR(ret), K(ttl_filter_arg_.ttl_filter_info_), K(minimum_safe_ttl_value), K(latest_data_table_schema->get_ttl_flag()),
           K(tenant_task_start_us), K(predicted_ttl_filter_value));
       } else {
         task_status = ObTTLTaskStatus::OB_TTL_TASK_SKIP;
-        LOG_INFO("[COMPACTION TTL] filter value is too old for ddl create snapshot, sync for next TTL task execution", KR(ret),
-          K(ttl_filter_arg_.ttl_filter_info_), K(max_ddl_create_snapshot_));
+        LOG_INFO("[COMPACTION TTL] filter value is too old for ddl create snapshot or being scn ttl time, sync for next TTL task execution", KR(ret),
+          K(ttl_filter_arg_.ttl_filter_info_), K(minimum_safe_ttl_value), K(latest_data_table_schema->get_ttl_flag()));
       }
     } else if (OB_FAIL(lock_table_and_sync_mds(trans, *latest_data_table_schema))) {
       LOG_WARN("failed to lock table and sync mds", KR(ret), K(latest_data_table_schema));

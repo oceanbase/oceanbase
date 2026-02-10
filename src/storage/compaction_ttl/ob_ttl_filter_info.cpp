@@ -151,38 +151,4 @@ int ObTTLFilterInfo::to_filter_col_type(const ObObjType &obj_type, ObTTLFilterCo
 
 } // namespace storage
 
-namespace share
-{
-
-bool ObTTLFlag::is_valid(const uint64_t tenant_data_version) const
-{
-  bool bool_ret = true;
-
-  if (tenant_data_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
-    bool_ret = version_ == TTL_FLAG_VERSION_V1 && had_rowscn_as_ttl_ == 0 && ttl_type_ == ObTTLDefinition::NONE && reserved_ == 0;
-  } else {
-    bool_ret = version_ == TTL_FLAG_VERSION_V1 && reserved_ == 0;
-  }
-
-  return bool_ret;
-}
-
-ObTTLFlag::ObTTLFlag()
-  : version_(TTL_FLAG_VERSION_V1),
-    had_rowscn_as_ttl_(0),
-    ttl_type_(ObTTLDefinition::NONE),
-    reserved_(0)
-{}
-
-void ObTTLFlag::reset()
-{
-  version_ = TTL_FLAG_VERSION_V1;
-  had_rowscn_as_ttl_ = 0;
-  ttl_type_ = ObTTLDefinition::NONE;
-  reserved_ = 0;
-}
-
-
-} // namespace share
-
 } // namespace oceanbase

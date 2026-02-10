@@ -3878,7 +3878,7 @@ int ObLSTabletService::update_rows(
     ObStoreCtx &ctx,
     const ObDMLBaseParam &dml_param,
     const ObIArray<uint64_t> &column_ids,
-    const ObIArray< uint64_t> &updated_column_ids,
+    const ObIArray<uint64_t> &origin_updated_column_ids,
     blocksstable::ObDatumRowIterator *row_iter,
     int64_t &affected_rows)
 {
@@ -3888,6 +3888,11 @@ int ObLSTabletService::update_rows(
   int64_t afct_num = 0;
   int64_t dup_num = 0;
 
+  // If a table is ttl table which use rowscn as ttl column, we need to force update lob table to ensure the rowscn is consistent with the data table
+  // Therefore, updated_column_ids maybe different from origin_updated_column_ids, which maybe contains all lob column.
+  ObSEArray<uint64_t, 8> updated_column_ids_buffer;
+  const ObIArray<uint64_t> *updated_column_ids = &origin_updated_column_ids;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -3895,11 +3900,17 @@ int ObLSTabletService::update_rows(
              || !ctx.is_write()
              || !dml_param.is_valid()
              || column_ids.count() <= 0
-             || updated_column_ids.count() <= 0
-             || nullptr == row_iter)) {
+             || nullptr == row_iter
+             || nullptr == dml_param.table_param_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ctx), K(dml_param),
-        K(column_ids), K(updated_column_ids), KP(row_iter));
+        K(column_ids), K(origin_updated_column_ids), KP(row_iter));
+  } else if (dml_param.table_param_->get_data_table().is_rowscn_ttl_table()
+             && OB_FAIL(expand_updated_columns_with_lob(dml_param.table_param_->get_col_descs(),
+                                                        origin_updated_column_ids,
+                                                        updated_column_ids_buffer,
+                                                        updated_column_ids))) {
+    LOG_WARN("failed to handle rowscn ttl table lob", K(ret));
   } else {
     ObDMLRunningCtx run_ctx(ctx,
                             dml_param,
@@ -3913,16 +3924,16 @@ int ObLSTabletService::update_rows(
     bool lob_update = false;
     ObRelativeTable &relative_table = run_ctx.relative_table_;
 
-    if (OB_FAIL(prepare_dml_running_ctx(&column_ids, &updated_column_ids, tablet_handle, run_ctx))) {
+    if (OB_FAIL(prepare_dml_running_ctx(&column_ids, updated_column_ids, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else if (FALSE_IT(tablet_handle.reset())) {
     } else if (OB_UNLIKELY(!relative_table.is_valid())) {
       ret = OB_ERR_SYS;
       LOG_ERROR("data table is not prepared", K(ret));
     } else if (OB_FAIL(construct_update_idx(relative_table.get_rowkey_column_num(),
-        run_ctx.col_map_, updated_column_ids, update_idx))) {
+        run_ctx.col_map_, *updated_column_ids, update_idx))) {
       LOG_WARN("failed to construct update_idx", K(ret), K(updated_column_ids));
-    } else if (OB_FAIL(check_rowkey_change(updated_column_ids, relative_table, rowkey_change))) {
+    } else if (OB_FAIL(check_rowkey_change(*updated_column_ids, relative_table, rowkey_change))) {
       LOG_WARN("failed to check rowkey changes", K(ret));
     } else {
       int64_t cur_time = 0;
@@ -5693,7 +5704,7 @@ int ObLSTabletService::construct_update_idx(
   int ret = OB_SUCCESS;
   int err = OB_SUCCESS;
 
-  if (OB_ISNULL(col_map) || upd_col_ids.count() <= 0 || update_idx.count() > 0 || schema_rowkey_cnt <= 0) {
+  if (OB_ISNULL(col_map) || update_idx.count() > 0 || schema_rowkey_cnt <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(col_map), K(upd_col_ids), K(upd_col_ids.count()), K(schema_rowkey_cnt));
   } else {
@@ -5724,7 +5735,7 @@ int ObLSTabletService::check_rowkey_change(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(update_ids.count() <= 0 || !relative_table.is_valid())) {
+  if (OB_UNLIKELY(!relative_table.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(update_ids), K(ret));
   } else {
@@ -9608,6 +9619,35 @@ int ObLSTabletService::scan_block_stat(
   } else if (OB_FAIL(iter.init(tablet_handle, scan_param))) {
     LOG_WARN("fail to init block stat iterator", K(ret), K(scan_param), K(tablet_handle));
   }
+  return ret;
+}
+
+int ObLSTabletService::expand_updated_columns_with_lob(
+    const ObColDescIArray &col_descs,
+    const ObIArray<uint64_t> &origin_updated_column_ids,
+    ObIArray<uint64_t> &updated_column_ids_buffer,
+    const ObIArray<uint64_t> *&updated_column_ids)
+{
+  int ret = OB_SUCCESS;
+
+  updated_column_ids_buffer.reset();
+
+  if (OB_FAIL(updated_column_ids_buffer.assign(origin_updated_column_ids))) {
+    LOG_WARN("fail to assign updated_column_ids_buffer", K(ret), K(origin_updated_column_ids));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); i++) {
+      if (col_descs.at(i).col_type_.is_lob_storage()) {
+        if (!is_contain(origin_updated_column_ids, static_cast<uint64_t>(col_descs.at(i).col_id_))
+            && OB_FAIL(updated_column_ids_buffer.push_back(col_descs.at(i).col_id_))) {
+          LOG_WARN("fail to push back updated_column_ids_buffer", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      updated_column_ids = &updated_column_ids_buffer;
+    }
+  }
+
   return ret;
 }
 

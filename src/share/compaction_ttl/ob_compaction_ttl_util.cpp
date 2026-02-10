@@ -166,17 +166,5 @@ int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schem
   return ret;
 }
 
-void ObTTLDefinition::gene_info(
-  char* buf, const int64_t buf_len, int64_t &pos) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || buf_len <= 0 || pos >= buf_len) {
-    // do nothing
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "TTL = %.*s BY %s ",
-    ttl_definition_.length(), ttl_definition_.ptr(), ttl_type_to_string(ttl_type_)))) {
-    COMMON_LOG(WARN, "fail to print ttl definition", K(ret), K(ttl_definition_), K(ttl_type_to_string(ttl_type_)));
-  }
-}
-
 } // namespace share
 } // namespace oceanbase

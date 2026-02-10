@@ -28,6 +28,7 @@
 #include "common/ob_range.h"
 #include "common/ob_store_format.h"
 #include "common/ob_tablet_id.h"
+#include "share/compaction_ttl/ob_ttl_definition.h"
 #include "share/ob_define.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/schema/ob_schema_struct.h"
@@ -1748,6 +1749,16 @@ public:
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
   inline ObTTLFlag get_ttl_flag() const { return ttl_flag_; }
   virtual bool has_ttl_definition() const override { return !get_ttl_definition().empty(); }
+  inline bool is_compaction_rowscn_ttl_di_table() const
+  {
+    return get_ttl_flag().ttl_type_ == share::ObTTLDefinition::COMPACTION
+           && is_delete_insert_merge_engine()
+           && get_ttl_flag().ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN;
+  }
+  void update_being_scn_ttl_time(const int64_t timestamp_us)
+  {
+    ttl_flag_.update_being_scn_ttl_time(timestamp_us);
+  }
   inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
   inline const common::ObString &get_index_params() const { return index_params_; }
   inline const common::ObString &get_exec_env() const { return exec_env_; }

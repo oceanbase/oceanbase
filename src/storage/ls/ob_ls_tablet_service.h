@@ -1074,6 +1074,11 @@ private:
       const int64_t row_count,
       blocksstable::ObDatumRow *old_datum_rows,
       blocksstable::ObDatumRow *new_datum_rows);
+  static int expand_updated_columns_with_lob(
+    const ObColDescIArray &col_descs,
+    const ObIArray<uint64_t> &origin_updated_column_ids,
+    ObIArray<uint64_t> &updated_column_ids_buffer,
+    const ObIArray<uint64_t> *&updated_column_ids);
 
 private:
   static int get_storage_row(const blocksstable::ObDatumRow &sql_row,

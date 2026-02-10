@@ -122,6 +122,16 @@ private:
     common::ObISQLClient &sql_proxy,
     const share::schema::ObTableSchema &schema,
     ObIArray<share::ObTabletLSPair> &tablet_ls_pair_array);
+
+  OB_INLINE int64_t get_minimum_safe_ttl_value(const share::schema::ObTableSchema &data_table_schema) const
+  {
+    // We will update all aux index of a rowscn-ttl delete-insert table to ensure that the rowscn is consistent among them.
+    // Therefore, if a delete-insert table was transformed to rowscn comapction ttl table BY ONLINE DDL,
+    // we should ensure that the row before the DDL timepoint is recycled by once time to avoid inconsistent rowscn.
+    return MAX(max_ddl_create_snapshot_,
+               data_table_schema.get_ttl_flag().get_being_scn_ttl_time_ns() + BEING_SCN_TTL_RECYCLE_SAFE_INTERVAL_NS);
+  }
+
 private:
 #ifdef ERRSIM
   static const int64_t TTL_SYNC_WAIT_DDL_LOCK_INTERVAL_US = 1000L * 1000L * 10L; // 10s in us
@@ -131,6 +141,7 @@ private:
   static const int64_t TTL_SYNC_WAIT_DDL_CREATE_SNAPSHOT_INTERVAL_NS = 1000L * 1000L * 1000L * 60L * 60L; // 1hour in ns
   static const int64_t TIMEOUT_PER_PARTITION_US = 30 * 1000L; // 30ms
   static const int64_t TRANS_TIMEOUT_US = 3 * 1000L * 1000L; // 3s
+  static const int64_t BEING_SCN_TTL_RECYCLE_SAFE_INTERVAL_NS = 10 * 1000L * 1000L * 1000L; // 10s
   ObArenaAllocator allocator_;
   const uint64_t tenant_id_;
   const uint64_t data_table_id_;

@@ -177,14 +177,14 @@ int ObTTLSchemaServiceTest::check_schema_ttl(
         ret = OB_ERR_UNEXPECTED;
       }
     }
-    if (OB_SUCC(ret) && expect_rowscn_flag != ttl_flag.had_rowscn_as_ttl_) {
+    if (OB_SUCC(ret) && expect_rowscn_flag != ttl_flag.was_compaction_ttl_) {
       ret = OB_ERR_UNEXPECTED;
     }
     if (OB_SUCCESS != ret) {
       COMMON_LOG(WARN, "check schema ttl failed", K(ret), "table_name", table_schema->get_table_name(),
                  K(expect_has_ttl), K(expect_rowscn_flag),
                  K(expected_ttl_def), K(expected_ttl_type), K(table_schema->get_ttl_definition()),
-                 K(ttl_flag.ttl_type_), K(ttl_flag.had_rowscn_as_ttl_));
+                 K(ttl_flag.ttl_type_), K(ttl_flag.ttl_column_type_));
     }
   }
   return ret;

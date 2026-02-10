@@ -59,6 +59,7 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     vec_vector_col_id_(OB_INVALID_ID),
     mv_mode_(),
     is_delete_insert_(false),
+    is_rowscn_ttl_table_(false),
     merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN),
     inc_pk_doc_id_col_id_(OB_INVALID_ID),
     vec_chunk_col_id_(OB_INVALID_ID),
@@ -109,6 +110,7 @@ void ObTableSchemaParam::reset()
   vec_vector_col_id_ = OB_INVALID_ID;
   mv_mode_.reset();
   is_delete_insert_ = false;
+  is_rowscn_ttl_table_ = false;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN;
   inc_pk_doc_id_col_id_ = OB_INVALID_ID;
   search_idx_included_cids_.reset();
@@ -137,6 +139,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     table_type_ = schema->get_table_type();
     lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
     is_delete_insert_ = schema->is_delete_insert_merge_engine();
+    is_rowscn_ttl_table_ = schema->get_ttl_flag().ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN;
     merge_engine_type_ = schema->get_merge_engine_type();
     if (OB_FAIL(schema->get_is_row_store(use_cs))) {
       LOG_WARN("fail to get is row store", K(ret));
@@ -284,7 +287,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
   }
 
   bool need_truncate_filter = !use_cs && nullptr != schema && schema->is_global_index_table();
-  bool has_ttl_definition = nullptr != schema && schema->get_ttl_flag().had_rowscn_as_ttl_;
+  bool has_ttl_definition = nullptr != schema && schema->get_ttl_flag().was_compaction_ttl_;
   if (OB_FAIL(ret)) {
   } else if (need_truncate_filter || has_ttl_definition) {
     if (OB_FAIL(schema->get_mulit_version_rowkey_column_ids(all_column_ids))) {
@@ -700,6 +703,7 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(search_idx_included_cid_idxes_);
   OB_UNIS_ENCODE(search_idx_included_extended_type_infos_);
   OB_UNIS_ENCODE(fts_index_type_);
+  OB_UNIS_ENCODE(is_rowscn_ttl_table_);
   return ret;
 }
 
@@ -860,7 +864,9 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   }
   OB_UNIS_DECODE(is_delete_insert_);
   OB_UNIS_DECODE(merge_engine_type_);
-  if (OB_SUCC(ret) && merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_MAX) {
+  // If the merge_engine_type is unknown, it means it's upgrade from a old version which doesn't have this field. (before 4.4.1)
+  // At this time, the valid merge_engine is only delete-insert or partial-update.
+  if (OB_SUCC(ret) && merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_UNKNOWN) {
     merge_engine_type_ = is_delete_insert_ ? ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT
                                            : ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
   }
@@ -886,6 +892,7 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
     }
   }
   OB_UNIS_DECODE(fts_index_type_);
+  OB_UNIS_DECODE(is_rowscn_ttl_table_);
   return ret;
 }
 
@@ -947,6 +954,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(search_idx_included_cid_idxes_);
   OB_UNIS_ADD_LEN(search_idx_included_extended_type_infos_);
   OB_UNIS_ADD_LEN(fts_index_type_);
+  OB_UNIS_ADD_LEN(is_rowscn_ttl_table_);
   return len;
 }
 

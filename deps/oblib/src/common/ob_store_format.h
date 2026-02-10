@@ -252,7 +252,9 @@ class ObMergeEngineStoreFormat
 public:
   static OB_INLINE bool is_merge_engine_valid(const ObMergeEngineType type)
   {
-    return type >= ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE && type < ObMergeEngineType::OB_MERGE_ENGINE_MAX;
+    return type == ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE ||
+           type == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT ||
+           type == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY;
   }
   static OB_INLINE bool is_default_merge_engine(const ObMergeEngineType type)
   {
