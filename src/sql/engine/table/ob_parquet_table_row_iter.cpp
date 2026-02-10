@@ -2737,6 +2737,7 @@ int ObParquetTableRowIterator::pre_buffer(std::shared_ptr<parquet::RowGroupReade
       }
     }
   }
+
   int64_t eager_column_cnt = 0;
   for (int i = 0; OB_SUCC(ret) && i < column_indexs_.count(); i++) {
     // 清除上一个 RowGroup 的 ColumnRangeSlices
@@ -2764,8 +2765,17 @@ int ObParquetTableRowIterator::pre_buffer(std::shared_ptr<parquet::RowGroupReade
         }
         int64_t col_length
             = rg_reader->metadata()->ColumnChunk(column_indexs_.at(i))->total_compressed_size();
-        OZ(column_range_slices_.at(i)->range_list_.push_back(
-            ObFilePreBuffer::ReadRange(col_start, col_length)));
+        int64_t current_offset = col_start;
+        int64_t remaining = col_length;
+        const int64_t range_size_limit = options_.cache_options_.range_size_limit_;
+
+        while (remaining > 0) {
+          int64_t range_size = std::min(remaining, range_size_limit);
+          column_range_slices_.at(i)->range_list_.push_back(
+              ObFilePreBuffer::ReadRange(current_offset, range_size));
+          current_offset += range_size;
+          remaining -= range_size;
+        }
       }
       OZ (column_range_slice_list.push_back(column_range_slices_.at(i)));
       if (has_eager_columns() && eager_column_cnt < get_eager_count()
