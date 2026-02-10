@@ -401,7 +401,7 @@ int ObPxTaskProcess::execute(const ObOpSpec &root_spec)
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
         LOG_WARN("failed to apply error code", K(ret), K(tmp_ret));
       }
-      bool is_interrupted_ = IS_INTERRUPTED();
+      is_interrupted_ = IS_INTERRUPTED();
       if (is_interrupted_) {
         // do nothing.
       } else if (OB_SUCCESS != (tmp_ret = ObInterruptUtil::interrupt_tasks(arg_.get_sqc_handler()->get_sqc_init_arg().sqc_,
