@@ -92,7 +92,7 @@ public:
   ObInterestOrderDim() : ObSkylineDim(INTERESTING_ORDER),
     is_interesting_order_(false),
     column_cnt_(0)
-  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER); }
+  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_MAX_ROWKEY_COLUMN_NUMBER); }
   virtual ~ObInterestOrderDim() {}
   void set_interesting_order(const bool interesting_order) { is_interesting_order_ = interesting_order; }
   int add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids);
@@ -104,8 +104,8 @@ public:
 private:
   bool is_interesting_order_;
   int64_t column_cnt_;
-  uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
-  bool const_column_info_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
+  uint64_t column_ids_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
+  bool const_column_info_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
 };
 
 //consider query range subset
@@ -122,7 +122,7 @@ public:
   ObQueryRangeDim() : ObSkylineDim(QUERY_RANGE),
     column_cnt_(0),
     contain_always_false_(false)
-  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER);}
+  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_MAX_ROWKEY_COLUMN_NUMBER);}
   virtual ~ObQueryRangeDim() {}
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   int add_rowkey_ids(const common::ObIArray<uint64_t> &column_ids);
@@ -131,7 +131,7 @@ public:
                "rowkey_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_));
 private:
   int64_t column_cnt_;
-  uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
+  uint64_t column_ids_[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
   bool contain_always_false_;
 };
 

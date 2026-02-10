@@ -10592,8 +10592,8 @@ void ObQueryRange::inner_get_prefix_info(const ObKeyPart *key_part,
                                          bool &contain_always_false) const
 {
   if (OB_NOT_NULL(key_part)) {
-    equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-    range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+    equal_prefix_count = OB_MAX_ROWKEY_COLUMN_NUMBER;
+    range_prefix_count = OB_MAX_ROWKEY_COLUMN_NUMBER;
     for ( /*do nothing*/ ; NULL != key_part; key_part = key_part->or_next_) {
       int64_t cur_equal_prefix_count = 0;
       int64_t cur_range_prefix_count = 0;

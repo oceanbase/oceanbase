@@ -931,7 +931,7 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
                                      bool &contain_always_false) const
 {
   int ret = OB_SUCCESS;
-  equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+  equal_prefix_count = OB_MAX_ROWKEY_COLUMN_NUMBER;
   range_prefix_count = 0;
   if (OB_ISNULL(node_head_)) {
     ret = OB_ERR_UNEXPECTED;

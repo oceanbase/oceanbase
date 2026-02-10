@@ -79,11 +79,11 @@ int ObInterestOrderDim::compare(const ObSkylineDim &other, CompareStat &status) 
 int ObInterestOrderDim::add_interest_prefix_ids(const common::ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
-  if (column_ids.count() < 0 || column_ids.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+  if (column_ids.count() < 0 || column_ids.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("too many rowkey ids", K(ret), K(column_ids.count()));
   } else {
-    MEMSET(column_ids_, 0, sizeof(uint64_t) * OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+    MEMSET(column_ids_, 0, sizeof(uint64_t) * OB_MAX_ROWKEY_COLUMN_NUMBER);
     for (int i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
       column_ids_[i] = column_ids.at(i);
     }
@@ -95,11 +95,11 @@ int ObInterestOrderDim::add_interest_prefix_ids(const common::ObIArray<uint64_t>
 int ObInterestOrderDim::add_const_column_info(const common::ObIArray<bool> &const_column_info)
 {
   int ret = OB_SUCCESS;
-  if (const_column_info.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+  if (const_column_info.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("too many rowkey ids", K(ret), K(const_column_info.count()));
   } else {
-    MEMSET(const_column_info_, 0, sizeof(bool) * OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+    MEMSET(const_column_info_, 0, sizeof(bool) * OB_MAX_ROWKEY_COLUMN_NUMBER);
     for (int i= 0; OB_SUCC(ret) && i < const_column_info.count(); i++) {
       const_column_info_[i] = const_column_info.at(i);
     }
@@ -302,11 +302,11 @@ int ObQueryRangeDim::compare(const ObSkylineDim &other, CompareStat &status) con
 int ObQueryRangeDim::add_rowkey_ids(const common::ObIArray<uint64_t> &rowkey_ids)
 {
   int ret = OB_SUCCESS;
-  if (rowkey_ids.count() < 0 || rowkey_ids.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+  if (rowkey_ids.count() < 0 || rowkey_ids.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("too many rowkey ids", K(ret), K(rowkey_ids.count()));
   } else {
-    MEMSET(column_ids_, 0, sizeof(uint64_t) * OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+    MEMSET(column_ids_, 0, sizeof(uint64_t) * OB_MAX_ROWKEY_COLUMN_NUMBER);
     for (int i = 0; OB_SUCC(ret) && i < rowkey_ids.count(); ++i) {
       column_ids_[i] = rowkey_ids.at(i);
     }
