@@ -1112,6 +1112,17 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
                 ObCharset::get_default_charset()));
           }
         } break;
+        case PARENT_TRACE_ID: {
+          const ObCurTraceId::TraceId &parent_trace_id = record.data_.parent_trace_id_;
+          if (parent_trace_id.is_invalid()) {
+            cells[cell_idx].set_null();
+          } else {
+            int64_t len = parent_trace_id.to_string(parent_trace_id_, sizeof(parent_trace_id_));
+            cells[cell_idx].set_varchar(parent_trace_id_, len);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                ObCharset::get_default_charset()));
+          }
+        } break;
         case PLSQL_EXEC_TIME: {
           cells[cell_idx].set_int(record.data_.plsql_exec_time_);
         } break;

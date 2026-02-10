@@ -105,6 +105,7 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
       ObExecRecord record_bak = session_info_.get_raw_audit_record().exec_record_;
       session_info_.get_raw_audit_record().try_cnt_ = retry_ctrl_.get_retry_times();
       session_info_.get_raw_audit_record().pl_trace_id_.set(traceid_guard_.origin_trace_id_);
+      session_info_.get_raw_audit_record().parent_trace_id_.set(traceid_guard_.parent_sql_trace_id_);
       if (ret_ == OB_SUCCESS && is_ps_cursor_open_) {
         // if ps cursor open succeed, record audit after fill cursor
       } else {
@@ -128,6 +129,7 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
         session_info_.get_raw_audit_record().exec_record_ = record_bak;
         session_info_.get_raw_audit_record().try_cnt_ = try_cnt;
         session_info_.get_raw_audit_record().pl_trace_id_.reset();
+        session_info_.get_raw_audit_record().parent_trace_id_.reset();
       }
     } else {
       LOG_DEBUG("result set is not inited, do not process record", K(ret_), K(ps_sql_));

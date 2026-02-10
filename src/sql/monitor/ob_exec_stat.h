@@ -340,6 +340,7 @@ struct ObAuditRecordData {
     partition_hit_ = true;
     is_perf_event_closed_ = false;
     pl_trace_id_.reset();
+    parent_trace_id_.reset();
     stmt_type_ = sql::stmt::T_NONE;
     sql_memory_used_ = nullptr;
     trans_status_ = INVALID_STATUS;
@@ -468,6 +469,7 @@ struct ObAuditRecordData {
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
   ObCurTraceId::TraceId pl_trace_id_;
+  ObCurTraceId::TraceId parent_trace_id_;
   int64_t plsql_exec_time_;
   char format_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   stmt::StmtType stmt_type_;

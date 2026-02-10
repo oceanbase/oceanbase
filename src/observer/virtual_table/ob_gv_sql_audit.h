@@ -191,6 +191,7 @@ private:
     TX_TABLE_READ_CNT,
     OUTROW_LOB_CNT,
     SS_OBJECT_STORAGE_READS,
+    PARENT_TRACE_ID,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;
@@ -218,6 +219,7 @@ private:
   char user_client_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char trace_id_[128];
   char pl_trace_id_[128];
+  char parent_trace_id_[128];
 
   //max wait event columns
   bool is_first_get_;
