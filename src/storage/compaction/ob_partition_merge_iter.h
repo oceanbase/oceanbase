@@ -132,16 +132,20 @@ private:
 // State machine for rowkey output status in minor merge
 struct ObMinorRowkeyOutputState {
   enum State: uint8_t {
-    FIRST_ROW_OUTPUT = 0,     // First row (F flag) has been output, but not last row (L flag)
+    UNCOMMITTED_ROW_OUTPUT = 0, // Uncommitted row (U flag) has been output
+    FIRST_COMMITTED_ROW_OUTPUT,     // First committed row (F flag) has been output, but not last row (L flag)
     RECYCLING,                // Recycling multi-version rows in the middle
     LAST_ROW_OUTPUT,          // Last row (L flag) has been output, rowkey completed
   };
   ObMinorRowkeyOutputState() : state_(LAST_ROW_OUTPUT) {}
   void reset() { state_ = LAST_ROW_OUTPUT; }
-  bool is_first_row_output() const { return state_ == FIRST_ROW_OUTPUT; }
+  bool have_rowkey_output_row() const { return state_ == UNCOMMITTED_ROW_OUTPUT || state_ == FIRST_COMMITTED_ROW_OUTPUT; }
+  bool is_first_committed_row_output() const { return state_ == FIRST_COMMITTED_ROW_OUTPUT; }
+  bool is_uncommitted_row_output() const { return state_ == UNCOMMITTED_ROW_OUTPUT; }
   bool is_recycling() const { return state_ == RECYCLING; }
   bool is_last_row_output() const { return state_ == LAST_ROW_OUTPUT; }
-  void set_first_row_output() { state_ = FIRST_ROW_OUTPUT; }
+  void set_uncommitted_row_output() { state_ = UNCOMMITTED_ROW_OUTPUT; }
+  void set_first_committed_row_output() { state_ = FIRST_COMMITTED_ROW_OUTPUT; }
   void set_recycling() { state_ = RECYCLING; }
   void set_last_row_output() { state_ = LAST_ROW_OUTPUT; }
   TO_STRING_KV(K_(state));
@@ -167,7 +171,7 @@ public:
   { UNUSEDx(other, cmp_ret); return OB_NOT_SUPPORTED;}
   virtual OB_INLINE const storage::ObITable *get_table() const override { return table_; }
   virtual OB_INLINE bool is_rowkey_first_row_already_output() {
-    return rowkey_state_.is_first_row_output();
+    return rowkey_state_.have_rowkey_output_row();
   }
 
   OB_INLINE bool is_base_iter() const { return is_base_iter_; }

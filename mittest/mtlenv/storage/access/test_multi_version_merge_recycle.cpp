@@ -1797,6 +1797,121 @@ TEST_F(TestMultiVersionMergeRecycle, three_sstables_mixed)
   merger.reset();
 }
 
+TEST_F(TestMultiVersionMergeRecycle, multi_uncommitted_trans_recycle)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeDagParam param;
+  ObTabletExeMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[1];
+  micro_data[0] = // FILTER
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag trans_id\n"
+      "0        var0  -10      -1         0       0     INSERT    NORMAL        CLF               trans_id_0\n"
+      "1        var1  MIN      -100       NOP     3     INSERT    NORMAL        FU                trans_id_2\n"
+      "1        var1  MIN      -80        NOP     2     INSERT    NORMAL        U                 trans_id_2\n"
+      "1        var1  MIN      -30        NOP     1     INSERT    NORMAL        U                 trans_id_2\n"
+      "1        var1  MIN      -20        30      NOP   INSERT    NORMAL        U                 trans_id_1\n"
+      "1        var1  -10      MIN        NOP     9     INSERT    NORMAL        SC                trans_id_0\n"
+      "1        var1  -10      0          NOP     9     INSERT    NORMAL        N                 trans_id_0\n"
+      "1        var1  -9       0          NOP     1     INSERT    NORMAL        L                 trans_id_0\n";
+
+  int schema_rowkey_cnt = 2;
+  int64_t snapshot_version = 30;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(30);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 1, true);
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint  bigint      bigint bigint  flag     flag_type  multi_version_row_flag trans_id\n"
+      "1        var1  MIN      -500        NOP     NOP   DELETE    NORMAL        FU              trans_id_4\n"
+      "1        var1  MIN      -400        NOP     14    UPDATE    NORMAL        U                trans_id_3\n"
+      "1        var1  MIN      -300        NOP     3     UPDATE    NORMAL        U                trans_id_3\n"
+      "1        var1  -22      0           NOP     4     UPDATE    NORMAL        L                trans_id_0\n"
+      "2        var2  -50      0           1       1     INSERT    NORMAL        CLF              trans_id_0\n";
+
+  snapshot_version = 50;
+  scn_range.start_scn_.convert_for_tx(30);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1, true);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObTxTable *tx_table = nullptr;
+  ObTxTableGuard tx_table_guard;
+  get_tx_table_guard(tx_table_guard);
+  ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
+
+  for (int64_t i = 1; i <= 4; i++) {
+    ObTxData *tx_data = new ObTxData();
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
+    transaction::ObTransID tx_id = i;
+
+    // fill in data
+    tx_data->tx_id_ = tx_id;
+    if (i < 4) {
+      tx_data->commit_version_.convert_for_tx(i * 10 + i);
+      tx_data->start_scn_.convert_for_tx(i);
+      tx_data->end_scn_ = tx_data->commit_version_;
+      tx_data->state_ = ObTxData::COMMIT;
+    } else {
+      tx_data->commit_version_.convert_for_tx(INT64_MAX);
+      tx_data->state_ = ObTxData::ABORT;
+    }
+    ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
+    delete tx_data;
+  }
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 40;
+  trans_version_range.base_version_ = 40;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  // minor mrege
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint  bigint      bigint bigint  flag     flag_type  multi_version_row_flag trans_id\n"
+      "1        var1  -33      0          NOP     14     UPDATE    NORMAL        LF                trans_id_0\n" // not filter because this row don't have F-flag
+      "2        var2  -50      0          1       1      INSERT    NORMAL        CLF                trans_id_0\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true, false);
+  ASSERT_TRUE(is_equal);
+  clear_tx_data();
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
+}
+
 }
 }
 

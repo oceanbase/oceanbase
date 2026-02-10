@@ -1843,7 +1843,7 @@ int ObPartitionMinorRowMergeIter::try_make_committing_trans_compacted()
     LOG_WARN("Unexpceted null current row", K(ret), KP_(curr_row));
   } else if (curr_row_->is_uncommitted_row() || curr_row_->is_ghost_row()) {
     // skip uncommited row and last row(including ghost row)
-  } else if (rowkey_state_.is_last_row_output()) {
+  } else if (rowkey_state_.is_last_row_output() || rowkey_state_.is_uncommitted_row_output()) {
     // need check first output row is compacted
     if (is_compact_completed_row() && !is_curr_row_commiting()) {
       // 1. if first row is already compacted, all the rows following are all from commited transaction;
@@ -1874,11 +1874,6 @@ int ObPartitionMinorRowMergeIter::try_make_committing_trans_compacted()
           // uncommitted first, then committed shadow row
         } else if (curr_row_->is_shadow_row()) {
           // continue
-        //} else if (OB_UNLIKELY(2 == row_queue_.count())) {
-          // two trans row, row queue will have > 2 rows [shadow_row / trans_A row / empty row for trans_B]
-          // one trans row, row queue will have 1 row [trans_A row]
-        //  ret = OB_ERR_UNEXPECTED;
-        //  LOG_WARN("Unexpected row queue", K(ret), K(row_queue_.count()), KPC(this));
         } else if (row_queue_.count() > 1 &&
                    OB_FAIL(row_queue_.compact_border_row(curr_row_, true /*last_row */, nop_pos_[ObRowQueue::QI_LAST_ROW], obj_copy_allocator_))) {
           // need to compact to last row
@@ -1931,8 +1926,10 @@ int ObPartitionMinorRowMergeIter::next()
     // Update state based on last output row
     if (curr_row_->is_last_multi_version_row()) {
       rowkey_state_.set_last_row_output();
+    } else if (curr_row_->is_uncommitted_row()) {
+      rowkey_state_.set_uncommitted_row_output();
     } else {
-      rowkey_state_.set_first_row_output();
+      rowkey_state_.set_first_committed_row_output();
     }
     curr_row_ = nullptr;
   }
@@ -2228,7 +2225,7 @@ int ObPartitionMinorMacroMergeIter::next_range(const bool open_macro)
         } else if (curr_block_op_.is_filter()) {
           rowkey_state_.set_recycling();
         } else {
-          rowkey_state_.set_first_row_output();
+          rowkey_state_.set_first_committed_row_output(); // can't reuse block with uncommitted row now
         }
         LOG_DEBUG("next_range", K(ret), K_(rowkey_state), K(curr_block_desc_));
       }
@@ -2361,7 +2358,7 @@ int ObPartitionMinorMacroMergeIter::get_block_op(
 {
   int ret = OB_SUCCESS;
   bool need_open = false;
-    if (!reuse_uncommit_row_ && curr_block_desc_.contain_uncommitted_row_) {
+  if (!reuse_uncommit_row_ && curr_block_desc_.contain_uncommitted_row_) {
     need_open = true;
     LOG_INFO("need rewrite one dirty macro", K_(curr_block_desc));
   } else if (OB_FAIL(check_merge_range_cross(curr_block_desc_.range_, need_open))) {
