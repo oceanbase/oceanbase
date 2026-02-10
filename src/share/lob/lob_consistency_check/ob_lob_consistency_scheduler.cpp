@@ -323,8 +323,8 @@ int ObLobCheckTabletScheduler::handle_single_exception_table_op(ObArenaAllocator
   int ret = OB_SUCCESS;
   ObJsonNode *existing_tablets = nullptr;
   // { "table_id1": [tablet_id1, tablet_id2, ...], "table_id2": [...], ... }
-
-  if (exception_tablets_json->json_type() == ObJsonNodeType::J_OBJECT) {
+  if (OB_ISNULL(exception_tablets_json)) {
+  } else if (exception_tablets_json->json_type() == ObJsonNodeType::J_OBJECT) {
     ObJsonObject *exception_obj = static_cast<ObJsonObject *>(exception_tablets_json);
     uint64_t table_count = exception_obj->element_count();
 
@@ -381,62 +381,13 @@ int ObLobCheckTabletScheduler::handle_exception_table_op(table::ObTTLTaskCtx *ct
   uint64_t ls_id = ctx->task_info_.ls_id_.id();
 
   // Step 1: Insert/merge new exception tablets
-  if (OB_NOT_NULL(lob_task_info.orphan_tablets_json_)) {
-    if (OB_FAIL(handle_single_exception_table_op(lob_task_info.exception_allocator_, lob_task_info.orphan_tablets_json_, LOB_ORPHAN_TYPE,
-                                                 trans))) {
-      LOG_WARN("fail to handle single exception table op", K(ret));
-    } else {
-      lob_task_info.orphan_tablets_json_ = nullptr;
-    }
-  }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(lob_task_info.not_found_tablets_json_)) {
-    if (OB_FAIL(handle_single_exception_table_op(lob_task_info.exception_allocator_, lob_task_info.not_found_tablets_json_, LOB_MISS_TYPE,
-                                                 trans))) {
-      LOG_WARN("fail to handle single exception table op", K(ret));
-    } else {
-      lob_task_info.not_found_tablets_json_ = nullptr;
-    }
-  }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(lob_task_info.mismatch_len_tablets_json_)) {
-    if (OB_FAIL(handle_single_exception_table_op(lob_task_info.exception_allocator_, lob_task_info.mismatch_len_tablets_json_,
-                                                 LOB_MISMATCH_LEN_TYPE, trans))) {
-      LOG_WARN("fail to handle single exception table op", K(ret));
-    } else {
-      lob_task_info.mismatch_len_tablets_json_ = nullptr;
-    }
-  }
-
-  // Step 2: Remove tablets that have become consistent
-  if (OB_SUCC(ret) && OB_NOT_NULL(lob_task_info.not_found_removed_tablets_json_)) {
-    if (OB_FAIL(remove_consistent_exception_tablets(ls_id, lob_task_info.not_found_removed_tablets_json_,
-                                                    LOB_MISS_TYPE, trans))) {
-      LOG_WARN("fail to remove consistent not_found tablets", K(ret), K(ls_id));
-    } else {
-      lob_task_info.not_found_removed_tablets_json_ = nullptr;
-    }
-  }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(lob_task_info.mismatch_len_removed_tablets_json_)) {
-    if (OB_FAIL(remove_consistent_exception_tablets(ls_id, lob_task_info.mismatch_len_removed_tablets_json_,
-                                                    LOB_MISMATCH_LEN_TYPE, trans))) {
-      LOG_WARN("fail to remove consistent mismatch_len tablets", K(ret), K(ls_id));
-    } else {
-      lob_task_info.mismatch_len_removed_tablets_json_ = nullptr;
-    }
-  }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(lob_task_info.orphan_removed_tablets_json_)) {
-    if (OB_FAIL(remove_consistent_exception_tablets(ls_id, lob_task_info.orphan_removed_tablets_json_,
-                                                    LOB_ORPHAN_TYPE, trans))) {
-      LOG_WARN("fail to remove consistent orphan tablets", K(ret), K(ls_id));
-    } else {
-      lob_task_info.orphan_removed_tablets_json_ = nullptr;
-    }
-  }
-
-  lob_task_info.exception_allocator_.reset();
+  OZ(handle_single_exception_table_op(lob_task_info.exception_allocator_, lob_task_info.orphan_tablets_json_, LOB_ORPHAN_TYPE, trans));
+  OZ(handle_single_exception_table_op(lob_task_info.exception_allocator_, lob_task_info.not_found_tablets_json_, LOB_MISS_TYPE, trans));
+  OZ(handle_single_exception_table_op(lob_task_info.exception_allocator_, lob_task_info.mismatch_len_tablets_json_, LOB_MISMATCH_LEN_TYPE, trans));
+  OZ(remove_consistent_exception_tablets(ls_id, lob_task_info.not_found_removed_tablets_json_, LOB_MISS_TYPE, trans));
+  OZ(remove_consistent_exception_tablets(ls_id, lob_task_info.mismatch_len_removed_tablets_json_, LOB_MISMATCH_LEN_TYPE, trans));
+  OZ(remove_consistent_exception_tablets(ls_id, lob_task_info.orphan_removed_tablets_json_, LOB_ORPHAN_TYPE, trans));
+  OX(lob_task_info.reset_json_nodes());
   return ret;
 }
 
@@ -447,8 +398,6 @@ int ObLobCheckTabletScheduler::remove_consistent_exception_tablets(uint64_t ls_i
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(removed_tablets_json)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("removed_tablets_json is null", K(ret));
   } else if (removed_tablets_json->json_type() != ObJsonNodeType::J_OBJECT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("removed_tablets_json is not object", K(ret), K(removed_tablets_json->json_type()));
@@ -602,15 +551,7 @@ int ObLobRepairTabletScheduler::handle_exception_table_op(table::ObTTLTaskCtx *c
     }
 
     // Clear exception_table_tablets_ in ctx after sync, reset for next batch
-    if (OB_SUCC(ret)) {
-      lob_task_info.exception_allocator_.reset();
-      lob_task_info.not_found_tablets_json_ = nullptr;
-      lob_task_info.orphan_tablets_json_ = nullptr;
-      lob_task_info.mismatch_len_tablets_json_ = nullptr;
-      lob_task_info.not_found_removed_tablets_json_ = nullptr;
-      lob_task_info.mismatch_len_removed_tablets_json_ = nullptr;
-      lob_task_info.orphan_removed_tablets_json_ = nullptr;
-    }
+    OX(lob_task_info.reset_json_nodes());
   }
 
   return ret;

@@ -47,6 +47,16 @@ struct ObLobTaskInfo {
     OB_DELETEx(ObJsonNode, &exception_allocator_, orphan_removed_tablets_json_);
   }
 
+  void reset_json_nodes() {
+    exception_allocator_.reset();
+    not_found_tablets_json_ = nullptr;
+    mismatch_len_tablets_json_ = nullptr;
+    orphan_tablets_json_ = nullptr;
+    not_found_removed_tablets_json_ = nullptr;
+    mismatch_len_removed_tablets_json_ = nullptr;
+    orphan_removed_tablets_json_ = nullptr;
+  }
+
   common::ObArenaAllocator exception_allocator_;
   int64_t                  lob_not_found_cnt_;
   int64_t                  lob_length_mismatch_cnt_;
