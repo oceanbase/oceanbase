@@ -1772,28 +1772,6 @@ int ObTablet::check_tablet_schema_mismatch(
   return ret;
 }
 
-int ObTablet::update_meta_last_persisted_committed_tablet_status_from_sstable(
-    const ObUpdateTableStoreParam &param,
-    const ObTabletCreateDeleteMdsUserData &old_last_persisted_committed_tablet_status)
-{
-  int ret = OB_SUCCESS;
-  if (is_mds_minor_merge(param.compaction_info_.merge_type_)) {
-    if (OB_FAIL(tablet_meta_.last_persisted_committed_tablet_status_.assign(
-        old_last_persisted_committed_tablet_status))) {
-      LOG_WARN("fail to assign last_persisted_committed_tablet_status", K(ret));
-    } else {
-      LOG_DEBUG("minor merge update with old last_persisted_committed_tablet_status",
-        K(tablet_meta_.last_persisted_committed_tablet_status_),
-        K(old_last_persisted_committed_tablet_status));
-    }
-  } else if (OB_FAIL(update_tablet_status_from_sstable(true/*expect_persist_status*/))) {
-    LOG_WARN("fail to update tablet status from sstable", K(ret));
-  }
-  LOG_DEBUG("read last tablet status", K(ret), K(param.compaction_info_.merge_type_),
-      K(tablet_meta_.last_persisted_committed_tablet_status_));
-  return ret;
-}
-
 int ObTablet::update_tablet_status_from_sstable(const bool expect_persist_status)
 {
   int ret = OB_SUCCESS;
@@ -1986,8 +1964,9 @@ int ObTablet::init_with_mds_sstable(
     LOG_WARN("fail to init table store", K(ret), K(param), KPC(old_table_store));
   } else if (OB_FAIL(try_update_start_scn())) {
     LOG_WARN("failed to update start scn", K(ret), K(param), K(table_store_addr_));
-  } else if (!is_ls_inner_tablet() && CLICK_FAIL(update_meta_last_persisted_committed_tablet_status_from_sstable(
-      param, old_tablet.tablet_meta_.last_persisted_committed_tablet_status_))) {
+  } else if (!is_ls_inner_tablet()
+             && old_tablet.tablet_meta_.mds_checkpoint_scn_ < tablet_meta_.mds_checkpoint_scn_
+            && CLICK_FAIL(update_tablet_status_from_sstable(true/*expect_persist_status*/))) {
     LOG_WARN("failed to update last_persisted_committed_tablet_status_ ", K(ret), K(param),
         "old_last_persisted_committed_tablet_status",
         old_tablet.tablet_meta_.last_persisted_committed_tablet_status_);

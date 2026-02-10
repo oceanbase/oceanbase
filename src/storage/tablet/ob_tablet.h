@@ -825,9 +825,6 @@ private:
       const ObTablet &old_tablet,
       const ObStorageSchema &storage_schema,
       const bool is_convert_co_major_merge);
-  int update_meta_last_persisted_committed_tablet_status_from_sstable(
-      const ObUpdateTableStoreParam &param,
-      const ObTabletCreateDeleteMdsUserData &last_tablet_status);
   int update_tablet_status_from_sstable(const bool expect_persist_status);
   int partial_deserialize(
       common::ObArenaAllocator &allocator,
