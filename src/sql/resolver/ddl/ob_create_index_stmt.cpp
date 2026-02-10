@@ -20,12 +20,12 @@ using namespace oceanbase::common;
 namespace sql
 {
 ObCreateIndexStmt::ObCreateIndexStmt(ObIAllocator *name_pool)
-    : ObPartitionedStmt(name_pool, stmt::T_CREATE_INDEX), create_index_arg_() ,table_id_(OB_INVALID_ID)
+    : ObPartitionedStmt(name_pool, stmt::T_CREATE_INDEX), create_index_arg_(&allocator_), table_id_(OB_INVALID_ID)
 {
 }
 
 ObCreateIndexStmt::ObCreateIndexStmt()
-    : ObPartitionedStmt(NULL, stmt::T_CREATE_INDEX), create_index_arg_(), table_id_(OB_INVALID_ID)
+    : ObPartitionedStmt(NULL, stmt::T_CREATE_INDEX), create_index_arg_(&allocator_), table_id_(OB_INVALID_ID)
 {
 }
 

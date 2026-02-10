@@ -2889,6 +2889,38 @@ public:
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
   }
+  explicit ObCreateIndexArg(common::ObIAllocator *allocator)
+      : index_type_(share::schema::INDEX_TYPE_IS_NOT),
+        index_columns_(),
+        store_columns_(),
+        hidden_store_columns_(),
+        fulltext_columns_(),
+        index_option_(),
+        data_table_id_(common::OB_INVALID_ID),
+        index_table_id_(common::OB_INVALID_ID),
+        if_not_exist_(false),
+        with_rowid_(false),
+        index_schema_(allocator),
+        is_inner_(false),
+        nls_date_format_(),
+        nls_timestamp_format_(),
+        nls_timestamp_tz_format_(),
+        sql_mode_(0),
+        inner_sql_exec_addr_(),
+        allocator_(),
+        local_session_var_(&allocator_),
+        exist_all_column_group_(false),
+        index_cgs_(),
+        vidx_refresh_info_(),
+        is_rebuild_index_(false),
+        is_index_scope_specified_(false),
+        is_offline_rebuild_(false),
+        index_key_(-1),
+        data_version_(0)
+  {
+    index_action_type_ = ADD_INDEX;
+    index_using_type_ = share::schema::USING_BTREE;
+  }
   virtual ~ObCreateIndexArg() {}
   void reset()
   {
@@ -3021,7 +3053,7 @@ public:
   uint64_t index_table_id_; // Data_table_id and index_table_id will be given in SQL during recovery
   bool if_not_exist_;
   bool with_rowid_;
-  share::schema::ObTableSchema index_schema_; // Index table schema
+  share::schema::ObTableSchema index_schema_; // Use stmt allocator so memory is freed on stmt retry
   bool is_inner_;
   //Nls_xx_format is required when creating a functional index
   common::ObString nls_date_format_;
