@@ -146,9 +146,10 @@ namespace transaction
       share::ObLSArray parts_;
       ObTxCommitParts commit_parts_;
       common::ObString app_trace_info_;
+      common::ObString app_trace_id_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(xid), K_(parts),
-          K_(app_trace_info));
+          K_(app_trace_info), K_(app_trace_id));
       OB_UNIS_VERSION(1);
     };
 
@@ -215,9 +216,11 @@ namespace transaction
       share::SCN commit_start_scn_;
       share::ObLSArray parts_;
       common::ObString app_trace_info_;
+      common::ObString app_trace_id_;
       ObTxCommitParts commit_parts_;
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(commit_start_scn), K_(parts), K_(app_trace_info), K_(commit_parts));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(commit_start_scn), K_(parts),
+          K_(app_trace_info), K_(commit_parts), K_(app_trace_id));
       OB_UNIS_VERSION(1);
     };
     struct ObTxCommitRespMsg : public ObTxMsg {
@@ -335,6 +338,7 @@ namespace transaction
     public:
       share::ObLSID upstream_;
       ObString app_trace_info_;
+      ObString app_trace_id_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(upstream));
       OB_UNIS_VERSION(1);
@@ -473,6 +477,7 @@ namespace transaction
       ObXATransID xid_;
       share::ObLSID upstream_;
       ObString app_trace_info_;
+      ObString app_trace_id_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(xid), K_(upstream));
       OB_UNIS_VERSION(1);
