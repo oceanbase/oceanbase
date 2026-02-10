@@ -652,8 +652,7 @@ int ObMediumCompactionInfo::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(medium_info));
   } else if (FALSE_IT(allocator_ = &allocator)) {
-  } else if (medium_info.contain_storage_schema()
-          && OB_FAIL(storage_schema_.init(allocator, medium_info.storage_schema_))) {
+  } else if (medium_info.storage_schema_.is_valid() && OB_FAIL(storage_schema_.init(allocator, medium_info.storage_schema_))) {
     LOG_WARN("failed to init storage schema", K(ret), K(medium_info));
   } else if (OB_FAIL(parallel_merge_info_.init(allocator, medium_info.parallel_merge_info_))) {
     LOG_WARN("failed to init parallel merge info", K(ret), K(medium_info));
@@ -736,6 +735,7 @@ void ObMediumCompactionInfo::reset()
   contain_mds_filter_info_ = false;
   contain_inc_major_info_ = false;
   contain_window_decision_log_info_ = false;
+  contain_noinc_storage_schema_ = false;
   reserved_ = 0;
   cluster_id_ = 0;
   data_version_ = 0;
@@ -818,10 +818,20 @@ bool ObMediumCompactionInfo::contain_storage_schema() const
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode() &&
       ObAdaptiveMergePolicy::is_skip_merge_reason((ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_merge_reason_)) {
-    contain_schema = false;
+    contain_schema = contain_noinc_storage_schema_;
   }
 #endif
   return contain_schema;
+}
+
+void ObMediumCompactionInfo::set_contain_noinc_storage_schema()
+{
+  if (MEDIUM_COMPAT_VERSION_V6 <= medium_compat_version_) {
+    contain_noinc_storage_schema_ = true;
+  } else {
+    contain_noinc_storage_schema_ = false;
+    storage_schema_.reset();
+  }
 }
 
 int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const  // FARM COMPAT WHITELIST

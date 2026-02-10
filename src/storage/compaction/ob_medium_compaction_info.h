@@ -341,6 +341,7 @@ public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
   void set_co_major_merge_strategy(const ObCOMajorMergeStrategy &strategy);
   void get_co_major_merge_strategy(ObCOMajorMergeStrategy &strategy) const;
+  void set_contain_noinc_storage_schema();
 private:
   bool contain_storage_schema() const;
 public:
@@ -355,7 +356,7 @@ public:
   static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V6;
 private:
   static const int32_t SCS_ONE_BIT = 1;
-  static const int32_t SCS_RESERVED_BITS = 24;
+  static const int32_t SCS_RESERVED_BITS = 23;
 
 public:
   union {
@@ -372,6 +373,7 @@ public:
       uint64_t contain_mds_filter_info_         : SCS_ONE_BIT;
       uint64_t contain_inc_major_info_          : SCS_ONE_BIT;
       uint64_t contain_window_decision_log_info_: SCS_ONE_BIT;
+      uint64_t contain_noinc_storage_schema_    : SCS_ONE_BIT;
       uint64_t reserved_                        : SCS_RESERVED_BITS;
     };
   };

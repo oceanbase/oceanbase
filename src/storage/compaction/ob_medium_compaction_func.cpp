@@ -1796,10 +1796,20 @@ int ObMediumCompactionScheduleFunc::try_skip_merge_for_ss(
     medium_info.set_basic_info(ObMediumCompactionInfo::MAJOR_COMPACTION, merge_reason, merge_version);
     medium_info.cluster_id_ = GCONF.cluster_id;
     medium_info.tenant_id_ = MTL_ID();
-    medium_info.storage_schema_.reset();
     medium_info.clear_parallel_range();
     medium_info.last_medium_snapshot_ = (0 >= last_major_snapshot) ? -1 : last_major_snapshot;
-    FLOG_INFO("success to prepare skip medium info", K(tablet_id), K(medium_info));
+    int tmp_ret = OB_SUCCESS;
+    int64_t tablet_schema_version = 0;
+    int64_t medium_info_schema_version = medium_info.storage_schema_.schema_version_;
+    if (OB_TMP_FAIL(tablet.get_schema_version_from_storage_schema(tablet_schema_version))) {
+      LOG_WARN("failed to get schema version from storage schema", K(tmp_ret), K(tablet_id), K(tablet));
+    } else if (tablet_schema_version >= medium_info_schema_version) {
+      LOG_TRACE("skip schema schema in medium info", K(tablet_id), K(medium_info));
+      medium_info.storage_schema_.reset();
+    } else {
+      medium_info.set_contain_noinc_storage_schema();
+    }
+    FLOG_INFO("success to prepare skip medium info", K(tablet_id), K(medium_info), K(tablet_schema_version), K(medium_info_schema_version));
     skip = true;
   }
   return ret;
