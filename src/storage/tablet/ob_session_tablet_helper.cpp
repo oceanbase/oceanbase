@@ -140,7 +140,7 @@ int ObSessionTabletCreateHelper::do_work()
       table_lock_arg.owner_id_.convert_from_client_sessid(conn->get_session().get_sessid_for_table(), conn->get_session().get_client_create_time());
       if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
         LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
-      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::SHARE, timeout_us, trans_))) {
+      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, timeout_us, trans_))) {
         LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
       } else if (OB_FAIL(latest_schema_guard.get_table_id(table_schema->get_database_id(), table_schema->get_session_id(), table_schema->get_table_name(),
                                table_id_get_from_guard, table_type, schema_version))) {

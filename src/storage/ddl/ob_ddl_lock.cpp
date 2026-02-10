@@ -491,15 +491,16 @@ int ObDDLLock::lock_for_add_lob_in_trans(
   const uint64_t data_table_id = data_table_schema.get_table_id();
   const int64_t timeout_us = DEFAULT_TIMEOUT;
   ObSEArray<ObTabletID, 1> data_tablet_ids;
+  const bool is_orcl_tmp_table_v2 = data_table_schema.is_oracle_tmp_table_v2();
   if (!need_lock(data_table_schema)) {
     LOG_INFO("skip ddl lock", K(data_table_id));
-  } else if (OB_FAIL(data_table_schema.get_tablet_ids(data_tablet_ids))) {
+  } else if (!is_orcl_tmp_table_v2 && OB_FAIL(data_table_schema.get_tablet_ids(data_tablet_ids))) {
     LOG_WARN("failed to get tablet ids", K(ret));
   } else if (OB_FAIL(lock_table_lock_in_trans(tenant_id, data_table_id, data_tablet_ids, ROW_EXCLUSIVE, timeout_us, trans))) {
     LOG_WARN("failed to lock tablet", K(ret));
   } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id, data_table_id, ROW_EXCLUSIVE, timeout_us, trans))) {
     LOG_WARN("failed to lock data table", K(ret));
-  } else if (OB_FAIL(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id, data_tablet_ids, ROW_EXCLUSIVE, timeout_us, trans))) {
+  } else if (!is_orcl_tmp_table_v2 && OB_FAIL(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id, data_tablet_ids, ROW_EXCLUSIVE, timeout_us, trans))) {
     LOG_WARN("failed to lock data table tablets", K(ret));
   }
   return ret;
