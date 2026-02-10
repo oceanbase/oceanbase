@@ -6345,14 +6345,15 @@ public:
   ssl_type_(share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED),
   modify_max_connections_(false),
   max_connections_per_hour_(OB_INVALID_ID), max_user_connections_(OB_INVALID_ID),
-  plugin_()
+  plugin_(), retain_current_password_(false), discard_old_password_(false)
   { }
   virtual ~ObSetPasswdArg() {}
   bool is_valid() const;
   virtual bool contain_sensitive_data() const { return true; }
   TO_STRING_KV(K_(tenant_id), K_(user), K_(host), K_(passwd), K_(ssl_type),
                K_(ssl_cipher), K_(x509_issuer), K_(x509_subject),
-               K_(max_connections_per_hour), K_(max_user_connections), K_(plugin));
+               K_(max_connections_per_hour), K_(max_user_connections), K_(plugin),
+               K_(retain_current_password), K_(discard_old_password));
 
   uint64_t tenant_id_;
   common::ObString user_;
@@ -6366,6 +6367,8 @@ public:
   uint64_t max_connections_per_hour_;
   uint64_t max_user_connections_;
   common::ObString plugin_;
+  bool retain_current_password_;
+  bool discard_old_password_;
 };
 
 struct ObLockUserArg : public ObDDLArg

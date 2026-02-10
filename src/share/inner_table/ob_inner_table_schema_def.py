@@ -476,7 +476,9 @@ all_user_def = dict(
       ('priv_create_database_link', 'int', 'false', '0'),
       ('priv_others', 'int', 'false', '0'),
       ('flags', 'int', 'false', '0'),
-      ('plugin', 'varchar:64', 'false', 'mysql_native_password'),
+      ('plugin', 'varchar:64', 'false', ''),
+      ('old_password', 'varchar:OB_MAX_PASSWORD_LENGTH', 'false', ''),
+      ('old_password_start_time', 'int', 'false', 'OB_INVALID_TIMESTAMP'),
     ],
 )
 
@@ -2285,6 +2287,7 @@ all_profile_def = dict(
     ('password_reuse_time', 'int', 'false', '-1'),
     ('password_reuse_max', 'int', 'false', '-1'),
     ('inactive_account_time', 'int', 'false', '-1'),
+    ('password_rollover_time', 'int', 'false', '-1'),
   ],
 )
 def_table_schema(**all_profile_def)
@@ -8973,6 +8976,7 @@ def_table_schema(
 # 588: __all_catalog_table_stat
 # 589: __all_catalog_column_stat
 # 590: __all_catalog_table_opt_stat_gather_history
+# 591: __all_audit_log_encryption_password
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -12090,6 +12094,7 @@ def_table_schema(
   ('create_database_link_priv', 'varchar:1'),
   ('create_role_priv', 'varchar:1'),
   ('drop_role_priv', 'varchar:1'),
+  # ('user_attributes', 'longtext', 'true', 'NULL'),
   ],
 )
 
@@ -33684,7 +33689,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 14)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_CATALOG,
           (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG,
           (CASE WHEN (PRIV_OTHERS & (1 << 17)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_SENSITIVE_RULE,
-          (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS
+          (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS,
+          OLD_PASSWORD,
+          OLD_PASSWORD_START_TIME
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -33757,7 +33764,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 14)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_CATALOG,
           (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG,
           (CASE WHEN (PRIV_OTHERS & (1 << 17)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_SENSITIVE_RULE,
-          (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS
+          (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS,
+          OLD_PASSWORD,
+          OLD_PASSWORD_START_TIME
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -48495,7 +48504,16 @@ def_table_schema(
       B.USER_ID AS USERID,
       B.PASSWD AS PASSWORD,
       B.PLUGIN AS PLUGIN,
-      CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(32)) AS ACCOUNT_STATUS,
+      CAST(CASE
+        WHEN B.IS_LOCKED = 1 THEN 'LOCKED'
+        WHEN B.OLD_PASSWORD_START_TIME > 0
+          AND NVL(P.PASSWORD_ROLLOVER_TIME, 0) > 0
+          AND NUMTODSINTERVAL((B.OLD_PASSWORD_START_TIME / (1000 * 1000)), 'SECOND')
+            + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss')
+            + NUMTODSINTERVAL(NVL(P.PASSWORD_ROLLOVER_TIME, 0) / (1000 * 1000), 'SECOND') > SYSDATE
+          THEN 'OPEN & IN ROLLOVER'
+        ELSE 'OPEN'
+      END AS VARCHAR2(32)) AS ACCOUNT_STATUS,
       CAST(NULL as DATE) AS LOCK_DATE,
       CAST(NULL as DATE) AS EXPIRY_DATE,
       CAST(NULL as VARCHAR2(30)) AS DEFAULT_TABLESPACE,
@@ -57905,6 +57923,17 @@ FROM
       9223372036854775807, 'UNLIMITED',
       -2, 'DEFAULT',
       PASSWORD_GRACE_TIME) AS VARCHAR2(128)) AS LIMIT
+  FROM
+    SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT
+  UNION ALL
+  SELECT
+    PROFILE_NAME AS PROFILE,
+    CAST('PASSWORD_ROLLOVER_TIME' AS VARCHAR2(32)) AS RESOURCE_NAME,
+    CAST('PASSWORD' AS VARCHAR2(8)) AS RESOURCE_TYPE,
+    CAST(DECODE(PASSWORD_ROLLOVER_TIME, -1, 'UNLIMITED',
+      9223372036854775807, 'UNLIMITED',
+      -2, 'DEFAULT',
+      PASSWORD_ROLLOVER_TIME) AS VARCHAR2(128)) AS LIMIT
   FROM
     SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT)
 ORDER BY PROFILE, RESOURCE_NAME
@@ -67408,7 +67437,16 @@ def_table_schema(
     SELECT
       B.USER_NAME AS USERNAME,
       B.USER_ID AS USERID,
-      CAST(CASE WHEN B.IS_LOCKED = 1 THEN 'LOCKED' ELSE 'OPEN' END as VARCHAR2(32)) AS ACCOUNT_STATUS,
+      CAST(CASE
+        WHEN B.IS_LOCKED = 1 THEN 'LOCKED'
+        WHEN B.OLD_PASSWORD_START_TIME > 0
+          AND NVL(P.PASSWORD_ROLLOVER_TIME, 0) > 0
+          AND NUMTODSINTERVAL((B.OLD_PASSWORD_START_TIME / (1000 * 1000)), 'SECOND')
+            + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss')
+            + NUMTODSINTERVAL(NVL(P.PASSWORD_ROLLOVER_TIME, 0) / (1000 * 1000), 'SECOND') > SYSDATE
+          THEN 'OPEN & IN ROLLOVER'
+        ELSE 'OPEN'
+      END AS VARCHAR2(32)) AS ACCOUNT_STATUS,
       CAST(NULL as DATE) AS LOCK_DATE,
       CAST(NULL as DATE) AS EXPIRY_DATE,
       CAST(NULL as VARCHAR2(30)) AS DEFAULT_TABLESPACE,
@@ -67427,6 +67465,8 @@ def_table_schema(
       CAST(B.PASSWORD_LAST_CHANGED AS DATE) AS PASSWORD_CHANGE_DATE
     FROM
       SYS.ALL_VIRTUAL_USER_REAL_AGENT B
+      LEFT JOIN SYS.ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT P
+        ON B.TENANT_ID = P.TENANT_ID AND B.PROFILE_ID = P.PROFILE_ID
     WHERE
       B.TYPE = 0
       AND B.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')

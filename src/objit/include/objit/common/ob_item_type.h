@@ -999,6 +999,8 @@ typedef enum ObItemType
   T_FUN_SYS_TO_FLOAT64_OR_NULL = 1946,
   T_FUN_SYS_NEW_TIME = 1947,
   T_FUN_SYS_NLS_CHARSET_ID = 1948,
+  T_FUN_SYS_AUDIT_LOG_ENCRYPTION_PASSWORD_SET = 1949,
+  T_FUN_SYS_AUDIT_LOG_ENCRYPTION_PASSWORD_GET = 1950,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
