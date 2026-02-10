@@ -391,6 +391,7 @@ private:
                  const lib::Worker::CompatMode compat_mode);
 };
 
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 2, 1)
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */
