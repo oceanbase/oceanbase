@@ -892,7 +892,7 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
       const ObOptParamHint *opt_params = &log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
       if (OB_FAIL(opt_params->get_opt_param(ObOptParamHint::WORKAREA_SIZE_POLICY, val))) {
         LOG_WARN("fail to check rowsets enabled", K(ret));
-      } else if (val.is_varchar() && 0 == val.get_varchar().case_compare("MANULE")) {
+      } else if (val.is_varchar() && 0 == val.get_varchar().case_compare("MANUAL")) {
         phy_plan_->disable_auto_memory_mgr();
       }
     }

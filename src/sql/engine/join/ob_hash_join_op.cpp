@@ -2877,9 +2877,7 @@ int ObHashJoinOp::prepare_hash_table()
         K(sql_mem_processor_.get_mem_bound()), K(buf_mgr_->get_data_ratio()),
         K(cur_dumped_partition_), K(enable_bloom_filter_));
     } else {
-      if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used()))) {
-        LOG_WARN("failed to update used mem size", K(ret));
-      }
+      sql_mem_processor_.update_used_mem_size(get_mem_used());
     }
     LOG_TRACE("trace prepare hash table", K(ret), K(hash_table.nbuckets_), K(hash_table.row_count_),
       K(buckets_mem_size), K(part_count_), K(buf_mgr_->get_reserve_memory_size()),

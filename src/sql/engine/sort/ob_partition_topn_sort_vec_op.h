@@ -343,8 +343,8 @@ private:
       if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
             &mem_context_->get_malloc_allocator(), checker, updated))) {
         SQL_ENG_LOG(WARN, "failed to get max available memory size", K(ret));
-      } else if (updated && OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_context_->used()))) {
-        SQL_ENG_LOG(WARN, "failed to update used memory size", K(ret));
+      } else if (updated) {
+        sql_mem_processor_.update_used_mem_size(mem_context_->used());
       }
     }
     return ret;

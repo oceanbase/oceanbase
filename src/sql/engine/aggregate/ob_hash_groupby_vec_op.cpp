@@ -229,8 +229,7 @@ int ObHashGroupByVecOp::inner_open()
                 aggr_processor_.get_aggregate_row_size() + sizeof(int64_t),
                 init_size))) {
       LOG_WARN("fail to init hash map", K(ret), K(dup_groupby_exprs_));
-    } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used_size()))) {
-      LOG_WARN("fail to update_used_mem_size", "size", get_mem_used_size(), K(ret));
+    } else if (FALSE_IT(sql_mem_processor_.update_used_mem_size(get_mem_used_size()))) {
     } else if (OB_FAIL(local_group_rows_.init_group_store(
                  sql_mem_processor_.get_dir_id(), &sql_mem_processor_,
                  mem_context_->get_malloc_allocator(), &io_event_observer_, MY_SPEC.max_batch_size_,
@@ -775,14 +774,11 @@ int ObHashGroupByVecOp::update_mem_status_periodically(const int64_t nth_cnt,
                     updated))) {
     LOG_WARN("failed to update usable memory size periodically", K(ret));
   } else if (updated) {
-    if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used_size()))) {
-      LOG_WARN("failed to update used memory size", K(ret));
-    } else {
-      double data_ratio = sql_mem_processor_.get_data_ratio();
-      est_part_cnt = detect_part_cnt(input_row);
-      calc_data_mem_ratio(est_part_cnt, data_ratio);
-      need_dump = is_need_dump(data_ratio);
-    }
+    sql_mem_processor_.update_used_mem_size(get_mem_used_size());
+    double data_ratio = sql_mem_processor_.get_data_ratio();
+    est_part_cnt = detect_part_cnt(input_row);
+    calc_data_mem_ratio(est_part_cnt, data_ratio);
+    need_dump = is_need_dump(data_ratio);
   }
   return ret;
 }
@@ -889,9 +885,8 @@ bool ObHashGroupByVecOp::need_start_dump(const int64_t input_rows, int64_t &est_
         mem_used))) {
       need_dump = true;
       LOG_WARN("failed to extend max memory size", K(ret), K(need_dump));
-    } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(mem_used))) {
-      LOG_WARN("failed to update used memory size", K(ret), K(mem_used),K(mem_bound),K(need_dump));
     } else {
+      sql_mem_processor_.update_used_mem_size(mem_used);
       est_part_cnt = detect_part_cnt(input_rows);
       calc_data_mem_ratio(est_part_cnt, data_ratio);
       LOG_TRACE("trace extend max memory size", K(ret), K(data_ratio),
@@ -994,8 +989,8 @@ int ObHashGroupByVecOp::setup_dump_env(const int64_t part_id, const int64_t inpu
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(sql_mem_processor_.get_max_available_mem_size(&mem_context_->get_malloc_allocator()))) {
       LOG_WARN("failed to get max available memory size", K(ret));
-    } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used_size()))) {
-      LOG_WARN("failed to update mem size", K(ret));
+    } else {
+      sql_mem_processor_.update_used_mem_size(get_mem_used_size());
     }
     LOG_TRACE("trace setup dump", K(part_cnt), K(pre_part_cnt), K(part_id));
   }
@@ -1640,7 +1635,7 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
     mem_context_->get_malloc_allocator().free(cur_part);
     cur_part = NULL;
   }
-  IGNORE_RETURN sql_mem_processor_.update_used_mem_size(get_mem_used_size());
+  sql_mem_processor_.update_used_mem_size(get_mem_used_size());
 
   return ret;
 }

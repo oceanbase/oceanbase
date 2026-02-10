@@ -128,7 +128,7 @@ public:
   int extend_max_memory_size(ObIAllocator *allocator, PredFunc dump_fun, bool &need_dump,
     int64_t mem_used, int64_t max_times = 1024);
 
-  int update_used_mem_size(int64_t used_size);
+  void update_used_mem_size(int64_t used_size);
 
   void set_periodic_cnt(int64_t cnt) { periodic_cnt_ = cnt; }
   int64_t get_periodic_cnt() const { return periodic_cnt_; }

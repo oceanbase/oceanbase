@@ -2165,8 +2165,8 @@ int ObHashJoinVecOp::prepare_hash_table()
         LOG_WARN("trace failed to  prepare hash table",
                 K(profile_.get_expect_size()), K(profile_.get_bucket_size()), K(profile_.get_row_count()),
                 K(get_mem_used()), K(sql_mem_processor_.get_mem_bound()), K(cur_dumped_partition_));
-      } else if (OB_FAIL(sql_mem_processor_.update_used_mem_size(get_mem_used()))) {
-        LOG_WARN("failed to update used mem size", K(ret));
+      } else {
+        sql_mem_processor_.update_used_mem_size(get_mem_used());
       }
     }
     LOG_TRACE("trace prepare hash table", K(ret), K(profile_.get_bucket_size()), K(profile_.get_row_count()),

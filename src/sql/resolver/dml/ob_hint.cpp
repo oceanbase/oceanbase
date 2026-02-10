@@ -975,7 +975,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       break;
     }
     case WORKAREA_SIZE_POLICY: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANULE"));
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANUAL"));
       break;
     }
     case SPILL_COMPRESSION_CODEC: {
