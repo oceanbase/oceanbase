@@ -1142,6 +1142,7 @@ int ObExprBaseLRpad::init_pad_ctx(const ObExpr &expr,
                                  int64_t length,
                                  int64_t buffer_size,
                                  bool is_mysql_mode,
+                                 const int64_t max_result_size,
                                  ObExprLRPadContext *&pad_ctx)
 {
   int ret = OB_SUCCESS;
@@ -1162,6 +1163,7 @@ int ObExprBaseLRpad::init_pad_ctx(const ObExpr &expr,
     if (OB_FAIL(ret)) {
     } else {
       int64_t repeat_count = (length + pad_len - 1) / pad_len;
+      repeat_count = std::min(repeat_count, max_result_size / str_pad.length());
       char *pad_buf = static_cast<char *>(exec_ctx.get_allocator().alloc(str_pad.length() * repeat_count));
       if (OB_ISNULL(pad_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1270,7 +1272,7 @@ int ObExprBaseLRpad::calc_mysql_vector_optimized(const ObExpr &expr,
     uint64_t pad_id = static_cast<uint64_t>(expr.expr_ctx_id_);
     if (NULL == (pad_ctx = static_cast<ObExprLRPadContext *>(exec_ctx.get_expr_op_ctx(pad_id)))) {
       ObString str_pad = pad_text_vec->get_string(bound.start());
-      if (OB_FAIL(init_pad_ctx(expr, ctx, exec_ctx, pad_id, str_pad, length, buffer_size, true, pad_ctx))) {
+      if (OB_FAIL(init_pad_ctx(expr, ctx, exec_ctx, pad_id, str_pad, length, buffer_size, true, max_result_size, pad_ctx))) {
         LOG_WARN("failed to init pad ctx", K(ret));
       }
     }
@@ -2340,7 +2342,9 @@ int ObExprBaseLRpad::calc_oracle_vector_optimized(const ObExpr &expr,
     const int64_t ORACLE_EXTENDED_MAX_VARCHAR_LENGTH = 32767;
     max_varchar2_size = ORACLE_EXTENDED_MAX_VARCHAR_LENGTH;
   }
-  max_result_size = max_varchar2_size;
+  max_result_size = ob_is_text_tc(expr.datum_meta_.type_)
+      ? OB_MAX_LONGTEXT_LENGTH
+      : max_varchar2_size;
 
   // get len_int (the second argument of lrpad expr)
   // set len_int to -1 if the result of expr should be set to null
@@ -2394,7 +2398,7 @@ int ObExprBaseLRpad::calc_oracle_vector_optimized(const ObExpr &expr,
     uint64_t pad_id = static_cast<uint64_t>(expr.expr_ctx_id_);
     if (NULL == (pad_ctx = static_cast<ObExprLRPadContext *>(exec_ctx.get_expr_op_ctx(pad_id)))) {
       int64_t buffer_size = std::min(max_result_size, len_int * mbmaxlen);
-      if (OB_FAIL(init_pad_ctx(expr, ctx, exec_ctx, pad_id, str_pad, len_int, buffer_size, false, pad_ctx))) {
+      if (OB_FAIL(init_pad_ctx(expr, ctx, exec_ctx, pad_id, str_pad, len_int, buffer_size, false, max_result_size, pad_ctx))) {
         LOG_WARN("failed to init pad ctx", K(ret));
       }
     }
@@ -2500,10 +2504,10 @@ int ObExprBaseLRpad::calc_oracle_inner_vector_optimized(const ObExpr &expr,
         int64_t remain_width = (len_int - text_width) % pad_width;
         int64_t total_width = 0;
         if (OB_FAIL((ObCharsetStringHelper::fast_display_charpos<false, CanDoAsciiOptimize>(cs_type,
-                                                                                                      str_pad,
-                                                                                                      remain_width,
-                                                                                                      prefix_size,
-                                                                                                      total_width)))) {
+                                                                                            str_pad,
+                                                                                            remain_width,
+                                                                                            prefix_size,
+                                                                                            total_width)))) {
           LOG_WARN("Failed to get max display width", K(ret), K(str_text), K(remain_width));
         } else {
           if (remain_width != total_width) {
@@ -2512,24 +2516,37 @@ int ObExprBaseLRpad::calc_oracle_inner_vector_optimized(const ObExpr &expr,
           int64_t total_pad_size = repeat_count * pad_size + prefix_size;
           int64_t result_size = text_size + total_pad_size + (pad_space ? space_str.length(): 0);
           if (OB_UNLIKELY(result_size > max_result_size)) {
+            pad_space = false;
             repeat_count = (max_result_size - text_size) / pad_size;
             int64_t remain_width = len_int - (text_width + pad_width * repeat_count);
             int64_t remain_size = max_result_size - (text_size + repeat_count * pad_size);
             int64_t total_width = 0;
             if (remain_width > 0 && remain_size > 0) {
               if (OB_FAIL(ObCharsetStringHelper::fast_display_charpos(cs_type,
-                                                                             str_pad.ptr(),
-                                                                             std::min<int64_t>(str_pad.length(), remain_size),
-                                                                             remain_width,
-                                                                             false,
-                                                                             prefix_size,
-                                                                             total_width))) {
+                                                                      str_pad.ptr(),
+                                                                      std::min<int64_t>(str_pad.length(), remain_size),
+                                                                      remain_width,
+                                                                      false,
+                                                                      prefix_size,
+                                                                      total_width))) {
                 LOG_WARN("Failed to get max display width", K(ret), K(str_text), K(remain_width));
               } else if (remain_width != total_width && remain_size != prefix_size) {
                 pad_space = true;
               }
             }
-          } else if (OB_FAIL((padding_vector_oracle_optimized<IsLeftPad>(str_text.ptr(), text_size, pad_buf, total_pad_size, pad_space, space_str, result_buf)))) {
+            if (OB_SUCC(ret)) {
+              total_pad_size = repeat_count * pad_size + prefix_size;
+              result_size = text_size + total_pad_size + (pad_space ? space_str.length(): 0);
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL((padding_vector_oracle_optimized<IsLeftPad>(str_text.ptr(),
+                                                                         text_size,
+                                                                         pad_buf,
+                                                                         total_pad_size,
+                                                                         pad_space,
+                                                                         space_str,
+                                                                         result_buf)))) {
             LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad));
           } else {
             res_vec->set_string(idx, result_buf, result_size);

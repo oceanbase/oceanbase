@@ -267,6 +267,7 @@ public:
                           int64_t length,
                           int64_t buffer_size,
                           bool is_mysql_mode,
+                          const int64_t max_result_size,
                           ObExprLRPadContext *&pad_ctx);
   int get_origin_len_obj(ObObj &len_obj) const;
   DECLARE_SET_LOCAL_SESSION_VARS;
