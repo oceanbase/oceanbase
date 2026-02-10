@@ -119,7 +119,6 @@ void ObTableLoadStoreCtx::destroy()
   }
   for (TransMap::const_iterator iter = trans_map_.begin(); iter != trans_map_.end(); ++iter) {
     ObTableLoadStoreTrans *trans = iter->second;
-    abort_unless(0 == trans->get_ref_count());
     trans_allocator_.free(trans);
   }
   // 按顺序析构对象, 被依赖的最后析构
@@ -1073,10 +1072,10 @@ int ObTableLoadStoreCtx::start_trans(const ObTableLoadTransId &trans_id,
       } else {
         if (OB_FAIL(alloc_trans(trans_id, trans))) {
           LOG_WARN("fail to alloc trans", KR(ret));
-        }
+        } else if (FALSE_IT(trans->inc_ref_count())) {
         // trans初始化会创建后台pipeline, pipeline通过持有trans的引用计数来保证channel的生命周期
         // 初始化失败场景, pipeline可能被创建出来, trans不能立即释放
-        else if (OB_FAIL(trans->init())) {
+        } else if (OB_FAIL(trans->init())) {
           LOG_WARN("fail to init trans", KR(ret), K(trans_id));
         } else {
           segment_ctx->current_trans_ = trans;
@@ -1123,7 +1122,11 @@ int ObTableLoadStoreCtx::commit_trans(ObTableLoadStoreTrans *trans)
     } else {
       segment_ctx->current_trans_ = nullptr;
       segment_ctx->committed_trans_store_ = trans_store;
-      trans->set_dirty();
+      if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
+        LOG_WARN("fail to erase_refactored", KR(ret));
+      } else {
+        put_trans(trans);
+      }
     }
     if (OB_NOT_NULL(segment_ctx)) {
       segment_ctx_map_.revert(segment_ctx);
@@ -1165,7 +1168,11 @@ int ObTableLoadStoreCtx::abort_trans(ObTableLoadStoreTrans *trans)
       LOG_WARN("fail to check trans status abort", KR(ret));
     } else {
       segment_ctx->current_trans_ = nullptr;
-      trans->set_dirty();
+      if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
+        LOG_WARN("fail to erase_refactored", KR(ret));
+      } else {
+        put_trans(trans);
+      }
     }
     if (OB_NOT_NULL(segment_ctx)) {
       segment_ctx_map_.revert(segment_ctx);
@@ -1184,18 +1191,13 @@ void ObTableLoadStoreCtx::put_trans(ObTableLoadStoreTrans *trans)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(trans));
   } else {
-    obsys::ObWLockGuard<> guard(rwlock_);
-    ObTableLoadTransCtx *trans_ctx = trans->get_trans_ctx();
-    if (0 == trans->dec_ref_count() && trans->is_dirty()) {
+    if (0 == trans->dec_ref_count()) {
+      ObTableLoadTransCtx *trans_ctx = trans->get_trans_ctx();
       ObTableLoadTransStatusType trans_status = trans_ctx->get_trans_status();
       OB_ASSERT(ObTableLoadTransStatusType::COMMIT == trans_status ||
                 ObTableLoadTransStatusType::ABORT == trans_status);
-      if (OB_FAIL(trans_map_.erase_refactored(trans->get_trans_id()))) {
-        LOG_WARN("fail to erase_refactored", KR(ret));
-      } else {
-        trans_allocator_.free(trans);
-        trans = nullptr;
-      }
+      trans_allocator_.free(trans);
+      trans = nullptr;
     }
   }
   if (OB_FAIL(ret)) {

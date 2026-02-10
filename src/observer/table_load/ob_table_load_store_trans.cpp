@@ -31,7 +31,6 @@ ObTableLoadStoreTrans::ObTableLoadStoreTrans(ObTableLoadTransCtx *trans_ctx)
     trans_store_(nullptr),
     trans_store_writer_(nullptr),
     ref_count_(0),
-    is_dirty_(false),
     is_inited_(false)
 {
 }
