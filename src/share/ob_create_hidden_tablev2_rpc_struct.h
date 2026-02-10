@@ -136,7 +136,8 @@ public:
                K_(tz_info_wrap),
                K_(nls_formats),
                K_(tablet_ids),
-               K_(foreign_key_checks));
+               K_(foreign_key_checks),
+               K_(enable_partition_pruning));
   ObCreateHiddenTableArgV2() :
     ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
@@ -149,7 +150,8 @@ public:
     tz_info_wrap_(),
     nls_formats_(ObNLSFormatEnum::NLS_MAX),
     tablet_ids_(),
-    foreign_key_checks_(true)
+    foreign_key_checks_(true),
+    enable_partition_pruning_(false)
     {}
   ~ObCreateHiddenTableArgV2()
   {
@@ -168,6 +170,7 @@ public:
     nls_formats_.reset();
     tablet_ids_.reset();
     foreign_key_checks_ = true;
+    enable_partition_pruning_ = false;
   }
   int assign(const ObCreateHiddenTableArgV2 &arg);
   int assign(const ObCreateHiddenTableArg &arg);
@@ -177,7 +180,8 @@ public:
            const ObSQLMode sql_mode, const ObTimeZoneInfo &tz_info,
            const common::ObString &local_nls_date, const common::ObString &local_nls_timestamp,
            const common::ObString &local_nls_timestamp_tz, const ObTimeZoneInfoWrap &tz_info_wrap,
-           const common::ObIArray<common::ObTabletID> &tablet_ids, const bool foreign_key_checks);
+           const common::ObIArray<common::ObTabletID> &tablet_ids, const bool foreign_key_checks,
+           const bool enable_partition_pruning = false);
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_table_id() const { return table_id_; }
   int64_t get_consumer_group_id() const { return consumer_group_id_; }
@@ -193,6 +197,7 @@ public:
   const common::ObIArray<common::ObString> &get_nls_formats() const { return nls_formats_; }
   const common::ObIArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
   bool get_foreign_key_checks() const { return foreign_key_checks_; }
+  bool get_enable_partition_pruning() const { return enable_partition_pruning_; }
 private:
   uint64_t tenant_id_;
   int64_t table_id_;
@@ -207,6 +212,7 @@ private:
   common::ObSArray<common::ObString> nls_formats_;
   common::ObSArray<common::ObTabletID> tablet_ids_;
   bool foreign_key_checks_;
+  bool enable_partition_pruning_;
 };
 
 }// end namespace obrpc
