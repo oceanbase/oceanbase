@@ -548,6 +548,11 @@ public:
   int check_stmt_need_multi_partition_dml(const ObDMLStmt &stmt,
                                           const ObIArray<IndexDMLInfo *> &index_dml_infos,
                                           bool &is_multi_part_dml);
+  int check_for_update_need_multi_partition_dml(const ObDMLStmt &stmt,
+                                         const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                         ObLogicalOperator &top,
+                                         ObShardingInfo *source_sharding,
+                                         bool &is_multi_part_dml);
   int check_location_need_multi_partition_dml(ObLogicalOperator &top,
                                               uint64_t table_id,
                                               bool &is_multi_part_dml,
