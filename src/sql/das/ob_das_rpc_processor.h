@@ -65,7 +65,7 @@ protected:
   ObSqlStatRecordKey sqlstat_key_;
   ObExecutingSqlStatRecord sqlstat_record_;
   //tsc monitor info
-  int64_t monitor_val_[5];
+  int64_t monitor_val_[10];
   ObTSCMonitorInfo tsc_monitor_info_;
 };
 

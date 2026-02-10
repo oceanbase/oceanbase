@@ -111,8 +111,7 @@ bool ObTableStoreStat::is_valid() const
       || pushdown_row_access_cnt_ < 0 || pushdown_row_select_cnt_ < 0
       || !single_get_stat_.is_valid() || !multi_get_stat_.is_valid() || !index_back_stat_.is_valid()
       || !single_scan_stat_.is_valid() || !multi_scan_stat_.is_valid()
-      || !exist_row_.is_valid() ||!get_row_.is_valid() || !scan_row_.is_valid()
-      || logical_read_cnt_ < 0 || physical_read_cnt_ < 0) {
+      || !exist_row_.is_valid() ||!get_row_.is_valid() || !scan_row_.is_valid()) {
     valid = false;
   }
   return valid;
@@ -158,9 +157,6 @@ int ObTableStoreStat::add(const ObTableStoreStat& other)
     exist_row_.add(other.exist_row_);
     get_row_.add(other.get_row_);
     scan_row_.add(other.scan_row_);
-
-    logical_read_cnt_ += other.logical_read_cnt_;
-    physical_read_cnt_ += other.physical_read_cnt_;
   }
   return ret;
 }

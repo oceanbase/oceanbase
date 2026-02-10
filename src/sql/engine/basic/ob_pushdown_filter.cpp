@@ -1695,7 +1695,7 @@ int ObPushdownFilterExecutor::do_filter(
   int ret = OB_SUCCESS;
   bool is_needed_to_do_filter = check_filter_determinated();
   uint64_t start_time = 0;
-  if (parent && parent->is_enable_reorder() && filter_info.disable_bypass_) {
+  if (OB_NOT_NULL(parent) && parent->is_enable_reorder() && filter_info.disable_bypass_) {
     start_time = rdtsc();
   }
   if (!is_needed_to_do_filter) {
@@ -1724,7 +1724,7 @@ int ObPushdownFilterExecutor::do_filter(
       0, filter_info.count_, result_bitmap)))) {
     LOG_WARN("failed to filter batch", K(ret));
   }
-  if (OB_SUCC(ret) && parent && parent->is_enable_reorder() && filter_info.disable_bypass_) {
+  if (OB_SUCC(ret) && (OB_NOT_NULL(parent) && parent->is_enable_reorder() && filter_info.disable_bypass_)) {
     uint64_t popcnt = result_bitmap.popcnt();
     filter_realtime_statistics_.add_filter_cost_time(rdtsc() - start_time + 1);
     if (parent->is_logic_and_node()) {  // If parent is logic and, then bitmap is initialized to 1, calculate # of 0 as filtered row count.
@@ -1732,6 +1732,7 @@ int ObPushdownFilterExecutor::do_filter(
     } else if (parent->is_logic_or_node()) {  // If parent is logic or, then bitmap is initialized to 0, calculate # of 1 as filtered row count.
       filter_realtime_statistics_.add_filtered_row_cnt(popcnt);
     }
+    LOG_DEBUG("collet filter real-time statistics", K(parent->get_type()), K(result_bitmap.size()), K(popcnt), K(filter_realtime_statistics_.get_filtered_row_cnt()), K(filter_realtime_statistics_.get_filter_cost_time()));
   }
   return ret;
 }

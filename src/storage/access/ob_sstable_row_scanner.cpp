@@ -289,7 +289,6 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
             LOG_WARN("Failed to increase row num in sample filter", KPC_(micro_scanner), KPC(sample_executor));
           }
         }
-        EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
         LOG_TRACE("[PUSHDOWN] pushdown for block scan", K(prefetcher_.cur_micro_data_fetch_idx_), K(micro_info), KPC(block_row_store_));
       }
       if (OB_SUCC(ret)) {
@@ -364,12 +363,11 @@ int ObSSTableRowScanner<PrefetchType>::inner_get_next_row(const ObDatumRow *&sto
       OB_FAIL(set_row_scn(access_ctx_->use_fuse_row_cache_, *iter_param_, store_row))) {
       LOG_WARN("failed to set row scn", K(ret), KPC(this));
     }
-    EVENT_INC(ObStatEventIds::SSSTORE_READ_ROW_COUNT);
     if (OB_NOT_NULL(sstable_)) {
       if (sstable_->is_minor_sstable()) {
-        EVENT_INC(ObStatEventIds::MINOR_SSSTORE_READ_ROW_COUNT);
+        ++access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_;
       } else if (sstable_->is_major_sstable()) {
-        EVENT_INC(ObStatEventIds::MAJOR_SSSTORE_READ_ROW_COUNT);
+        ++access_ctx_->table_store_stat_.major_sstable_read_row_cnt_;
       }
     }
     LOG_DEBUG("[INDEX BLOCK] inner get next row", KPC(store_row), KPC(this));

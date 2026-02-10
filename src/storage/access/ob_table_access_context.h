@@ -46,13 +46,6 @@ class ObTruncatePartitionFilter;
 #define REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(CTX, SIZE) \
   if (OB_NOT_NULL(CTX)) CTX->add_ssstore_read_bytes(SIZE)
 
-#define REALTIME_MONITOR_INC_READ_ROW_CNT(ITER, CTX) \
-  if (OB_LIKELY(nullptr != ITER && nullptr != CTX))  \
-    ITER->is_sstable_iter() ? CTX->add_ssstore_read_row_cnt() : CTX->add_memstore_read_row_cnt();
-
-#define REALTIME_MONITOR_ADD_READ_ROW_CNT(CTX, COUNT) \
-  if (OB_NOT_NULL(CTX)) CTX->add_ssstore_read_row_cnt(COUNT);
-
 #define IF_NEED_CHECK_BASE_VERSION_FILTER(CTX) \
   CTX->truncate_part_filter_ != nullptr && CTX->truncate_part_filter_->is_valid_filter()
 
@@ -85,9 +78,12 @@ struct ObTableScanStoreStat
     pushdown_micro_access_cnt_ = 0;
     empty_read_cnt_ = 0;
     rowkey_prefix_ = 0;
-    logical_read_cnt_ = 0;
-    physical_read_cnt_ = 0;
     in_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
+    major_sstable_read_row_cnt_ = 0;
+    minor_sstable_read_row_cnt_ = 0;
+    memstore_read_row_cnt_ = 0;
+    blockscan_row_cnt_ = 0;
+    storage_filtered_row_cnt_ = 0;
     skip_index_skip_block_cnt_ = 0;
   }
 public:
@@ -123,9 +119,9 @@ public:
                K_(block_cache_hit_cnt), K_(block_cache_miss_cnt),
                K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt),
                K_(micro_access_cnt), K_(pushdown_micro_access_cnt),
-               K_(empty_read_cnt), K_(rowkey_prefix),
-               K_(logical_read_cnt), K_(physical_read_cnt), K_(in_row_cache_threshold),
-               K_(skip_index_skip_block_cnt));
+               K_(empty_read_cnt), K_(rowkey_prefix), K_(in_row_cache_threshold),
+               K_(major_sstable_read_row_cnt), K_(minor_sstable_read_row_cnt), K_(memstore_read_row_cnt),
+               K_(blockscan_row_cnt), K_(storage_filtered_row_cnt), K_(skip_index_skip_block_cnt));
   int64_t row_cache_hit_cnt_;
   int64_t row_cache_miss_cnt_;
   int64_t row_cache_put_cnt_;
@@ -140,9 +136,12 @@ public:
   int64_t pushdown_micro_access_cnt_;
   int64_t empty_read_cnt_;
   int64_t rowkey_prefix_;
-  int64_t logical_read_cnt_;
-  int64_t physical_read_cnt_;
   int64_t in_row_cache_threshold_;
+  int64_t major_sstable_read_row_cnt_;
+  int64_t minor_sstable_read_row_cnt_;
+  int64_t memstore_read_row_cnt_;
+  int64_t blockscan_row_cnt_;
+  int64_t storage_filtered_row_cnt_;
   int64_t skip_index_skip_block_cnt_;
 };
 
@@ -253,18 +252,6 @@ struct ObTableAccessContext
   {
     if (OB_LIKELY(nullptr != table_scan_stat_ && nullptr != table_scan_stat_->tsc_monitor_info_)) {
       *table_scan_stat_->tsc_monitor_info_->ssstore_read_bytes_ += bytes;
-    }
-  }
-  OB_INLINE void add_ssstore_read_row_cnt(const int64_t count = 1)
-  {
-    if (OB_LIKELY(nullptr != table_scan_stat_ && nullptr != table_scan_stat_->tsc_monitor_info_)) {
-      *table_scan_stat_->tsc_monitor_info_->ssstore_read_row_cnt_ += count;
-    }
-  }
-  OB_INLINE void add_memstore_read_row_cnt(const int64_t count = 1)
-  {
-    if (OB_LIKELY(nullptr != table_scan_stat_ && nullptr != table_scan_stat_->tsc_monitor_info_)) {
-      *table_scan_stat_->tsc_monitor_info_->memstore_read_row_cnt_ += count;
     }
   }
   OB_INLINE void incr_row_scan_cnt(int64_t &local_cnt)

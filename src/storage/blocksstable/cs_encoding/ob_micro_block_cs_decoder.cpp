@@ -432,12 +432,12 @@ int ObCSEncodeBlockGetReader::init(
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(do_init(block_data, request_cnt))) {
-      LOG_WARN("failed to do init", K(ret), K(block_data), K(request_cnt));
-    } else {
-      read_info_ = &read_info;
-    }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(do_init(block_data, request_cnt))) {
+    LOG_WARN("failed to do init", K(ret), K(block_data), K(request_cnt));
+  } else {
+    read_info_ = &read_info;
+    original_data_length_ = transform_helper_.get_micro_block_header()->original_length_;
   }
 
   return ret;
@@ -578,6 +578,8 @@ int ObCSEncodeBlockGetReader::init(const ObMicroBlockData &block_data,
       LOG_WARN("fail to init transform helper", K(ret));
     } else if (OB_FAIL(do_init(block_data, request_cnt))) {
       LOG_WARN("failed to do init", K(ret), K(block_data), K(request_cnt));
+    } else {
+      original_data_length_ = transform_helper_.get_micro_block_header()->original_length_;
     }
   }
   return ret;
@@ -946,6 +948,8 @@ int ObMicroBlockCSDecoder::init(
 
     if (OB_FAIL(do_init(block_data))) {
       LOG_WARN("do init failed", K(ret));
+    } else {
+      original_data_length_ = transform_helper_.get_micro_block_header()->original_length_;
     }
 
     LOG_DEBUG("init ObMicroBlockCSDecoder", K(ret), K(block_data), K(read_info));

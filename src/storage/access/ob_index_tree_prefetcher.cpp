@@ -1330,7 +1330,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
                                   block_info, *(access_ctx_->allocator_), use_vectorize))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
           } else if (block_info.can_skip_fetch()) {
-            access_ctx_->table_store_stat_.collect_stat_info(block_info);
+            update_table_store_stat(access_ctx_->table_store_stat_, block_info);
             continue;
           } else if (nullptr != agg_store_ && OB_FAIL(agg_store_->can_use_index_info(block_info, can_agg))) {
             LOG_WARN("Fail to judge can aggregate micro index", K(ret));
@@ -1338,7 +1338,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             if (OB_FAIL(agg_store_->fill_index_info(block_info, false))) {
               LOG_WARN("Fail to agg index info", K(ret), K(block_info), KPC_(agg_store), KPC(this));
             } else {
-              access_ctx_->table_store_stat_.collect_stat_info(block_info);
+              update_table_store_stat(access_ctx_->table_store_stat_, block_info, true/* is_agg */);
               LOG_DEBUG("Success to agg index info", K(ret), K(block_info), KPC_(agg_store));
               continue;
             }
@@ -1857,14 +1857,14 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
                                                                 use_vectorize))) {
         LOG_WARN("Fail to check if can skip prefetch", K(ret), K(index_info));
       } else if (index_info.can_skip_fetch()) {
-        prefetcher.access_ctx_->table_store_stat_.collect_stat_info(index_info);
+        prefetcher.update_table_store_stat(prefetcher.access_ctx_->table_store_stat_, index_info);
       } else if (nullptr != prefetcher.agg_store_ && OB_FAIL(prefetcher.agg_store_->can_use_index_info(index_info, can_agg))) {
         LOG_WARN("Fail to judge can aggregate index info", K(ret), KPC(prefetcher.agg_store_));
       } else if (can_agg) {
         if (OB_FAIL(prefetcher.agg_store_->fill_index_info(index_info, false))) {
           LOG_WARN("Fail to agg index info", K(ret), K(index_info), KPC_(prefetcher.agg_store), KPC(this));
         } else {
-          prefetcher.access_ctx_->table_store_stat_.collect_stat_info(index_info);
+          prefetcher.update_table_store_stat(prefetcher.access_ctx_->table_store_stat_, index_info, true/* is_agg */);
           LOG_DEBUG("Success to agg index info", K(ret), K(index_info), KPC_(prefetcher.agg_store), KPC(this));
         }
       } else if (OB_FAIL(prefetcher.check_row_lock(index_info, is_row_lock_checked_))) {
@@ -1963,6 +1963,23 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
     }
   }
   return ret;
+}
+
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::update_table_store_stat(
+    ObTableScanStoreStat &table_store_stat, const ObMicroIndexInfo &index_info, bool is_agg/* filter or aggregate */)
+{
+  table_store_stat.skip_index_skip_block_cnt_ += index_info.get_micro_block_count();
+  table_store_stat.pushdown_micro_access_cnt_ += index_info.get_micro_block_count();
+  table_store_stat.blockscan_row_cnt_ += index_info.get_row_count();
+  if (sstable_->is_minor_sstable()) {
+    table_store_stat.minor_sstable_read_row_cnt_ += index_info.get_row_count();
+  } else if (sstable_->is_major_sstable()) {
+    table_store_stat.major_sstable_read_row_cnt_ += index_info.get_row_count();
+  }
+  if (!is_agg) {
+    table_store_stat.storage_filtered_row_cnt_ += index_info.get_row_count();
+  }
 }
 
 // Explicit instantiations.

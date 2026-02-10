@@ -210,7 +210,7 @@ int ObCGScanner::locate(
   return ret;
 }
 
-int ObCGScanner::open_cur_data_block()
+int ObCGScanner::open_cur_data_block(bool blockscan)
 {
   int ret = OB_SUCCESS;
   if (prefetcher_.cur_micro_data_fetch_idx_ < 0 ||
@@ -254,8 +254,10 @@ int ObCGScanner::open_cur_data_block()
           current_ = MAX(cs_range.start_row_id_, query_index_range_.start_row_id_);
         }
         access_ctx_->inc_micro_access_cnt();
-        EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
-        ++access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
+        REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_scanner_->get_data_length());
+        if (blockscan) {
+          ++access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
+        }
         LOG_TRACE("[COLUMNSTORE] open data block", "row_range", cs_range);
         LOG_DEBUG("Success to open micro block", K(ret), K(prefetcher_.cur_micro_data_fetch_idx_),
                   K(micro_info), K(micro_handle), KPC(this), K(common::lbt()));
@@ -378,7 +380,7 @@ int ObCGScanner::get_next_valid_block(sql::ObPushdownFilterExecutor *parent,
             LOG_WARN("Fail to set bitmap batch", K(ret), K(row_range));
           } else if (parent && parent->is_enable_reorder() && filter_info.disable_bypass_) {
             filter_info.filter_->get_filter_realtime_statistics().add_filtered_row_cnt(count);
-            filter_info.filter_->get_filter_realtime_statistics().add_skip_index_skip_mb_cnt(1);
+            filter_info.filter_->get_filter_realtime_statistics().add_skip_index_skip_block_cnt(1);
           }
         } else if (index_info.is_filter_always_true()) {
           if (OB_FAIL(result_bitmap.set_bitmap_batch(
@@ -389,7 +391,7 @@ int ObCGScanner::get_next_valid_block(sql::ObPushdownFilterExecutor *parent,
             LOG_WARN("Fail to set bitmap batch", K(ret), K(row_range));
           } else if (parent && parent->is_enable_reorder() && filter_info.disable_bypass_) {
             filter_info.filter_->get_filter_realtime_statistics().add_filtered_row_cnt(count);
-            filter_info.filter_->get_filter_realtime_statistics().add_skip_index_skip_mb_cnt(1);
+            filter_info.filter_->get_filter_realtime_statistics().add_skip_index_skip_block_cnt(1);
           }
         } else if (nullptr != parent && (!parent->is_enable_reorder() || !filter_info.first_batch_) && ObCGScanner::can_skip_filter(
                 *parent, *parent_bitmap, prefetcher_.current_micro_info().get_row_range())) {
@@ -437,7 +439,7 @@ int ObCGScanner::inner_filter(
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to get next valid index", K(ret));
           }
-        } else if (OB_FAIL(open_cur_data_block())) {
+        } else if (OB_FAIL(open_cur_data_block(true))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to open cur data block", K(ret));
           }
@@ -660,7 +662,7 @@ int ObCGRowScanner::fetch_rows(const int64_t batch_size, uint64_t &count, const 
   if (is_new_range_) {
     prefetcher_.cur_micro_data_fetch_idx_++;
     prefetcher_.cur_micro_data_read_idx_++;
-    if (OB_FAIL(open_cur_data_block())) {
+    if (OB_FAIL(open_cur_data_block(true))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Fail to open data block", K(ret), K_(current));
       }
@@ -679,7 +681,7 @@ int ObCGRowScanner::fetch_rows(const int64_t batch_size, uint64_t &count, const 
         LOG_DEBUG("Calc to end of prefetched data", K(ret), K(prefetcher_.cur_micro_data_fetch_idx_),
                   K(prefetcher_.micro_data_prefetch_idx_));
       } else if (FALSE_IT(++prefetcher_.cur_micro_data_fetch_idx_)) {
-      } else if (OB_FAIL(open_cur_data_block())) {
+      } else if (OB_FAIL(open_cur_data_block(true))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to open data block", K(ret), K_(current));
         }

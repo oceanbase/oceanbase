@@ -649,8 +649,8 @@ int ObDASScanOp::decode_task_result(ObIDASTaskResult *task_result)
       ObTSCMonitorInfo &tsc_monitor_info = *scan_rtdef_->tsc_monitor_info_;
       tsc_monitor_info.add_io_read_bytes(scan_result->get_io_read_bytes());
       tsc_monitor_info.add_ssstore_read_bytes(scan_result->get_ssstore_read_bytes());
-      tsc_monitor_info.add_ssstore_read_row_cnt(scan_result->get_ssstore_read_row_cnt());
-      tsc_monitor_info.add_memstore_read_row_cnt(scan_result->get_memstore_read_row_cnt());
+      tsc_monitor_info.add_base_read_row_cnt(scan_result->get_base_read_row_cnt());
+      tsc_monitor_info.add_delta_read_row_cnt(scan_result->get_delta_read_row_cnt());
     }
   }
   return ret;
@@ -765,8 +765,8 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
   if (OB_SUCC(ret) && OB_NOT_NULL(scan_rtdef_->tsc_monitor_info_)) {
     scan_result.add_io_read_bytes(*scan_rtdef_->tsc_monitor_info_->io_read_bytes_);
     scan_result.add_ssstore_read_bytes(*scan_rtdef_->tsc_monitor_info_->ssstore_read_bytes_);
-    scan_result.add_ssstore_read_row_cnt(*scan_rtdef_->tsc_monitor_info_->ssstore_read_row_cnt_);
-    scan_result.add_memstore_read_row_cnt(*scan_rtdef_->tsc_monitor_info_->memstore_read_row_cnt_);
+    scan_result.add_base_read_row_cnt(*scan_rtdef_->tsc_monitor_info_->base_read_row_cnt_);
+    scan_result.add_delta_read_row_cnt(*scan_rtdef_->tsc_monitor_info_->delta_read_row_cnt_);
     scan_rtdef_->tsc_monitor_info_->reset_stat();
   }
   return ret;
@@ -1501,8 +1501,8 @@ ObDASScanResult::ObDASScanResult()
     enable_rich_format_(false),
     io_read_bytes_(0),
     ssstore_read_bytes_(0),
-    ssstore_read_row_cnt_(0),
-    memstore_read_row_cnt_(0),
+    base_read_row_cnt_(0),
+    delta_read_row_cnt_(0),
     das_execute_remote_info_()
 {
 }
@@ -1660,8 +1660,8 @@ OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
                     vec_row_store_,
                     io_read_bytes_,
                     ssstore_read_bytes_,
-                    ssstore_read_row_cnt_,  // FARM COMPAT WHITELIST
-                    memstore_read_row_cnt_, // FARM COMPAT WHITELIST
+                    base_read_row_cnt_,  // FARM COMPAT WHITELIST
+                    delta_read_row_cnt_, // FARM COMPAT WHITELIST
                     das_execute_remote_info_);
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()

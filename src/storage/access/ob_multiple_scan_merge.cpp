@@ -443,7 +443,6 @@ int ObMultipleScanMerge::supply_consume()
           STORAGE_LOG(WARN, "loser tree push error", K(ret));
         }
       }
-      REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
     }
   }
 
@@ -506,7 +505,6 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
             } else {
               consumer_cnt_ = 0;
               need_supply_consume = false;
-              REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
             }
           } else if (OB_FAIL(ObRowFuse::fuse_row(*(item.row_), row, nop_pos_, final_result))) {
             STORAGE_LOG(WARN, "failed to merge rows", K(ret), KPC(item.row_), K(row));
@@ -514,7 +512,6 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
             //success to get row directly from iterator without merge
             need_supply_consume = false;
             row.scan_index_ = item.row_->scan_index_;
-            REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
             break;
           } else {
             //need retry

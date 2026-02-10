@@ -83,7 +83,7 @@ public:
 
 protected:
   bool end_of_scan() const;
-  int open_cur_data_block();
+  int open_cur_data_block(bool blockscan=false);
   int init_micro_scanner();
   void get_data_range(const ObMicroIndexInfo &data_info, ObCSRange &range);
 

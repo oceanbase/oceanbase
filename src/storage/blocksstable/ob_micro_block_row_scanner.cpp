@@ -284,9 +284,11 @@ int ObIMicroBlockRowScanner::get_next_rows()
     if (OB_SUCC(ret)) {
       int64_t scan_cnt = std::abs(current_ - prev_current);
       if (OB_NOT_NULL(context_) && 0 < scan_cnt) {
-        context_->table_store_stat_.logical_read_cnt_ += scan_cnt;
-        context_->table_store_stat_.physical_read_cnt_ += scan_cnt;
-        REALTIME_MONITOR_ADD_READ_ROW_CNT(context_, scan_cnt);
+        if (sstable_->is_minor_sstable()) {
+          context_->table_store_stat_.minor_sstable_read_row_cnt_ += scan_cnt;
+        } else if (sstable_->is_major_sstable()) {
+          context_->table_store_stat_.major_sstable_read_row_cnt_ += scan_cnt;
+        }
       }
     }
   }
@@ -314,9 +316,6 @@ int ObIMicroBlockRowScanner::inner_get_next_row(const ObDatumRow *&row)
       row = &row_;
       current_ += step_;
     }
-  }
-  if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
-    ++context_->table_store_stat_.physical_read_cnt_;
   }
   LOG_DEBUG("get next row", K(ret), KPC(row), K_(macro_id));
   return ret;
@@ -380,11 +379,11 @@ int ObIMicroBlockRowScanner::apply_filter(const bool can_blockscan)
     } else {
       can_blockscan_ = can_blockscan;
       is_filter_applied_ = true;
-      ++context_->table_store_stat_.pushdown_micro_access_cnt_;
       if (param_->has_lob_column_out()) {
         context_->reuse_lob_locator_helper();
       }
-      EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, get_access_cnt());
+      ++context_->table_store_stat_.pushdown_micro_access_cnt_;
+      context_->table_store_stat_.blockscan_row_cnt_ += get_access_cnt();
     }
   }
 
@@ -934,8 +933,9 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
       }
     }
     if (OB_SUCC(ret)) {
+      const int64_t bitmap_cnt = use_private_bitmap_ ? filter_bitmap_->size() : pd_filter_info.filter_->get_result()->size();
       const int64_t select_cnt = use_private_bitmap_ ? filter_bitmap_->popcnt() : pd_filter_info.filter_->get_result()->popcnt();
-      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
+      context_->table_store_stat_.storage_filtered_row_cnt_ += (bitmap_cnt - select_cnt);
     }
   }
   return ret;
@@ -1206,9 +1206,7 @@ int ObIMicroBlockRowScanner::get_next_border_rows(const ObDatumRowkey &rowkey)
     if (OB_SUCC(ret)) {
       int64_t scan_cnt = std::abs(current_ - prev_current);
       if (OB_NOT_NULL(context_) && 0 < scan_cnt) {
-        context_->table_store_stat_.logical_read_cnt_ += scan_cnt;
-        context_->table_store_stat_.physical_read_cnt_ += scan_cnt;
-        REALTIME_MONITOR_ADD_READ_ROW_CNT(context_, scan_cnt);
+        context_->table_store_stat_.major_sstable_read_row_cnt_ += scan_cnt;
       }
       if (current_ == scan_end_idx) {
         if (is_equal) {
@@ -1608,9 +1606,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_get_next_row_impl(const ObDatumRow
         } else if (OB_FAIL(do_compact(multi_version_row, row_, final_result))) {
           LOG_WARN("failed to do compact", K(ret));
         } else {
-          if (OB_NOT_NULL(context_)) {
-            ++context_->table_store_stat_.physical_read_cnt_;
-          }
           if (have_uncommited_row) {
             row_.set_have_uncommited_row();
           }
@@ -2738,9 +2733,6 @@ int ObMultiVersionDIMicroBlockRowScanner::inner_get_next_di_row(const ObDatumRow
       row = &row_;
       current_ += step_;
     }
-  }
-  if (OB_SUCC(ret) && OB_NOT_NULL(context_)) {
-    ++context_->table_store_stat_.physical_read_cnt_;
   }
   LOG_DEBUG("get next row", K(ret), KPC(row), K_(macro_id));
   return ret;

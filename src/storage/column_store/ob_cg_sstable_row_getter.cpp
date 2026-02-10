@@ -155,6 +155,8 @@ int ObCGGetter::get_next_row(ObMacroBlockReader &block_reader, const blocksstabl
                 row_idx - read_handle_.index_block_info_.get_row_range().start_row_id_,
                 store_row))) {
       LOG_WARN("Fail to get row", K(ret), K(row_idx), "macro_id", read_handle_.micro_handle_->macro_block_id_);
+    } else {
+      REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_getter_->get_average_row_length());
     }
   }
   return ret;
@@ -404,7 +406,7 @@ int ObCGSSTableRowGetter::fetch_row(ObSSTableReadHandle &read_handle, const ObNo
 
   if (OB_SUCC(ret)) {
     store_row = &row_;
-    EVENT_INC(ObStatEventIds::SSSTORE_READ_ROW_COUNT);
+    ++access_ctx_->table_store_stat_.major_sstable_read_row_cnt_;
     LOG_DEBUG("inner get next row", KPC(store_row), KPC(read_handle.rowkey_));
   }
   return ret;
@@ -431,6 +433,8 @@ int ObCGSSTableRowGetter::fetch_rowkey_row(ObSSTableReadHandle &read_handle, con
               store_row,
               &macro_block_reader_))) {
     LOG_WARN("Fail to get row", K(ret));
+  } else {
+    REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_getter_->get_average_row_length());
   }
   return ret;
 }

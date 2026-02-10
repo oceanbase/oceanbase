@@ -515,10 +515,10 @@ public:
   int64_t get_io_read_bytes() { return io_read_bytes_; }
   void add_ssstore_read_bytes(int64_t ssstore_read_bytes) { ssstore_read_bytes_ += ssstore_read_bytes; }
   int64_t get_ssstore_read_bytes() { return ssstore_read_bytes_; }
-  void add_ssstore_read_row_cnt(int64_t ssstore_read_row_cnt) { ssstore_read_row_cnt_ += ssstore_read_row_cnt; }
-  int64_t get_ssstore_read_row_cnt() { return ssstore_read_row_cnt_; }
-  void add_memstore_read_row_cnt(int64_t memstore_read_row_cnt) { memstore_read_row_cnt_ += memstore_read_row_cnt; }
-  int64_t get_memstore_read_row_cnt() { return memstore_read_row_cnt_; }
+  void add_base_read_row_cnt(int64_t base_read_row_cnt) { base_read_row_cnt_ += base_read_row_cnt; }
+  int64_t get_base_read_row_cnt() { return base_read_row_cnt_; }
+  void add_delta_read_row_cnt(int64_t delta_read_row_cnt) { delta_read_row_cnt_ += delta_read_row_cnt; }
+  int64_t get_delta_read_row_cnt() { return delta_read_row_cnt_; }
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
                        K_(datum_store),
                        KPC_(output_exprs),
@@ -526,8 +526,8 @@ public:
                        K_(vec_row_store),
                        K_(io_read_bytes),
                        K_(ssstore_read_bytes),
-                       K_(ssstore_read_row_cnt),
-                       K_(memstore_read_row_cnt),
+                       K_(base_read_row_cnt),
+                       K_(delta_read_row_cnt),
                        K_(das_execute_remote_info));
 private:
   ObChunkDatumStore datum_store_;
@@ -541,8 +541,8 @@ private:
   bool enable_rich_format_;
   int64_t io_read_bytes_;
   int64_t ssstore_read_bytes_;
-  int64_t ssstore_read_row_cnt_;
-  int64_t memstore_read_row_cnt_;
+  int64_t base_read_row_cnt_;
+  int64_t delta_read_row_cnt_;
   ObDasExecuteRemoteInfo das_execute_remote_info_;
 };
 

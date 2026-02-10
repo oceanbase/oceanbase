@@ -676,6 +676,7 @@ protected:
       ObMicroIndexInfo &index_block_info,
       ObMicroBlockDataHandle &micro_handle);
   int prefetch_multi_data_block(const int64_t max_prefetch_idx);
+  void update_table_store_stat(ObTableScanStoreStat &table_store_stat, const ObMicroIndexInfo &index_info, bool is_agg=false/* filter or aggregate */);
 
   struct ObIndexBlockReadHandle {
     ObIndexBlockReadHandle() :

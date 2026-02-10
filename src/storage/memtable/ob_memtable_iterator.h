@@ -49,7 +49,6 @@ public:
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) {
     int ret = common::OB_SUCCESS;
     if (OB_SUCC(inner_get_next_row(row))) {
-      EVENT_INC(ObStatEventIds::MEMSTORE_READ_ROW_COUNT);
     }
     return ret;
   }

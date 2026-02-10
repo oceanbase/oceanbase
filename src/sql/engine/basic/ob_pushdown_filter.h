@@ -657,26 +657,26 @@ private:
     FilterRealTimeStatistics()
     : filter_cost_time_(0)
     , filtered_row_cnt_(0)
-    , skip_index_skip_mb_cnt_(0)
+    , skip_index_skip_block_cnt_(0)
     {};
 
     void reset() {
       filter_cost_time_ = 0;
       filtered_row_cnt_ = 0;
-      skip_index_skip_mb_cnt_ = 0;
+      skip_index_skip_block_cnt_ = 0;
     }
 
     OB_INLINE uint64_t get_filter_cost_time() const {return filter_cost_time_;}
     OB_INLINE void add_filter_cost_time(uint64_t filter_cost_time) { filter_cost_time_ += filter_cost_time; };
     OB_INLINE uint64_t get_filtered_row_cnt() {return filtered_row_cnt_; }
     OB_INLINE void add_filtered_row_cnt(uint64_t filtered_row_cnt) { filtered_row_cnt_ += filtered_row_cnt; };
-    OB_INLINE uint64_t get_skip_index_skip_mb_cnt() { return skip_index_skip_mb_cnt_; };
-    OB_INLINE void add_skip_index_skip_mb_cnt(uint64_t skip_index_skip_mb_cnt) { skip_index_skip_mb_cnt_ += skip_index_skip_mb_cnt; }
-    TO_STRING_KV(K_(filter_cost_time), K_(filtered_row_cnt), K_(skip_index_skip_mb_cnt));
+    OB_INLINE uint64_t get_skip_index_skip_block_cnt() { return skip_index_skip_block_cnt_; };
+    OB_INLINE void add_skip_index_skip_block_cnt(uint64_t skip_index_skip_block_cnt) { skip_index_skip_block_cnt_ += skip_index_skip_block_cnt; }
+    TO_STRING_KV(K_(filter_cost_time), K_(filtered_row_cnt), K_(skip_index_skip_block_cnt));
 
     uint64_t filter_cost_time_;
     uint64_t filtered_row_cnt_;
-    uint64_t skip_index_skip_mb_cnt_; // # of micro block skipped by skip index.
+    uint64_t skip_index_skip_block_cnt_; // # of micro block skipped by skip index.
   };
 public:
   static const int64_t INVALID_CG_ITER_IDX = -1;
