@@ -2175,23 +2175,20 @@ int ObGranulePump::split_granule(ObGranuleIteratorOp *gi_op, int64_t scan_op_id,
 int ObGranulePump::reset_gi_task()
 {
   int ret = common::OB_SUCCESS;
+  ObLockGuard<ObSpinLock> lock_guard(lock_);
   if (is_taskset_reset_) {
+    /*do nothing*/
   } else {
-    ObLockGuard<ObSpinLock> lock_guard(lock_);
-    if (is_taskset_reset_) {
-      /*do nothing*/
-    } else {
-      is_taskset_reset_ = true;
-      set_fetch_task_ret(OB_SUCCESS);
-      for (int64_t i = 0; i < gi_task_array_map_.count() && OB_SUCC(ret); ++i) {
-        GITaskArrayItem &item = gi_task_array_map_.at(i);
-        item.no_more_task_from_shared_pool_ = false;
-        for(int64_t j = 0; j < item.taskset_array_.count() && OB_SUCC(ret); ++j) {
-          ObGITaskSet &taskset = item.taskset_array_.at(j);
-          taskset.cur_pos_ = 0;
-        }
+    for (int64_t i = 0; i < gi_task_array_map_.count() && OB_SUCC(ret); ++i) {
+      GITaskArrayItem &item = gi_task_array_map_.at(i);
+      item.no_more_task_from_shared_pool_ = false;
+      for(int64_t j = 0; j < item.taskset_array_.count() && OB_SUCC(ret); ++j) {
+        ObGITaskSet &taskset = item.taskset_array_.at(j);
+        taskset.cur_pos_ = 0;
       }
     }
+    is_taskset_reset_ = true;
+    set_fetch_task_ret(OB_SUCCESS);
   }
   return ret;
 }

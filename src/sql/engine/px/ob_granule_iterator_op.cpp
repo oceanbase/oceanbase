@@ -635,6 +635,10 @@ int ObGranuleIteratorOp::rescan()
   int ret = ObOperator::inner_rescan();
   CK(NULL != pump_);
   CK(NULL != pump_arg_);
+  bool is_child_sample_scan = !MY_SPEC.full_partition_wise() &&
+                              OB_NOT_NULL(real_child_) &&
+                              IS_SAMPLE_SCAN(real_child_->get_spec().type_);
+  LOG_TRACE("gi begin rescan");
   if (OB_FAIL(ret)) {
   } else if (pump_version_ != pump_arg_->pump_version_) {
     // We can not reused the processed tasks when task regenerated (pump version changed).
@@ -658,6 +662,16 @@ int ObGranuleIteratorOp::rescan()
       rescan_task_idx_ = 0;
       state_ = GI_GET_NEXT_GRANULE_TASK;
     }
+    LOG_TRACE("gi end rescan");
+  } else if (is_child_sample_scan) {
+    // After sampling is completed, a rescan is performed. To ensure all workers reacquire tasks
+    // during the next batch retrieval, the GI tasks are reset. Fetching tasks during the rescan is
+    // unnecessary and will causing data race.
+    pruning_tablet_ids_.reset();
+    rescan_task_idx_ = 0;
+    state_ = GI_GET_NEXT_GRANULE_TASK;
+    OZ(const_cast<ObGranulePump *>(pump_)->reset_gi_task());
+    LOG_TRACE("gi end rescan");
   } else {
     if (GI_UNINITIALIZED == state_) {
       // NJ call rescan before iterator rows, need to nothing for the first scan.
@@ -680,19 +694,9 @@ int ObGranuleIteratorOp::rescan()
       pruning_tablet_ids_.reset();
       rescan_task_idx_ = 0;
       state_ = GI_GET_NEXT_GRANULE_TASK;
-      if (MY_SPEC.full_partition_wise()) {
-        is_rescan_ = true;
-      } else if (OB_ISNULL(real_child_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null real_child_", K(spec_.get_id()));
-      } else if (PHY_BLOCK_SAMPLE_SCAN == real_child_->get_spec().type_ ||
-          PHY_ROW_SAMPLE_SCAN == real_child_->get_spec().type_ ||
-          PHY_DDL_BLOCK_SAMPLE_SCAN == real_child_->get_spec().type_) {
-        OZ(const_cast<ObGranulePump *>(pump_)->reset_gi_task());
-      } else {
-        is_rescan_ = true;
-      }
+      is_rescan_ = true;
     }
+    LOG_TRACE("gi end rescan");
   }
 
 #ifndef NDEBUG
@@ -1491,10 +1495,7 @@ int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
   int ret = OB_SUCCESS;
   int64_t child_cnt = cur->get_child_cnt();
   if (0 == child_cnt) {
-    if (PHY_TABLE_SCAN == cur->get_spec().type_
-        || PHY_BLOCK_SAMPLE_SCAN == cur->get_spec().type_
-        || PHY_ROW_SAMPLE_SCAN == cur->get_spec().type_
-        || PHY_DDL_BLOCK_SAMPLE_SCAN == cur->get_spec().type_) {
+    if (PHY_TABLE_SCAN == cur->get_spec().type_ || IS_SAMPLE_SCAN(cur->get_spec().type_)) {
       const ObTableScanSpec &tsc_spec = static_cast<const ObTableScanSpec&>(cur->get_spec());
       if (!tsc_spec.use_dist_das_) {
         consumer = cur;

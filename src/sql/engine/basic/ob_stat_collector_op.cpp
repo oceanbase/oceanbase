@@ -127,9 +127,7 @@ int ObStatCollectorOp::find_sample_scan(ObOperator *op, ObOperator *&tsc)
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op) || OB_NOT_NULL(tsc)) {
     /*do nothing*/
-  } else if (PHY_BLOCK_SAMPLE_SCAN == op->get_spec().get_type() ||
-             PHY_ROW_SAMPLE_SCAN == op->get_spec().get_type() ||
-             PHY_DDL_BLOCK_SAMPLE_SCAN == op->get_spec().get_type()) {
+  } else if (IS_SAMPLE_SCAN(op->get_spec().get_type())) {
     tsc = op;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_child_cnt(); ++i) {

@@ -1088,10 +1088,7 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
     }
   }
 
-  if (PHY_TABLE_SCAN == spec.type_ ||
-      PHY_ROW_SAMPLE_SCAN == spec.type_ ||
-      PHY_BLOCK_SAMPLE_SCAN == spec.type_ ||
-      PHY_DDL_BLOCK_SAMPLE_SCAN == spec.type_) {
+  if (PHY_TABLE_SCAN == spec.type_ || IS_SAMPLE_SCAN(spec.type_)) {
     ObTableScanSpec &tsc_spec = static_cast<ObTableScanSpec&>(spec);
     ObDASScanCtDef &scan_ctdef = tsc_spec.tsc_ctdef_.scan_ctdef_;
     ObDASScanCtDef *lookup_ctdef = tsc_spec.tsc_ctdef_.lookup_ctdef_;
@@ -4617,9 +4614,7 @@ int ObStaticEngineCG::generate_dml_tsc_ids(const ObOpSpec &spec, const ObLogical
         LOG_WARN("push back failed", K(ret));
       }
     }
-  } else if (PHY_TABLE_SCAN == spec.type_ ||
-             PHY_ROW_SAMPLE_SCAN == spec.type_ ||
-              PHY_BLOCK_SAMPLE_SCAN == spec.type_) {
+  } else if (PHY_TABLE_SCAN == spec.type_ || IS_SAMPLE_SCAN(spec.type_)) {
     if (static_cast<const ObTableScanSpec&>(spec).use_dist_das()) {
       // avoid das tsc collected and processed by gi
     } else if (OB_UNLIKELY(!op.is_table_scan())) {
