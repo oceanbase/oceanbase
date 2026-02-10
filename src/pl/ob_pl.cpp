@@ -2297,6 +2297,31 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
   return ret;
 }
 
+#define TRANSFORM_AND_TRANS_SQL(node)                                                       \
+do {                                                                                        \
+  int64_t raw_pos = (node)->children_[0]->pos_ - trans_ctx.raw_anonymous_off_;              \
+  int64_t raw_str_off = (node)->children_[0]->text_len_;                                    \
+  trans_ctx.raw_sql_or_expr_.assign_ptr((node)->children_[0]->raw_text_,                    \
+                                          (node)->children_[0]->text_len_);                 \
+  trans_ctx.raw_param_num_ = no_param_root->children_[0]->param_num_;                       \
+  trans_ctx.no_param_sql_.assign_ptr(parse_result.no_param_sql_ +                           \
+                                      no_param_root->children_[0]->pos_,                    \
+                                      no_param_root->children_[0]->str_len_);               \
+  if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + raw_pos - trans_ctx.copied_idx_ ||         \
+      raw_pos < trans_ctx.copied_idx_) {                                                    \
+    ret = OB_ERR_UNEXPECTED;                                                                \
+    LOG_WARN("unexpected error about trans_ctx.buf", K(ret), K(raw_pos),                    \
+              K(trans_ctx.copied_idx_));                                                    \
+  } else {                                                                                  \
+    MEMCPY(trans_ctx.buf_ + trans_ctx.buf_len_,                                             \
+            trans_ctx.raw_sql_.ptr() + trans_ctx.copied_idx_,                               \
+            raw_pos - trans_ctx.copied_idx_);                                               \
+    trans_ctx.buf_len_ += raw_pos - trans_ctx.copied_idx_;                                  \
+    OZ (trans_sql(trans_ctx, (node), ctx));                                                 \
+    trans_ctx.copied_idx_ = raw_pos + raw_str_off;                                          \
+  }                                                                                         \
+} while (0)
+
 int ObPL::transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *root, ParseNode *no_param_root, ObExecContext &ctx, ParseResult &parse_result)
 {
   int ret = OB_SUCCESS;
@@ -2325,39 +2350,10 @@ int ObPL::transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *root, ParseNo
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret));
       } else {
-        /* 语法树分析时会修改node上部分属性, 这里提前记录 */
-        int64_t raw_pos = expr_node->children_[0]->pos_ - trans_ctx.raw_anonymous_off_;
-        int64_t raw_str_off = expr_node->children_[0]->text_len_;
-        trans_ctx.raw_sql_or_expr_.assign_ptr(expr_node->children_[0]->raw_text_, expr_node->children_[0]->text_len_);
-        trans_ctx.raw_param_num_ = no_param_root->children_[0]->param_num_;
-        trans_ctx.no_param_sql_.assign_ptr(parse_result.no_param_sql_ + no_param_root->children_[0]->pos_, no_param_root->children_[0]->str_len_);
-        if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + raw_pos - trans_ctx.copied_idx_ ||
-            raw_pos < trans_ctx.copied_idx_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error about trans_ctx.buf", K(ret), K(raw_pos), K(trans_ctx.copied_idx_));
-        } else {
-          MEMCPY(trans_ctx.buf_ + trans_ctx.buf_len_, trans_ctx.raw_sql_.ptr() + trans_ctx.copied_idx_, raw_pos - trans_ctx.copied_idx_);
-          trans_ctx.buf_len_ += raw_pos - trans_ctx.copied_idx_;
-          OZ (trans_sql(trans_ctx, expr_node, ctx));
-          trans_ctx.copied_idx_ = raw_pos + raw_str_off;
-        }
+        TRANSFORM_AND_TRANS_SQL(expr_node);
       }
     } else if (T_SQL_STMT == no_param_root->type_) {
-      int64_t raw_pos = root->children_[0]->pos_ - trans_ctx.raw_anonymous_off_;
-      int64_t raw_str_off = root->children_[0]->text_len_;
-      trans_ctx.raw_sql_or_expr_.assign_ptr(root->children_[0]->raw_text_, root->children_[0]->text_len_);
-      trans_ctx.raw_param_num_ = no_param_root->children_[0]->param_num_;
-      trans_ctx.no_param_sql_.assign_ptr(parse_result.no_param_sql_ + no_param_root->children_[0]->pos_, no_param_root->children_[0]->str_len_);
-      if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + raw_pos - trans_ctx.copied_idx_ ||
-          raw_pos < trans_ctx.copied_idx_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error about trans_ctx.buf", K(ret));
-      } else {
-        MEMCPY(trans_ctx.buf_ + trans_ctx.buf_len_, trans_ctx.raw_sql_.ptr() + trans_ctx.copied_idx_, raw_pos - trans_ctx.copied_idx_);
-        trans_ctx.buf_len_ += raw_pos - trans_ctx.copied_idx_;
-        OZ (trans_sql(trans_ctx, root, ctx));
-        trans_ctx.copied_idx_ = raw_pos + raw_str_off;
-      }
+      TRANSFORM_AND_TRANS_SQL(root);
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < root->num_child_ && i < no_param_root->num_child_; ++i) {
         OZ (SMART_CALL(transform_tree(trans_ctx, root->children_[i], no_param_root->children_[i], ctx, parse_result)));
