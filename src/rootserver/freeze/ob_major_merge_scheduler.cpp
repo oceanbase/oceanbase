@@ -27,6 +27,8 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 
 ///////////////////////////////////////////////////////////////////////////////
+ERRSIM_POINT_DEF(EN_MERGE_SCHEDULER_IDLE_IDLE_LOOP_UNTIL_PAUSED);
+ERRSIM_POINT_DEF(EN_CLEAR_PROGRESS_CHECKER_CACHED_INFO);
 
 int ObMajorMergeIdling::init(const uint64_t tenant_id)
 {
@@ -208,6 +210,13 @@ int ObMajorMergeScheduler::try_idle(
         clear_cached_info = true;
         LOG_INFO("clear cached info when idling", KR(ret), K(start_ts));
       }
+#ifdef ERRSIM
+      else if (EN_CLEAR_PROGRESS_CHECKER_CACHED_INFO) {
+        (void) progress_checker_.clear_cached_info();
+        clear_cached_info = true;
+        LOG_INFO("clear cached info when errsim", KR(ret), K(start_ts));
+      }
+#endif
     }
     LOG_INFO("major_merge_scheduler is not idling", KR(ret), K_(tenant_id), K(idle_time_us),
              K_(stop), "epoch", get_epoch());
@@ -276,7 +285,7 @@ int ObMajorMergeScheduler::do_work()
 {
   int ret = OB_SUCCESS;
   bool need_merge = true;
-  HEAP_VARS_2((ObZoneMergeInfoArray, info_array), (ObGlobalMergeInfo, global_info)) {
+  HEAP_VAR(ObGlobalMergeInfo, global_info) {
     const int64_t curr_round_epoch = get_epoch();
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
@@ -287,7 +296,7 @@ int ObMajorMergeScheduler::do_work()
         LOG_WARN("fail to try reload", KR(ret), K_(tenant_id));
       }
     }
-    if (FAILEDx(merge_info_mgr_->get_zone_merge_mgr().get_snapshot(global_info, info_array))) {
+    if (FAILEDx(merge_info_mgr_->get_zone_merge_mgr().get_snapshot(global_info))) {
       LOG_WARN("fail to get merge info", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(check_or_update_major_merge_state(curr_round_epoch, global_info, need_merge))) {
       LOG_WARN("fail to check or update major merge state", KR(ret), K(curr_round_epoch), K(global_info));
@@ -378,6 +387,19 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
         break;
       }
 
+#ifdef ERRSIM
+      int errsim_ret = EN_MERGE_SCHEDULER_IDLE_IDLE_LOOP_UNTIL_PAUSED;
+      const int64_t sleep_time_us = 5 * 1000 * 1000; // 5s
+      while (OB_SUCC(ret) && errsim_ret && !is_paused()) {
+        LOG_INFO("EN EN_MERGE_SCHEDULER_IDLE_IDLE_LOOP_UNTIL_PAUSED, wait for paused", K(errsim_ret), "is_paused", is_paused());
+        if (OB_FAIL(idling_.idle(sleep_time_us))) {
+          LOG_WARN("fail to idle for leader switchover", KR(ret), K(sleep_time_us));
+        } else if (is_paused()) {
+          LOG_INFO("leader switchover, break idle loop", K(errsim_ret));
+        }
+        errsim_ret = EN_MERGE_SCHEDULER_IDLE_IDLE_LOOP_UNTIL_PAUSED;
+      }
+#endif
       // wait some time to merge
       if (OB_SUCCESS != (tmp_ret = try_idle(DEFAULT_IDLE_US, ret))) {
         LOG_WARN("fail to idle", KR(ret));
@@ -887,7 +909,11 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging, con
       }
     }
     if (OB_SUCC(ret) && !is_paused() && (start_service_time > 0) &&
+#ifdef ERRSIM
+        is_merging && ((now - max_merge_time) > MAX_REFRESH_EPOCH_IN_MERGE_INTERVAL || EN_CLEAR_PROGRESS_CHECKER_CACHED_INFO)) {
+#else
         is_merging && (now - max_merge_time) > MAX_REFRESH_EPOCH_IN_MERGE_INTERVAL) {
+#endif
       if (OB_FAIL(try_update_epoch_and_reload())) {
         LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), "cur_epoch", get_epoch());
       }

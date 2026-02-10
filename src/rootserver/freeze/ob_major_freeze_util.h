@@ -36,6 +36,9 @@ public:
                                       ObRestoreMajorFreezeService *restore_major_freeze_service,
                                       ObMajorFreezeService *&major_freeze_service,
                                       bool &is_primary_service);
+  static int check_epoch_immediately(common::ObISQLClient &sql_proxy,
+                                      const uint64_t tenant_id,
+                                      const int64_t expected_epoch);
   static int check_epoch_periodically(common::ObISQLClient &sql_proxy,
                                       const uint64_t tenant_id,
                                       const int64_t expected_epoch,
