@@ -2108,6 +2108,7 @@ void ObTenant::lq_wait(ObThWorker &w)
 
 int ObTenant::lq_yield(ObThWorker &w)
 {
+  DISABLE_SQL_MEMLEAK_GUARD;
   int ret = OB_SUCCESS;
   ATOMIC_INC(&tt_large_quries_);
   // 有新请求排队时才切换到LQ组
