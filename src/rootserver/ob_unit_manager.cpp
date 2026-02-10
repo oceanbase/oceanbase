@@ -9382,10 +9382,62 @@ int ObUnitManager::admin_migrate_unit(
     }
     LOG_WARN("left resource can't hold unit", "server", dst,
         K(hard_limit), "config", unit_info.config_, KR(ret));
+  } else if (OB_FAIL(check_disk_resource_for_manual_migrate_(unit_info, dst, report_dst_server_resource_info))) {
+    LOG_WARN("check disk resource for manual migrate failed", KR(ret),
+        K(unit_id), K(dst));
   } else if (OB_FAIL(migrate_unit_(unit_id, dst, true/*is_manual*/))) {
     LOG_WARN("migrate unit failed", K(unit_id), "destination", dst, KR(ret));
   }
 
+  return ret;
+}
+
+// Checks disk resource availability for manual unit migration. Only considers the current
+// unit's disk usage, without accounting for other units migrating to the destination server,
+// as their disk usage cannot be accurately counted during migration.
+int ObUnitManager::check_disk_resource_for_manual_migrate_(
+    const share::ObUnitInfo &unit_info,
+    const ObAddr &dst,
+    const obrpc::ObGetServerResourceInfoResult &report_dst_server_resource_info)
+{
+  int ret = OB_SUCCESS;
+  share::ObUnitStat unit_stat;
+  ObUnitStatManager unit_stat_mgr;
+  const uint64_t unit_id = unit_info.unit_.unit_id_;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("check inner stat failed", K_(inited), K_(loaded), KR(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
+    // skip, no need to check data_disk_usage in shared-storage mode
+  } else if (!unit_info.pool_.is_granted_to_tenant()) {
+    // skip check when unit is not assigned to any tenant
+  } else if (OB_FAIL(unit_stat_mgr.init(get_sql_proxy()))) {
+    LOG_WARN("fail to init unit_stat_mgr", KR(ret));
+  } else if (OB_FAIL(unit_stat_mgr.gather_stat())){
+    LOG_WARN("fail to gather_stat", KR(ret));
+    // ignore error to continue migration when querying __all_virtual_unit times out on observer
+    ret = OB_SUCCESS;
+  } else if (OB_FAIL(unit_stat_mgr.get_unit_stat(unit_id, unit_info.unit_.zone_, unit_stat))) {
+    LOG_WARN("fail to get_unit_stat", KR(ret), K(unit_id), K(unit_info.unit_.zone_));
+  } else {
+    const ObServerResourceInfo &dst_resource_info = report_dst_server_resource_info.get_resource_info();
+    const int64_t required_size = unit_stat.get_required_size() + dst_resource_info.data_disk_in_use_;
+    const int64_t total_size = dst_resource_info.data_disk_total_;
+    const int64_t required_percent = (100 * required_size) / total_size;
+    const int64_t limit_percent = GCONF.data_disk_usage_limit_percentage;
+    if (required_percent >= limit_percent) {
+      ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
+      LOG_WARN("migrate unit fail. dest server out of space",
+          K(unit_id), K(dst), K(unit_stat), K(required_size), K(total_size), K(limit_percent), KR(ret));
+      if (OB_SUCCESS != ERRSIM_USE_DUMMY_SERVER) {
+        LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, "dummy_zone", "127.0.0.1:1000",
+            "data disk space");
+      } else {
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, helper.convert(unit_info.unit_.zone_),
+            helper.convert(dst), "data disk space");
+      }
+    }
+  }
   return ret;
 }
 
