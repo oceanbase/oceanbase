@@ -35,11 +35,10 @@ struct ObAggrParamProperty final
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObAggrParamProperty() : mono_(Monotonicity::NONE_MONO), is_null_prop_(true), is_text_stat_aggr_(false) {}
+  ObAggrParamProperty() : mono_(Monotonicity::NONE_MONO), is_null_prop_(true) {}
   ObAggrParamProperty(const Monotonicity mono, const bool is_null_prop)
     : mono_(mono),
-      is_null_prop_(is_null_prop),
-      is_text_stat_aggr_(false)
+      is_null_prop_(is_null_prop)
   {}
   ~ObAggrParamProperty() = default;
   int assign(const ObAggrParamProperty &other)
@@ -48,15 +47,13 @@ public:
     if (this != &other) {
       mono_ = other.mono_;
       is_null_prop_ = other.is_null_prop_;
-      is_text_stat_aggr_ = other.is_text_stat_aggr_;
     }
     return ret;
   }
-  TO_STRING_KV(K_(mono), K_(is_null_prop), K_(is_text_stat_aggr));
+  TO_STRING_KV(K_(mono), K_(is_null_prop));
 public:
   Monotonicity mono_;
   bool is_null_prop_;
-  bool is_text_stat_aggr_; // it is a statistic aggregate
 };
 
 }

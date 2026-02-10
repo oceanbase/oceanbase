@@ -321,8 +321,15 @@ public:
   }
   const char *get_fmt() const
   {
-    return lib::is_oracle_mode() ? " SYS_COUNT_INROW(\"%.*s\")"
-                                   : " SYS_COUNT_INROW(`%.*s`)";
+    const char *fmt = nullptr;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0) {
+      fmt = lib::is_oracle_mode() ? " SYS_COUNT_INROW(\"%.*s\")"
+                                  : " SYS_COUNT_INROW(`%.*s`)";
+    } else {
+      fmt = lib::is_oracle_mode() ? " COUNT(\"%.*s\")"
+                                  : " COUNT(`%.*s`)";
+    }
+    return fmt;
   }
 
   virtual int decode(ObObj &obj, ObIAllocator &allocator) override;

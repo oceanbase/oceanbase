@@ -218,6 +218,7 @@ public:
   OB_INLINE void set_use_column_store(const bool use_cs) { use_column_store_ = use_cs; }
   OB_INLINE void set_enable_prefetch_limiting(const bool enable_limit) { enable_prefetch_limiting_ = enable_limit; }
   OB_INLINE void set_use_global_iter_pool(const bool use_iter_mgr) { use_global_iter_pool_ = use_iter_mgr; }
+  OB_INLINE void set_enable_dbms_stats_option(const bool enable_option) { enable_dbms_stats_option_ = enable_option; }
   OB_INLINE void set_flags(const bool block_scan, const bool filter, const bool base_skip_index,
                            const bool use_cs, const bool enable_limit, const bool filter_reorder = false,
                            const bool inc_skip_index = false)
@@ -242,6 +243,7 @@ public:
   OB_INLINE bool is_use_column_store() const { return use_column_store_; }
   OB_INLINE bool is_enable_prefetch_limiting() const { return enable_prefetch_limiting_; }
   OB_INLINE bool is_use_global_iter_pool() const { return use_global_iter_pool_; }
+  OB_INLINE bool is_enable_dbms_stats_option() const { return enable_dbms_stats_option_; }
   TO_STRING_KV(K_(pd_flag));
 
   union {
@@ -257,7 +259,8 @@ public:
       int32_t enable_prefetch_limiting_ : 1;
       int32_t use_global_iter_pool_:1;
       int32_t enable_inc_skip_index_ : 1;
-      int32_t reserved_ : 21;
+      int32_t enable_dbms_stats_option_ : 1;
+      int32_t reserved_ : 20;
     };
     int32_t pd_flag_;
   };

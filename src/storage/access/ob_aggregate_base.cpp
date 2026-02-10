@@ -245,7 +245,6 @@ int ObPushdownAggContext::init_agg_infos(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
   const sql::ObExprPtrIArray *agg_exprs = param.aggregate_exprs_;
-  const common::ObIArray<share::ObAggrParamProperty> *aggr_param_props = param.iter_param_.aggr_param_props_;
   if (OB_ISNULL(agg_exprs)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid null aggr exprs", K(ret), KP(agg_exprs));
@@ -263,11 +262,15 @@ int ObPushdownAggContext::init_agg_infos(const ObTableAccessParam &param)
         LOG_WARN("Invalie aggr expr", K(ret), KPC(agg_expr));
       } else if (OB_FAIL(agg_info.param_exprs_.init(agg_expr->arg_cnt_))) {
         LOG_WARN("Failed to init param exprs array", K(ret));
-      } else if (OB_NOT_NULL(aggr_param_props) && i < aggr_param_props->count() &&
-                 OB_FALSE_IT(agg_info.is_statistic_agg_ = aggr_param_props->at(i).is_text_stat_aggr_)) {
       } else {
         agg_info.real_aggr_type_ = agg_expr->type_;
         agg_info.expr_ = agg_expr;
+        if (param.iter_param_.pd_storage_flag_.is_enable_dbms_stats_option() &&
+            agg_expr->arg_cnt_ > 0 &&
+            OB_NOT_NULL(agg_expr->args_[0])) {
+          agg_info.is_statistic_agg_ = is_lob_storage(agg_expr->args_[0]->obj_meta_.get_type()) &&
+                                        agg_expr->args_[0]->obj_meta_.has_lob_header();
+        }
         if (agg_expr->arg_cnt_ > 1) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected aggr expr", K(ret), KPC(agg_expr));

@@ -6419,6 +6419,7 @@ int ObStaticEngineCG::generate_tsc_flags(const ObLogTableScan &op, ObDASScanCtDe
     uint64_t tenant_id = session_info->get_effective_tenant_id();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     int64_t pd_level = 0;
+    bool has_dbms_stats_hint = log_plan->get_stmt()->get_query_ctx()->get_global_hint().has_dbms_stats_hint();
     if (OB_UNLIKELY(!tenant_config.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to init tenant config", K(tenant_id));
@@ -6468,6 +6469,7 @@ int ObStaticEngineCG::generate_tsc_flags(const ObLogTableScan &op, ObDASScanCtDe
       scan_ctdef.table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
       scan_ctdef.table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
       scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
+      scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_enable_dbms_stats_option(has_dbms_stats_hint);
     }
   }
   return ret;
