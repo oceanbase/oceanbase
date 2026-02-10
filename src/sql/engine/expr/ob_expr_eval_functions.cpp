@@ -1497,6 +1497,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprNewTime::eval_new_time,                              /* 897 */
   NULL, // ObExprNLSCharsetId::eval_nls_charset_id,                   /* 898 */
   NULL, // calc_cbrt_expr_mysql,                                      /* 899 */
+  NULL, // ObExprE::eval_e,                                           /* 900 */
+  NULL, // ObExprCountSubstrings::eval_count_substrings,              /* 901 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -2015,6 +2017,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprJSONType::eval_json_type_vector,                        /* 328 */
   NULL, // ObExprJSONLength::eval_json_length_vector,                    /* 329 */
   NULL, // ObExprJSONKeys::eval_json_keys_vector,                        /* 330 */
+  NULL, // ObExprE::eval_e_vector,                                       /* 331 */
+  NULL, // ObExprCountSubstrings::eval_count_substrings_vector,          /* 332 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

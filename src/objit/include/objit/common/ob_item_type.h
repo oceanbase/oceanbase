@@ -520,6 +520,8 @@ typedef enum ObItemType
   T_FUN_SYS_MONTHS_ADD = 785,
   T_FUN_SYS_CBRT = 786,
   T_FUN_SYS_BTRIM = 787,
+  T_FUN_SYS_E = 788,
+  T_FUN_SYS_COUNT_SUBSTRINGS = 789,
 
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
