@@ -459,6 +459,16 @@ public:
                                                bool &found,
                                                bool &is_on_null_side);
 
+  static int is_table_item_on_null_side(const ObDMLStmt *stmt,
+                                        TableItem *target_table,
+                                        bool &is_on_null_side);
+
+  static int is_table_item_on_null_side_recursively(const TableItem *current_table,
+                                                    const TableItem *target_table,
+                                                    bool is_on_null_side,
+                                                    bool &found,
+                                                    bool &found_on_null_side);
+
   static int is_table_on_null_side_of_parent(const ObDMLStmt *stmt,
                                              uint64_t source_table_id,
                                              uint64_t target_table_id,
