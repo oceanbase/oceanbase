@@ -661,7 +661,7 @@ TEST_F(TestTransferHandler, test_transfer_with_cancel_retry)
   INNER_EXE_SQL(OB_SYS_TENANT_ID, "alter system set debug_sync_timeout = '1000s'");
   usleep(100000); // wait for debug_sync_timeout to take effect
   sql.reset();
-  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'BEFORE_TRANSFER_LOCK_TABLE_AND_PART wait_for signal_target'");
+  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'BEFORE_TRANSFER_LOCK_TABLE_AND_PART wait_for signal_target execute 10000'");
 
   ASSERT_EQ(PART_LIST_COUNT, g_part_list.count());
   ObSEArray<ObTableID, PART_LIST_COUNT> table_ids;
