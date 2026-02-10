@@ -565,12 +565,23 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
   } else if (data_version < DATA_VERSION_4_3_5_2) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("data version less than 4.3.5.2 is not support");
-  } else if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id, task_info FROM %s WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create LIMIT %ld",
+  } else {
+    /*
+     [451, ): task_info已经占位;
+    */
+    const bool has_task_info = (data_version >= DATA_VERSION_4_5_1_0);
+    const char *extra_cols = has_task_info ? ", task_info " : "";
+    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id%s FROM %s WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create LIMIT %ld",
               share::OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
+              extra_cols,
               share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
               ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-              batch_size))) {
-    LOG_WARN("sql assign fmt failed", K(ret));
+              batch_size))){
+      LOG_WARN("sql assign fmt failed", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(proxy.write(tenant_id, sql.ptr(), insert_rows))) {
     LOG_WARN("fail to execute sql", K(ret), K(sql), K(tenant_id));
   } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s"
