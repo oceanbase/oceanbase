@@ -307,7 +307,7 @@ int ObMViewTrimMLogTask::replace_mlog(const ObIArray<uint64_t> &relevent_mviews,
     // any mv, then replace the mlog to trim unused columns
     for (int64_t i = 0; OB_SUCC(ret) && !need_replace_mlog && i < orig_column_ids.count(); ++i) {
       uint64_t column_id = orig_column_ids.at(i);
-      if (column_id < OB_MLOG_SEQ_NO_COLUMN_ID) {
+      if (column_id < OB_MIN_MLOG_SPECIAL_COLUMN_ID) {
         const ObColumnSchemaV2 *column_schema = mlog_schema->get_column_schema(column_id);
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;

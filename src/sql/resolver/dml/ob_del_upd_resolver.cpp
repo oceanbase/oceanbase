@@ -2446,14 +2446,13 @@ int ObDelUpdResolver::add_all_mlog_columns_to_stmt(const TableItem &table_item,
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", KR(ret));
-      } else if (column_schema->get_column_id() >= OB_MLOG_SEQ_NO_COLUMN_ID) {
+      } else if (column_schema->get_column_id() >= OB_MIN_MLOG_SPECIAL_COLUMN_ID) {
         // skip
       } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs))) {
         LOG_WARN("add column to stmt failed", K(ret), K(table_item));
       } else { /*do nothing*/}
     }
   }
-
   return ret;
 }
 
