@@ -345,6 +345,7 @@ void ObStorageCachePolicyPrewarmerTest::exe_prepare_sql()
   OK(sys_exe_sql("alter system set merger_check_interval = '10s' tenant tt1;"));
   OK(sys_exe_sql("alter system set minor_compact_trigger = 2 tenant tt1;"));
   OK(sys_exe_sql("alter system set _ss_major_compaction_prewarm_level = 0 tenant tt1;"));
+  OK(sys_exe_sql("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP, error_code = 4016, frequency = 1;"));
   FLOG_INFO("set _ss_major_compaction_prewarm_level = 0");
 }
 

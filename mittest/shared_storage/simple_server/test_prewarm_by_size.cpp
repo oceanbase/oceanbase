@@ -222,7 +222,7 @@ void ObPrereadMetaMacroTest::exe_prepare_sql()
   OK(sys_exe_sql("alter system set ob_compaction_schedule_interval = '3s' tenant tt1;"));
   OK(sys_exe_sql("alter system set minor_compact_trigger = 2 tenant tt1;"));
   OK(sys_exe_sql("alter system set _ss_macro_cache_miss_threshold_for_prefetch = 1 tenant tt1;"));
-
+  OK(sys_exe_sql("alter system set_tp tp_name = EN_COMPACTION_SS_MINOR_MERGE_FAST_SKIP, error_code = 4016, frequency = 1;"));
   sleep(10);
 }
 
