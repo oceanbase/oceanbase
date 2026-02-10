@@ -7002,6 +7002,8 @@ int ObServerSchemaService::refresh_increment_schema(
   } else if (OB_ISNULL(schema_mgr_for_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema mgr for cache is null", KR(ret), K(schema_status));
+  } else if (OB_FAIL(check_schema_slot_available(tenant_id))) {
+    LOG_WARN("fail to check_schema_slot_available", KR(ret));
   } else {
     bool core_schema_change = true;
     bool sys_schema_change = true;

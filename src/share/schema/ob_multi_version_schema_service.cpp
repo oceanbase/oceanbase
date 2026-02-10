@@ -5443,6 +5443,24 @@ int ObMultiVersionSchemaService::get_dropped_tenant_ids(
   return ret;
 }
 
+int ObMultiVersionSchemaService::check_schema_slot_available(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaStore *schema_store = nullptr;
+  ObSchemaMgrCache *schema_mgr_cache = nullptr;
+  ObSchemaMgrItem *dst_item = NULL;
+  int64_t target_pos = -1;
+  if (OB_ISNULL(schema_store = schema_store_map_.get(tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_store is null", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(schema_mgr_cache = &schema_store->schema_mgr_cache_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_mgr_cache is null", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_mgr_cache->find_dst_item_for_put(tenant_id, dst_item, target_pos))){
+    LOG_WARN("fail to find dst item for put", KR(ret), K(dst_item));
+  }
+  return ret;
+}
 }//end of namespace schema
 }//end of namespace share
 }//end of namespace oceanbase

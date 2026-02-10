@@ -1187,6 +1187,7 @@ public:
       common::ObIArray<const ObTenantSchema *> &tenant_schemas,
       common::ObIArray<const ObDatabaseSchema *> &database_schemas,
       common::ObIArray<const ObTableSchema *> &table_schemas);
+  virtual int check_schema_slot_available(const uint64_t tenant_id) = 0;
 
 protected:
   bool check_inner_stat() const;
