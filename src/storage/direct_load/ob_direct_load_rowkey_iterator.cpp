@@ -95,6 +95,18 @@ int ObDirectLoadMacroBlockEndKeyIterator::init(ObSSTableSecMetaIterator *macro_m
   return ret;
 }
 
+int ObDirectLoadMacroBlockEndKeyIterator::init(ObSSTableSecMetaIterator *macro_meta_iter,
+                                               const ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init(macro_meta_iter))) {
+    LOG_WARN("fail to init macro block end key iterator", KR(ret));
+  } else if (OB_FAIL(tablet_handle_.assign(tablet_handle))) {
+    LOG_WARN("fail to assign tablet handle", KR(ret), K(tablet_handle));
+  }
+  return ret;
+}
+
 int ObDirectLoadMacroBlockEndKeyIterator::get_next_rowkey(const ObDatumRowkey *&rowkey)
 {
   int ret = OB_SUCCESS;
