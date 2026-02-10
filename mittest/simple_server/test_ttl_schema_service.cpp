@@ -64,6 +64,7 @@ public:
       ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
     }
     ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id_));
+    oceanbase::palf::election::MAX_TST = 500 * 1000;
   }
 
   // Helper method to test is_compaction_ttl_schema for a given table

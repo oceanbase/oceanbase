@@ -49,6 +49,11 @@ namespace unittest
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
 class ObMinMergedTransVersionTest : public ObSimpleClusterTestBase
 {
+protected:
+  virtual void SetUp() override {
+    ObSimpleClusterTestBase::SetUp();
+    oceanbase::palf::election::MAX_TST = 500 * 1000;
+  }
 public:
   ObMinMergedTransVersionTest()
     : ObSimpleClusterTestBase("test_min_merged_trans_version"),

@@ -151,7 +151,7 @@ int ObTabletMediumCompactionInfoRecorder::init(
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     is_inited_ = true;
-    LOG_INFO("success to init medium clog recorder", K(ret), K_(ls_id), K_(tablet_id), K(max_saved_version));
+    LOG_DEBUG("success to init medium clog recorder", K(ret), K_(ls_id), K_(tablet_id), K(max_saved_version));
   }
   return ret;
 }

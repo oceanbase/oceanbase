@@ -33,6 +33,11 @@ namespace unittest
 
 class ObTruncateInfoServiceTest : public ObSimpleClusterTestBase
 {
+protected:
+  virtual void SetUp() override {
+    ObSimpleClusterTestBase::SetUp();
+    oceanbase::palf::election::MAX_TST = 500 * 1000;
+  }
 public:
   ObTruncateInfoServiceTest()
     : ObSimpleClusterTestBase("test_truncate_info_service"),

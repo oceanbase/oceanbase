@@ -61,6 +61,7 @@ public:
       ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
     }
     ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id_));
+    oceanbase::palf::election::MAX_TST = 500 * 1000;
   }
   uint64_t tenant_id_;
 
