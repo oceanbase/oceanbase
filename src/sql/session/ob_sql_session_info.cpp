@@ -1150,12 +1150,10 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
         }
       }
     } else {
-      if (false == is_sess_disconn || false == is_obproxy_mode() || is_reset_connection) {
-        need_drop_temp_table = true;
-        //ac=1, 反序列化session断开时只是任务结束, 并不是真的sess断开, 视作trx commit
-        if (is_sess_disconn && get_is_deserialized() && ac) {
-          is_sess_disconn = false;
-        }
+      need_drop_temp_table = true;
+      //ac=1, 反序列化session断开时只是任务结束, 并不是真的sess断开, 视作trx commit
+      if (is_sess_disconn && get_is_deserialized() && ac) {
+        is_sess_disconn = false;
       }
     }
     if (need_drop_temp_table) {
