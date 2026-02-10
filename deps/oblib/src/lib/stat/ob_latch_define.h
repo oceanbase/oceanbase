@@ -975,7 +975,8 @@ LATCH_DEF(RS_JOB_ID_ALLOC_LOCK, 941, "ob rs job id alloc lock", LATCH_FIFO, 2000
 LATCH_DEF(SNAPSHOT_TABLE_PROXY_LOCK, 942, "ob snapshot table proxy lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OPT_STAT_SQL_SERVICE_LOCK, 943, "ob opt stat sql service lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(S2M_QUEUE_THREAD_LOCK, 944, "ob s2m queue thread lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 945, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_CO_MERGE_DAG_NET_CTX_LOCK, 945, "co merge dag net ctx lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 946, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
