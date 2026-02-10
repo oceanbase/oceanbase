@@ -57,6 +57,7 @@ public:
   void reset();
   int build_serialized_header(char *buf, const int64_t len) const;
   int check_integrity() const;
+  bool is_integrity() const;
   bool is_valid() const;
 
   bool is_data_block() const
