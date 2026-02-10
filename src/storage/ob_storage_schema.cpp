@@ -192,6 +192,20 @@ int64_t ObStorageColumnSchema::legacy_serialize_len() const
   return len;
 }
 
+bool ObStorageColumnSchema::is_schema_changed(const ObStorageColumnSchema &other) const
+{
+  bool is_schema_changed = false;
+  if (this == &other) {
+    // Same instance must be identical; shortcut to avoid unnecessary comparisons.
+  } else if (info_ != other.info_ ||
+             default_checksum_ != other.default_checksum_ ||
+             !(meta_type_ == other.meta_type_) ||
+             !(orig_default_value_ == other.orig_default_value_)) {
+    is_schema_changed = true;
+  }
+  return is_schema_changed;
+}
+
 /*
  * ObStorageColumnGroupSchema
  */
@@ -414,6 +428,28 @@ int ObStorageColumnGroupSchema::copy_from(ObIArray<ObColDesc> &column_ids,
   }
 
   return ret;
+}
+
+bool ObStorageColumnGroupSchema::is_schema_changed(const ObStorageColumnGroupSchema &other) const
+{
+  bool is_schema_changed = false;
+  if (this == &other) {
+    // Same instance must be identical; shortcut to avoid unnecessary comparisons.
+  } else if (version_ != other.version_ ||
+             type_ != other.type_ ||
+             compressor_type_ != other.compressor_type_ ||
+             row_store_type_ != other.row_store_type_ ||
+             block_size_ != other.block_size_ ||
+             schema_column_cnt_ != other.schema_column_cnt_ ||
+             rowkey_column_cnt_ != other.rowkey_column_cnt_ ||
+             schema_rowkey_column_cnt_ != other.schema_rowkey_column_cnt_ ||
+             column_cnt_ != other.column_cnt_ ||
+             (nullptr != column_idxs_ &&
+              nullptr != other.column_idxs_ &&
+              MEMCMP(column_idxs_, other.column_idxs_, sizeof(uint16_t) * column_cnt_) != 0)) {
+    is_schema_changed = true;
+  }
+  return is_schema_changed;
 }
 
 /*
@@ -943,6 +979,52 @@ bool ObStorageSchema::is_valid() const
     // no need checking other options for view
   }
   return valid_ret;
+}
+
+bool ObStorageSchema::is_schema_changed(const ObStorageSchema &other) const
+{
+  bool is_schema_changed = false;
+  if (this == &other) {
+    // Same instance must be identical; shortcut to avoid unnecessary comparisons.
+  } else if (column_cnt_ != other.column_cnt_ ||
+             store_column_cnt_ != other.store_column_cnt_) {
+    is_schema_changed = true;
+  } else if (progressive_merge_round_ != other.progressive_merge_round_ ||
+             progressive_merge_num_ != other.progressive_merge_num_) {
+    is_schema_changed = true;
+    // the change of pctfree/block_size/encryption/compressor_type/row_store_type will make progressive_merge_round changed
+  } else if (tablet_size_ != other.tablet_size_ ||
+             merge_engine_type_ != other.merge_engine_type_ ||
+             micro_block_format_version_ != other.micro_block_format_version_ ||
+             minor_row_store_type_ != other.minor_row_store_type_ ||
+             skip_index_level_ != other.skip_index_level_ ||
+             !(mv_mode_ == other.mv_mode_) ||
+             semistruct_encoding_type_.flags_ != other.semistruct_encoding_type_.flags_ ||
+             !(semistruct_properties_.case_compare_equal(other.semistruct_properties_))) {
+    is_schema_changed = true;
+  } else if (info_ != other.info_) {
+    is_schema_changed = true;
+  } else if (column_group_array_.count() != other.column_group_array_.count() ||
+             skip_idx_attr_array_.count() != other.skip_idx_attr_array_.count() ||
+             (!column_info_simplified_ && column_array_.count() != other.column_array_.count())) {
+    is_schema_changed = true;
+  } else {
+    for (int64_t i = 0; !is_schema_changed && i < column_group_array_.count(); ++i) {
+      is_schema_changed = column_group_array_.at(i).is_schema_changed(other.column_group_array_.at(i));
+    }
+    for (int64_t i = 0; !is_schema_changed && i < skip_idx_attr_array_.count(); ++i) {
+      if (skip_idx_attr_array_.at(i).col_idx_ != other.skip_idx_attr_array_.at(i).col_idx_ ||
+          !(skip_idx_attr_array_.at(i).skip_idx_attr_ == other.skip_idx_attr_array_.at(i).skip_idx_attr_)) {
+        is_schema_changed = true;
+      }
+    }
+    if (!column_info_simplified_) {
+      for (int64_t i = 0; !is_schema_changed && i < column_array_.count(); ++i) {
+        is_schema_changed = column_array_.at(i).is_schema_changed(other.column_array_.at(i));
+      }
+    }
+  }
+  return is_schema_changed;
 }
 
 int ObStorageSchema::assign(common::ObIAllocator &allocator, const ObStorageSchema &other)

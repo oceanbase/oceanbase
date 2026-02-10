@@ -76,7 +76,7 @@ public:
   int legacy_deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int legacy_serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int64_t legacy_serialize_len() const;
-
+  bool is_schema_changed(const ObStorageColumnSchema &other) const;
   TO_STRING_KV(K_(meta_type), K_(is_column_stored_in_sstable), K_(is_rowkey_column),
       K_(is_generated_column), K_(orig_default_value));
 
@@ -159,6 +159,7 @@ public:
   { // column_idxs_ is null for all cg
     return (nullptr == column_idxs_) ? col_idx : column_idxs_[col_idx];
   }
+  bool is_schema_changed(const ObStorageColumnGroupSchema &other) const;
   TO_STRING_KV(K_(version), K_(type), K_(compressor_type), K_(row_store_type), K_(block_size), K_(schema_column_cnt), K_(rowkey_column_cnt),
       K_(schema_rowkey_column_cnt), K_(column_cnt), "column_idxs", ObArrayWrap<uint16_t>(column_idxs_, column_cnt_));
 public:
@@ -235,6 +236,7 @@ public:
   void reset_column_group_array();
   void reset();
   virtual bool is_valid() const override;
+  bool is_schema_changed(const ObStorageSchema &other_schema) const;
   // serialize & deserialize
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
