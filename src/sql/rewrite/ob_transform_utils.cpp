@@ -24,6 +24,7 @@
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/ob_sql_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 
 namespace oceanbase {
@@ -3828,6 +3829,8 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get_table_item", K(ret), K(table_item));
   } else if (!table_item->is_basic_table()) {
+    // do nothing
+  } else if (OB_ALL_VIRTUAL_COLUMN_TID == table_item->ref_id_) {
     // do nothing
   } else if (OB_FAIL(get_valid_index_id(schema_guard, stmt, table_item, index_ids))) {
     LOG_WARN("fail to get valid index id", K(ret), K(table_item->ref_id_));
