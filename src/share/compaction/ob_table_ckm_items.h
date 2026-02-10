@@ -174,6 +174,10 @@ private:
     const share::ObFreezeInfo &freeze_info,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm);
+  static int check_tablet_ids_differ(
+    const share::schema::ObTableSchema *old_table_schema,
+    const ObTableCkmItems &data_ckm,
+    bool &tablet_ids_differ);
   static const int64_t DEFAULT_COLUMN_CNT = 64;
   static const int64_t DEFAULT_TABLET_CNT = 16;
   bool is_inited_;
