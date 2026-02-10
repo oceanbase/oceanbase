@@ -2100,8 +2100,10 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
   } else {
     BEGIN_BUF_PRINT;
     // print access
-    ObIArray<ObRawExpr*> &access = get_access_exprs();
-    if (OB_FAIL(adjust_print_access_info(access))) {
+    ObSEArray<ObRawExpr*, 8> access;
+    if (OB_FAIL(access.assign(get_access_exprs()))) {
+      LOG_WARN("failed to assign access exprs", K(ret));
+    } else if (OB_FAIL(adjust_print_access_info(access))) {
       ret = OB_SUCCESS;
       //ignore error code for explain
       EXPLAIN_PRINT_EXPRS(access, type);
