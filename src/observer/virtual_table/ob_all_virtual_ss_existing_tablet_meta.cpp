@@ -376,6 +376,7 @@ int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabl
                                   ls_id_,
                                   tablet_id_,
                                   transfer_scn_);
+      param.set_read_mark_delete(true);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(!param.is_valid())) {
         ret = OB_INVALID_ARGUMENT;
