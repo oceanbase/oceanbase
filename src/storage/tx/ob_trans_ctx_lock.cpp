@@ -120,9 +120,12 @@ int CtxLock::try_rdlock_ctx()
 
 void CtxLock::unlock()
 {
-  unlock_access();
-  unlock_flush_redo();
+  // Unlock in reverse order of acquisition to keep the lock hierarchy sane.
+  // This is important because ctx_->before_unlock/after_unlock may rely on
+  // ACCESS/REDO locks still being held when releasing ctx lock.
   unlock_ctx();
+  unlock_flush_redo();
+  unlock_access();
 }
 
 int CtxLock::wrlock_ctx()
@@ -199,6 +202,7 @@ void CtxLockGuard::set(CtxLock &lock, uint8_t mode)
   do_lock_(true);
 }
 
+ERRSIM_POINT_DEF(EN_SLOW_CTX_LOCK_THRESHOLD)
 void CtxLockGuard::reset()
 {
   if (NULL != lock_) {
@@ -211,14 +215,20 @@ void CtxLockGuard::reset()
     if (mode_ & MODE::ACCESS) {
       lock_->unlock_access();
     }
-
-    lock_ = NULL;
     int64_t release_ts = ObTimeUtility::fast_current_time();
-    if (release_ts - request_ts_ > 50_ms) {
+    const int64_t slow_threshold = EN_SLOW_CTX_LOCK_THRESHOLD ? (-EN_SLOW_CTX_LOCK_THRESHOLD) * 1_ms : 50_ms;
+    if (release_ts - request_ts_ > slow_threshold) {
       TRANS_LOG_RET(WARN, OB_SUCCESS, "[slow ctx lock]",
+                    KP(lock_), K(mode_),
                     "request_used", hold_ts_ - request_ts_,
-                    "hold_used", release_ts - hold_ts_, K(lbt()));
+                    "hold_used", release_ts - hold_ts_,
+                    K(ctx_lock_val_), K(access_lock_val_), K(flush_redo_lock_val_),
+                    K(lbt()));
     }
+    lock_ = NULL;
+    ctx_lock_val_ = 0;
+    access_lock_val_ = 0;
+    flush_redo_lock_val_ = 0;
   }
 }
 

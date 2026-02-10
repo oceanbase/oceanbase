@@ -134,6 +134,7 @@ public:
         testing::UnitTest::GetInstance()->current_test_info();
     auto test_name = test_info->name();
     MTL_MEM_ALLOC_MGR.init();
+    ASSERT_EQ(OB_SUCCESS, omt::ObTenantConfigMgr::get_instance().add_tenant_config(1001));
     _TRANS_LOG(INFO, ">>>> starting test : %s", test_name);
     LOG_INFO(">>>>>>starting>>>>>>>>", K(test_name));
   }

@@ -1307,14 +1307,32 @@ int ObTxNode::commit_with_retry_ctrl(ObTxDesc &tx, const int64_t expire_ts)
     LOG_WARN("commit tx error", K(ret), K(tx), K(expire_ts));
   } else if (tx_retry_control_map_.find(&tx) != tx_retry_control_map_.end()) {
     ObTxRetryControl &retry_ctrl = tx_retry_control_map_[&tx];
-    // if (!retry_ctrl.tx_writes_empty()) {
-    //   // wake up all lock wait tx
-    //   std::vector<int64_t> &tx_writes = retry_ctrl.tx_writes_hash_;
-    //   for (auto hash : tx_writes) {
-    //     fake_lock_wait_mgr_.wakeup_key(hash);
-    //   }
-    // }
-    delete retry_ctrl.node_;
+    // In this unittest framework, local lock release may already wake up local waiters via
+    // MVCC/memtable paths, but remote-exec-side wait nodes often rely on explicit wakeup here.
+    // To avoid double-wakeup in pure local cases, only wake when the wait queue contains a
+    // REMOTE_EXEC_SIDE node for the committed rows.
+    if (!retry_ctrl.tx_writes_empty()) {
+      for (auto key : retry_ctrl.tx_writes_hash_) {
+        const uint64_t hash = hash_rowkey(memtable_->get_tablet_id(), key);
+        bool has_remote_exec_side = false;
+        ObLockWaitNode *iter = fake_lock_wait_mgr_.get_wait_head(hash);
+        while (iter != NULL && iter->hash_ == hash) {
+          if (iter->get_node_type() == ObLockWaitNode::NODE_TYPE::REMOTE_EXEC_SIDE) {
+            has_remote_exec_side = true;
+            break;
+          }
+          iter = (ObLockWaitNode *)iter->next_;
+        }
+        if (has_remote_exec_side) {
+          fake_lock_wait_mgr_.wakeup_key(hash);
+        }
+      }
+    }
+    if (retry_ctrl.node_ != NULL) {
+      lock_wait_node_to_tx_map_.erase(retry_ctrl.node_);
+      delete retry_ctrl.node_;
+      retry_ctrl.node_ = NULL;
+    }
     retry_ctrl.tx_end();
     ObMockLockWaitMgr::clear_thread_node();
     tx_retry_control_map_.erase(&tx);

@@ -1034,18 +1034,28 @@ void ObLockWaitMgr::ls_switch_to_follower(const share::ObLSID &ls_id)
 {
   ObLink* retire_iter = NULL;
   {
-    Node *iter = NULL;
+    // NOTE: `hash_->quick_next(prev)` expects `prev` to be a node that is still valid
+    // for traversal. If we remove `cur` during iteration, we must NOT advance `prev`
+    // to `cur`, otherwise the next `quick_next(prev)` may traverse from a deleted node.
+    Node *prev = NULL;
     Node *node2del = NULL;
     CriticalGuard(get_qs());
-    while(NULL != (iter = hash_->quick_next(iter))) {
-      TRANS_LOG(TRACE, "switch to follower:", KPC(iter));
-      if (iter->get_ls_id() == ls_id.id()) {
-        node2del = iter;
+    while (true) {
+      Node *cur = hash_->quick_next(prev);
+      if (NULL == cur) {
+        break;
+      }
+      TRANS_LOG(TRACE, "switch to follower:", KPC(cur));
+      if (cur->get_ls_id() == ls_id.id()) {
+        node2del = cur;
         bool is_placeholder = ATOMIC_LOAD(&node2del->is_placeholder_);
         if (!is_placeholder || (is_placeholder && node2del->get_node_type() == Node::REMOTE_EXEC_SIDE)) {
           retire_node(retire_iter, node2del);
         }
         node2del = NULL;
+        // keep `prev` unchanged because `cur` might be removed from hash_
+      } else {
+        prev = cur;
       }
     }
   }
@@ -1121,6 +1131,7 @@ bool ObLockWaitMgr::wait_(Node* node, Node*& delete_node, bool &is_placeholder)
   } else {
     CriticalGuard(get_qs());
     if (node->get_node_type() == rpc::ObLockWaitNode::REMOTE_CTRL_SIDE) {
+      // Remote control-side node: always enqueue and wait for explicit wakeup.
       node->try_lock_times_++;
       (void)insert_node_(node);
       wait_succ = true;
