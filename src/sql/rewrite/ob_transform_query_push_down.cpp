@@ -846,6 +846,8 @@ int ObTransformQueryPushDown::do_transform(ObSelectStmt *select_stmt,
                                           select_offset,
                                           const_select_items))) {
     LOG_WARN("push down stmt exprs failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*view_stmt))) {
+    LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
   } else {
     /* do nothing*/
   }
