@@ -11756,12 +11756,12 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
                                         skip_const_in_select))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(left_exec_params,
-                                               left_where_exprs,
+                                               left_having_exprs,
                                                left_new_select_exprs,
                                                skip_const_in_cond))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(left_exec_params,
-                                               left_having_exprs,
+                                               left_where_exprs,
                                                left_new_select_exprs,
                                                skip_const_in_cond))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
@@ -11771,12 +11771,12 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
                                                skip_const_in_select))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_exec_params,
-                                               right_where_exprs,
+                                               right_having_exprs,
                                                right_new_select_exprs,
                                                skip_const_in_cond))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_exec_params,
-                                               right_having_exprs,
+                                               right_where_exprs,
                                                right_new_select_exprs,
                                                skip_const_in_cond))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
