@@ -1136,7 +1136,6 @@ void ObCOMergeTwoStageCtx::reset()
 int ObCOMergeTwoStageCtx::close_files(const int64_t task_id, const int64_t start_cg_idx, const int64_t end_cg_idx)
 {
   int ret = OB_SUCCESS;
-  bool could_release = true;
   if (!is_valid()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -1148,13 +1147,8 @@ int ObCOMergeTwoStageCtx::close_files(const int64_t task_id, const int64_t start
     LOG_WARN("mgr is null", KR(ret), K(task_id));
   } else if (OB_FAIL(mgr_array_[task_id]->close_part(start_cg_idx, end_cg_idx))) {
     LOG_WARN("fail to close files", KR(ret), K(task_id), K(start_cg_idx), K(end_cg_idx));
-  } else if (OB_FAIL(mgr_array_[task_id]->check_could_release(could_release))) {
-    LOG_WARN("fail to check could release", KR(ret), K(task_id));
-  } else if (could_release) {
-    mgr_array_[task_id]->~ObCOMergeLogFileMgr();
-    mem_ctx_->local_free(mgr_array_[task_id]);
-    mgr_array_[task_id] = nullptr;
-    LOG_INFO("success to release mgr", K(ret), K(task_id));
+  } else if (OB_FAIL(mgr_array_[task_id]->try_release())) {
+    LOG_WARN("fail to try release mgr", KR(ret), K(task_id));
   }
   return ret;
 }

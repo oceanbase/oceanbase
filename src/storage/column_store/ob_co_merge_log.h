@@ -468,7 +468,8 @@ public:
       row_file_count_(0),
       log_file_(),
       row_files_(nullptr),
-      allocator_("LogFileMgr")
+      allocator_("LogFileMgr"),
+      release_lock_(common::ObLatchIds::OB_CO_TABLET_MERGE_CTX_MUTEX)
   {}
   virtual ~ObCOMergeLogFileMgr() { reset(); }
   int init(
@@ -477,7 +478,7 @@ public:
       const bool skip_base_cg = false);
   void reset();
   int close_part(const int64_t start_cg_idx, const int64_t end_cg_idx);
-  int check_could_release(bool &could_release);
+  int try_release();
 
   int get_row_file(const int64_t idx, ObCOMergeLogFile *&file);
   int get_log_file(ObCOMergeLogFile *&file);
@@ -497,6 +498,7 @@ private:
   ObCOMergeLogFile log_file_;
   ObCOMergeLogFile **row_files_;
   ObLocalArena allocator_;
+  lib::ObMutex release_lock_;
 };
 }
 }

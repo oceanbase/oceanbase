@@ -716,18 +716,22 @@ int ObCOMergeLogFileMgr::close_part(const int64_t start_cg_idx, const int64_t en
   return ret;
 }
 
-int ObCOMergeLogFileMgr::check_could_release(bool &could_release)
+int ObCOMergeLogFileMgr::try_release()
 {
   int ret = OB_SUCCESS;
-  could_release = true;
+  ObMutexGuard guard(release_lock_);
   if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObCOMergeLogFileMgr not init", K(ret));
+    // do nothing
   } else {
+    bool could_release = true;
     for (int64_t i = 0; could_release && i < row_file_count_; ++i) {
       if (nullptr != row_files_[i]) {
         could_release = false;
       }
+    }
+    if (could_release) {
+      reset();
+      LOG_INFO("success to release log file mgr", K(ret));
     }
   }
   return ret;
