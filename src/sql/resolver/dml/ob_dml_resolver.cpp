@@ -2759,75 +2759,74 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       || OB_ISNULL(session_info_)
       || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema checker or query ctx is null", K(stmt), K_(schema_checker), K(query_ctx), K_(params_.expr_factory));
+    LOG_WARN("schema checker or query ctx is null", K(ret), K(stmt), K_(schema_checker), K(query_ctx), K_(params_.expr_factory));
   } else if (OB_UNLIKELY(!table_item.is_link_table() && !table_item.is_basic_table()
                          && !table_item.is_fake_cte_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not base table or alias from base table", K_(table_item.type), K(ret));
   } else if (need_check_exist && NULL != (col_item = stmt->get_column_item(table_item.table_id_, column_name))) {
-    if (!include_hidden) {
-      if (!ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
-        //do nothing
-      } else if (current_scope_ == T_UPDATE_SCOPE || current_scope_ == T_INSERT_SCOPE) {
+    if (OB_ISNULL(col_expr = col_item->get_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col expr is null", K(ret), KPC(col_item));
+    } else if (col_expr->is_hidden_column()
+               && !include_hidden
+               && !session_info_->is_inner()) {
+      // The other hidden columns have already been checked when they were first
+      // added to the stmt, but the __pk_increment still needs to be checked to
+      // ensure that it will not be modified.
+      const bool is_hidden_pk = ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_PK_INCREMENT_COLUMN_NAME);
+      if (OB_UNLIKELY(is_hidden_pk
+                      && (T_UPDATE_SCOPE == current_scope_
+                          || T_INSERT_SCOPE == current_scope_))) {
         ret = OB_ERR_BAD_FIELD_ERROR;
-        LOG_WARN("not allowed update insert hidden pk increment column", K(ret));
+        LOG_WARN("can not modify __pk_increment column using DML", K(ret));
       }
     }
   } else {
-    bool is_uni = false;
-    bool is_mul = false;
     //not resolve, so add column item to dml stmt
     const ObColumnSchemaV2 *col_schema = NULL;
     const ObTableSchema *table_schema = NULL;
-    //for materialized view, should use materialized view id to resolve column,
-    //and its schema id saved in table_item.table_id_
+    bool is_uni = false;
+    bool is_mul = false;
     uint64_t tid = table_item.ref_id_;
-    if (!include_hidden) {
-      if (!ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
-        //do nothing
-      } else if (current_scope_ == T_UPDATE_SCOPE || current_scope_ == T_INSERT_SCOPE) {
-        //do nothing include is false
-      } else if (ObResolverUtils::is_restore_user(*session_info_)
-                 || ObResolverUtils::is_drc_user(*session_info_)
-                 || session_info_->is_inner()
-                 || is_from_existing_mview()) {
-        include_hidden = true;
-      } else {
-        include_hidden = true;
-        const ObGlobalHint &global_hint = query_ctx->get_query_hint().get_global_hint();
-        bool has_enable_param = false;
-        if (OB_FAIL(global_hint.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param))) {
-          LOG_WARN("failed to check has enable opt param", K(ret));
-        } else if (OB_UNLIKELY(!has_enable_param)) {
-          ret = OB_ERR_BAD_FIELD_ERROR;
-          LOG_WARN("hidden columns not allowed", K(ret));
-          ObString column_name(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME);
-          ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
-          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-                                                 scope_name.length(), scope_name.ptr());
-        }
-      }
-      // special path for mview, mview would create sepcial hidden column when create,
-      // allow to access hidden column when refreshing mview or select mview table
-      if (session_info_->get_ddl_info().is_refreshing_mview() ||
-          (table_item.mview_id_ != OB_INVALID_ID &&
-           (current_scope_ != T_UPDATE_SCOPE && current_scope_ != T_INSERT_SCOPE))) {
-        if (rootserver::ObMViewUtils::is_hidden_column(column_name)) {
-          include_hidden = true;
-        }
-        LOG_INFO("include hidden column", K(include_hidden), K(current_scope_),
-                 K(table_item.mview_id_), K(session_info_->get_ddl_info().is_refreshing_mview()), K(column_name));
-      }
-    }
-    if (OB_FAIL(ret)) {
-      //do nothing
-    } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tid, table_schema, table_item.is_link_table()))) {
-      LOG_WARN("invalid table id", K(tid));
-    } else if (OB_FAIL(get_column_schema(tid, column_name, col_schema, include_hidden, table_item.is_link_table()))) {
+    if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tid, table_schema, table_item.is_link_table()))) {
+      LOG_WARN("failed to get table schema", K(ret), K(tid));
+    } else if (OB_FAIL(get_column_schema(tid, column_name, col_schema, true, table_item.is_link_table()))) {
       LOG_WARN("get column schema failed", K(ret), K(tid), K(column_name));
     } else if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column schema is null");
+      LOG_WARN("column schema is null", K(ret), K(tid), K(column_name));
+    } else if (col_schema->is_hidden()
+               && !col_schema->is_generated_column()
+               && !col_schema->is_udt_hidden_column()
+               && !include_hidden
+               && !session_info_->is_inner()) {
+      // the hidden generated column will be handled in the resolve func of themselves
+      const bool is_hidden_pk = ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_PK_INCREMENT_COLUMN_NAME);
+      const bool is_rowid_col = lib::is_oracle_mode() && ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME);
+      bool enable_hidden_visible = false;
+      if (OB_UNLIKELY(is_hidden_pk
+                      && (T_UPDATE_SCOPE == current_scope_
+                          || T_INSERT_SCOPE == current_scope_))) {
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        LOG_WARN("can not modify __pk_increment column using DML", K(ret), K(column_name), K(current_scope_));
+      } else if (is_rowid_col
+                 || ObResolverUtils::is_restore_user(*session_info_)
+                 || ObResolverUtils::is_drc_user(*session_info_)
+                 || params_.is_for_rt_mv_
+                 || is_from_existing_mview()) {
+        // do nothing, allow to use hidden column
+      } else if (OB_FAIL(query_ctx->get_query_hint().get_global_hint().opt_params_
+                         .has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE,
+                                               enable_hidden_visible))) {
+        LOG_WARN("failed to check hidden column visible hint", K(ret));
+      } else if (OB_UNLIKELY(!enable_hidden_visible)) {
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), scope_name.length(), scope_name.ptr());
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*params_.expr_factory_, *col_schema, session_info_, col_expr))) {
       LOG_WARN("build column expr failed", K(ret));
     } else if (OB_FAIL(table_schema->is_unique_key_column(*schema_guard,
