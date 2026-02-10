@@ -399,6 +399,8 @@ int ObLinkedMacroBlockItemReader::read_item_block()
           buf_pos_ = 0;
           buf_len_ = request_size;
         }
+        LOG_INFO("finish to read large item", K(ret), KP(buf_), K(item_size), K(request_size), K(buf_pos_),
+          K(buf_len_), K(linked_header_));
       }
     }
   }
@@ -429,8 +431,11 @@ int ObLinkedMacroBlockItemReader::parse_item(
       item_buf = buf_ + buf_pos_;
       item_buf_len = item_header->payload_size_;
       buf_pos_ += item_buf_len;
-
-      if (OB_FAIL(check_item_crc(item_header->payload_crc_, item_buf, item_buf_len))) {
+      if (OB_UNLIKELY(buf_pos_ > buf_len_)) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_ERROR("item buffer size overflow", K(ret), KP_(buf), K(buf_pos_), K(buf_len_),
+          K(offset), KP(item_buf), K(item_buf_len), KPC(item_header));
+      } else if (OB_FAIL(check_item_crc(item_header->payload_crc_, item_buf, item_buf_len))) {
         LOG_WARN("item checksum error", K(ret), KPC(item_header));
       }
     }
