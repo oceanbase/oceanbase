@@ -1922,7 +1922,7 @@ int ObBasicSessionInfo::gen_sys_var_in_pc_str()
   ObSysVarInPC sys_vars;
   char *buf = NULL;
   int64_t pos = 0;
-  if (is_first_gen_ || sys_var_in_pc_str_.size() < MAX_SYS_VARS_STR_SIZE) {
+  if (is_first_gen_) {
     //如果是第一次则需要分配内存
     if (NULL == (buf = (char *)sess_level_name_pool_.alloc(MAX_SYS_VARS_STR_SIZE))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1978,10 +1978,10 @@ int ObBasicSessionInfo::gen_sys_var_in_pc_str_lazy()
 {
   int ret = OB_SUCCESS;
   if (need_regenerate_sys_var_str_) {
-    need_regenerate_sys_var_str_ = false;
     if (OB_FAIL(gen_sys_var_in_pc_str())) {
-      need_regenerate_sys_var_str_ = true;
       LOG_WARN("fail to generate sys var in pc str", K(ret));
+    } else {
+      need_regenerate_sys_var_str_ = false;
     }
   }
   return ret;
@@ -5764,7 +5764,7 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
       }
       // above write string for sys_var_in_pc_str_ and config_in_pc_str_ will set capacity
       // to unexpected value, so we need to check its size in
-      // next gen_sys_var_in_pc_str() and gen_configs_in_pc_str() to not reuse memory
+      // next gen_configs_in_pc_str() to not reuse memory
     }
     sql_scope_flags_.set_flags(sql_scope_flags);
     is_deserialized_ = true;
