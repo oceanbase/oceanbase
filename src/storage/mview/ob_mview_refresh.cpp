@@ -335,6 +335,12 @@ int ObMViewRefresher::prepare_for_refresh()
     } else if (OB_NOT_NULL(refresh_stats_collection_)
                && OB_FAIL(refresh_stats_collection_->collect_before_refresh(*refresh_ctx_))) {
       LOG_WARN("fail to collect refresh stats before refresh", KR(ret));
+    } else if ((ObMVRefreshMethod::FAST == refresh_method
+                || (ObMVRefreshMethod::FORCE == refresh_method && can_fast_refresh))
+               && ObMVRefreshMethod::MAX == refresh_param_.refresh_method_
+               && OB_FAIL(check_adaptive_refresh_method(refresh_method))) {
+      LOG_WARN("failed to check adaptive refresh method", KR(ret));
+      ret = OB_SUCCESS; // continue to use original refresh method
     }
     if (OB_FAIL(ret)) {
     } else if (ObMVRefreshMethod::COMPLETE == refresh_method ||
@@ -377,7 +383,6 @@ int ObMViewRefresher::prepare_for_refresh()
         } else if (OB_FAIL(refresh_ctx_->refresh_sqls_.push_back(fast_refresh_sql))) {
           LOG_WARN("fail to push back", KR(ret));
         }
-        LOG_INFO("print fast refresh sql", K(fast_refresh_sql));
       }
     }
   }
@@ -973,6 +978,42 @@ int ObMViewRefresher::collect_based_schema_object_infos(
       //  directly dependency base objects placed at the front of the array.
       LOG_WARN("unexpected ordering in based_schema_object_infos", K(ret), K(direct_dep_cnt), K(dependency_infos));
     }
+  }
+  return ret;
+}
+
+int ObMViewRefresher::check_adaptive_refresh_method(ObMVRefreshMethod &adaptive_refresh_method)
+{
+  int ret = OB_SUCCESS;
+  bool should_adaptive_complete = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  const double complete_refresh_ratio_threshold = tenant_config.is_valid() ?
+                                                  static_cast<double>(tenant_config->_mv_adaptive_complete_refresh_threshold.get()) / 100.0 :
+                                                  0.0;
+  const int64_t MLOG_ROWS_THRESHOLD = 500;
+  if (OB_ISNULL(refresh_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("refresh ctx is null", KR(ret));
+  } else if (OB_ISNULL(refresh_stats_collection_)
+      || 0.0 == complete_refresh_ratio_threshold
+      || refresh_ctx_->target_data_sync_scn_.is_valid() /* need consistent refresh, not supported */) {
+    // do nothing
+  } else {
+    const ObIArray<ObMViewRefreshChangeStats> &change_stats_array = refresh_stats_collection_->change_stats_array_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < change_stats_array.count(); ++i) {
+      const ObMViewRefreshChangeStats &change_stats = change_stats_array.at(i);
+      int64_t num_mlog_rows = change_stats.num_rows_ins_ + change_stats.num_rows_del_ + change_stats.num_rows_upd_;
+      int64_t num_base_table_rows = change_stats.num_rows_ - change_stats.num_rows_ins_ + change_stats.num_rows_del_;
+      if (num_mlog_rows > MLOG_ROWS_THRESHOLD && num_base_table_rows != 0
+          && static_cast<double>(num_mlog_rows)/num_base_table_rows > complete_refresh_ratio_threshold) {
+        should_adaptive_complete = true;
+        break;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && should_adaptive_complete) {
+    adaptive_refresh_method = ObMVRefreshMethod::COMPLETE;
+    LOG_INFO("using adaptive complete refresh");
   }
   return ret;
 }

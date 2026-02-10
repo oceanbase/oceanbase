@@ -94,6 +94,7 @@ private:
                      share::ObScnRange &base_table_scn_range);
   int gen_complete_refresh_sql_string_(ObString &select_string,
                                        ObIAllocator &str_alloc);
+  int check_adaptive_refresh_method(share::schema::ObMVRefreshMethod &adaptive_refresh_method);
 private:
   sql::ObExecContext *ctx_;
   ObMViewRefreshCtx *refresh_ctx_;
