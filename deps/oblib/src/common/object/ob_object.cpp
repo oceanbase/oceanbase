@@ -2251,6 +2251,31 @@ int ObObj::print_varchar_literal(char *buffer, int64_t length, int64_t &pos, con
   return OBJ_FUNCS[meta_.get_type()].print_str(*this, buffer, length, pos, params);
 }
 
+int ObObj::print_varchar_literal(char *&buffer, int64_t &length,
+                                 int64_t &pos, ObIAllocator &alloc,
+                                 const ObObjPrintParams &params) const
+{
+  int ret = OB_SUCCESS;
+  int64_t saved_pos = pos;
+  while (OB_SUCC(ret) && pos == saved_pos) {
+    if (OB_FAIL(OBJ_FUNCS[meta_.get_type()].print_str(*this, buffer, length, pos, params))) {
+      if (OB_SIZE_OVERFLOW == ret) {
+        ret = OB_SUCCESS;
+        if (OB_FAIL(multiple_extend_buf(buffer, length, alloc))) {
+          LOG_WARN("failed to auto extend stmt buf", K(ret));
+        } else {
+          pos = saved_pos;
+        }
+      } else {
+        LOG_WARN("failed to print str", K(ret));
+      }
+    } else {
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObObj::print_plain_str_literal(char *buffer, int64_t length, int64_t &pos, const ObObjPrintParams &params) const
 {
   return OBJ_FUNCS[meta_.get_type()].print_plain_str(*this, buffer, length, pos, params);

@@ -1438,7 +1438,7 @@ public:
 
   inline bool need_return_lob_locator() const
   {
-    return is_client_use_lob_locator() || is_client_support_lob_locatorv2();
+    return is_client_use_lob_locator();
   }
 
   inline bool is_support_new_result_meta_data() const
