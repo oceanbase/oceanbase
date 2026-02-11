@@ -1621,14 +1621,27 @@ int init_agg_func(RuntimeContext &agg_ctx, const int64_t agg_col_id, const bool 
   }
 
   if (OB_SUCC(ret) && is_statistic_agg) {
-    if (OB_ISNULL(wrapper_buf = allocator.alloc(sizeof(StatisticWrapper<AggType>)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SQL_LOG(WARN, "allocate memory failed", K(ret));
-    } else if (FALSE_IT(wrapper = new (wrapper_buf) StatisticWrapper<AggType>())) {
-    } else {
-      wrapper->set_inner_aggregate(agg);
-      agg = wrapper;
+#define CREATE_STATISTIC_WRAPPER(WrapperType) \
+    if (OB_ISNULL(wrapper_buf = allocator.alloc(sizeof(WrapperType)))) { \
+      ret = OB_ALLOCATE_MEMORY_FAILED; \
+      SQL_LOG(WARN, "allocate memory failed", K(ret)); \
+    } else if (FALSE_IT(wrapper = new (wrapper_buf) WrapperType())) { \
+    } else { \
+      wrapper->set_inner_aggregate(agg); \
+      agg = wrapper; \
     }
+    if (need_group_extra) {
+      if (has_distinct) {
+        CREATE_STATISTIC_WRAPPER(StatisticWrapper<DistinctWrapper<GroupStoreWrapper<AggType>>>);
+      } else {
+        CREATE_STATISTIC_WRAPPER(StatisticWrapper<GroupStoreWrapper<AggType>>);
+      }
+    } else if (has_distinct) {
+      CREATE_STATISTIC_WRAPPER(StatisticWrapper<DistinctWrapper<AggType>>);
+    } else {
+      CREATE_STATISTIC_WRAPPER(StatisticWrapper<AggType>);
+    }
+#undef CREATE_STATISTIC_WRAPPER
   }
 
 
