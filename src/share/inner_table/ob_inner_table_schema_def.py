@@ -13098,6 +13098,7 @@ def_table_schema(
       ('tenant_id', 'int'),
       ('policy', 'varchar:6'),
       ('db_id', 'int'),
+      ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

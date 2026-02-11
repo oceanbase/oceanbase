@@ -43,7 +43,8 @@ public:
       : dop_(other.dop_), plan_id_(other.plan_id_), exec_id_(other.exec_id_),
         session_id_(other.session_id_), db_id_(other.db_id_),
         my_session_(other.my_session_),
-        disable_auto_mem_mgr_(other.disable_auto_mem_mgr_) {
+        disable_auto_mem_mgr_(other.disable_auto_mem_mgr_),
+        trace_id_(other.trace_id_) {
     if (*(other.get_sql_id()) == '\0') {
       sql_id_[0] = '\0';
     } else {
@@ -63,6 +64,7 @@ public:
   ObSQLSessionInfo *get_my_session() { return my_session_; }
   void reset_my_session() { my_session_ = nullptr; }
   bool get_disable_auto_mem_mgr() { return disable_auto_mem_mgr_; }
+  const common::ObCurTraceId::TraceId& get_trace_id() const { return trace_id_; }
 
   TO_STRING_KV(K_(dop), K_(plan_id), K_(exec_id), K_(session_id), K_(db_id), K_(sql_id), K_(disable_auto_mem_mgr));
 
@@ -75,6 +77,7 @@ private:
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   ObSQLSessionInfo *my_session_;
   bool disable_auto_mem_mgr_;
+  common::ObCurTraceId::TraceId trace_id_;
 };
 
 class ObSqlWorkAreaProfile : public common::ObDLinkBase<ObSqlWorkAreaProfile>
@@ -189,6 +192,7 @@ public:
   const char* get_sql_id();
   uint64_t get_session_id();
   uint64_t get_db_id();
+  const common::ObCurTraceId::TraceId& get_trace_id() const { return exec_info_.get_trace_id(); }
 
   OB_INLINE bool need_profiled()
   {
@@ -386,6 +390,7 @@ public:
     sql_exec_id_ = other.sql_exec_id_;
     session_id_ = other.session_id_;
     database_id_ = other.database_id_;
+    trace_id_ = other.trace_id_;
   }
 
   ObSqlWorkareaProfileInfo &operator=(const ObSqlWorkareaProfileInfo &other)
@@ -410,6 +415,7 @@ public:
   uint64_t sql_exec_id_;
   uint64_t session_id_;
   uint64_t database_id_;
+  common::ObCurTraceId::TraceId trace_id_;
 };
 
 class ObSqlWorkAreaIntervalStat

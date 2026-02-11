@@ -86,6 +86,7 @@ private:
   common::ObString ipstr_;
   int32_t port_;
   ObSqlWorkareaActiveIterator iter_;
+  char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
 };
 
 } /* namespace observer */
