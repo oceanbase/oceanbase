@@ -1126,7 +1126,6 @@ private:
   int pop_task_from_ready_list_(ObITask *&task);
   int rank_compaction_dags_();
   int batch_move_compaction_dags_(const int64_t batch_size);
-  bool check_need_compaction_rank_() const;
   int do_rank_compaction_dags_(
     const int64_t batch_size,
     common::ObSEArray<compaction::ObTabletMergeDag *, 32> &rank_dags);
