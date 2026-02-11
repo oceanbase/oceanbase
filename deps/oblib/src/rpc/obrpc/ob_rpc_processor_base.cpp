@@ -217,7 +217,11 @@ int ObRpcProcessorBase::deserialize()
     if (OB_SUCC(ret) && need_compressed) {
       common::ObCompressor *compressor = NULL;
       int64_t dst_data_size = 0;
-      if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
+      if (original_len <= 0 || original_len > get_max_rpc_packet_size()) {
+        ret = OB_RPC_PACKET_TOO_LONG;
+        RPC_OBRPC_LOG(ERROR, "original len should not be less than 0 or greater than max rpc packet size",
+                            K(ret), K(original_len), "limit", get_max_rpc_packet_size());
+      } else if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(compressor_type,
               compressor))) {
         RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret), K(compressor_type));
       } else if (NULL == (uncompressed_buf_ =

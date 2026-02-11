@@ -107,25 +107,6 @@ protected:
                          ObRpcCompressMode mode,
                          bool &need_send_cmd_packet,
                          bool &is_still_need_compress);
-  /*
-   * this func is to decompress segment data
-   *@param [in] ctx : ctx of decompress
-   *@param [in] data + pos: data ptr to decompress
-   *@param [in] net_packet_buf: buf to place decompressed data, used with
-   *@param [in] net_packet_buf_size: size of net buf
-   *@param [in] net_packet_buf_pos: pos to place decompressed data
-   *@param [in] compressed_size: size of data  to decompress
-   *@param [in] original_size: size of original data  before compressing
-   */
-  int decode_segment(ObRpcCompressDCtx &ctx,
-                     char *data,
-                     char *net_packet_buf,
-                     int64_t net_packet_buf_size,
-                     bool is_data_compressed,
-                     int16_t compressed_size,
-                     int16_t original_size,
-                     int64_t &pos,
-                     int64_t &net_packet_buf_pos);
 protected:
   //const int16_t COMPRESS_BLOCK_SIZE = 1024;
   const int64_t MAX_COMPRESS_DATA_SIZE = (1UL << 32) - 1024;// 4G - 1K
