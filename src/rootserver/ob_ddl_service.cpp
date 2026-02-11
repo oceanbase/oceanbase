@@ -15094,7 +15094,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
     if (OB_SUCC(ret)) {
       bool need_update_index_table = false;
       bool need_progressive_merge = false;
-      if (alter_table_arg.is_alter_columns_) {
+      if (alter_table_arg.is_alter_columns_
+          && ObDDLType::DDL_DROP_COLUMN_INSTANT != ddl_type) {
         if (OB_FAIL(check_need_add_progressive_round(
             tenant_data_version,
             *orig_table_schema,
