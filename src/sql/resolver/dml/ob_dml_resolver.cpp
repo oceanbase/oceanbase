@@ -2824,20 +2824,11 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
           col_expr->set_data_type(ObLobType);
         }
       }
-      if (table_item.alias_name_.empty()) {
-        col_expr->set_synonym_db_name(table_item.synonym_db_name_);
-        col_expr->set_synonym_name(table_item.synonym_name_);
-      }
-      col_expr->set_column_attr(table_item.get_table_name(), col_schema->get_column_name_str());
-      col_expr->set_from_alias_table(!table_item.alias_name_.empty());
-      col_expr->set_database_name(table_item.database_name_);
-      //column maybe from alias table, so must reset ref id by table id from table_item
-      col_expr->set_ref_id(table_item.table_id_, col_schema->get_column_id());
+      col_expr->set_table_item_info(table_item);
+      col_expr->set_column_id(col_schema->get_column_id());
+      col_expr->set_column_name(col_schema->get_column_name_str());
       col_expr->set_unique_key_column(is_uni);
       col_expr->set_mul_key_column(is_mul);
-      if (!table_item.alias_name_.empty()) {
-        col_expr->set_table_alias_name();
-      }
       bool is_lob_column = is_lob_storage(col_schema->get_data_type());
       col_expr->set_lob_column(is_lob_column);
       column_item.expr_ = col_expr;
