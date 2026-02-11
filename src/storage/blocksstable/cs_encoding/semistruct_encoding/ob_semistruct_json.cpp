@@ -1222,6 +1222,9 @@ int ObJsonSchemaFlatter::add_schema_info(ObSemiSchemaNode &schema_node, ObSemiNe
       schema_node.set_col_id(freq_col_idx_++);
       schema_info_arr_.at(schema_node.get_col_id()) = info;
     }
+  } else if (spare_col_idx_ == INT16_MAX) {
+    ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
+    LOG_WARN("spare column count is out of range, semistruct encoding is not valid", K(ret), K(spare_col_idx_));
   } else {
     schema_node.set_col_id(spare_col_idx_++);
     if (OB_FAIL(schema_info_arr_.push_back(info))) {
@@ -1764,6 +1767,10 @@ int ObJsonSchemaFlatter::visit_scalar(ObSemiSchemaScalar *&scalar_node)
       if (need_store_as_freq_column(scalar_node->get_path_cnt())) {
         scalar_node->set_freq_column(true);
         freq_column_count_++;
+        if (freq_column_count_ == INT16_MAX) {
+          ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
+          LOG_WARN("freq column count is out of range, semistruct encoding is not valid", K(ret), K(freq_column_count_));
+        }
       }
     }
   }
@@ -2322,9 +2329,9 @@ int ObSemiStructSubSchema::get_column_id(const share::ObSubColumnPath& path, uin
     LOG_WARN("find column in spare columns fail", K(ret), K(path), KPC(path_ptr), K(spare_columns_));
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(sub_column)) {
-    if (sub_column->get_col_id() >= UINT16_MAX) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sub column id is too large", K(ret), K(sub_column));
+    if (sub_column->get_col_id() >= INT16_MAX) {
+      ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
+      LOG_WARN("sub column id is too large, semistruct encoding is not valid", K(ret), K(sub_column));
     } else {
       sub_col_idx = sub_column->get_col_id();
     }
@@ -2438,9 +2445,9 @@ int ObSemiStructSubSchema::add_spare_column(const ObJsonSchemaFlatter &flatter, 
     ObSemiSchemaScalar* scalar_node = reinterpret_cast<ObSemiSchemaScalar*>(node);
     sub_column.set_precision_and_scale(scalar_node->get_precision(), scalar_node->get_scale());
   }
-  if (col_id >= UINT16_MAX) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sub column is too much", K(ret), K(col_id));
+  if (col_id >= INT16_MAX) {
+    ret = OB_NOT_SUPPORT_SEMISTRUCT_ENCODE;
+    LOG_WARN("sub column is too much, semistruct encoding is not valid", K(ret), K(col_id));
   } else if (OB_FAIL(sub_column.init(flatter.get_path(), node->json_type(), node->obj_type(), col_id))) {
     LOG_WARN("init sub column fail", K(ret), K(flatter.get_path()));
   } else if (OB_FAIL(spare_columns_.push_back(ObSemiStructSubColumn()))) {
