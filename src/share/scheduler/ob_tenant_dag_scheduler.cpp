@@ -2263,20 +2263,6 @@ int ObDagPrioScheduler::schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_lis
   return ret;
 }
 
-// should hold prio_lock_ before calling this func
-bool ObDagPrioScheduler::check_need_compaction_rank_() const
-{
-  bool bret = true;
-  if (!is_compaction_dag_prio()) {
-    bret = false;
-  } else if (dag_list_[RANK_DAG_LIST].is_empty()) {
-    bret = false;
-  } else if (dag_list_[READY_DAG_LIST].get_size() >= adaptive_task_limit_ * COMPACTION_DAG_RERANK_FACTOR) {
-    bret = false;
-  }
-  return bret;
-}
-
 int ObDagPrioScheduler::do_rank_compaction_dags_(
     const int64_t batch_size,
     common::ObSEArray<compaction::ObTabletMergeDag *, 32> &rank_dags)
@@ -2378,8 +2364,10 @@ int ObDagPrioScheduler::rank_compaction_dags_()
     need_adaptive_schedule = scheduler->enable_adaptive_merge_schedule();
   }
 
-  if (!check_need_compaction_rank_()) {
-    // ready list has plenty of dags, no need to rank new dags
+  if (!is_compaction_dag_prio()) {
+    // not compaction dag prio, no need to rank
+  } else if (dag_list_[RANK_DAG_LIST].is_empty()) {
+    // no dag needs to rank
   } else if (ObDagPrio::DAG_PRIO_COMPACTION_LOW == priority_) {
     int64_t prepare_co_dag_cnt = 0;
     ObIDag *head = dag_list_[READY_DAG_LIST].get_header();
@@ -2392,12 +2380,23 @@ int ObDagPrioScheduler::rank_compaction_dags_()
       cur = cur->get_next();
     }
 
-    if (prepare_co_dag_cnt * 2 >= adaptive_task_limit_) {
-      // exist co prepare dags wait to schedule
-    } else if (OB_FAIL(batch_move_compaction_dags_(0 == prepare_co_dag_cnt ? batch_size : limits_))) {
-      COMMON_LOG(WARN, "failed to move co prepare dag from wait list to ready list", K(ret), K(limits_));
+    int64_t fetch_co_dag_limit = 0;
+    if (prepare_co_dag_cnt * 2 < adaptive_task_limit_) {
+      // need to fetch co prepare dags
+      if (0 == prepare_co_dag_cnt && dag_list_[READY_DAG_LIST].get_size() < batch_size) {
+        // no co prepare dag in ready list and ready list is not full, fetch more
+        fetch_co_dag_limit = batch_size;
+      } else {
+        // ready list has plenty of dags, fetch a few to prevent from being starved
+        fetch_co_dag_limit = limits_;
+      }
     }
 
+    if (fetch_co_dag_limit > 0 && OB_FAIL(batch_move_compaction_dags_(fetch_co_dag_limit))) {
+      COMMON_LOG(WARN, "failed to move co prepare dag from wait list to ready list", K(ret), K(limits_), K(fetch_co_dag_limit));
+    }
+  } else if (dag_list_[READY_DAG_LIST].get_size() >= batch_size) {
+    // mini/minor ready list has plenty of dags, no need to rank new dags
   } else if (!need_adaptive_schedule) {
     // not allow rerank, move all dags in rank_list to ready list directly
     if (OB_FAIL(batch_move_compaction_dags_(dag_list_[RANK_DAG_LIST].get_size()))) {
