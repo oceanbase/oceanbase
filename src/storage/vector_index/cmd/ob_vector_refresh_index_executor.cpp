@@ -951,6 +951,80 @@ int ObVectorRefreshIndexExecutor::resolve_rebuild_inner_arg(const ObVectorRebuil
   return ret;
 }
 
+int ObVectorRefreshIndexExecutor::do_freeze_tablet()
+{
+  int ret = OB_SUCCESS;
+  // freeze major tablet
+  ObArray<uint64_t> tablet_ids;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    ObSqlString select_sql;
+    if (OB_FAIL(select_sql.append_fmt(
+            "select tablet_id from oceanbase.DBA_OB_TABLE_LOCATIONS where table_id = %lu",
+            domain_tb_id_))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_FAIL(ctx_->get_sql_proxy()->read(
+                   res, tenant_id_, select_sql.ptr()))) {
+      LOG_WARN("fail to execute select sql", KR(ret), K(select_sql),
+               K(tenant_id_));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is NULL", K(ret));
+    } else {
+      while (OB_SUCC(ret)) {
+        uint64_t tablet_id = 0;
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("next failed", K(ret));
+          }
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, uint64_t);
+          if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+            LOG_WARN("failed to store tablet id", K(ret));
+          }
+        }
+      }
+
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && tablet_ids.count() > 0) {
+    LOG_INFO("get freeze tablet id", K(tablet_ids));
+    // Only do minor/major freeze for first tablet, to maintain compatibility with the legacy behavior while minimizing CPU resource usage.
+    for (int i = 0 ; OB_SUCC(ret) && i < 1; ++i) {
+      int64_t affected_rows = 0;
+      uint64_t tablet_id = tablet_ids.at(i);
+      ObSqlString freeze_sql;
+      if (OB_FAIL(freeze_sql.append_fmt(
+            "alter system minor freeze tablet_id = %lu", tablet_id))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else if (OB_FAIL(ctx_->get_sql_proxy()->write(tenant_id_, freeze_sql.ptr(), affected_rows))) {
+        ret = OB_SUCCESS;
+        LOG_WARN("fail to execute minor freeze sql, continue other tablet id", K(tablet_id),
+                  K(tenant_id_), K(freeze_sql));
+      } else {
+        LOG_INFO("execute minor freeze success", K(tablet_id), K(affected_rows));
+      }
+      ObSqlString major_sql;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(major_sql.append_fmt(
+            "alter system major freeze tablet_id = %lu", tablet_id))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else if (OB_FAIL(ctx_->get_sql_proxy()->write(tenant_id_, major_sql.ptr(), affected_rows))) {
+        ret = OB_SUCCESS;
+        LOG_WARN("fail to execute major freeze sql, continue other tablet id", K(tablet_id),
+                  K(tenant_id_), K(major_sql));
+      } else {
+        LOG_INFO("execute major freeze success", K(tablet_id), K(affected_rows));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVectorRefreshIndexExecutor::do_refresh() {
   int ret = OB_SUCCESS;
   ObVectorRefreshIndexCtx refresh_ctx;
@@ -979,6 +1053,13 @@ int ObVectorRefreshIndexExecutor::do_refresh() {
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
       LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
       ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (refresh_ctx.need_major_merge_) {
+      if (OB_FAIL(do_freeze_tablet())) {
+        LOG_WARN("fail to do freeze tablet", K(ret));
+      }
     }
   }
   if (ret == OB_EAGAIN) {
@@ -1020,6 +1101,13 @@ int ObVectorRefreshIndexExecutor::do_refresh_with_retry()
       if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
         LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
         ret = COVER_SUCC(tmp_ret);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (refresh_ctx.need_major_merge_) {
+        if (OB_FAIL(do_freeze_tablet())) {
+          LOG_WARN("fail to do freeze tablet", K(ret));
+        }
       }
     }
     if (OB_FAIL(ret)) {

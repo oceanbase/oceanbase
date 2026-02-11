@@ -270,7 +270,8 @@ public:
       batch_allocator_("BATCHALLOC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       search_allocator_(tenant_id),
       ls_leader_(true),
-      is_refresh_adaptor_(false) {};
+      is_refresh_adaptor_(false),
+      scn_() {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
   int init_prefilter(const int64_t &min, const int64_t &max);
@@ -306,6 +307,8 @@ public:
   bool get_ls_leader() { return ls_leader_; }
   void set_is_refresh_adaptor(const bool is_refresh_adaptor) { is_refresh_adaptor_ = is_refresh_adaptor; }
   bool get_is_refresh_adaptor() { return is_refresh_adaptor_; }
+  void set_scn(const SCN scn) { scn_ = scn; }
+
   void do_next_batch()
   {
     int64_t curr_cnt = get_vec_cnt();
@@ -327,6 +330,7 @@ private:
   ObVsagSearchAlloc search_allocator_;
   bool ls_leader_;
   bool is_refresh_adaptor_;
+  SCN scn_;
 };
 
 class ObVectorQueryConditions {

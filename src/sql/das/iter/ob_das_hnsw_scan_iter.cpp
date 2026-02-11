@@ -810,6 +810,10 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
       LOG_WARN("failed to set query condition.", K(ret));
     } else if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id_, ls_leader))) {
       LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id_));
+    } else if (OB_ISNULL(snapshot_) || !snapshot_->core_.version_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("snapshot is null", K(ret), KPC(snapshot_));
+    } else if (FALSE_IT(ada_ctx.set_scn(snapshot_->core_.version_))) {
     } else if (OB_FALSE_IT(ada_ctx.set_ls_leader(ls_leader))) {
     } else if (!ls_leader) {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));

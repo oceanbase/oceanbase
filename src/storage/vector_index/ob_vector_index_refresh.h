@@ -27,7 +27,8 @@ public:
       : allocator_("VecRefCtx"), tenant_id_(OB_INVALID_TENANT_ID),
         base_tb_id_(OB_INVALID_ID), domain_tb_id_(OB_INVALID_ID),
         index_id_tb_id_(OB_INVALID_ID), trans_(nullptr),
-        refresh_method_(share::schema::ObVectorRefreshMethod::MAX) {}
+        refresh_method_(share::schema::ObVectorRefreshMethod::MAX),
+        need_major_merge_(false) {}
   bool is_valid() const {
     return OB_INVALID_TENANT_ID != tenant_id_ &&
            OB_INVALID_ID != domain_tb_id_ && OB_INVALID_ID != base_tb_id_ &&
@@ -58,6 +59,7 @@ public:
 
   double delta_rate_threshold_;
   int64_t refresh_threshold_;
+  bool need_major_merge_;
 };
 
 class ObVectorIndexRefresher {

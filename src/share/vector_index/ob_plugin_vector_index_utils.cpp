@@ -758,6 +758,7 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
       ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
       ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), extra_info_column_count, &allocator, &tmp_allocator);
       ada_ctx.set_is_refresh_adaptor(true);
+      ada_ctx.set_scn(target_scn);
       bool ls_leader = true;
       if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id, ls_leader))) {
         LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id));
