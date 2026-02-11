@@ -157,6 +157,10 @@ public:
   ~ObSessionTabletGCHelper() = default;
   int do_work();
   int is_sys_ls_leader(bool &is_leader) const;
+  // OBCDC will report an error if it can access the tablet but cannot access the schema.
+  // Therefore, as long as a temporary table exists and either the main or related table's tablet has not been GC'd,
+  // it must be mutually exclusive with DDL operations.
+  // is_table_has_active_session only checks whether the tablet exists, not whether the session is alive.
   static int is_table_has_active_session(
     const share::schema::ObSimpleTableSchemaV2 *table_schema,
     const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
@@ -173,6 +177,7 @@ private:
   static int is_table_has_active_session(
     const uint64_t tenant_id,
     const uint64_t table_id,
+    const int64_t schema_version,
     bool &has_active_session);
   // Group session tablet infos by session_id and sequence
   static int group_by_session_and_seq(
