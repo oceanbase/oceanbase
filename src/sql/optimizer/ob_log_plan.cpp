@@ -15948,8 +15948,13 @@ int ObLogPlan::check_das_need_scan_with_domain_id(ObLogicalOperator *op)
         LOG_WARN("complex query with dml on index merge not supported", K(ret));
       } else {
         ret = OB_NOT_SUPPORTED;
+        LOG_WARN("complex query with dml on fulltext / vector index is", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex query with dml on fulltext / vector index is");
       }
+    } else if (OB_UNLIKELY(scan->has_func_lookup() && OB_NOT_NULL(stmt_) && stmt_->is_dml_write_stmt())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("complex query with dml on fulltext / vector index is", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex query with dml on fulltext / vector index is");
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
