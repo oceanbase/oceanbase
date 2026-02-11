@@ -121,10 +121,12 @@ int ObHiveTableMetadata::setup_tbl_schema(const uint64_t tenant_id,
     LOG_WARN("failed to setup partition expr", K(ret));
   } else {
     std::map<std::string, std::string>::const_iterator params_iter
-        = table.parameters.find("transient_lastDdlTime");
-    if (OB_UNLIKELY(params_iter != table.parameters.end())) {
+        = table.parameters.find("last_modified_time");
+    if (params_iter != table.parameters.end()) {
       lake_table_metadata_version_
           = ::obsys::ObStringUtil::str_to_int(params_iter->second.c_str(), 0);
+    } else {
+      lake_table_metadata_version_ = table.createTime;
     }
   }
 
