@@ -64,6 +64,7 @@ public:
   {}
   int set_table_ids(const common::ObIArray<uint64_t> &table_ids);
   int do_work();
+  static int is_ls_leader(const share::ObLSID &ls_id, bool &is_leader);
   ~ObSessionTabletCreateHelper() = default;
   const common::ObIArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
   const common::ObIArray<uint64_t> &get_table_ids() const { return table_ids_; }
@@ -107,28 +108,18 @@ class ObSessionTabletDeleteHelper final
 public:
   ObSessionTabletDeleteHelper(
     const uint64_t tenant_id,
-    const ObSessionTabletInfo &tablet_info)
-    : tenant_id_(tenant_id),
-      tablet_info_(tablet_info),
-      trans_(nullptr),
-      allocator_("SessTabDelH"),
-      is_independent_trans_(true)
-  {}
-  ObSessionTabletDeleteHelper(
-    const uint64_t tenant_id,
-    const ObSessionTabletInfo &tablet_info,
+    ObIArray<storage::ObSessionTabletInfo *> &tablet_infos,
     common::ObMySQLTransaction &trans)
     : tenant_id_(tenant_id),
-      tablet_info_(tablet_info),
+      tablet_infos_(tablet_infos),
       trans_(&trans),
       allocator_("SessTabDelH"),
-      is_independent_trans_(false),
       timeout_us_(MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */))
   {}
   ~ObSessionTabletDeleteHelper() = default;
   int do_work();
   void set_timeout_us(int64_t timeout_us) { timeout_us_ = timeout_us; }
-  TO_STRING_KV(K_(tenant_id), K_(tablet_info));
+  TO_STRING_KV(K_(tenant_id), K_(tablet_infos));
 private:
   int delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version);
   int mds_remove_tablet(
@@ -139,12 +130,9 @@ private:
 private:
   uint64_t tenant_id_;
   // The ls_id of the tablet may change after migration, but the ls_id in the tablet_info_ does not get updated.
-  ObSessionTabletInfo tablet_info_;
+  ObIArray<storage::ObSessionTabletInfo *> &tablet_infos_;
   common::ObMySQLTransaction *trans_;
   common::ObArenaAllocator allocator_;
-  // If is_independent_trans_ is true, it means that the transaction is started by the ObSessionTabletDeleteHelper itself.
-  // Additionally, to ensure atomic deletion of multiple temporary table tablets, a shared transaction must be provided.
-  bool is_independent_trans_;
   int64_t timeout_us_;
 };
 
@@ -157,7 +145,7 @@ public:
     {}
   ~ObSessionTabletGCHelper() = default;
   int do_work();
-  int is_sys_ls_leader(bool &is_leader) const;
+  int get_local_leader_ls_ids(common::ObIArray<share::ObLSID> &ls_ids) const;
   // OBCDC will report an error if it can access the tablet but cannot access the schema.
   // Therefore, as long as a temporary table exists and either the main or related table's tablet has not been GC'd,
   // it must be mutually exclusive with DDL operations.
@@ -170,9 +158,10 @@ public:
     const ObString &db_name,
     const ObString &table_name,
     const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
-  static const int64_t MAX_GC_COUNT = 200;
+  static const int64_t MAX_GC_COUNT = 600;
   static const int64_t NUM_OF_TABLET_GROUP = 4;
   static const int64_t TABLET_GROUP_SIZE = 16;
+  static const int64_t BATCH_DELETE_SESSION_TABLET_COUNT = TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP;
   TO_STRING_KV(K_(tenant_id));
 private:
   static int is_table_has_active_session(

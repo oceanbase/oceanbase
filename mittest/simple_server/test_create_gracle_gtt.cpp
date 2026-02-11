@@ -166,6 +166,34 @@ int TestCreateOracleGTT::check_tablet_exists_in_gtt_operator(const ObTabletID &t
   return ret;
 }
 
+int delete_tablet(ObSessionTabletInfo &tablet_info)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  ObSEArray<storage::ObSessionTabletInfo *, 1> tablet_infos;
+  if (OB_FAIL(trans.start(GCTX.sql_proxy_, g_tenant_id))) {
+    LOG_WARN("failed to start transaction", KR(ret));
+  } else if (OB_FAIL(tablet_infos.push_back(&tablet_info))) {
+    LOG_WARN("failed to push back tablet info", KR(ret));
+  } else {
+    ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_infos, trans);
+    if (OB_FAIL(delete_helper.do_work())) {
+      LOG_WARN("failed to delete tablet", KR(ret));
+    } else {
+      LOG_INFO("deleted tablet", K(tablet_info));
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    bool is_commit = (OB_SUCCESS == ret);
+    if (OB_TMP_FAIL(trans.end(is_commit))) {
+      LOG_WARN("failed to end transaction", KR(ret), KR(tmp_ret));
+      ret = is_commit ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
 TEST_F(TestCreateOracleGTT, prepare_data)
 {
   int ret = OB_SUCCESS;
@@ -244,8 +272,7 @@ TEST_F(TestCreateOracleGTT, create_and_delete_tablet)
   ASSERT_EQ(OB_SUCCESS, tablet_info.init(tablet_id, ls_id, g_gtt_table_id, sequence, session_id, 0));
   tablet_info.is_creator_ = true;
 
-  ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
-  ASSERT_EQ(OB_SUCCESS, delete_helper.do_work());
+  ASSERT_EQ(OB_SUCCESS, delete_tablet(tablet_info));
 
   LOG_INFO("Deleted session tablet", K(tablet_id));
 
@@ -319,8 +346,7 @@ TEST_F(TestCreateOracleGTT, test_create_duplicate_tablet)
   ASSERT_EQ(OB_SUCCESS, tablet_info.init(tablet_id1, ls_id1, g_gtt_table_id, sequence, session_id, 0));
   tablet_info.is_creator_ = true;
 
-  ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
-  ASSERT_EQ(OB_SUCCESS, delete_helper.do_work());
+  ASSERT_EQ(OB_SUCCESS, delete_tablet(tablet_info));
 
   ASSERT_EQ(OB_SUCCESS, check_tablet_exists_in_tablet_to_ls(tablet_id1, exists, g_tenant_id));
   ASSERT_FALSE(exists);
@@ -371,8 +397,7 @@ TEST_F(TestCreateOracleGTT, test_create_multiple_sessions)
     ASSERT_EQ(OB_SUCCESS, tablet_info.init(tablet_ids[i], ls_id, g_gtt_table_id, sequence, session_ids[i], 0));
     tablet_info.is_creator_ = true;
 
-    ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
-    ASSERT_EQ(OB_SUCCESS, delete_helper.do_work());
+    ASSERT_EQ(OB_SUCCESS, delete_tablet(tablet_info));
 
     LOG_INFO("Deleted session tablet", K(i), K(tablet_ids[i]));
   }
@@ -469,8 +494,7 @@ TEST_F(TestCreateOracleGTT, test_parallel_create_and_delete_tablet)
       }
       tablet_info.is_creator_ = true;
 
-      ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
-      if (OB_SUCCESS == (local_ret = delete_helper.do_work())) {
+      if (OB_SUCCESS == (local_ret = delete_tablet(tablet_info))) {
         delete_success_count++;
         LOG_INFO("Thread deleted tablet successfully", K(i), K(tablet_ids[i]));
       } else {
@@ -575,9 +599,8 @@ TEST_F(TestCreateOracleGTT, test_mixed_parallel_create_and_delete)
       if (OB_SUCCESS == tablet_info.init(tablets_to_delete[i], ls_ids_to_delete[i],
                                           g_gtt_table_id, sequence, session_ids_to_delete[i], 0)) {
         tablet_info.is_creator_ = true;
-        ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
 
-        if (OB_SUCCESS == delete_helper.do_work()) {
+        if (OB_SUCCESS == delete_tablet(tablet_info)) {
           delete_success++;
           LOG_INFO("Delete thread succeeded", K(i), K(tablets_to_delete[i]));
         }
@@ -616,8 +639,7 @@ TEST_F(TestCreateOracleGTT, test_mixed_parallel_create_and_delete)
     ASSERT_EQ(OB_SUCCESS, tablet_info.init(newly_created_tablets[i], newly_created_ls_ids[i],
                                             g_gtt_table_id, sequence, newly_created_session_ids[i], 0));
     tablet_info.is_creator_ = true;
-    ObSessionTabletDeleteHelper delete_helper(g_tenant_id, tablet_info);
-    ASSERT_EQ(OB_SUCCESS, delete_helper.do_work());
+    ASSERT_EQ(OB_SUCCESS, delete_tablet(tablet_info));
   }
 
   LOG_INFO("Test mixed parallel create and delete completed successfully");

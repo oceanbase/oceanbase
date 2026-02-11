@@ -56,11 +56,13 @@ public:
   //
   // @param [in] sql_proxy, ObMySQLProxy or ObMySQLTransaction
   // @param [in] tenant_id, tenant for query
+  // @param [in] ls_ids, ls_ids for query
   // @param [out] infos, ObSessionTabletInfo for getting
   // @return OB_SUCCESS if success
-  static int batch_get(
+  static int batch_get_by_ls_ids(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
+    const ObIArray<share::ObLSID> &ls_ids,
     ObIArray<storage::ObSessionTabletInfo> &infos);
   // Get ObSessionTabletInfo from __all_tablet_to_global_temporary_table
   //

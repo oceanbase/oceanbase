@@ -257,7 +257,12 @@ int TestTransferHandler::get_tablet_ids_and_check_ls_from_session_table(
 {
   int ret = OB_SUCCESS;
   ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
-  if (OB_FAIL(ObTabletToGlobalTmpTableOperator::batch_get(*GCTX.sql_proxy_, g_tenant_id, session_tablet_infos))) {
+  common::ObSEArray<share::ObLSID, 4> ls_ids;
+  if (OB_FAIL(ls_ids.push_back(share::ObLSID(1001)))) {
+    LOG_WARN("failed to push back ls id", K(ret));
+  } else if (OB_FAIL(ls_ids.push_back(share::ObLSID(1002)))) {
+    LOG_WARN("failed to push back ls id", K(ret));
+  } else if (OB_FAIL(ObTabletToGlobalTmpTableOperator::batch_get_by_ls_ids(*GCTX.sql_proxy_, g_tenant_id, ls_ids, session_tablet_infos))) {
     LOG_WARN("failed to get session tablet infos", K(ret), K(table_ids), K(session_tablet_infos));
   }
 
