@@ -21791,6 +21791,7 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
       LOG_WARN("failed to determine docid type", K(ret));
     }
 
+    const bool is_partitioned_without_pk = hidden_table_schema.is_partitioned_table() && hidden_table_schema.is_table_without_pk();
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
       const ObTableSchema *index_table_schema = NULL;
       bool need_rebuild = true;
@@ -21802,8 +21803,12 @@ int ObDDLService::reconstruct_index_schema(obrpc::ObAlterTableArg &alter_table_a
         LOG_WARN("table schema should not be null", K(ret));
       } else if (disallow_ivf_index && index_table_schema->is_vec_ivf_index()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("create vector index on partition table without primary key not supported", K(ret), K(hidden_table_schema), KPC(index_table_schema));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index on partition table without primary key");
+        LOG_WARN("create ivf index on column table not supported", K(ret), K(hidden_table_schema), KPC(index_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index on column table");
+      } else if (is_partitioned_without_pk && index_table_schema->is_vec_ivf_index()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create vector ivf index on partition table without primary key not supported", K(ret), K(hidden_table_schema), KPC(index_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector ivf index on partition table without primary key");
       } else if (OB_FAIL(check_index_table_need_rebuild(*index_table_schema,
                                                         drop_cols_id_arr,
                                                         is_oracle_mode,
