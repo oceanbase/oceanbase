@@ -200,8 +200,6 @@ int ObBackupConnectivityCheckManager::schedule_check_read_write_consistency_(con
                                                   file_len,
                                                   data_checksum))) { // check PUT
     LOG_WARN("[RW CONSISTENCY CHECK] fail to check RW consistency after PUT", K(ret), K(server_list), K(check_file_path));
-  } else if (backup_dest.is_enable_worm()) {
-    // no need to check overwrite and append
   } else if (OB_FAIL(check_file.overwrite_check_file(file_len, data_checksum))) {
     LOG_WARN("fail to create check file", K(ret), K(check_file));
   } else if (OB_FAIL(check_server_rw_consistency_(server_list,
@@ -854,14 +852,10 @@ int ObBackupConsistencyCheckFile::write_check_file(int64_t &file_len, uint64_t &
 int ObBackupConsistencyCheckFile::overwrite_check_file(int64_t &file_len, uint64_t &data_checksum)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = check_desc_.get_tenant_id();
-  check_desc_.reset();
-
+  // overwrite check file with same content
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("check file not init", K(ret));
-  } else if (OB_FAIL(check_desc_.init(tenant_id))) { //random content will re-generate
-    LOG_WARN("fail to init check desc", K(ret), K(tenant_id));
   } else if (OB_FAIL(write_check_file(file_len, data_checksum))) {
     LOG_WARN("fail to write check file", K(ret), K_(check_desc));
   }
