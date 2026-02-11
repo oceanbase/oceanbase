@@ -277,7 +277,8 @@ public:
                   const ObAggCellVecBasicInfo &basic_info,
                   const share::ObAggrParamProperty &param_prop,
                   common::ObIAllocator &allocator);
-  void reuse() override;
+  int init(const ObTableAccessParam &param) override;
+  void reset() override;
   int eval(blocksstable::ObStorageDatum &datum,
            const int64_t row_count = 1,
            const int64_t agg_row_idx = 0,
@@ -293,7 +294,7 @@ public:
     UNUSEDx(reader, col_offset, row_ids, row_count);
     return false;
   }
-  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(cast_datum));
+  INHERIT_TO_STRING_KV("ObAggCellVec", ObAggCellVec, K_(cast_datum), KP_(cast_datum_buf));
 protected:
   OB_INLINE bool can_use_index_info() const override
   {
@@ -303,6 +304,7 @@ protected:
   }
 private:
   blocksstable::ObStorageDatum cast_datum_;
+  char *cast_datum_buf_;
 };
 
 // Empty table: count_sum() returns 0, sum() returns null
