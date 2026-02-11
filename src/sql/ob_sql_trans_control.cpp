@@ -667,6 +667,9 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   if (plan->is_contain_oracle_trx_level_temporary_table()) {
     OX (tx_desc->set_with_temporary_table());
   }
+  if (plan->is_contain_oracle_session_level_temporary_table()) {
+    OX (session->set_accessed_session_level_temp_table());
+  }
   if (OB_FAIL(ret) && start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {
