@@ -156,7 +156,7 @@ int ObBM25MaxScoreParamCollector::collect_agg_row(const blocksstable::ObDatumRow
     const uint64_t doc_len = agg_row.storage_datums_[doc_len_agg_idx_].get_uint();
     const double norm_len = static_cast<double>(doc_len);
     const double tf_score = sql::ObExprBM25::doc_token_weight(token_freq, norm_len);
-    if (tf_score > curr_max_score_) {
+    if (tf_score > curr_max_score_ || 0 == curr_max_score_) {
       token_freq_res_->set_uint(token_freq);
       doc_len_res_->set_uint(doc_len);
       curr_max_score_ = tf_score;
