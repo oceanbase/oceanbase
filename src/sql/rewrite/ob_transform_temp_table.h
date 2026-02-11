@@ -185,6 +185,10 @@ public:
                                ObSelectStmt *view,
                                ObIArray<ObRawExpr *> &old_view_columns,
                                ObIArray<ObRawExpr *> &new_view_columns);
+  int replace_generated_column_dependant_exprs(
+      const ObIArray<ObRawExpr *> &view_column_list,
+      const ObIArray<ObRawExpr *> &new_column_list,
+      const ObIArray<int64_t> &gen_col_idxs);
   int apply_temp_table_select_list(ObStmtCompareContext &context,
                                    const ObStmtMapInfo& map_info,
                                    ObSelectStmt *parent_stmt,

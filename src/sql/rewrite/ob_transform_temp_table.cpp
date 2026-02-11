@@ -1678,6 +1678,7 @@ int ObTransformTempTable::apply_temp_table_columns(ObStmtCompareContext &context
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> temp_table_column_list;
+  ObSEArray<int64_t, 4> gen_col_idxs;
   if (OB_ISNULL(view) || OB_ISNULL(temp_table_query) ||
       OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1689,10 +1690,16 @@ int ObTransformTempTable::apply_temp_table_columns(ObStmtCompareContext &context
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < view_column_list.count(); ++i) {
       ObRawExpr *view_column = view_column_list.at(i);
+      ObColumnRefRawExpr *view_col_ref = NULL;
       bool find = false;
       if (OB_ISNULL(view_column)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null column expr", K(ret));
+      } else if (OB_UNLIKELY(!view_column->is_column_ref_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect non-column expr", K(ret), KPC(view_column));
+      } else {
+        view_col_ref = static_cast<ObColumnRefRawExpr*>(view_column);
       }
       //column item是否存在于temp table中
       for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_table_column_list.count(); ++j) {
@@ -1712,7 +1719,7 @@ int ObTransformTempTable::apply_temp_table_columns(ObStmtCompareContext &context
       if (OB_SUCC(ret) && !find) {
         TableItem *table = NULL;
         ColumnItem *column_item = NULL;
-        ObColumnRefRawExpr *col_ref = static_cast<ObColumnRefRawExpr*>(view_column);
+        ObColumnRefRawExpr *col_ref = view_col_ref;
         uint64_t table_id = OB_INVALID_ID;
         uint64_t column_id = OB_INVALID_ID;
         if (OB_ISNULL(column_item = view->get_column_item_by_id(col_ref->get_table_id(),
@@ -1746,7 +1753,81 @@ int ObTransformTempTable::apply_temp_table_columns(ObStmtCompareContext &context
             LOG_WARN("failed to add column item", K(ret));
           } else if (OB_FAIL(new_column_list.push_back(col_ref))) {
             LOG_WARN("failed to push back expr", K(ret));
+          } else if (view_col_ref->is_generated_column() && OB_FAIL(gen_col_idxs.push_back(i))) {
+            LOG_WARN("failed to record generated column index", K(ret));
           }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !gen_col_idxs.empty() &&
+      OB_FAIL(replace_generated_column_dependant_exprs(view_column_list,
+                                                       new_column_list,
+                                                       gen_col_idxs))) {
+    LOG_WARN("failed to replace generated column dependant exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformTempTable::replace_generated_column_dependant_exprs(
+    const ObIArray<ObRawExpr *> &view_column_list,
+    const ObIArray<ObRawExpr *> &new_column_list,
+    const ObIArray<int64_t> &gen_col_idxs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ctx", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < gen_col_idxs.count(); ++i) {
+    const int64_t idx = gen_col_idxs.at(i);
+    ObRawExpr *new_col_expr = NULL;
+    ObColumnRefRawExpr *new_col_ref = NULL;
+    ObRawExpr *depend_expr = NULL;
+    ObSEArray<ObRawExpr*, 4> dep_cols;
+    if (OB_UNLIKELY(idx < 0 || idx >= new_column_list.count() ||
+                    idx >= view_column_list.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect generated column index", K(ret), K(idx),
+               K(new_column_list.count()), K(view_column_list.count()));
+    } else if (OB_ISNULL(new_col_expr = new_column_list.at(idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null new column expr", K(ret));
+    } else if (OB_UNLIKELY(!new_col_expr->is_column_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect non-column expr", K(ret), KPC(new_col_expr));
+    } else if (OB_FALSE_IT(new_col_ref = static_cast<ObColumnRefRawExpr*>(new_col_expr))) {
+    } else if (OB_UNLIKELY(!new_col_ref->is_generated_column())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected non-generated column", K(ret), KPC(new_col_ref));
+    } else if (OB_ISNULL(depend_expr = new_col_ref->get_dependant_expr())) {
+      // do nothing
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(depend_expr, dep_cols))) {
+      LOG_WARN("failed to extract dependant columns", K(ret));
+    } else {
+      ObRawExprCopier copier(*ctx_->expr_factory_);
+      for (int64_t j = 0; OB_SUCC(ret) && j < dep_cols.count(); ++j) {
+        int64_t dep_idx = OB_INVALID_INDEX;
+        if (OB_ISNULL(dep_cols.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null dependant column", K(ret));
+        } else if (!ObOptimizerUtil::find_item(view_column_list, dep_cols.at(j), &dep_idx)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dependant column not in view column list", K(ret), KPC(dep_cols.at(j)));
+        } else if (OB_UNLIKELY(dep_idx < 0 || dep_idx >= new_column_list.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect dependant column index", K(ret), K(dep_idx), K(new_column_list.count()));
+        } else if (OB_FAIL(copier.add_replaced_expr(dep_cols.at(j), new_column_list.at(dep_idx)))) {
+          LOG_WARN("failed to add replace expr", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ObRawExpr *new_depend_expr = NULL;
+        if (OB_FAIL(copier.copy_on_replace(depend_expr, new_depend_expr))) {
+          LOG_WARN("failed to copy dependant expr", K(ret));
+        } else {
+          new_col_ref->set_dependant_expr(new_depend_expr);
         }
       }
     }
