@@ -87,6 +87,7 @@
   #include "src/storage/tablet/ob_tablet_split_info_mds_helper.h"
   #include "src/storage/tablet/ob_tablet_split_info_mds_user_data.h"
 #endif
+
 /**************************************************************************************************/
 
 /**********************generate mds frame code with multi source transaction***********************/
@@ -107,6 +108,15 @@
 // @param ID for FRAME code reflection reason and compat reason, write the number by INC logic.
 // @param ENUM_NAME transaction layer needed, will be defined in enum class
 //                  ObTxDataSourceType(ob_multi_data_source.h)
+
+
+
+// 注意!!!
+// 多源事务类型不能通过注释占位, 必须用真实代码占位.
+// 为了编译通过, 可以在下面PLACE_DEFINE代码块内, 定义需要的类型: Helper类和Ctx类(如果不是默认MdsCtx的话).
+// 等正式代码合入后, 再删除占位的Helper类和Ctx类定义.
+
+
 #define GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENUM_NAME) \
 _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENUM_NAME)
 #ifdef NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
@@ -218,26 +228,74 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::ObMViewMdsOpCtx, \
                                           40,\
                                           MVIEW_MDS_OP)
-  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletDDLCompleteMdsHelper,\
-  //                                         ::oceanbase::storage::mds::MdsCtx,\
-  //                                         41,\
-  //                                         DDL_COMPLETE_MDS)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletDDLCompleteMdsHelper,\
+                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          41,\
+                                          DDL_COMPLETE_MDS)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletSplitInfoMdsHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           42,\
                                           TABLET_SPLIT_INFO)
-  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTTLFilterInfoMdsHelper,\
-  //                                         ::oceanbase::storage::mds::MdsCtx, \
-  //                                         43,\
-  //                                         SYNC_TTL_FILTER_INFO)
-  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObDirectLoadAutoIncSeqMdsHelpler,\
-  //                                         ::oceanbase::storage::mds::MdsCtx,\
-  //                                         44,\
-  //                                         DIRECT_LOAD_AUTO_INC_SEQ)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTTLFilterInfoMdsHelper,\
+                                          ::oceanbase::storage::mds::MdsCtx, \
+                                          43,\
+                                          SYNC_TTL_FILTER_INFO)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObDirectLoadAutoIncSeqMdsHelpler,\
+                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          44,\
+                                          DIRECT_LOAD_AUTO_INC_SEQ)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
 /**************************************************************************************************/
+
+#if defined (NEED_MDS_REGISTER_DEFINE) && !defined (NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION)
+#ifndef PLACE_DEFINE
+#define PLACE_DEFINE
+namespace oceanbase
+{
+namespace share
+{
+class SCN;
+}
+namespace storage
+{
+namespace mds
+{
+struct BufferCtx;
+}
+
+#define DEFINE_EMPTY(HELPER_TYPE) \
+class HELPER_TYPE \
+{ \
+public: \
+  static int on_register(const char* buf, const int64_t len, mds::BufferCtx &ctx) \
+  { \
+    (void)buf; \
+    (void)len; \
+    (void)ctx; \
+    return 0; \
+  } \
+  static int on_replay(const char* buf, const int64_t len, const share::SCN &scn, mds::BufferCtx &ctx) \
+  { \
+    (void)buf; \
+    (void)len; \
+    (void)scn; \
+    (void)ctx; \
+    return 0; \
+  } \
+};
+
+DEFINE_EMPTY(ObTabletDDLCompleteMdsHelper)
+DEFINE_EMPTY(ObTTLFilterInfoMdsHelper)
+DEFINE_EMPTY(ObDirectLoadAutoIncSeqMdsHelpler)
+
+#undef DEFINE_EMPTY
+
+} // namespace storage
+} // namespace oceanbase
+#endif // PLACE_DEFINE
+#endif
 
 /**********************generate mds frame code with multi source data******************************/
 // GENERATE_MDS_UNIT(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION) is an
