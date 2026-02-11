@@ -1590,6 +1590,8 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   const uint8_t IO_MODE_CNT = static_cast<uint8_t>(ObIOMode::MAX_MODE) + 1;
+  tenant_id_ = tenant_id;
+  io_scheduler_ = io_scheduler;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -1612,7 +1614,7 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
     LOG_WARN("init io usage failed", K(ret), K(io_mem_stats_), K(SYS_MODULE_CNT), K(io_config.group_configs_.count()));
   } else if (OB_FAIL(io_clock_.init(tenant_id , io_config, &io_usage_))) {
     LOG_WARN("init io clock failed", K(ret), K(io_config));
-  } else if (OB_FAIL(io_scheduler->init_group_queues(tenant_id, io_config.group_configs_.count(), &io_allocator_))) {
+  } else if (OB_FAIL(io_scheduler_->init_group_queues(tenant_id, io_config.group_configs_.count(), &io_allocator_))) {
     LOG_WARN("init io map failed", K(ret), K(tenant_id), K(io_allocator_));
   } else if (OB_FAIL(init_group_index_map(tenant_id, io_config))) {
     LOG_WARN("init group map failed", K(ret));
@@ -1624,8 +1626,6 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
   } else if (OB_FAIL(qsched_.init(tenant_id, io_config))) {
     LOG_WARN("init qsched failed", K(ret), K(io_config));
   } else {
-    tenant_id_ = tenant_id;
-    io_scheduler_ = io_scheduler;
     local_iops_util_ = 0;
     inc_ref();
     is_inited_ = true;
@@ -1644,7 +1644,7 @@ void ObTenantIOManager::destroy()
   if (is_inited_) {
     while (1 != get_ref_cnt()) {
       if (REACH_TIME_INTERVAL(1000L * 1000L)) { //1s
-        LOG_INFO("wait tenant io manager quit", K(MTL_ID()), K(start_ts), K(get_ref_cnt()));
+        LOG_INFO("wait tenant io manager quit", K(tenant_id_), K(start_ts), K(get_ref_cnt()));
       }
       ob_usleep((useconds_t)10L * 1000L); //10ms
     }
@@ -1653,8 +1653,8 @@ void ObTenantIOManager::destroy()
   }
 
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(io_scheduler_) && OB_FAIL(io_scheduler_->remove_phyqueues(MTL_ID()))) {
-    LOG_WARN("remove phy_queues from map failed", K(ret), K(MTL_ID()));
+  if (OB_NOT_NULL(io_scheduler_) && OB_FAIL(io_scheduler_->remove_phyqueues(tenant_id_))) {
+    LOG_WARN("remove phy_queues from map failed", K(ret), K(tenant_id_));
   }
 
   io_clock_.destroy();
