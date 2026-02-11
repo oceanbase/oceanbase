@@ -10981,7 +10981,9 @@ int ObOptimizerUtil::check_can_batch_rescan(const ObLogicalOperator *op,
     /* contains limit pushdown, enabled after 4.2.5 */
   } else if (op->is_table_scan()) {
     const ObLogTableScan *table_scan = static_cast<const ObLogTableScan*>(op);
-    if (OB_ISNULL(table_scan->get_est_cost_info())) {
+    if (table_scan->get_contains_fake_cte()) {
+      can_batch_rescan = false;
+    } else if (OB_ISNULL(table_scan->get_est_cost_info())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null est cost info", K(ret));
     } else if (!table_scan->can_batch_rescan()) {
