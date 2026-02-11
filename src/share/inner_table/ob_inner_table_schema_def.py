@@ -38440,20 +38440,20 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT
-    SID AS SID,
-    gv$sesstat.CON_ID AS TENANT_ID,
-    SVR_IP AS SVR_IP,
-    SVR_PORT AS SVR_PORT,
-    STAT_ID AS STAT_ID,
-    NAME AS STAT_NAME,
-    VALUE AS VALUE
+    s.SID AS SID,
+    s.CON_ID AS TENANT_ID,
+    s.SVR_IP AS SVR_IP,
+    s.SVR_PORT AS SVR_PORT,
+    n.STAT_ID AS STAT_ID,
+    n.NAME AS STAT_NAME,
+    s.VALUE AS VALUE
   FROM
-    oceanbase.GV$SESSTAT
+    oceanbase.GV$SESSTAT s
   left join
-    oceanbase.v$statname
-  on gv$sesstat.`statistic#`=v$statname.`statistic#`
+    oceanbase.V$STATNAME n
+  on s.`STATISTIC#` = n.`STATISTIC#`
   WHERE
-    STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
+    n.STAT_ID in (200001, 200002, 200010, 200011, 200005, 200006);
 """.replace("\n", " "),
 )
 
