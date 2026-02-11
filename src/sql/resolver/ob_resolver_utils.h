@@ -319,7 +319,8 @@ public:
                              const ParseNode &sp_name_node,
                              ObString &db_name,
                              ObString &sp_name,
-                             bool need_db_name = true);
+                             bool need_db_name = true,
+                             const ObString *default_db_name = nullptr);
   static int resolve_synonym_object_recursively(ObSchemaChecker &schema_checker,
                                                 ObSynonymChecker &synonym_checker,
                                                 uint64_t tenant_id,

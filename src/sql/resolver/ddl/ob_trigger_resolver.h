@@ -87,7 +87,8 @@ private:
                          obrpc::ObCreateTriggerArg &trigger_arg);
   int resolve_schema_name(const ParseNode &parse_node,
                           common::ObString &database_name,
-                          common::ObString &schema_name);
+                          common::ObString &schema_name,
+                          const ObString *default_db_name = nullptr);
   int resolve_alter_clause(const ParseNode &alter_clause,
                            share::schema::ObTriggerInfo &tg_info,
                            const ObString &db_name,

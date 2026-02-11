@@ -2116,7 +2116,8 @@ int ObResolverUtils::resolve_sp_name(ObSQLSessionInfo &session_info,
                                      const ParseNode &sp_name_node,
                                      ObString &db_name,
                                      ObString &sp_name,
-                                     bool need_db_name)
+                                     bool need_db_name,
+                                     const ObString *default_db_name)
 {
   int ret = OB_SUCCESS;
   const ParseNode *sp_node = NULL;
@@ -2154,9 +2155,13 @@ int ObResolverUtils::resolve_sp_name(ObSQLSessionInfo &session_info,
       if (!need_db_name && lib::is_oracle_mode()) {
         // do nothing ...
       } else if (session_info.get_database_name().empty()) {
-        ret = OB_ERR_NO_DB_SELECTED;
-        LOG_USER_ERROR(OB_ERR_NO_DB_SELECTED);
-        LOG_WARN("No Database Selected", K(ret));
+        if (OB_NOT_NULL(default_db_name)) {
+          db_name = *default_db_name;
+        } else {
+          ret = OB_ERR_NO_DB_SELECTED;
+          LOG_USER_ERROR(OB_ERR_NO_DB_SELECTED);
+          LOG_WARN("No Database Selected", K(ret));
+        }
       } else {
         db_name = session_info.get_database_name();
       }

@@ -378,7 +378,7 @@ int64_t ObTriggerInfo::get_convert_size() const
 
 /************************* mysql mode procedure *************************/
 #define TRIGGER_PROCEDURE_MYSQL \
-  "CREATE PROCEDURE %c%.*s%c(IN OLD %c%.*s%c.%c%.*s%c%%ROWTYPE, %.*s NEW %c%.*s%c.%c%.*s%c%%ROWTYPE) \n" \
+  "CREATE PROCEDURE %c%.*s%c.%c%.*s%c(IN OLD %c%.*s%c.%c%.*s%c%%ROWTYPE, %.*s NEW %c%.*s%c.%c%.*s%c%%ROWTYPE) \n" \
   "%.*s \n"
 /************************* mysql mode procedure *************************/
 
@@ -1059,7 +1059,8 @@ void ObTriggerInfo::TriggerContext::dispatch_decalare_execute(const ObTriggerInf
   tg_body = &trigger_body_;
 }
 
-int ObTriggerInfo::gen_procedure_source(const common::ObString &base_object_database,
+int ObTriggerInfo::gen_procedure_source(const common::ObString &trigger_database,
+                                        const common::ObString &base_object_database,
                                         const common::ObString &base_object_name,
                                         const ParseNode &parse_node,
                                         const ObDataTypeCastParams &dtc_params,
@@ -1090,6 +1091,7 @@ int ObTriggerInfo::gen_procedure_source(const common::ObString &base_object_data
     buf_len = proc_size;
     OV (OB_NOT_NULL(buf), OB_ALLOCATE_MEMORY_FAILED);
     OZ (BUF_PRINTF(TRIGGER_PROCEDURE_MYSQL,
+                   delimiter, trigger_database.length(), trigger_database.ptr(), delimiter,
                    delimiter, get_trigger_name().length(), get_trigger_name().ptr(), delimiter,
                    delimiter, base_object_database.length(), base_object_database.ptr(), delimiter,
                    delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
