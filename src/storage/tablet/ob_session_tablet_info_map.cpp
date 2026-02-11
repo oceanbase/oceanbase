@@ -13,6 +13,7 @@
 #include "storage/tablet/ob_session_tablet_info_map.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
+#include "share/rc/ob_tenant_base.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -105,6 +106,10 @@ int ObSessionTabletInfoMap::add_session_tablet(
   if (OB_UNLIKELY(table_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(table_ids));
+  } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "temporary table access in standby tenant");
+    LOG_WARN("temporary table access is not supported in standby tenant", KR(ret), K(table_ids), K(sequence), K(session_id));
   } else if (OB_FAIL(create_helper.set_table_ids(table_ids))) {
     LOG_WARN("failed to set table ids", KR(ret), K(table_ids));
   } else if (OB_FAIL(create_helper.do_work())) {
