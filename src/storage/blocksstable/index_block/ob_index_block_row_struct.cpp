@@ -148,11 +148,17 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
     set_end_scn(data_store_desc.get_end_scn());
     set_row_store_type(index_row_header->get_row_store_type());
     set_compressor_type(index_row_header->get_compressor_type());
-    set_master_key_id(index_row_header->get_encrypt_id());
+    set_master_key_id(data_store_desc.get_master_key_id());
     set_encrypt_id(index_row_header->get_encrypt_id());
     set_encrypt_key(index_row_header->get_encrypt_key());
     set_schema_version(index_row_header->get_schema_version());
 
+    is_data_block_ = index_row_header->is_data_block();
+    is_clustered_index_ = index_row_header->is_clustered_node();
+    has_macro_block_bloom_filter_ = index_row_header->has_macro_block_bloom_filter();
+    logic_micro_id_ = index_row_header->get_logic_micro_id();
+    data_checksum_ = index_row_header->get_data_checksum();
+    shared_data_macro_id_ = index_row_header->get_shared_data_macro_id();
     is_secondary_meta_ = false;
     is_macro_node_ = true;
     macro_id_ = index_row_header->get_macro_id();
@@ -175,6 +181,8 @@ int ObIndexBlockRowDesc::init(const ObDataStoreDesc &data_store_desc,
     if (!data_store_desc.is_major_or_meta_merge_type()) {
       if (OB_FAIL(idx_row_parser.get_minor_meta(index_row_meta))) {
         STORAGE_LOG(WARN, "fail to get minor meta", K(ret), K(idx_row_parser));
+      } else if (OB_FAIL(set_end_scn_by_snapshot_version(index_row_meta->snapshot_version_))) {
+        STORAGE_LOG(WARN, "fail to set end scn by snapshot version", K(ret), K(index_row_meta->snapshot_version_));
       } else {
         max_merged_trans_version_ = index_row_meta->max_merged_trans_version_;
         row_count_delta_ = index_row_meta->row_count_delta_;
