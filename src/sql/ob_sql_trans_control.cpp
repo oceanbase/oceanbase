@@ -271,7 +271,9 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
       bool can_async_commit = !session->get_has_temp_table_flag()
                           && !session->has_tx_level_temp_table()
                           && session->partition_hit().get_bool()
-                          && session->is_in_transaction();
+                          && session->is_in_transaction()
+                          && OB_ISNULL(session->get_pl_profiler())
+                          && OB_ISNULL(session->get_pl_code_coverage());
       if (can_async_commit) {
         callback = &session->get_end_trans_cb();
         LOG_TRACE("[PL_ASYNC_COMMIT] Using async commit callback", K(ret));
