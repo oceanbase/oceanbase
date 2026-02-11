@@ -774,6 +774,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
   // to mark what session status we need to do to rollback if init failed
   bool need_remove_top_stack = false;
   bool need_debug_stop = false;
+  bool need_recover_use_pl_inner_info_string = false;
 
   int64_t pl_block_timeout = 0;
   int64_t query_start_time = session_info.get_query_start_time();
@@ -921,6 +922,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     saved_pl_internal_time_split_point_ = session_info.get_pl_internal_time_split_point();
   }
   OX (saved_use_pl_inner_info_string_ = session_info.get_use_pl_inner_info_string());
+  OX (need_recover_use_pl_inner_info_string = true);
   OX (session_info.set_use_pl_inner_info_string(true));
   if (OB_SUCC(ret)) {
     ObString empty_string;
@@ -1009,6 +1011,10 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     // stop debugger
     if (need_debug_stop) {
       IGNORE_RETURN ObPLContext::debug_stop(&session_info);
+    }
+
+    if (need_recover_use_pl_inner_info_string) {
+      session_info.set_use_pl_inner_info_string(saved_use_pl_inner_info_string_);
     }
   }
 
@@ -1299,7 +1305,7 @@ void ObPLContext::destory(
       session_info.set_pl_internal_time_split_point(saved_pl_internal_time_split_point_);
     }
   }
-  OX (session_info.set_use_pl_inner_info_string(saved_use_pl_inner_info_string_));
+  session_info.set_use_pl_inner_info_string(saved_use_pl_inner_info_string_);
   if (is_autonomous_) {
     int end_trans_ret = end_autonomous(ctx, session_info, ret == OB_TRANS_XA_BRANCH_FAIL);
     ret = OB_SUCCESS == ret ? end_trans_ret : ret;

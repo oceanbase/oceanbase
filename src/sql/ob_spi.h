@@ -82,8 +82,8 @@ private:
   observer::ObQueryRetryCtrl &retry_ctrl_;
   ObSPIResultSet &spi_result_;
   ObSQLSessionInfo &session_info_;
-  pl::ObPLSqlCodeInfo save_sqlcode_info_;
   int &ret_;
+  int saved_retry_cnt_;
   bool init_;
 };
 
@@ -99,6 +99,7 @@ private:
   int64_t query_start_time_bk_;
   pl::ObPLSqlCodeInfo *sqlcode_info_bk_;
   bool is_ps_cursor_;
+  char sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
 };
 
 struct ObSPICursor
