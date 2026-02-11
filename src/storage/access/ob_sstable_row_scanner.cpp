@@ -444,8 +444,11 @@ template<typename PrefetchType>
 int ObSSTableRowScanner<PrefetchType>::refresh_blockscan_checker(const blocksstable::ObDatumRowkey &rowkey)
 {
   int ret = OB_SUCCESS;
-  if (nullptr != block_row_store_ &&
-      OB_FAIL(prefetcher_.refresh_blockscan_checker(prefetcher_.cur_micro_data_fetch_idx_ + 1, rowkey))) {
+  // not support blockscan in the following situations:
+  // 1. reach the end of sstable scan
+  // 2. in middle of micro block, no need to check blockscan when scan not finished
+  if (is_end_of_scan() || nullptr == block_row_store_) {
+  } else if (OB_FAIL(prefetcher_.refresh_blockscan_checker(prefetcher_.cur_micro_data_fetch_idx_ + 1, rowkey))) {
     LOG_WARN("Failed to prepare blockscan check info", K(ret), K(rowkey), KPC(this));
   }
   return ret;
