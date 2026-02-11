@@ -947,6 +947,9 @@ public:
     cursor_flag_(CURSOR_FLAG_UNDEF),
     ref_count_(0),
     is_scrollable_(false),
+    snapshot_(),
+    is_need_check_snapshot_(false),
+    streaming_cursor_read_uncommitted_(false),
     last_execute_time_(0),
     last_stream_cursor_(false),
     sql_text_(),
@@ -969,6 +972,7 @@ public:
     is_scrollable_(false),
     snapshot_(),
     is_need_check_snapshot_(false),
+    streaming_cursor_read_uncommitted_(false),
     last_execute_time_(0),
     last_stream_cursor_(false),
     sql_text_(),
@@ -1023,6 +1027,7 @@ public:
     first_row_.reset();
     last_row_.reset();
     is_need_check_snapshot_ = false;
+    streaming_cursor_read_uncommitted_ = false;
     sql_trace_id_.reset();
     is_packed_ = false;
     sql_text_.reset();
@@ -1110,6 +1115,8 @@ public:
 
   void set_need_check_snapshot(bool is_need_check_snapshot) { is_need_check_snapshot_ = is_need_check_snapshot; }
   bool is_need_check_snapshot() { return is_need_check_snapshot_; }
+  void set_streaming_cursor_read_uncommitted(bool read_uncommitted) { streaming_cursor_read_uncommitted_ = read_uncommitted; }
+  bool is_streaming_cursor_read_uncommitted() { return streaming_cursor_read_uncommitted_; }
   void set_is_in_tx_cursor(bool is_in_tx_cursor) { in_tx_cursor_ = is_in_tx_cursor; }
   bool is_in_tx_cursor() { return in_tx_cursor_; }
   void set_tx_cursor_idx(uint64_t package_id, uint64_t routine_id, int64_t cursor_index) { tx_cursor_idx_ = std::make_tuple(package_id, routine_id, cursor_index); }
@@ -1233,6 +1240,7 @@ public:
                K_(is_scrollable),
                K_(snapshot),
                K_(is_need_check_snapshot),
+               K_(streaming_cursor_read_uncommitted),
                K_(last_execute_time),
                K_(sql_trace_id),
                K_(is_packed),
@@ -1269,6 +1277,8 @@ protected:
   // and the snapshot were acquired in an active transaction
   // it is required to check snapshot state is valid before doing fetch
   bool is_need_check_snapshot_;
+  // If cursor is a streaming cursor and the snapshot were acquired in an active transaction
+  bool streaming_cursor_read_uncommitted_;
   int64_t last_execute_time_; // 记录上一次cursor操作的时间点
   bool last_stream_cursor_; // cursor复用场景下，记录上一次是否是流式cursor
   ObCurTraceId::TraceId sql_trace_id_; // trace id of cursor sql statement
