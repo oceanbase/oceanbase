@@ -113,6 +113,13 @@ public:
                                              const ObObjMeta& meta2,
                                              ObCmpOp cmp_op,
                                              obj_cmp_func &cmp_func);
+  /*
+   * old version of can_cmp_without_cast copied from 4_2_x_release
+   */
+  OB_INLINE static bool can_cmp_without_cast_old(const ObObjMeta& meta1,
+                                             const ObObjMeta& meta2,
+                                             ObCmpOp cmp_op,
+                                             obj_cmp_func &cmp_func);
   static int compare_oper(const ObObj &obj1,
                           const ObObj &obj2,
                           ObCollationType cs_type,
@@ -332,6 +339,41 @@ OB_INLINE bool ObObjCmpFuncs::can_cmp_without_cast(const ObObjMeta& meta1,
     const ObObjTypeClass tc1 = meta1.get_type_class();
     const ObObjTypeClass tc2 = meta2.get_type_class();
     cmp_func = cmp_funcs[tc1][tc2][cmp_op];
+    need_no_cast = (cmp_func != NULL);
+  }
+  return need_no_cast;
+}
+
+// copied from 4_2_x_release
+// used in filter pushdown when upgrading from 4_2_x to 4_4_x
+// in 42x, string tc and text tc cannot compare directly
+// but in 44x, string tc and text tc can compare directly
+OB_INLINE bool ObObjCmpFuncs::can_cmp_without_cast_old(const ObObjMeta& meta1,
+                                                   const ObObjMeta& meta2,
+                                                   ObCmpOp cmp_op,
+                                                   obj_cmp_func &cmp_func)
+{
+  int ret = OB_SUCCESS;
+  const ObObjType type1 = meta1.get_type();
+  const ObObjType type2 = meta2.get_type();
+  const ObObjTypeClass tc1 = meta1.get_type_class();
+  const ObObjTypeClass tc2 = meta2.get_type_class();
+  cmp_func = NULL;
+  bool need_no_cast = false;
+  if (OB_UNLIKELY(is_datetime_timestamp_cmp(type1, type2))
+      || OB_UNLIKELY(is_otimestamp_cmp(type1, type2))) {
+    need_no_cast = false;
+  } else if ((ObIntervalYMType == type1 && ObIntervalDSType == type2)
+              || (ObIntervalYMType == type2 && ObIntervalDSType == type1)) {
+    need_no_cast = false;
+  } else if (OB_UNLIKELY(ob_is_string_type(type1)
+                         && ob_is_string_type(type2)
+                         && ((meta1.get_collation_type() != meta2.get_collation_type())
+                             || tc1 != tc2))) { // string tc and text tc cannot compare directly
+    need_no_cast = false;
+  } else if (OB_FAIL(get_cmp_func(tc1, tc2, cmp_op, cmp_func))) {
+    COMMON_LOG(ERROR, "get cmp func failed", K(type1), K(type2), K(tc1), K(tc2), K(cmp_op));
+  } else {
     need_no_cast = (cmp_func != NULL);
   }
   return need_no_cast;

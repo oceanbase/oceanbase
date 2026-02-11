@@ -371,7 +371,7 @@ int ObPushdownFilterConstructor::is_white_mode(const ObRawExpr* raw_expr, bool &
           if (need_check && !param_meta.is_null()) {
             const ObCmpOp cmp_op = sql::ObRelationalExprOperator::get_cmp_op(raw_expr->get_expr_type());
             obj_cmp_func cmp_func = nullptr;
-            need_check = ObObjCmpFuncs::can_cmp_without_cast(col_meta, param_meta, cmp_op, cmp_func);
+            need_check = ObObjCmpFuncs::can_cmp_without_cast_old(col_meta, param_meta, cmp_op, cmp_func);
           }
         }
       }
