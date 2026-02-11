@@ -503,7 +503,7 @@ int ObCgroupCtrl::add_thread_to_cgroup_(
     char group_path[PATH_BUFSIZE];
     char tid_value[VALUE_BUFSIZE + 1];
 
-    snprintf(tid_value, VALUE_BUFSIZE, "%ld", gettid());
+    snprintf(tid_value, VALUE_BUFSIZE, "%ld", tid);
     if (OB_FAIL(get_group_path(group_path,
             PATH_BUFSIZE,
             tenant_id,
