@@ -276,6 +276,7 @@ int ObObjectManager::dec_ref(const MacroBlockId &object_id) const
 }
 
 int ObObjectManager::resize_local_device(
+    const int64_t expected_current_size,
     const int64_t new_device_size,
     const int64_t new_device_disk_percentage,
     const int64_t reserved_size)
@@ -288,9 +289,14 @@ int ObObjectManager::resize_local_device(
     LOG_WARN("not init", K(ret));
   } else if (!is_shared_storage_) {
     SpinWLockGuard guard(lock_);
+    const int64_t current_size = get_total_macro_block_count() * get_macro_block_size();
+    if (expected_current_size != current_size) {
+      ret = OB_EAGAIN;
+    }
     HEAP_VAR(ObServerSuperBlock, tmp_super_block) {
       tmp_super_block = super_block_;
-      if (OB_FAIL(OB_SERVER_BLOCK_MGR.resize_file(
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.resize_file(
           new_device_size, new_device_disk_percentage, reserved_size, tmp_super_block))) {
         LOG_WARN("fail to resize file", K(ret), K(new_device_size), K(new_device_disk_percentage), K(reserved_size));
       } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.write_super_block(tmp_super_block, super_block_buf_holder_))) {

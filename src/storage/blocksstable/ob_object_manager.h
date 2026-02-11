@@ -359,6 +359,7 @@ public:
   int inc_ref(const MacroBlockId &object_id) const;
   int dec_ref(const MacroBlockId &object_id) const;
   int resize_local_device(
+      const int64_t expected_current_size,
       const int64_t new_device_size,
       const int64_t new_device_disk_percentage,
       const int64_t reserved_size);

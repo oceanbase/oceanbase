@@ -257,25 +257,30 @@ int ObBlockManager::alloc_object(ObStorageObjectHandle &object_handle) {
   ObIODOpts opts;
   uint64_t write_seq = 0;
   ObIODOpt opt_array[1];
+  bool need_retry = true;
 
   if (IS_NOT_INIT || !is_started()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBlockManager not init", K(ret));
-  } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
-    if (ret != OB_SERVER_OUTOF_DISK_SPACE) {
-      LOG_WARN("Failed to alloc block from io device", K(ret));
+    need_retry = false;
     }
-  }
-  // try alloc block
-  if (ret == OB_SERVER_OUTOF_DISK_SPACE) {
-    if (OB_FAIL(extend_file_size_if_need())) { // block to get disk
-      ret = OB_SERVER_OUTOF_DISK_SPACE;        // reuse last ret code
-      LOG_ERROR("The data file disk space is exhausted. Please expand the capacity by resizing datafile!!!", K(ret));
-    } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
+
+  while (need_retry) {
+    ret = io_device_->alloc_block(&opts, io_fd);
       if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
-        LOG_ERROR("The data file disk space is exhausted. Please expand the capacity by resizing datafile!!!", K(ret));
+      const int tmp_ret = extend_file_size_if_need();
+      if (OB_SUCCESS == tmp_ret || OB_EAGAIN == tmp_ret) {
+        // need to retry
       } else {
-        LOG_ERROR("Failed to alloc block from io device", K(ret));
+        ret = OB_SERVER_OUTOF_DISK_SPACE;
+        need_retry = false;
+        LOG_ERROR("The data file disk space is exhausted. Please expand the capacity by resizing datafile!!!",
+                  K(ret), K(tmp_ret));
+      }
+    } else {
+      need_retry = false;
+      if (OB_FAIL(ret) && ret != OB_SERVER_OUTOF_DISK_SPACE) {
+        LOG_WARN("Failed to alloc block from io device", K(ret));
       }
     }
   }
@@ -1813,14 +1818,15 @@ int ObBlockManager::extend_file_size_if_need() {
 
       int64_t suggest_extend_size = 0;
       int64_t datafile_disk_percentage = 0;
+      int64_t cur_datafile_size = 0;
 
       if (OB_FAIL(observer::ObServerUtils::calc_auto_extend_size(
-              suggest_extend_size))) {
+              cur_datafile_size, suggest_extend_size))) {
         LOG_DEBUG("calc auto extend size error, maybe ssblock file has reach "
                   "it's max size",
                   K(ret));
       } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.resize_local_device(
-                     suggest_extend_size, datafile_disk_percentage,
+                     cur_datafile_size, suggest_extend_size, datafile_disk_percentage,
                      reserved_size))) {
         LOG_WARN("Fail to resize file in auto extend", K(ret),
                  K(suggest_extend_size));

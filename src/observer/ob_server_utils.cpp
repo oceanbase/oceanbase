@@ -210,8 +210,8 @@ const char *ObServerUtils::build_syslog_file_info(const common::ObAddr &addr)
  * calc actual_extend_size, following the rules:
  *  1. if datafile_next less than 1G, actual_extend_size equal to min(1G, datafile_maxsize * 10%)
  *  2. if datafile_next large than 1G, actual_extend_size equal to min(datafile_next, max_extend_file)
-*/
-int ObServerUtils::calc_auto_extend_size(int64_t &actual_extend_size)
+ */
+int ObServerUtils::calc_auto_extend_size(int64_t &cur_datafile_size, int64_t &actual_extend_size)
 {
   int ret = OB_SUCCESS;
 
@@ -252,6 +252,7 @@ int ObServerUtils::calc_auto_extend_size(int64_t &actual_extend_size)
       }
     } else {
       actual_extend_size += datafile_size; // suggest block file size
+      cur_datafile_size = datafile_size;
     }
   }
   return ret;
