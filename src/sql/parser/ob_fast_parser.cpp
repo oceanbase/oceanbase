@@ -167,7 +167,7 @@ ObFastParserBase::ObFastParserBase(ObIAllocator &allocator, const FPContext fp_c
   question_mark_ctx_.capacity_ = 0;
   question_mark_ctx_.by_ordinal_ = false;
   question_mark_ctx_.by_name_ = false;
-  question_mark_ctx_.by_order_ = false;
+  question_mark_ctx_.by_order_ = fp_ctx.question_mark_by_order_;
   question_mark_ctx_.name_ = nullptr;
   charset_type_ = ObCharset::charset_type_by_coll(fp_ctx.charsets4parser_.string_collation_);
   charset_info_ = ObCharset::get_charset(fp_ctx.charsets4parser_.string_collation_);

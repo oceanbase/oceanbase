@@ -7072,7 +7072,7 @@ int ObSQLUtils::parameterize_pl_sql(const ObString &raw_sql,
 
   FPContext fp_ctx(session.get_charsets4parser());
   fp_ctx.sql_mode_ = session.get_sql_mode();
-  fp_result.question_mark_ctx_.by_order_ = param_byorder;
+  fp_ctx.question_mark_by_order_ = param_byorder;
 
   if (OB_UNLIKELY(raw_sql.empty())) {
     ret = OB_ERR_EMPTY_QUERY;
