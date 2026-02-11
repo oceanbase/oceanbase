@@ -4803,7 +4803,7 @@ int ObRpcCheckBackupDestVaildityP::process()
             arg_.backup_dest_str_,
             *gctx_.sql_proxy_))) {
         LOG_WARN("fail to init dest mgr", K(ret), K_(arg));
-      } else if (OB_FAIL(dest_mgr.check_dest_validity(*gctx_.srv_rpc_proxy_, arg_.need_format_file_))) {
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(*gctx_.srv_rpc_proxy_, arg_.need_format_file_, arg_.need_check_permission_))) {
         LOG_WARN("fail to check dest validity", K(ret), K_(arg));
       }
     }

@@ -1180,7 +1180,7 @@ int ObUserTenantBackupJobMgr::check_dest_validity_()
     LOG_WARN("fail to get backup dest str", K(ret));
   } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str, *sql_proxy_))) {
     LOG_WARN("fail to init dest manager", K(ret), KPC(job_attr_));
-  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
+  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, true/*need_check_permission*/))) {
     LOG_WARN("fail to check backup dest validity", K(ret), KPC(job_attr_));
   }
   return ret;

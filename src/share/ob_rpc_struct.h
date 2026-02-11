@@ -14714,19 +14714,22 @@ public:
     : tenant_id_(common::OB_INVALID_TENANT_ID),
       dest_type_(share::ObBackupDestType::TYPE::DEST_TYPE_MAX),
       backup_dest_str_(),
-      need_format_file_(false) {}
+      need_format_file_(false),
+      need_check_permission_(true) {}
   int assign(const ObRemoteCheckBackupDestValidityArg &arg);
   bool is_valid() const;
   int init(const uint64_t tenant_id,
            const int64_t dest_type,
            const ObString &backup_dest_str,
-           const bool need_format_file);
-  TO_STRING_KV(K_(tenant_id), K_(dest_type), K_(backup_dest_str), K_(need_format_file));
+           const bool need_format_file,
+           const bool need_check_permission);
+  TO_STRING_KV(K_(tenant_id), K_(dest_type), K_(backup_dest_str), K_(need_format_file), K_(need_check_permission));
 public:
   uint64_t tenant_id_;
   int64_t dest_type_; // ObBackupDestType::TYPE
   common::ObString backup_dest_str_; // encrpyted
   bool need_format_file_;
+  bool need_check_permission_;
 };
 
 struct ObTriggerDumpDataDictArg final

@@ -498,7 +498,7 @@ int ObBackupDestMgr::check_dest_connectivity(obrpc::ObSrvRpcProxy &rpc_proxy)
   return ret;
 }
 
-int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file)
+int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file, const bool need_check_permission)
 {
   int ret = OB_SUCCESS;
   share::ObBackupStore store;
@@ -511,6 +511,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
     LOG_WARN("ObBackupDestMgr not init", K(ret));
   } else if (OB_FAIL(remote_execute_if_need_(rpc_proxy,
                                              need_format_file,
+                                             need_check_permission,
                                              RemoteExecuteType::CHECK_DEST_VALIDITY,
                                              need_remote_execute))) {
     LOG_WARN("fail to remote execute if need", K(ret));
@@ -519,7 +520,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
     LOG_WARN("fail to init store", K(ret), K_(backup_dest));
   } else if (OB_FAIL(store.dest_is_empty_directory(is_empty))) {
     LOG_WARN("fail to check dest is empty dirctory", K(ret), K_(backup_dest));
-  } else if (OB_FAIL(check_dest_connectivity(rpc_proxy))) {
+  } else if (need_check_permission && OB_FAIL(check_dest_connectivity(rpc_proxy))) {
     LOG_WARN("fail to check dest connectivity", K(ret), K_(backup_dest));
   } else if (!is_empty) {
     if (OB_FAIL(store.is_format_file_exist(is_exist))) {
@@ -572,6 +573,7 @@ int ObBackupDestMgr::check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const 
 
 int ObBackupDestMgr::remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
                                              const bool need_format_file,
+                                             const bool need_check_permission,
                                              const RemoteExecuteType type,
                                              bool &need_remote_execute)
 {
@@ -601,7 +603,7 @@ int ObBackupDestMgr::remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
       common::ObAddr dest;
       if (OB_FAIL(backup_dest_.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)))) {
         LOG_WARN("fail to get backup dest str", K(ret), K_(backup_dest));
-      } else if (OB_FAIL(args.init(tenant_id_, dest_type_, ObString(backup_dest_str), need_format_file))) {
+      } else if (OB_FAIL(args.init(tenant_id_, dest_type_, ObString(backup_dest_str), need_format_file, need_check_permission))) {
         LOG_WARN("fail to init ObRemoteCheckBackupDestValidityArg", K(ret));
       } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
           GCONF.cluster_id, gen_meta_tenant_id(tenant_id_), ObLSID(ObLSID::SYS_LS_ID), dest))) {
@@ -721,6 +723,7 @@ int ObBackupDestMgr::write_format_file()
     LOG_WARN("ObBackupDestMgr not init", K(ret));
   } else if (OB_FAIL(remote_execute_if_need_(*GCTX.srv_rpc_proxy_,
                                               false /*unused*/,
+                                              true /*need_check_permission*/,
                                               RemoteExecuteType::WRITE_FORMAT_FILE,
                                               need_remote_execute))) {
     LOG_WARN("fail to remote execute if need", K(ret));

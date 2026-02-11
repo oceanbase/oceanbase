@@ -89,7 +89,7 @@ int ObConnectivityChecker::check_dest_connectivity(const ObBackupPathString &bac
       ret = ERRSIM_BACKUP_CLEAN_CONNECTIVITY_CHECK_FAIL;
       LOG_WARN("errsim: connectivity check forced fail", K(ret), K(tenant_id_), K(complete_backup_dest_str), K(dest_type));
 #endif
-    } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
+    } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
       LOG_WARN("failed to check backup dest validity", K(ret), K(tenant_id_), K(complete_backup_dest_str));
     }
     LOG_INFO("check_dest_connectivity ret", K(ret), K(tenant_id_), K(backup_dest_str), K(backup_dest), K(complete_backup_dest_str));

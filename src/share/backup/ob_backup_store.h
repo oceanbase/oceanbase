@@ -186,7 +186,7 @@ public:
       const share::ObBackupPathString &backup_dest_str,
       common::ObISQLClient &sql_proxy);
   int check_dest_connectivity(obrpc::ObSrvRpcProxy &rpc_proxy);
-  int check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file);
+  int check_dest_validity(obrpc::ObSrvRpcProxy &rpc_proxy, const bool need_format_file, const bool need_check_permission);
   int write_format_file();
   void reset();
   bool is_valid_type(const RemoteExecuteType type) const { return CHECK_DEST_VALIDITY <= type && type < MAX; }
@@ -198,6 +198,7 @@ private:
   int updata_backup_file_status_();
   int remote_execute_if_need_(obrpc::ObSrvRpcProxy &rpc_proxy,
                               const bool need_format_file,
+                              const bool need_check_permission,
                               const RemoteExecuteType type,
                               bool &need_remote_execute);
 private:

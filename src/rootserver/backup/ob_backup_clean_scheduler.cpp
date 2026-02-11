@@ -1090,7 +1090,7 @@ int ObUserTenantBackupDeleteMgr::check_data_backup_dest_validity_()
     // do nothing
   } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA, backup_dest_str, *sql_proxy_))) {
     LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(backup_dest_str));
-  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
+  } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
     LOG_WARN("failed to check backup dest validity", K(ret), K(job_attr_), K(backup_dest_str));
   }
   return ret;
@@ -1119,7 +1119,7 @@ int ObUserTenantBackupDeleteMgr::check_log_archive_dest_validity_()
         LOG_WARN("failed to get archive path", K(ret));
       } else if (OB_FAIL(dest_mgr.init(job_attr_->tenant_id_, ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG, archive_dest_str,  *sql_proxy_))) {
         LOG_WARN("failed to init dest manager", K(ret), K(job_attr_), K(archive_dest_str));
-      } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/))) {
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(*rpc_proxy_, true/*need_format_file*/, false/*need_check_permission*/))) {
         LOG_WARN("failed to check archive dest validity", K(ret), K(job_attr_), K(archive_dest_str));
       }
     }
