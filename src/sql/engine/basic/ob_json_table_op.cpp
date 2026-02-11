@@ -652,12 +652,14 @@ int ObJsonTableOp::inner_rescan()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("failed to inner rescan", K(ret));
+  } else if (OB_NOT_NULL(root_) && OB_FAIL(root_->reset(&jt_ctx_))) {
+    LOG_WARN("failed to reset root node", K(ret));
   } else {
+    jt_ctx_.mem_ctx_ = nullptr;
     jt_ctx_.row_alloc_.reuse();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(reset_variable())) {
-    LOG_WARN("failed to inner open", K(ret));
+    if (OB_FAIL(reset_variable())) {
+      LOG_WARN("failed to inner open", K(ret));
+    }
   }
   return ret;
 }
@@ -1090,6 +1092,7 @@ int RbIterateTableFunc::reset_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
         rb_iters[i] = NULL;
       }
     }
+    scan_node.iter_ = NULL;
   }
   return ret;
 }
