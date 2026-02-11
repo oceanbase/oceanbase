@@ -88,10 +88,10 @@ int ObLogRestoreSourceLocationConfigParser::check_before_update_inner_config(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("backup store desc is invalid");
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "access the log restore source location");
-    } else if (GCONF.cluster_id == desc.cluster_id_ && tenant_id_ == desc.tenant_id_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("set standby itself as log restore source is not allowed");
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set standby itself as log restore source");
+    // } else if (GCONF.cluster_id == desc.cluster_id_ && tenant_id_ == desc.tenant_id_) {
+    //   ret = OB_INVALID_ARGUMENT;
+    //   LOG_WARN("set standby itself as log restore source is not allowed");
+    //   LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set standby itself as log restore source");
     }
   }
   //TODO (mingqiao) need support access permission check
