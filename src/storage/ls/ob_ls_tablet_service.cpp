@@ -8905,7 +8905,7 @@ int ObLSTabletService::estimate_skip_index_sortedness(
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("Fail to get table schema", KR(ret), K(tenant_id), K(tablet_id));
   } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("Fail to get table schema", KR(ret), K(tenant_id), K(tablet_id));
   } else if (latest_major_sstable->is_co_sstable()) {
     // for column store table, there are a few points to note:
