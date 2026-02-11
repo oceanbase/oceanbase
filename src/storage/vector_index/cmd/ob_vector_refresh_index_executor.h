@@ -217,6 +217,7 @@ private:
   int resolve_rebuild_inner_arg(const ObVectorRebuildIndexInnerArg &arg,
                                 bool& in_recycle_bin);
 
+  int do_freeze_tablet();
   int do_refresh();
   int do_refresh_with_retry();
   int do_rebuild();
