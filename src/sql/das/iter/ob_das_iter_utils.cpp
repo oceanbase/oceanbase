@@ -2424,7 +2424,7 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
       }
     } else if (OB_UNLIKELY(rowkey_scan_output_expr != func_lookup_ctdef->lookup_domain_id_expr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error, rowkey scan output expr not equal to lookup doc id expr", K(ret));
+      LOG_WARN("unexpected error, rowkey scan output expr not equal to lookup doc id expr", K(ret), KP(rowkey_scan_output_expr), KP(func_lookup_ctdef->lookup_domain_id_expr_));
     } else if (func_lookup_ctdef->has_main_table_lookup()) {
       main_lookup_rowkey_exprs = &static_cast<const ObDASScanCtDef *>(func_lookup_ctdef->get_main_lookup_scan_ctdef())->rowkey_exprs_;
       if (OB_UNLIKELY(1 != main_lookup_rowkey_exprs->count() || rowkey_scan_output_expr != main_lookup_rowkey_exprs->at(0))) {
@@ -2437,8 +2437,9 @@ int ObDASIterUtils::create_function_lookup_tree(ObTableScanParam &scan_param,
   ObDASIter *func_lookup_result = nullptr;
   ObDASCacheLookupIter *root_lookup_iter = nullptr;
   common::ObFixedArray<ObExpr *, common::ObIAllocator> rowkey_exprs(alloc, 1);
-  rowkey_exprs.push_back(func_lookup_ctdef->lookup_domain_id_expr_);
-  if (FAILEDx(create_functional_lookup_sub_tree(
+  if (FAILEDx(rowkey_exprs.push_back(func_lookup_ctdef->lookup_domain_id_expr_))) {
+    LOG_WARN("failed to push back lookup domain id expr to rowkey exprs", K(ret), K(rowkey_exprs.count()));
+  } else if (OB_FAIL(create_functional_lookup_sub_tree(
       scan_param,
       scan_param.ls_id_,
       alloc,
