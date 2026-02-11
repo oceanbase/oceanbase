@@ -93,9 +93,14 @@ public:
           break;
         }
         case common::OB_APP_MIN_COLUMN_ID + 5: { // URI
-          cells[cell_idx].set_varchar(client_pool->get_uri().ptr());
-          cells[cell_idx].set_collation_type(
-              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          const char *uri_ptr = client_pool->get_uri().ptr();
+          if (OB_ISNULL(uri_ptr)) {
+            cells[cell_idx].set_null();
+          } else {
+            cells[cell_idx].set_varchar(uri_ptr);
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         }
         case common::OB_APP_MIN_COLUMN_ID + 6: { // TOTAL_CLIENTS

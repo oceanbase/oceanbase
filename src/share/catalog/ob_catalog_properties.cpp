@@ -726,35 +726,22 @@ int ObFilesystemCatalogProperties::decrypt(ObIAllocator &allocator)
 int ObHMSCatalogProperties::to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  ObCStringHelper helper;
   OZ(J_COMMA());
-  OZ(databuff_printf(buf,
-                     buf_len,
-                     pos,
-                     R"("%s":"%s")",
-                     OPTION_NAMES[URI],
-                     helper.convert(ObHexStringWrap(uri_))));
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[URI]));
+  OZ(hex_print(uri_.ptr(), uri_.length(), buf, buf_len, pos));
+  OZ(databuff_printf(buf, buf_len, pos, R"(")"));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf,
-                     buf_len,
-                     pos,
-                     R"("%s":"%s")",
-                     OPTION_NAMES[PRINCIPAL],
-                     helper.convert(ObHexStringWrap(principal_))));
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[PRINCIPAL]));
+  OZ(hex_print(principal_.ptr(), principal_.length(), buf, buf_len, pos));
+  OZ(databuff_printf(buf, buf_len, pos, R"(")"));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf,
-                     buf_len,
-                     pos,
-                     R"("%s":"%s")",
-                     OPTION_NAMES[KEYTAB],
-                     helper.convert(ObHexStringWrap(keytab_))));
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[KEYTAB]));
+  OZ(hex_print(keytab_.ptr(), keytab_.length(), buf, buf_len, pos));
+  OZ(databuff_printf(buf, buf_len, pos, R"(")"));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf,
-                     buf_len,
-                     pos,
-                     R"("%s":"%s")",
-                     OPTION_NAMES[KRB5CONF],
-                     helper.convert(ObHexStringWrap(krb5conf_))));
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[KRB5CONF]));
+  OZ(hex_print(krb5conf_.ptr(), krb5conf_.length(), buf, buf_len, pos));
+  OZ(databuff_printf(buf, buf_len, pos, R"(")"));
   OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
@@ -777,12 +764,9 @@ int ObHMSCatalogProperties::to_json_kv_string(char *buf, const int64_t buf_len, 
                      OPTION_NAMES[CACHE_REFRESH_INTERVAL_SEC],
                      cache_refresh_interval_sec_));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf,
-                     buf_len,
-                     pos,
-                     R"("%s":"%s")",
-                     OPTION_NAMES[HMS_CATALOG_NAME],
-                     helper.convert(ObHexStringWrap(hms_catalog_name_))));
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[HMS_CATALOG_NAME]));
+  OZ(hex_print(hms_catalog_name_.ptr(), hms_catalog_name_.length(), buf, buf_len, pos));
+  OZ(databuff_printf(buf, buf_len, pos, R"(")"));
   return ret;
 }
 
@@ -889,6 +873,10 @@ int ObHMSCatalogProperties::resolve_catalog_properties(const ParseNode &node)
         case T_URI: {
           uri_
               = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
+          if (uri_.length() > OB_MAX_URI_LENGTH) {
+            ret = OB_ERR_TOO_LONG_IDENT;
+            LOG_WARN("hms catalog's uri is too long", K(ret), K(uri_));
+          }
           break;
         }
         case T_PRINCIPAL: {
