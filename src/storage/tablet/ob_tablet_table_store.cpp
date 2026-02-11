@@ -27,6 +27,7 @@ using namespace compaction;
 using namespace oceanbase::share;
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_CANT_RECYCLE_OLDEST_MAJOR_SSTABLE);
 
 ObTabletTableStore::ObTabletTableStore()
   : version_(TABLE_STORE_VERSION_V4),
@@ -1597,6 +1598,13 @@ int ObTabletTableStore::inner_build_major_tables_(
         break;
       }
     }
+  #ifdef ERRSIM
+    if (OB_SUCC(ret) && EN_CANT_RECYCLE_OLDEST_MAJOR_SSTABLE == -GCTX.get_server_id()) {
+      start_pos = 0;
+      inc_base_snapshot_version = -1;
+      FLOG_INFO("errsim to stop recycle the oldest major sstable");
+    }
+  #endif
     if (-1 == inc_base_snapshot_version && major_tables.count() > 0) {
       inc_base_snapshot_version = major_tables.at(0)->get_snapshot_version();
       LOG_WARN("not found inc base snapshot version, use the oldest major table", K(ret));

@@ -478,7 +478,6 @@ int ObTabletSplitDag::init_by_param(const share::ObIDagInitParam *param)
 int ObTabletSplitDag::create_first_task()
 {
   int ret = OB_SUCCESS;
-  int64_t task_id = 0;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> source_sstables;
   ObTabletSplitPrepareTask *prepare_task = nullptr;
   ObTabletSplitMergeTask *merge_task = nullptr;
@@ -519,7 +518,7 @@ int ObTabletSplitDag::create_first_task()
       } else if (OB_ISNULL(write_task)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr task", K(ret));
-      } else if (OB_FAIL(write_task->init(task_id++, param_, context_, source_sstables.at(i)))) {
+      } else if (OB_FAIL(write_task->init(0/*task_id*/, param_, context_, source_sstables.at(i)))) {
         LOG_WARN("init write task failed", K(ret));
       } else if (OB_FAIL(prepare_task->add_child(*write_task))) {
         LOG_WARN("add child task failed", K(ret));
