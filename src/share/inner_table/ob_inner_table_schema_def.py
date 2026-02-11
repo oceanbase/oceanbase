@@ -8810,9 +8810,9 @@ def_table_schema(
     ('weight', 'double', 'true')
   ],
 )
-# 574: __all_tenant_macro_block_copy_task
-# 575: __all_tenant_macro_block_copy_task_progress
-# 576: __all_tenant_macro_block_copy_task_history
+# 574: __all_tenant_macro_block_ha_task
+# 575: __all_tenant_macro_block_ha_task_progress
+# 576: __all_tenant_macro_block_ha_task_history
 def_table_schema(
   owner       = 'yunshan.tys',
   table_name  = '__all_tablet_to_global_temporary_table',
@@ -17888,9 +17888,9 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_active_session_history_v2']))
 
-# 12577: __all_virtual_macro_block_copy_task
-# 12578: __all_virtual_macro_block_copy_task_progress
-# 12579: __all_virtual_macro_block_copy_task_history
+# 12577: __all_virtual_macro_block_ha_task
+# 12578: __all_virtual_macro_block_ha_task_progress
+# 12579: __all_virtual_macro_block_ha_task_history
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12580',
@@ -18633,9 +18633,9 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15539', all_def_ke
 # 15541: __all_sync_standby_status
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15542', all_def_keywords['__all_virtual_tablet_window_loop_info']))
 
-# 15543: __all_virtual_macro_block_copy_task
-# 15544: __all_virtual_macro_block_copy_task_progress
-# 15545: __all_virtual_macro_block_copy_task_history
+# 15543: __all_virtual_macro_block_ha_task
+# 15544: __all_virtual_macro_block_ha_task_progress
+# 15545: __all_virtual_macro_block_ha_task_history
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15546', all_def_keywords['__all_routine_load_job']))
 # 15548: __all_virtual_ss_local_cache_diagnose_info
