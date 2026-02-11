@@ -119,7 +119,7 @@ int ObVecIndexBuildTask::init(
   }
 
   if(OB_FAIL(ret)) {
-  } else if (use_vid_ && index_schema->is_vec_rowkey_vid_type() && snapshot_version <= 0) {
+  } else if (use_vid_ && index_schema->is_vec_rowkey_vid_type() && snapshot_version <= 0 && !create_index_arg.is_offline_or_restore()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the snapshot version should be more than zero", K(ret), K(snapshot_version));
   } else if (OB_FAIL(deep_copy_index_arg(allocator_,
@@ -1991,7 +1991,7 @@ int ObVecIndexBuildTask::submit_drop_vec_index_task()
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(object_id_));
   } else if (OB_ISNULL(data_table_schema)) {
-    if (is_offline_rebuild_) {
+    if (create_index_arg_.is_offline_or_restore()) {
       drop_index_task_submitted_ = true;
       LOG_INFO("hidden data_table maybe removed when offline ddl is failed, skip submit drop", K(ret), K(object_id_));
     } else {
@@ -2151,7 +2151,7 @@ int ObVecIndexBuildTask::cleanup_impl()
                                                      data_table_id,
                                                      data_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(data_table_id));
-    } else if (create_index_arg_.is_offline_rebuild_ && OB_ISNULL(data_schema)) {
+    } else if (create_index_arg_.is_offline_or_restore() && OB_ISNULL(data_schema)) {
       is_skip_unlock = true;
       LOG_INFO("the data table schema is null, skip unlock for the offline ddl rebuild hnsw index", K(ret), K(object_id_));
     } else if (OB_ISNULL(data_schema)) {

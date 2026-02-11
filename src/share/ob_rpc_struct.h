@@ -3029,7 +3029,8 @@ public:
         index_key_(-1),
         data_version_(0),
         generated_column_names_(),
-        def_index_id_(common::OB_INVALID_ID)
+        def_index_id_(common::OB_INVALID_ID),
+        is_table_restore_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -3069,6 +3070,7 @@ public:
     data_version_ = 0;
     generated_column_names_.reset();
     def_index_id_ = common::OB_INVALID_ID;
+    is_table_restore_ = false;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -3113,6 +3115,7 @@ public:
       index_key_ = other.index_key_;
       data_version_ = other.data_version_;
       def_index_id_ = other.def_index_id_;
+      is_table_restore_ = other.is_table_restore_;
       for (int i = 0; i < other.generated_column_names_.count() && OB_SUCC(ret); i++) {
         ObString column_name;
         if (OB_FAIL(ob_write_string(allocator_, other.generated_column_names_.at(i), column_name))) {
@@ -3133,6 +3136,7 @@ public:
   inline bool is_spatial_index() const { return ObSimpleTableSchemaV2::is_spatial_index(index_type_); }
   inline bool is_multivalue_index() const { return is_multivalue_index_aux(index_type_); }
   inline bool is_vec_index() const { return ObSimpleTableSchemaV2::is_vec_index(index_type_); }
+  inline bool is_offline_or_restore() const { return is_offline_rebuild_ || is_table_restore_; }
 
 //todo @qilu:only for each_cg now, when support customized cg ,refine this
   typedef common::ObSEArray<uint64_t, common::DEFAULT_CUSTOMIZED_CG_NUM> ObCGColumnList;
@@ -3197,6 +3201,7 @@ public:
   uint64_t data_version_;
   common::ObSEArray<ObString, common::OB_PREALLOCATED_NUM> generated_column_names_;
   uint64_t def_index_id_;
+  bool is_table_restore_;
 };
 
 struct ObIndexOfflineDdlArg : ObDDLArg

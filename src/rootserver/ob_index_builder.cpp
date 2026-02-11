@@ -750,9 +750,9 @@ int ObIndexBuilder::submit_build_index_task(
   const bool is_fts_or_multivalue = share::schema::is_fts_or_multivalue_index(create_index_arg.index_type_);
   const bool is_vec_index = share::schema::is_vec_index(create_index_arg.index_type_);
   if (tenant_data_version >= DATA_VERSION_4_5_1_0) {
-    param.ddl_need_retry_at_executor_ = (is_vec_index || is_fts_or_multivalue) && !create_index_arg.is_offline_rebuild_;
+    param.ddl_need_retry_at_executor_ = (is_vec_index || is_fts_or_multivalue) && !create_index_arg.is_offline_or_restore();
   } else if (tenant_data_version >= DATA_VERSION_4_4_0_0) {
-    param.ddl_need_retry_at_executor_ = is_fts_or_multivalue && !create_index_arg.is_offline_rebuild_;
+    param.ddl_need_retry_at_executor_ = is_fts_or_multivalue && !create_index_arg.is_offline_or_restore();
   } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
     param.ddl_need_retry_at_executor_ = is_fts_or_multivalue && GCTX.is_shared_storage_mode();
   }

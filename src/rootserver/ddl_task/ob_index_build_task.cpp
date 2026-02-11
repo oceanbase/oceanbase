@@ -458,7 +458,7 @@ int ObIndexBuildTask::init(
     }
     if (share::schema::is_rowkey_doc_aux(create_index_arg_.index_type_) ||
         share::schema::is_vec_rowkey_vid_type(create_index_arg_.index_type_)) {
-      if (snapshot_version_ <= 0 && !create_index_arg_.is_offline_rebuild_) {
+      if (snapshot_version_ <= 0 && !create_index_arg_.is_offline_or_restore()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("snapshot version is not valid", K(ret), K(snapshot_version_), K(create_index_arg_.index_type_));
       }
@@ -1136,7 +1136,7 @@ int ObIndexBuildTask::wait_data_complement()
     LOG_WARN("not init", KR(ret), KP(GCTX.schema_service_), KP(GCTX.sql_proxy_));
   } else if (ObDDLTaskStatus::REDEFINITION != task_status_) {
     LOG_WARN("task status not match", K(ret), K(task_status_));
-  } else if (OB_UNLIKELY(snapshot_version_ <= 0 && !create_index_arg_.is_offline_rebuild_)) {
+  } else if (OB_UNLIKELY(snapshot_version_ <= 0 && !create_index_arg_.is_offline_or_restore())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected snapshot", K(ret), KPC(this));
   }

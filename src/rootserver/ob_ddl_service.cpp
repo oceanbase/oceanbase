@@ -7276,9 +7276,9 @@ int ObDDLService::create_aux_index_task_(
                                      share::schema::is_vec_ivfpq_centroid_index(create_index_arg.index_type_) ||
                                      share::schema::is_vec_ivfpq_pq_centroid_index(create_index_arg.index_type_);
     if (tenant_data_version >= DATA_VERSION_4_5_1_0) {
-      param.ddl_need_retry_at_executor_ = (is_vec_centroid_aux || is_vec_rowkey_vid_aux || is_rowkey_doc_aux) && !create_index_arg.is_offline_rebuild_;
+      param.ddl_need_retry_at_executor_ = (is_vec_centroid_aux || is_vec_rowkey_vid_aux || is_rowkey_doc_aux) && !create_index_arg.is_offline_or_restore();
     } else if (tenant_data_version >= DATA_VERSION_4_4_0_0) {
-      param.ddl_need_retry_at_executor_ = (is_vec_rowkey_vid_aux || is_rowkey_doc_aux) && !create_index_arg.is_offline_rebuild_;
+      param.ddl_need_retry_at_executor_ = (is_vec_rowkey_vid_aux || is_rowkey_doc_aux) && !create_index_arg.is_offline_or_restore();
     } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
       param.ddl_need_retry_at_executor_ = is_rowkey_doc_aux && GCTX.is_shared_storage_mode();
     }

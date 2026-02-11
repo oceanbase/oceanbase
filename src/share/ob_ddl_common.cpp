@@ -3199,6 +3199,7 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
   ObSEArray<ObString, 1> col_names;
   create_index_arg.index_option_.reset();
   create_index_arg.is_offline_rebuild_ = task.get_src_tenant_id() == task.get_tenant_id();  // not table recover task.
+  create_index_arg.is_table_restore_ = task.get_src_tenant_id() != task.get_tenant_id();
   create_index_arg.parallelism_ = task.get_parallelism();
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(task.get_tenant_id(), new_schema_guard))) {
@@ -3268,7 +3269,6 @@ int ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
   bool &need_update_snapshot)
 {
   int ret = OB_SUCCESS;
-  bool in_table_restore = false;
   ObDocIDType doc_id_type = ObDocIDType::INVALID;
   uint64_t docid_col_id = OB_INVALID_ID;
   ObDocIDType vid_type = ObDocIDType::INVALID;
@@ -3286,9 +3286,7 @@ int ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
     is_index_with_vid = index_schema->is_vec_hnsw_index();
   }
 
-  if (FAILEDx(ObDDLUtil::check_is_table_restore_task(create_index_arg.tenant_id_, task_id, in_table_restore))) {
-      LOG_WARN("fail to check is table restore task", K(ret));
-  } else if (!(create_index_arg.is_offline_rebuild_ || in_table_restore)) {
+  if (!create_index_arg.is_offline_or_restore()) {
     // don't need update snapshot
   } else if (is_index_with_docid && OB_FAIL(ObFtsIndexBuilderUtil::determine_docid_type(*table_schema, doc_id_type))) {
     LOG_WARN("fail to get docid id type", K(ret));
@@ -3308,7 +3306,7 @@ int ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
   } else if ((is_index_with_docid && OB_FAIL(table_schema->get_rowkey_doc_tid(domain_index_share_tid))) ||
              (is_index_with_vid && OB_FAIL(table_schema->get_rowkey_vid_tid(domain_index_share_tid)))) {
     if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
-      if (!in_table_restore) { // only for primary key change in offline rebuild task
+      if (!create_index_arg.is_table_restore_) { // only for primary key change in offline rebuild task
         FLOG_INFO("There may be no rowkey_doc/vid table in origin index, skip update.", K(ret), K(is_index_with_docid), K(is_index_with_vid));
         ret = OB_SUCCESS;
       } else {
@@ -3317,61 +3315,6 @@ int ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
     }
   } else {
     need_update_snapshot = true;
-  }
-  return ret;
-}
-
-int ObDDLUtil::get_domain_index_share_table_snapshot(const ObTableSchema *table_schema,
-    const ObTableSchema *index_schema,
-    const int64_t task_id,
-    const obrpc::ObCreateIndexArg &create_index_arg,
-    int64_t &fts_snapshot_version)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard new_schema_guard;
-  rootserver::ObRootService *root_service = GCTX.root_service_;
-  uint64_t tenant_id = create_index_arg.tenant_id_;
-  bool need_update_snapshot = false;
-  if (OB_ISNULL(root_service) || OB_ISNULL(table_schema) || OB_ISNULL(index_schema)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service, table schema, index schema must not be nullptr", K(ret), K(root_service), K(table_schema), K(index_schema));
-  } else if (OB_FAIL(ObDDLUtil::check_need_update_domain_index_share_table_snapshot(
-                 table_schema, index_schema, task_id, create_index_arg, need_update_snapshot))) {
-    LOG_WARN("fail to check need update domain index share table snapshot", K(ret));
-  } else if (!need_update_snapshot) {
-    // don't need update snapshot
-  } else if (index_schema->is_fts_index() || index_schema->is_multivalue_index() || index_schema->is_vec_spiv_index()
-             || index_schema->is_vec_hnsw_index()) {
-    ObMySQLTransaction trans;
-    const ObTableSchema *domain_index_share_schema = nullptr;
-    uint64_t  domain_index_share_tid = 0;
-    if ((index_schema->is_fts_index() || index_schema->is_multivalue_index() || index_schema->is_vec_spiv_index()) && OB_FAIL(table_schema->get_rowkey_doc_tid(domain_index_share_tid))) {
-      LOG_WARN("failed to get rowkey doc table id", K(ret));
-    } else if (index_schema->is_vec_hnsw_index() && OB_FAIL(table_schema->get_rowkey_vid_tid(domain_index_share_tid))) {
-      LOG_WARN("failed to get rowkey vid table id", K(ret));
-    } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id, new_schema_guard))) {
-      LOG_WARN("failed to refresh schema guard", K(ret));
-    } else if (OB_FAIL(new_schema_guard.get_table_schema(tenant_id, domain_index_share_tid, domain_index_share_schema))) {
-      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(domain_index_share_tid));
-    } else if (OB_ISNULL(domain_index_share_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, rowkey doc/vid index schema must not be nullptr", K(ret));
-    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
-      LOG_WARN("fail to start trans", K(ret), K(tenant_id));
-    } else if (OB_FAIL(ObDDLUtil::obtain_snapshot(trans, *table_schema, *domain_index_share_schema, fts_snapshot_version))) {
-      if (OB_SNAPSHOT_DISCARDED == ret) {
-        LOG_INFO("snapshot discarded, need retry waiting trans", K(ret), K(fts_snapshot_version));
-      } else {
-        LOG_WARN("hold snapshot failed", K(ret), K(fts_snapshot_version));
-      }
-    }
-    if (trans.is_started()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
-      }
-    }
   }
   return ret;
 }
