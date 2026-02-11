@@ -412,8 +412,8 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::wait(
         cond_.wait(1000);
         if (OB_UNLIKELY(rpc_proxy_.is_detect_session_killed()
                           && !has_terminated
-                          && OB_ERR_SESSION_INTERRUPTED == THIS_WORKER.check_status())) {
-          RPC_LOG(INFO, "check session killed, will terminate all rpc locally", K(response_count_), K(cb_list_.get_size()));
+                          && is_interrupt_error(THIS_WORKER.check_status()))) {
+          RPC_LOG(INFO, "check session or query interrupted, all RPCs will be terminated prematurely", K(response_count_), K(cb_list_.get_size()));
           int tmp_ret = OB_SUCCESS;
           int index = 0;
           ObAsyncCB<PC, ObAsyncRpcProxy, RpcProxy> *cb = cb_list_.get_first();
