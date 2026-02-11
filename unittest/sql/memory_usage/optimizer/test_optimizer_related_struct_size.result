@@ -13,7 +13,7 @@
 | QueryRangeInfo | 472 |
 | ObSkylineDim | 16 |
 | ObIndexBackDim | 16 |
-| ObInterestOrderDim | 96 |
+| ObInterestOrderDim | 56 |
 | ObQueryRangeDim | 144 |
 | ObUniqueRangeDim | 24 |
 | ObShardingInfoDim | 32 |
