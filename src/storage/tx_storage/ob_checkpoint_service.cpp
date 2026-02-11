@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "rootserver/ob_ls_service_helper.h" // ObLSServiceHelper
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "logservice/ob_log_service.h"
@@ -838,31 +837,52 @@ private:
   {
     int ret = OB_SUCCESS;
     min_clog_checkpoint_scn.set_max();
-    const int64_t expire_renew_time = INT64_MAX;
-    share::ObLSLocation location;
-    bool is_cache_hit = false;
     const uint64_t tenant_id = MTL_ID();
     const ObLSID ls_id = ls.get_ls_id();
 
+    common::ObMemberList member_list;
+    int64_t paxos_replica_num = 0;
+    common::GlobalLearnerList learner_list;
     obrpc::ObSSCkptRpcProxy ss_ckpt_rpc_proxy;
     ObSSRpcCollectCNClogCkptArg arg(tenant_id, ls_id);
-    if (OB_FAIL(GCTX.location_service_->get(
-            GCONF.cluster_id, tenant_id, ls_id, expire_renew_time, is_cache_hit, location))) {
-      LOG_WARN("get ls location failed", KR(ret), K(tenant_id), K(ls_id));
+    if (OB_FAIL(ls.get_log_handler()->get_paxos_member_list_and_learner_list(
+            member_list, paxos_replica_num, learner_list))) {
+      LOG_WARN("get paxos member list and learner list failed", KR(ret), K(tenant_id), K(ls_id));
     } else if (OB_FAIL(GCTX.net_frame_->get_proxy(ss_ckpt_rpc_proxy))) {
       STORAGE_LOG(WARN, "get proxy failed", KR(ret), K(ls_id), K(arg));
     } else {
-      const ObIArray<ObLSReplicaLocation> &ls_locations = location.get_replica_locations();
-      for (int i = 0; i < ls_locations.count() && OB_SUCC(ret); ++i) {
-        const ObAddr &server = ls_locations.at(i).get_server();
+      // collect checkpoint scn from paxos members
+      for (int64_t i = 0; i < member_list.get_member_number() && OB_SUCC(ret); ++i) {
+        ObAddr server;
         ObSSRpcCollectCNClogCkptResult result;
-        if (OB_FAIL(ss_ckpt_rpc_proxy.to(server).by(tenant_id).collect_cn_clog_ckpt(arg, result))) {
-          STORAGE_LOG(WARN, "post rpc collect cn clog ckpt failed", KR(ret), K(ls_id), K(arg));
+        if (OB_FAIL(member_list.get_server_by_index(i, server))) {
+          STORAGE_LOG(WARN, "get server by index from member_list failed", KR(ret), K(i), K(ls_id));
+        } else if (OB_FAIL(ss_ckpt_rpc_proxy.to(server).by(tenant_id).collect_cn_clog_ckpt(arg, result))) {
+          STORAGE_LOG(WARN, "post rpc collect cn clog ckpt failed", KR(ret), K(ls_id), K(server), K(arg));
         } else if (OB_FAIL(result.ret_code_)) {
-          STORAGE_LOG(WARN, "collect cn clog ckpt failed", KR(ret), K(ls_id), K(arg), K(result));
+          STORAGE_LOG(WARN, "collect cn clog ckpt failed", KR(ret), K(ls_id), K(server), K(arg), K(result));
         } else {
           min_clog_checkpoint_scn = MIN(min_clog_checkpoint_scn, result.clog_checkpoint_scn_);
-          FLOG_INFO("finish get clog_checkpoint_scn from one compute node",
+          FLOG_INFO("finish get clog_checkpoint_scn from one paxos member",
+                    K(ls_id),
+                    K(server),
+                    K(result),
+                    K(min_clog_checkpoint_scn));
+        }
+      }
+      // collect checkpoint scn from learners
+      for (int64_t i = 0; i < learner_list.get_member_number() && OB_SUCC(ret); ++i) {
+        ObAddr server;
+        ObSSRpcCollectCNClogCkptResult result;
+        if (OB_FAIL(learner_list.get_server_by_index(i, server))) {
+          STORAGE_LOG(WARN, "get server by index from learner_list failed", KR(ret), K(i), K(ls_id));
+        } else if (OB_FAIL(ss_ckpt_rpc_proxy.to(server).by(tenant_id).collect_cn_clog_ckpt(arg, result))) {
+          STORAGE_LOG(WARN, "post rpc collect cn clog ckpt failed", KR(ret), K(ls_id), K(server), K(arg));
+        } else if (OB_FAIL(result.ret_code_)) {
+          STORAGE_LOG(WARN, "collect cn clog ckpt failed", KR(ret), K(ls_id), K(server), K(arg), K(result));
+        } else {
+          min_clog_checkpoint_scn = MIN(min_clog_checkpoint_scn, result.clog_checkpoint_scn_);
+          FLOG_INFO("finish get clog_checkpoint_scn from one learner",
                     K(ls_id),
                     K(server),
                     K(result),
