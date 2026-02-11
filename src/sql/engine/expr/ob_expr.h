@@ -831,7 +831,9 @@ public:
 
   OB_INLINE bool eager_evaluation() const
   {
-    return arg_cnt_ <= 1
+    return (arg_cnt_ <= 1
+            && type_ != T_OP_EXISTS
+            && type_ != T_OP_NOT_EXISTS)
            || eager_evaluation_;
   }
 
