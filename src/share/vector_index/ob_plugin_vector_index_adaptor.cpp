@@ -3906,6 +3906,9 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
             ctx->status_ = PVQ_REFRESH;
             LOG_INFO("query result need refresh adapter, ls leader",
                      K(ret), K(ls_id), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()));
+          } else {
+            LOG_INFO("skip snap data refresh",
+                     K(ret), K(ls_id), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()));
           }
         } else {
           LOG_WARN("failed to get next row", K(ret));
@@ -5222,6 +5225,7 @@ int ObPluginVectorIndexAdaptor::inner_init_snap_builder(ObVectorIndexParam *para
       LOG_WARN("init buffer mode snap data fail", K(ret));
     } else {
       snap_data_->builder_->seg_type_ = ObVectorIndexSegmentType::BASE;
+      snap_data_->rb_flag_ = false;
       snap_data_->set_inited();
       LOG_INFO("create snap data success.", K(ret), K(snap_data_), K(lbt()));
     }
@@ -5238,6 +5242,7 @@ int ObPluginVectorIndexAdaptor::inner_init_snap_builder(ObVectorIndexParam *para
     LOG_WARN("failed to create vsag index.", K(ret));
   } else {
     snap_data_->builder_->seg_type_ = ObVectorIndexSegmentType::BASE;
+    snap_data_->rb_flag_ = false;
     snap_data_->set_inited();
     LOG_INFO("create snap data success.", K(ret), K(snap_data_), K(lbt()));
   }
