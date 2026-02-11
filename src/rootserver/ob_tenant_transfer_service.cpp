@@ -21,6 +21,7 @@
 #include "share/ob_freeze_info_proxy.h" // ObFreezeInfoProxy
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
 #include "share/ls/ob_ls_operator.h" // ObLSAttrOperator
+#include "share/ls/ob_ls_table_operator.h" // ObLSTableOperator
 #include "storage/tablelock/ob_table_lock_service.h" // ObTableLockService
 #include "storage/ddl/ob_ddl_lock.h" // ObDDLLock
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
@@ -425,11 +426,10 @@ int ObTenantTransferService::check_if_need_wait_due_to_last_failure_(
 
 ERRSIM_POINT_DEF(EN_TENANT_TRANSFER_CHECK_LS_MEMBER_LIST_NOT_SAME);
 
-// 1.check leader member_lists of src_ls and dest_ls are same
-// 2.if member_lists are same, check that all servers in member_list are acitve
-// 3.if src_ls and dest_ls are both dup ls:
-//   3.1. check learner_lists are same
-//   3.2. check transfer_scn of all src_ls replicas are same
+// 1.check leader all_member_lists of src_ls and dest_ls are same
+// 2.if member_lists are same, check that all servers in member_list(without logonly replicas) are acitve
+// 3.check replay scn of src_ls and dest_ls are same (without logonly replicas)
+// 4.if src_ls and dest_ls are both dup ls, check learner_lists are same
 int ObTenantTransferService::check_ls_member_list_and_learner_list_(
     common::ObISQLClient &sql_proxy,
     const ObLSID &src_ls,
@@ -440,35 +440,37 @@ int ObTenantTransferService::check_ls_member_list_and_learner_list_(
   result_comment = EMPTY_COMMENT;
   bool all_members_are_active = false;
   bool replay_scn_check_pass = false;
-  ObLSReplica::MemberList src_ls_member_list;
-  ObLSReplica::MemberList dest_ls_member_list;
+  ObArray<ObAddr> src_ls_member_list;
+  ObArray<ObAddr> dest_ls_member_list;
+  ObArray<ObAddr> src_ls_member_list_without_logonly;
+  ObArray<ObAddr> dest_ls_member_list_without_logonly;
   GlobalLearnerList src_ls_learner_list;
   GlobalLearnerList dest_ls_learner_list;
-  bool dup_ls_transfer_scn_all_same = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(get_member_list_and_learner_list_by_inner_sql_(
-      sql_proxy,
+  } else if (OB_FAIL(get_member_list_and_learner_list_(
       src_ls,
+      src_ls_member_list,
+      src_ls_member_list_without_logonly,
+      src_ls_learner_list))) {
+    LOG_WARN("get src_ls member list and learner list failed", KR(ret), K(src_ls));
+  } else if (OB_FAIL(get_member_list_and_learner_list_(
       dest_ls,
-      src_ls_member_list,
       dest_ls_member_list,
-      src_ls_learner_list,
+      dest_ls_member_list_without_logonly,
       dest_ls_learner_list))) {
-    LOG_WARN("get member list by inner sql failed", KR(ret), K(src_ls), K(dest_ls));
-  } else if (!ObLSReplica::servers_in_member_list_are_same(
-      src_ls_member_list,
-      dest_ls_member_list)) {
+    LOG_WARN("get dest_ls member list and learner list failed", KR(ret), K(dest_ls));
+  } else if (!member_list_are_same_(src_ls_member_list, dest_ls_member_list)) {
     // result 1: member_lists are not same
     result_comment = WAIT_FOR_MEMBER_LIST;
     LOG_WARN("member_list of src_ls and dest_ls are not same", KR(ret), K_(tenant_id), K(src_ls),
         K(dest_ls), K(src_ls_member_list), K(dest_ls_member_list), K(result_comment));
-  } else if (OB_FAIL(ObLSReplica::check_all_servers_in_member_list_are_active(
-      src_ls_member_list,
+  } else if (OB_FAIL(check_all_servers_in_member_list_are_active_(
+      src_ls_member_list_without_logonly,
       all_members_are_active))) {
     LOG_WARN("check all servers in member list are active failed",
-        KR(ret), K(src_ls_member_list), K(all_members_are_active));
+        KR(ret), K(src_ls_member_list_without_logonly), K(all_members_are_active));
   } else if (!all_members_are_active) {
     // result 2: member_lists are same, but server in member_list is inactive
     result_comment = INACTIVE_SERVER_IN_MEMBER_LIST;
@@ -476,15 +478,15 @@ int ObTenantTransferService::check_ls_member_list_and_learner_list_(
         K(src_ls_member_list), K(all_members_are_active), K(result_comment));
   } else if (OB_FAIL(check_replay_scn_in_member_list_(
       src_ls,
-      src_ls_member_list,
+      src_ls_member_list_without_logonly,
       replay_scn_check_pass))) {
     LOG_WARN("check replay scn of src_ls failed", KR(ret), K(src_ls), K(src_ls_member_list));
   } else if (!replay_scn_check_pass) {
     result_comment = WAIT_FOR_REPLAY_SCN;
-    LOG_WARN("replay scn of src_ls is abnormal", KR(ret), K(src_ls), K(src_ls_member_list));
+    LOG_WARN("replay scn of src_ls is abnormal", KR(ret), K(src_ls), K(src_ls_member_list_without_logonly));
   } else if (OB_FAIL(check_replay_scn_in_member_list_(
       dest_ls,
-      dest_ls_member_list,
+      dest_ls_member_list_without_logonly,
       replay_scn_check_pass))) {
     LOG_WARN("check replay scn of dest_ls failed", KR(ret), K(dest_ls), K(dest_ls_member_list));
   } else if (!replay_scn_check_pass) {
@@ -517,8 +519,9 @@ int ObTenantTransferService::check_ls_member_list_and_learner_list_(
     // result 5: check pass
     TTS_INFO("member_lists of src_ls and dest_ls are same and all members are acitve",
         KR(ret), K(tenant_id_), K(src_ls), K(dest_ls), K(all_members_are_active),
-        K(src_ls_member_list), K(dest_ls_member_list), K(src_ls_learner_list),
-        K(dest_ls_member_list), K(dup_ls_transfer_scn_all_same), K(result_comment));
+        K(src_ls_member_list), K(dest_ls_member_list), K(src_ls_member_list_without_logonly),
+        K(dest_ls_member_list_without_logonly), K(src_ls_learner_list),
+        K(dest_ls_learner_list), K(result_comment));
   }
 
   // just for debug
@@ -550,117 +553,91 @@ bool ObTenantTransferService::is_dup_ls_(const ObLSID &ls_id, const ObIArray<ObL
   return is_dup;
 }
 
-// get ls leader member list of src_ls and dest_ls
-int ObTenantTransferService::get_member_list_and_learner_list_by_inner_sql_(
-    common::ObISQLClient &sql_proxy,
-    const ObLSID &src_ls,
-    const ObLSID &dest_ls,
-    ObLSReplica::MemberList &src_ls_member_list,
-    ObLSReplica::MemberList &dest_ls_member_list,
-    GlobalLearnerList &src_ls_learner_list,
-    GlobalLearnerList &dest_ls_learner_list)
+// get ls leader member list of src_ls and dest_ls from __all_ls_meta_table via ObLSTableOperator
+// and filter out logonly replicas from member_list
+int ObTenantTransferService::get_member_list_and_learner_list_(
+    const ObLSID &ls_id,
+    MemberAddrs &all_member_list,
+    MemberAddrs &member_list_without_logonly,
+    GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
-  src_ls_member_list.reset();
-  dest_ls_member_list.reset();
+  all_member_list.reset();
+  member_list_without_logonly.reset();
+  learner_list.reset();
+  share::ObLSInfo ls_info;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (!src_ls.is_valid() || !dest_ls.is_valid()) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(src_ls), K(dest_ls));
-  } else {
-    SMART_VAR(ObISQLClient::ReadResult, result) {
-      ObSqlString sql;
-      common::sqlclient::ObMySQLResult *res = NULL;
-      if (OB_FAIL(sql.assign_fmt(
-          "SELECT PAXOS_MEMBER_LIST, LEARNER_LIST FROM %s WHERE TENANT_ID = %lu AND ROLE = 'LEADER'"
-          " AND LS_ID IN (%ld, %ld) ORDER BY FIELD(LS_ID, %ld, %ld)",
-          OB_GV_OB_LOG_STAT_TNAME,
-          tenant_id_,
-          src_ls.id(),
-          dest_ls.id(),
-          src_ls.id(),
-          dest_ls.id()))) {
-        LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id), K(src_ls), K(dest_ls));
-      } else if (OB_FAIL(sql_proxy.read(result, sql.ptr()))) {
-        LOG_WARN("execute sql failed", KR(ret), K(sql));
-      } else if (OB_ISNULL(res = result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get mysql result failed", KR(ret), K(sql));
-      } else if (OB_FAIL(construct_ls_member_list_and_learner_list_(*res, src_ls_member_list, src_ls_learner_list))) {
-        LOG_WARN("construct src ls member list failed", KR(ret), K_(tenant_id), K(src_ls));
-      } else if (OB_FAIL(construct_ls_member_list_and_learner_list_(*res, dest_ls_member_list, dest_ls_learner_list))) {
-        LOG_WARN("construct dest ls member list failed", KR(ret), K_(tenant_id), K(dest_ls));
-      }
-      // double check sql result
-      if (OB_FAIL(ret)) {
-        if (OB_UNLIKELY(OB_ITER_END == ret)) { // read less than two rows
-          ret = OB_LEADER_NOT_EXIST;
-          LOG_WARN("leader of src_ls or dest_ls not found", KR(ret), K_(tenant_id), K(src_ls),
-              K(dest_ls), K(src_ls_member_list), K(dest_ls_member_list));
-        } else {
-          LOG_WARN("get ls member_list and learner_list from inner table failed", KR(ret), K_(tenant_id),
-              K(src_ls), K(dest_ls), K(src_ls_member_list), K(dest_ls_member_list),
-              K(src_ls_learner_list), K(dest_ls_learner_list));
-        }
-      } else if (OB_SUCC(res->next())) { // make sure read only two rows
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("read too much ls from inner table", KR(ret), K_(tenant_id),
-            K(src_ls), K(dest_ls), K(src_ls_member_list), K(dest_ls_member_list), K(sql));
-      } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        LOG_WARN("next failed", KR(ret), K_(tenant_id), K(src_ls), K(dest_ls),
-            K(sql), K(src_ls_member_list), K(dest_ls_member_list));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } // end SMART_VAR
+    LOG_WARN("invalid args", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(GCTX.lst_operator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lst operator is null", KR(ret), KP(GCTX.lst_operator_));
+  } else if (OB_FAIL(GCTX.lst_operator_->get(
+      GCONF.cluster_id,
+      tenant_id_,
+      ls_id,
+      ObLSTable::DEFAULT_MODE,
+      ls_info))) {
+    LOG_WARN("fail to get ls info", KR(ret), K(tenant_id_), K(ls_id));
+  } else if (OB_FAIL(get_member_list_and_learner_list_from_leader_(
+      ls_info,
+      all_member_list,
+      member_list_without_logonly,
+      learner_list))) {
+    LOG_WARN("fail to construct member list from ls info", KR(ret), K(ls_info));
   }
   return ret;
 }
 
-int ObTenantTransferService::construct_ls_member_list_and_learner_list_(
-    sqlclient::ObMySQLResult &res,
-    ObLSReplica::MemberList &ls_member_list,
-    GlobalLearnerList &ls_learner_list)
+// construct member_list and learner_list from leader replica,
+// filtering out logonly replicas from member_list
+int ObTenantTransferService::get_member_list_and_learner_list_from_leader_(
+    const share::ObLSInfo &ls_info,
+    MemberAddrs &all_member_list,
+    MemberAddrs &member_list_without_logonly,
+    GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
-  ls_member_list.reset();
-  ls_learner_list.reset();
-  ObString ls_member_list_str;
-  ObString ls_learner_list_str;
-  const char *ls_member_list_ptr = NULL;
-  const char *ls_learner_list_ptr = NULL;
-  ObCStringHelper helper;
-  if (OB_FAIL(res.next())) {
-    LOG_WARN("next failed", KR(ret));
-  } else if (OB_FAIL(res.get_varchar("PAXOS_MEMBER_LIST", ls_member_list_str))) {
-    LOG_WARN("fail to get PAXOS_MEMBER_LIST", KR(ret));
-  } else if (OB_FAIL(res.get_varchar("LEARNER_LIST", ls_learner_list_str))) {
-    LOG_WARN("fail to get LEARNER_LIST", KR(ret));
-  } else if (OB_FAIL(helper.convert(ls_member_list_str, ls_member_list_ptr))) {
-    LOG_WARN("convert ls_member_list", KR(ret), K(ls_member_list_str));
-  } else if (OB_FAIL(helper.convert(ls_learner_list_str, ls_learner_list_ptr))) {
-    LOG_WARN("convert ls_learner_list", KR(ret), K(ls_learner_list_str));
-  } else if (OB_FAIL(ObLSReplica::text2member_list(
-      ls_member_list_ptr,
-      ls_member_list))) {
-    LOG_WARN("text2member_list failed", KR(ret), K(ls_member_list_str));
-  } else if (OB_FAIL(ObLSReplica::text2learner_list(
-      ls_learner_list_ptr,
-      ls_learner_list))) {
-    LOG_WARN("text2learner_list failed", KR(ret), K(ls_learner_list_str));
+  all_member_list.reset();
+  member_list_without_logonly.reset();
+  learner_list.reset();
+  const ObLSReplica *leader_replica = nullptr;
+  if (OB_FAIL(ls_info.find_leader(leader_replica))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_LEADER_NOT_EXIST;
+    }
+    LOG_WARN("fail to find leader replica", KR(ret), K(ls_info));
+  } else if (OB_ISNULL(leader_replica)) {
+    ret = OB_LEADER_NOT_EXIST;
+    LOG_WARN("leader replica is null", KR(ret), K(ls_info));
+  } else if (OB_FAIL(learner_list.deep_copy(leader_replica->get_learner_list()))) {
+    LOG_WARN("fail to deep copy learner list", KR(ret));
+  } else {
+    ARRAY_FOREACH(ls_info.get_replicas(), idx) {
+      const ObLSReplica &replica = ls_info.get_replicas().at(idx);
+      if (!replica.get_in_member_list()) {
+        // skip replicas not in member list
+      } else if (OB_FAIL(all_member_list.push_back(replica.get_server()))) {
+        LOG_WARN("fail to push back server", KR(ret), K(replica));
+      } else if (replica.is_logonly_replica()) {
+        // skip logonly replicas
+      } else if (OB_FAIL(member_list_without_logonly.push_back(replica.get_server()))) {
+        LOG_WARN("fail to push back server", KR(ret), K(replica));
+      }
+    }
   }
   return ret;
 }
 
 int ObTenantTransferService::check_replay_scn_in_member_list_(
     const ObLSID &ls_id,
-    const ObLSReplica::MemberList &ls_member_list,
+    const MemberAddrs &ls_member_list,
     bool &check_pass)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObAddr> member_addrs;
   check_pass = false;
   ObTimeoutCtx timeout_ctx;
   storage::ObFetchLSReplayScnProxy batch_rpc_proxy(
@@ -678,21 +655,19 @@ int ObTenantTransferService::check_replay_scn_in_member_list_(
     LOG_WARN("invalid args", K(ret), K(tenant_id_), K(ls_id), K(ls_member_list));
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.rpc_timeout))) {
     LOG_WARN("set default timeout ctx failed", KR(ret));
-  } else if (OB_FAIL(ObLSReplica::member_list2addrs(ls_member_list, member_addrs))) {
-    LOG_WARN("member list2addrs failed", KR(ret), K(ls_member_list), K(member_addrs));
   } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(
       tenant_id_,
       share::OBCG_TRANSFER/*group_id*/,
       timeout_ctx.get_timeout(),
-      member_addrs))) {
-    LOG_WARN("failed to set ha async arg", KR(ret), K(tenant_id_), K(timeout_ctx), K(member_addrs));
+      ls_member_list))) {
+    LOG_WARN("failed to set ha async arg", KR(ret), K(tenant_id_), K(timeout_ctx), K(ls_member_list));
   } else if (FALSE_IT(arg.tenant_id_ = tenant_id_)) {
   } else if (FALSE_IT(arg.ls_id_ = ls_id)) {
   } else if (OB_FAIL(ObHAAsyncRpc::send_async_rpc(async_rpc_arg, arg, batch_rpc_proxy, responses))) {
     LOG_WARN("failed to send async rpc", KR(ret), K(async_rpc_arg), K(arg));
   } else if (OB_UNLIKELY(responses.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("responses is empty", KR(ret), K(tenant_id_), K(ls_id), K(member_addrs), K(responses));
+    LOG_WARN("responses is empty", KR(ret), K(tenant_id_), K(ls_id), K(ls_member_list), K(responses));
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     // This threshold aligns with the implementation of storage layer.
@@ -708,8 +683,43 @@ int ObTenantTransferService::check_replay_scn_in_member_list_(
     }
     check_pass = max_scn.convert_to_ts() - min_scn.convert_to_ts() < threshold;
     if (!check_pass) {
-      LOG_WARN("unexpected replay scn", KR(ret), K(ls_id), K(member_addrs),
+      LOG_WARN("unexpected replay scn", KR(ret), K(ls_id), K(ls_member_list),
           K(responses), K(min_scn), K(max_scn), K(threshold));
+    }
+  }
+  return ret;
+}
+
+bool ObTenantTransferService::member_list_are_same_(
+    const MemberAddrs &src_member_list,
+    const MemberAddrs &dest_member_list)
+{
+  bool is_same = true;
+  if (src_member_list.count() != dest_member_list.count()) {
+    is_same = false;
+  } else {
+    ARRAY_FOREACH_X(src_member_list, idx, cnt, is_same) {
+      if (!common::has_exist_in_array(dest_member_list, src_member_list.at(idx))) {
+        is_same = false;
+      }
+    }
+  }
+  return is_same;
+}
+
+int ObTenantTransferService::check_all_servers_in_member_list_are_active_(
+    const MemberAddrs &member_list,
+    bool &all_active)
+{
+  int ret = OB_SUCCESS;
+  all_active = true;
+  ARRAY_FOREACH_X(member_list, idx, cnt, OB_SUCC(ret) && all_active) {
+    const ObAddr &server = member_list.at(idx);
+    if (OB_FAIL(SVR_TRACER.check_server_alive(server, all_active))) {
+      all_active = false;
+      LOG_WARN("check server alive failed", KR(ret), K(server), K(all_active), K(member_list));
+    } else if (!all_active) {
+      LOG_WARN("server in member_list is inactive", KR(ret), K(server), K(member_list));
     }
   }
   return ret;
