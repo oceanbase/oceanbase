@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_LS_RECOVERY_STAT_HANDLER
 
 #include "lib/ob_define.h"
+#include "lib/container/ob_array.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h" //ObGetLSReplayedScnProxy
 #include "share/ls/ob_ls_recovery_stat_operator.h" // ObLSRecoveryStatOperator
 #include "logservice/palf/palf_handle_impl.h"                  // PalfStat
@@ -110,6 +111,10 @@ private:
       const int64_t majority_cnt,
       const ObIArray<int> &return_code_array,
       const ObGetLSReplayedScnProxy &proxy,
+      share::SCN &majority_min_readable_scn);
+  int do_calc_majority_min_readable_scn_(
+      const int64_t majority_cnt,
+      ObArray<SCN> &readable_scn_list,
       share::SCN &majority_min_readable_scn);
 
   int construct_new_member_list_(

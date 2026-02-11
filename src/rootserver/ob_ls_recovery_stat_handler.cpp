@@ -20,6 +20,7 @@
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_ls_recovery_reportor.h" // ObLSRecoveryReportor
 #include "rootserver/ob_ls_service_helper.h"//ObLSServiceHelper
+#include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
 
 namespace oceanbase
 {
@@ -490,15 +491,64 @@ int ObLSRecoveryStatHandler::calc_majority_min_readable_scn_(
     } else if (readable_scn_list.count() < majority_cnt) {
       ret = OB_EAGAIN;
       LOG_WARN("can not get majority readable_scn count", KR(ret), K(majority_cnt), K(readable_scn_list), K(return_code_array));
+    } else if (OB_FAIL(do_calc_majority_min_readable_scn_(majority_cnt, readable_scn_list, majority_min_readable_scn))) {
+      LOG_WARN("failed to calc majority readable_scn", KR(ret), K(majority_cnt), K(readable_scn_list));
     } else {
-      (void)std::sort(readable_scn_list.begin(), readable_scn_list.end(), std::greater<share::SCN>());
-      for (int64_t i = 0; OB_SUCC(ret) && i < readable_scn_list.count() && i < majority_cnt; ++i) {
-        if (majority_min_readable_scn > readable_scn_list.at(i)) {
-          majority_min_readable_scn = readable_scn_list.at(i);
-        }
-      }
       LOG_TRACE("calculate majority min readable_scn finished", KR(ret), K(leader_readable_scn),
           K(majority_min_readable_scn), K(readable_scn_list), K(majority_cnt), K(return_code_array));
+    }
+  }
+  return ret;
+}
+
+int ObLSRecoveryStatHandler::do_calc_majority_min_readable_scn_(
+    const int64_t majority_cnt,
+    ObArray<SCN> &readable_scn_list,
+    share::SCN &majority_min_readable_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("inner stat error", KR(ret), K_(is_inited));
+  } else if (majority_cnt <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(majority_cnt));
+  } else if (readable_scn_list.count() < majority_cnt) {
+    ret = OB_EAGAIN;
+    LOG_WARN("can not get majority readable_scn count", KR(ret), K(majority_cnt), K(readable_scn_list));
+  } else {
+    (void)std::sort(readable_scn_list.begin(), readable_scn_list.end(), std::greater<share::SCN>());
+    majority_min_readable_scn = SCN::max_scn();
+    for (int64_t i = 0; OB_SUCC(ret) && i < readable_scn_list.count() && i < majority_cnt; ++i) {
+      if (majority_min_readable_scn > readable_scn_list.at(i)) {
+        majority_min_readable_scn = readable_scn_list.at(i);
+      }
+    }
+
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (OB_FAIL(ret)) {
+    } else if (!tenant_config.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid tenant config guard", KR(ret), K(tenant_id_));
+    } else {
+      const bool calculate_all = tenant_config->_standby_readable_scn_all;
+      const int64_t stale_time = tenant_config->max_stale_time_for_weak_consistency.get_value();
+      const int64_t majority_readable_scn_ts = majority_min_readable_scn.convert_to_ts();
+      const int64_t readable_ts_low_bound = majority_readable_scn_ts - stale_time;
+      if (calculate_all) {
+        SCN all_replica_min_readable_scn = majority_min_readable_scn;
+        for (int64_t i = 0; OB_SUCC(ret) && i < readable_scn_list.count(); i++) {
+          const SCN replica_readable_scn = readable_scn_list.at(i);
+          if (all_replica_min_readable_scn > replica_readable_scn) {
+            const int64_t replica_readable_scn_ts = replica_readable_scn.convert_to_ts();
+            if (replica_readable_scn_ts > readable_ts_low_bound) {
+              all_replica_min_readable_scn = replica_readable_scn;
+            }
+          }
+        }
+        majority_min_readable_scn = all_replica_min_readable_scn;
+      }
+      LOG_TRACE("calculate majority min readable_scn finished", KR(ret), K(majority_min_readable_scn),
+          K(readable_scn_list), K(majority_cnt), K(calculate_all), K(readable_ts_low_bound));
     }
   }
   return ret;

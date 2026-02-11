@@ -3304,6 +3304,7 @@ int ObService::init_tenant_config(
   return OB_SUCCESS;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_GET_LOW_READABLE_SCN_ERROR);
 int ObService::get_ls_replayed_scn(
     const ObGetLSReplayedScnArg &arg,
     ObGetLSReplayedScnRes &result)
@@ -3337,7 +3338,13 @@ int ObService::get_ls_replayed_scn(
       LOG_WARN("log stream is null", KR(ret), K(arg), K(ls_handle));
     } else if (OB_FAIL(ls->get_max_decided_scn(cur_readable_scn))) {
       LOG_WARN("failed to get_max_decided_scn", KR(ret), K(arg), KPC(ls));
-    } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(), cur_readable_scn))) {
+    } else if (ERRSIM_GET_LOW_READABLE_SCN_ERROR) {
+      cur_readable_scn.convert_from_ts(cur_readable_scn.convert_to_ts()
+          - 1_s * abs(ERRSIM_GET_LOW_READABLE_SCN_ERROR));
+      LOG_WARN("set low readable_scn", KR(ret), K(cur_readable_scn), K(ObTimeUtility::current_time()),
+          K(ERRSIM_GET_LOW_READABLE_SCN_ERROR));
+    }
+    if (FAILEDx(result.init(arg.get_tenant_id(), arg.get_ls_id(), cur_readable_scn))) {
       LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn));
     } else {
       LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result));

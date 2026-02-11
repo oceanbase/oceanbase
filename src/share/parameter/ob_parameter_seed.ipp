@@ -1779,6 +1779,12 @@ DEF_TIME(_standby_max_replay_gap_time, OB_TENANT_PARAMETER, "900s", "[10s,)",
         "_standby_max_replay_gap_time, and the gap between sync_scn and replayable_scn of each log stream "
         "is kept reasonably small. Range: [10s, )",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_standby_readable_scn_all, OB_TENANT_PARAMETER, "False",
+    "Controls whether the readable SCN of log stream is calculated using all replicas. Can be 'True' or 'False'. "
+    "'False': set the log stream's readable SCN to the minimum readable SCN among a majority of replicas. "
+    "'True': set the log stream's readable SCN to the minimum readable SCN among all replicas that satisfy the constraint: "
+    "replica_readable_scn >= (majority_readable_scn - max_stale_time_for_weak_consistency).",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_preserve_order_for_pagination, OB_TENANT_PARAMETER, "False",
         "enable preserver order for limit",
