@@ -166,6 +166,9 @@ int ObMultipleMerge::init(
     if (access_ctx_->is_mview_query()) {
       access_param_->iter_param_.is_delete_insert_ = false;
     }
+    if (access_ctx_->query_flag_.is_reverse_scan()) {
+      access_param_->iter_param_.pd_storage_flag_.set_enable_inc_skip_index(false);
+    }
 
     access_param_->iter_param_.set_tablet_handle(get_table_param.tablet_iter_.get_tablet_handle_ptr());
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
@@ -210,6 +213,9 @@ int ObMultipleMerge::switch_param(
   access_ctx_ = &context;
   get_table_param_ = &get_table_param;
   access_param_->iter_param_.set_tablet_handle(get_table_param.tablet_iter_.get_tablet_handle_ptr());
+  if (access_ctx_->query_flag_.is_reverse_scan()) {
+    access_param_->iter_param_.pd_storage_flag_.set_enable_inc_skip_index(false);
+  }
 
   if (OB_FAIL(prepare_read_tables())) {
     STORAGE_LOG(WARN, "Failed to prepare read tables", K(ret), K(*this));
@@ -255,6 +261,9 @@ int ObMultipleMerge::switch_table(
     unprojected_row_.count_ = 0;
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
     const int64_t batch_size = access_param_->iter_param_.vectorized_enabled_ ? access_param_->get_op()->get_batch_size() : 1;
+    if (access_ctx_->query_flag_.is_reverse_scan()) {
+      access_param_->iter_param_.pd_storage_flag_.set_enable_inc_skip_index(false);
+    }
     if (OB_ISNULL(read_info)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected null read_info", K(ret));
