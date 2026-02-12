@@ -21,6 +21,7 @@
 #include "share/ob_define.h"
 #include "share/ob_errno.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include "rpc/obmysql/ob_mysql_global.h"
 
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
@@ -234,6 +235,8 @@ int ObDBMSSchedJobExecutor::create_session(
   } else {
     free_session_ctx.sessid_ = sid;
     free_session_ctx.proxy_sessid_ = proxy_sid;
+    free_session_ctx.tenant_id_ = tenant_id;
+    free_session_ctx.has_inc_active_num_ = true;
   }
   return ret;
 }
@@ -387,10 +390,14 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       }
     }
     if (OB_SUCC(ret)) {
+      int64_t current_time = ObTimeUtility::current_time();
       ObWorkerSessionGuard worker_session_guard(session_info);
       OZ (ObDBMSSchedJobExecutor::init_env(job_info, *session_info));
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
+      OX (session_info->set_current_trace_id(ObCurTraceId::get_trace_id()));
+      OX (session_info->set_session_active(what.string(), current_time, current_time, obmysql::COM_QUERY));
+      EVENT_INC(ACTIVE_SESSIONS);
       OZ (table_operator_.update_for_start_execute(tenant_id, job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
       if (OB_NOT_NULL(conn) && OB_NOT_NULL(session_info) && !is_ora_sys_user(session_info->get_user_id()) && !is_root_user(session_info->get_user_id())) {
