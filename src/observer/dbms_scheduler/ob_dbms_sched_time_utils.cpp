@@ -290,6 +290,32 @@ int ObDBMSSchedTimeUtil::resolve_repeat_interval(const ObString &repeat_interval
   return ret;
 }
 
+int ObDBMSSchedTimeUtil::freq_interval_to_ts(int64_t &repeat_interval_ts)
+{
+  int ret = OB_SUCCESS;
+  int64_t freq_num = 0;
+  if (SECONDLY == freq_type_) {
+    freq_num = 1;
+  } else if (MINUTELY == freq_type_) {
+    freq_num = 60;
+  } else if (HOURLY == freq_type_) {
+    freq_num = 60 * 60;
+  } else if (DAILY == freq_type_) {
+    freq_num = 24 * 60 * 60;
+  } else if (WEEKLY == freq_type_) {
+    freq_num = 7 * 24 * 60 * 60;
+  }
+
+  if (INT64_MAX < interval_num_ * freq_num * 1000000LL) { //溢出处理
+    repeat_interval_ts = 0;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("overflow", K(ret), K(interval_num_), K(freq_num));
+  } else {
+    repeat_interval_ts = interval_num_ * freq_num * 1000000LL;
+  }
+  return ret;
+}
+
 int ObDBMSSchedTimeUtil::calc_expr(int64_t start_date, int64_t &next_date, int64_t base_date, int64_t return_date_after)
 {
   int ret = OB_SUCCESS;
@@ -303,17 +329,56 @@ int ObDBMSSchedTimeUtil::calc_expr(int64_t start_date, int64_t &next_date, int64
   } else if (is_first_time_ && !has_by_clause_) {
     next_date = start_date;
   } else {
-    time_t start_time = (time_t)(start_date / 1000000LL);
-    time_t base_time = (time_t)(base_date / 1000000LL);
+    // 获取标准时区偏移（秒，东为正），使 gmtime 输出等效于本地标准时间
+    tzset();
+    long tz_offset = -timezone; // timezone 是"西偏秒数"，取反得到"东偏秒数"
+    time_t start_time = (time_t)(start_date / 1000000LL) + tz_offset;
+    time_t base_time = (time_t)(base_date / 1000000LL) + tz_offset;
     if (start_time > base_time) {
       is_first_time_ = true;
     }
     base_time = std::max(base_time, start_time);
-    time_t return_time_after = (time_t)(return_date_after / 1000000LL);
-    base_time_ = *localtime(&base_time);
-    next_time_ = *localtime(&base_time);
-    start_time_ = *localtime(&start_time);
-    return_time_after_ = *localtime(&return_time_after);
+    time_t return_time_after = (time_t)(return_date_after / 1000000LL) + tz_offset;
+    // base_time快进：跳过已确定不包含结果的完整周期，减少后续迭代次数
+    // 例如base=2025-03, return=2026-02, freq=monthly, interval=2: 快进到2026-01
+    if (base_time < return_time_after) {
+      if (MONTHLY == freq_type_ || YEARLY == freq_type_) {
+        struct tm base_tm;
+        gmtime_r(&base_time, &base_tm);
+        struct tm return_tm;
+        gmtime_r(&return_time_after, &return_tm);
+        if (MONTHLY == freq_type_) {
+          int total_months = (return_tm.tm_year - base_tm.tm_year) * 12
+                             + (return_tm.tm_mon - base_tm.tm_mon);
+          int skip_periods = total_months / interval_num_;
+          if (skip_periods > 0) {
+            base_tm.tm_mon += skip_periods * interval_num_;
+            base_time = timegm(&base_tm);
+          }
+        } else { // YEARLY
+          int total_years = return_tm.tm_year - base_tm.tm_year;
+          int skip_periods = total_years / interval_num_;
+          if (skip_periods > 0) {
+            base_tm.tm_year += skip_periods * interval_num_;
+            base_time = timegm(&base_tm);
+          }
+        }
+      } else {
+        // WEEKLY/DAILY/HOURLY/MINUTELY/SECONDLY
+        int64_t repeat_interval_ts = 0;
+        if (OB_SUCC(freq_interval_to_ts(repeat_interval_ts)) && repeat_interval_ts > 0) {
+          time_t period_secs = repeat_interval_ts / 1000000LL;
+          time_t skip_periods = (return_time_after - base_time) / period_secs;
+          if (skip_periods > 0) {
+            base_time += skip_periods * period_secs;
+          }
+        }
+      }
+    }
+    gmtime_r(&base_time, &base_time_);
+    gmtime_r(&base_time, &next_time_);
+    gmtime_r(&start_time, &start_time_);
+    gmtime_r(&return_time_after, &return_time_after_);
     switch (freq_type_) {
       case YEARLY: {
         if (interval_type_bitset_.has_member(BYYEARDAY) &&
@@ -356,8 +421,9 @@ int ObDBMSSchedTimeUtil::calc_expr(int64_t start_date, int64_t &next_date, int64
     }
 
     OX (
-      time_t seconds_since_epoch = mktime(&next_time_);
-      if (return_time_after > seconds_since_epoch) {
+      time_t seconds_since_epoch = timegm(&next_time_) - tz_offset; // 反偏移回真实 UTC
+      time_t real_return_time_after = (time_t)(return_date_after / 1000000LL); // 用原始未偏移的值比较
+      if (real_return_time_after > seconds_since_epoch) {
         next_date = ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE;
       } else {
         next_date = static_cast<int64_t>(seconds_since_epoch) * 1000000LL;
@@ -372,16 +438,16 @@ int ObDBMSSchedTimeUtil::calc_expr(int64_t start_date, int64_t &next_date, int64
 bool ObDBMSSchedTimeUtil::find_second()
 {
   bool found = false;
-  time_t find_time = mktime(&next_time_);
+  time_t find_time = timegm(&next_time_);
   int current_second = next_time_.tm_sec; // 当前秒 (0-59)
   for (int i = current_second; i < MAX_MINUTE_OR_SECOND && !found; i++) {
     // 检查当前秒是否在 second_bitset_ 中, 未指定则用start_time
     if ((!interval_type_bitset_.has_member(BYSECOND) && start_time_.tm_sec == i) || second_bitset_.has_member(i)) {
       next_time_.tm_sec = i;
-      find_time = mktime(&next_time_);
-      if (find_time > mktime(&return_time_after_)) {
+      find_time = timegm(&next_time_);
+      if (find_time > timegm(&return_time_after_)) {
         found = true;
-      } else if (is_first_time_ && (find_time == mktime(&return_time_after_))) {
+      } else if (is_first_time_ && (find_time == timegm(&return_time_after_))) {
         found = true;
       }
     }
@@ -392,14 +458,14 @@ bool ObDBMSSchedTimeUtil::find_second()
     next_time_.tm_min += 1;
   }
   // 修正溢出并规范化时间
-  find_time = mktime(&next_time_);
+  find_time = timegm(&next_time_);
   return found;
 }
 
 bool ObDBMSSchedTimeUtil::find_minute()
 {
   bool found = false;
-  time_t find_time = mktime(&next_time_);
+  time_t find_time = timegm(&next_time_);
   int current_minute = next_time_.tm_min; // 当前分钟 (0-59)
   for (int i = current_minute; i < MAX_MINUTE_OR_SECOND && !found; i++) {
     // 检查当前分钟是否在 minute_bitset_ 中, 未指定则用start_time
@@ -419,7 +485,7 @@ bool ObDBMSSchedTimeUtil::find_minute()
     next_time_.tm_hour += 1;
   }
   // 修正溢出并规范化时间
-  find_time = mktime(&next_time_);
+  find_time = timegm(&next_time_);
   return found;
 }
 
@@ -427,7 +493,7 @@ bool ObDBMSSchedTimeUtil::find_minute()
 bool ObDBMSSchedTimeUtil::find_hour()
 {
   bool found = false;
-  time_t find_time = mktime(&next_time_);
+  time_t find_time = timegm(&next_time_);
   int current_hour = next_time_.tm_hour; // 当前小时 (0-23)
   for (int i = current_hour; i < MAX_HOUR && !found; i++) {
     // 检查当前小时是否在 hour_bitset_ 中, 未指定则用start_time
@@ -448,7 +514,7 @@ bool ObDBMSSchedTimeUtil::find_hour()
     next_time_.tm_mday += 1;
   }
   // 修正溢出并规范化时间
-  find_time = mktime(&next_time_);
+  find_time = timegm(&next_time_);
   return found;
 }
 
@@ -456,7 +522,7 @@ bool ObDBMSSchedTimeUtil::find_hour()
 bool ObDBMSSchedTimeUtil::find_day()
 {
   bool found = false;
-  time_t find_time = mktime(&next_time_);
+  time_t find_time = timegm(&next_time_);
   int cur_wday = (next_time_.tm_wday == 0 ? MAX_DAY : next_time_.tm_wday); //星期几 (1=Monday, ..., 7=Sunday)
   int start_wday = (start_time_.tm_wday == 0 ? MAX_DAY : start_time_.tm_wday);
   for (int i = cur_wday; i <= MAX_DAY && !found; i++) {
@@ -479,14 +545,14 @@ bool ObDBMSSchedTimeUtil::find_day()
     next_time_.tm_mday += MAX_DAY + 1 - cur_wday;
   }
   // 修正溢出并规范化时间
-  find_time = mktime(&next_time_);
+  find_time = timegm(&next_time_);
   return found;
 }
 
 bool ObDBMSSchedTimeUtil::find_month_day()
 {
   bool found = false;
-  time_t find_time = mktime(&next_time_);
+  time_t find_time = timegm(&next_time_);
   int current_year = next_time_.tm_year + 1900;
   int current_month = next_time_.tm_mon + 1; // 当前月 (1-12)
   int current_month_day = next_time_.tm_mday; // 当前日期 (1-31)
@@ -513,14 +579,14 @@ bool ObDBMSSchedTimeUtil::find_month_day()
     next_time_.tm_mon += 1;
   }
   // 修正溢出并规范化时间
-  find_time = mktime(&next_time_);
+  find_time = timegm(&next_time_);
   return found;
 }
 
 bool ObDBMSSchedTimeUtil::find_year_day()
 {
   bool found = false;
-  time_t find_time = mktime(&next_time_);
+  time_t find_time = timegm(&next_time_);
   int current_year = next_time_.tm_year + 1900;
   int current_year_max_day = 365;
   if ((current_year % 4 == 0 && current_year % 100 != 0) || (current_year % 400 == 0)) {
@@ -550,7 +616,7 @@ bool ObDBMSSchedTimeUtil::find_year_day()
     next_time_.tm_year += 1;
   }
   // 修正溢出并规范化时间
-  find_time = mktime(&next_time_);
+  find_time = timegm(&next_time_);
   return found;
 }
 
@@ -563,7 +629,7 @@ bool ObDBMSSchedTimeUtil::find_weekno()
 bool ObDBMSSchedTimeUtil::find_month()
 {
   bool found = false;
-  time_t find_time = mktime(&next_time_);
+  time_t find_time = timegm(&next_time_);
   int current_month = next_time_.tm_mon + 1; //转换为 1-12
   for (int i = current_month; i <= MAX_MONTH && !found; i++) {
     // 检查当前月份是否在 month_bitset_ 中, 未指定则用start_time
@@ -588,11 +654,11 @@ bool ObDBMSSchedTimeUtil::find_month()
     next_time_.tm_year += 1;
   }
   // 修正溢出并规范化时间
-  find_time = mktime(&next_time_);
+  find_time = timegm(&next_time_);
   return found;
 }
 
-bool ObDBMSSchedTimeUtil::should_continue_loop(int &loop_count, int &ret_code)
+bool ObDBMSSchedTimeUtil::should_continue_loop(int &loop_count, int &ret_code, time_t find_time)
 {
   bool ret = true;
   const int MAX_LOOP_COUNT = freq_type_ == SECONDLY ? 100000 : 10000;
@@ -601,6 +667,12 @@ bool ObDBMSSchedTimeUtil::should_continue_loop(int &loop_count, int &ret_code)
     ret = false;
     ret_code = OB_ERR_UNEXPECTED;
     LOG_ERROR("loop count exceeded limit", K(ret_code), K(loop_count), K(MAX_LOOP_COUNT));
+  } else if ((find_time == (time_t)(-1L) && errno ==EOVERFLOW)
+    || find_time < (time_t)(-43200L) //时间戳为0时对应UTC-12时区下的偏移值
+    || find_time >= (time_t)(ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE / 1000000LL)) {
+    ret = false;
+    ret_code = OB_ERR_UNEXPECTED;
+    LOG_ERROR("find time exceeded limit", K(ret_code), K(find_time));
   }
   return ret;
 }
@@ -610,10 +682,11 @@ int ObDBMSSchedTimeUtil::hand_yearly()
   int ret = OB_SUCCESS;
   bool found = false;
   int loop_count = 0;
-  time_t find_time = mktime(&next_time_);
-  struct tm old_next_time = *localtime(&find_time);
+  time_t find_time = timegm(&next_time_);
+  struct tm old_next_time;
+  gmtime_r(&find_time, &old_next_time);
   if (interval_type_bitset_.has_member(BYYEARDAY)) {
-    while (!found && find_time < (time_t)(ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE / 1000000LL) && should_continue_loop(loop_count, ret)) {
+    while (!found && should_continue_loop(loop_count, ret, find_time)) {
       found = find_year_day();
       if (found) {
         found = find_hour();
@@ -627,14 +700,14 @@ int ObDBMSSchedTimeUtil::hand_yearly()
       // 修正进位
       if (!found && next_time_.tm_year != old_next_time.tm_year) {
         next_time_.tm_year -= 1;
-        find_time = mktime(&next_time_);
+        find_time = timegm(&next_time_);
         next_time_.tm_year += interval_num_;
-        find_time = mktime(&next_time_);
-        old_next_time = *localtime(&find_time);
+        find_time = timegm(&next_time_);
+        gmtime_r(&find_time, &old_next_time);
       }
     }
   } else {
-    while (!found && find_time < (time_t)(ObDBMSSchedJobInfo::DEFAULT_MAX_END_DATE / 1000000LL) && should_continue_loop(loop_count, ret)) { // 未指定byyearday则按照bymonth
+    while (!found && should_continue_loop(loop_count, ret, find_time)) { // 未指定byyearday则按照bymonth
       found = find_month();
       if (found) {
         found = find_month_day();
@@ -651,10 +724,10 @@ int ObDBMSSchedTimeUtil::hand_yearly()
       // 修正进位
       if (!found && next_time_.tm_year != old_next_time.tm_year) {
         next_time_.tm_year -= 1;
-        find_time = mktime(&next_time_);
+        find_time = timegm(&next_time_);
         next_time_.tm_year += interval_num_;
-        find_time = mktime(&next_time_);
-        old_next_time = *localtime(&find_time);
+        find_time = timegm(&next_time_);
+        gmtime_r(&find_time, &old_next_time);
       }
     }
   }
@@ -669,9 +742,10 @@ int ObDBMSSchedTimeUtil::hand_monthly()
   int ret = OB_SUCCESS;
   bool found = false;
   int loop_count = 0;
-  time_t find_time = mktime(&next_time_);
-  struct tm old_next_time = *localtime(&find_time);
-  while (!found && should_continue_loop(loop_count, ret)) {
+  time_t find_time = timegm(&next_time_);
+  struct tm old_next_time;
+  gmtime_r(&find_time, &old_next_time);
+  while (!found && should_continue_loop(loop_count, ret, find_time)) {
     found = find_month_day();
     if (found) {
       found = find_hour();
@@ -685,10 +759,10 @@ int ObDBMSSchedTimeUtil::hand_monthly()
     // 修正进位
     if (!found && next_time_.tm_mon != old_next_time.tm_mon) {
       next_time_.tm_mon -= 1;
-      find_time = mktime(&next_time_);
+      find_time = timegm(&next_time_);
       next_time_.tm_mon += interval_num_;
-      find_time = mktime(&next_time_);
-      old_next_time = *localtime(&find_time);
+      find_time = timegm(&next_time_);
+      gmtime_r(&find_time, &old_next_time);
     }
   }
   return ret;
@@ -699,9 +773,10 @@ int ObDBMSSchedTimeUtil::hand_weekly()
   int ret = OB_SUCCESS;
   bool found = false;
   int loop_count = 0;
-  time_t find_time = mktime(&next_time_);
-  struct tm old_next_time = *localtime(&find_time);
-  while (!found && should_continue_loop(loop_count, ret)) {
+  time_t find_time = timegm(&next_time_);
+  struct tm old_next_time;
+  gmtime_r(&find_time, &old_next_time);
+  while (!found && should_continue_loop(loop_count, ret, find_time)) {
     found = find_day();
     if (found) {
       found = find_hour();
@@ -716,10 +791,10 @@ int ObDBMSSchedTimeUtil::hand_weekly()
     if (!found && next_time_.tm_mday != old_next_time.tm_mday && next_time_.tm_wday == 1) {
       int old_wday = (old_next_time.tm_wday == 0 ? MAX_DAY : old_next_time.tm_wday);
       next_time_.tm_mday -= MAX_DAY + 1 - old_wday;
-      find_time = mktime(&next_time_);
+      find_time = timegm(&next_time_);
       next_time_.tm_mday += MAX_DAY + 1 - old_wday + (interval_num_ - 1) * MAX_DAY;
-      find_time = mktime(&next_time_);
-      old_next_time = *localtime(&find_time);
+      find_time = timegm(&next_time_);
+      gmtime_r(&find_time, &old_next_time);
     }
   }
   return ret;
@@ -730,9 +805,10 @@ int ObDBMSSchedTimeUtil::hand_daily()
   int ret = OB_SUCCESS;
   bool found = false;
   int loop_count = 0;
-  time_t find_time = mktime(&next_time_);
-  struct tm old_next_time = *localtime(&find_time);
-  while (!found && should_continue_loop(loop_count, ret)) {
+  time_t find_time = timegm(&next_time_);
+  struct tm old_next_time;
+  gmtime_r(&find_time, &old_next_time);
+  while (!found && should_continue_loop(loop_count, ret, find_time)) {
     found = find_hour();
     if (found) {
       found = find_minute();
@@ -743,10 +819,10 @@ int ObDBMSSchedTimeUtil::hand_daily()
     // 修正进位
     if (!found && next_time_.tm_mday != old_next_time.tm_mday) {
       next_time_.tm_mday -= 1;
-      find_time = mktime(&next_time_);
+      find_time = timegm(&next_time_);
       next_time_.tm_mday = old_next_time.tm_mday + interval_num_;
-      find_time = mktime(&next_time_);
-      old_next_time = *localtime(&find_time);
+      find_time = timegm(&next_time_);
+      gmtime_r(&find_time, &old_next_time);
     }
   }
   return ret;
@@ -757,9 +833,10 @@ int ObDBMSSchedTimeUtil::hand_hourly()
   int ret = OB_SUCCESS;
   bool found = false;
   int loop_count = 0;
-  time_t find_time = mktime(&next_time_);
-  struct tm old_next_time = *localtime(&find_time);
-  while (!found && should_continue_loop(loop_count, ret)) {
+  time_t find_time = timegm(&next_time_);
+  struct tm old_next_time;
+  gmtime_r(&find_time, &old_next_time);
+  while (!found && should_continue_loop(loop_count, ret, find_time)) {
     found = find_minute();
     if (found) {
       found = find_second();
@@ -767,10 +844,10 @@ int ObDBMSSchedTimeUtil::hand_hourly()
     // 修正进位
     if (!found && next_time_.tm_hour != old_next_time.tm_hour) {
       next_time_.tm_hour -= 1;
-      find_time = mktime(&next_time_);
+      find_time = timegm(&next_time_);
       next_time_.tm_hour = old_next_time.tm_hour + interval_num_;
-      find_time = mktime(&next_time_);
-      old_next_time = *localtime(&find_time);
+      find_time = timegm(&next_time_);
+      gmtime_r(&find_time, &old_next_time);
     }
   }
   return ret;
@@ -781,17 +858,18 @@ int ObDBMSSchedTimeUtil::hand_minutely()
   int ret = OB_SUCCESS;
   bool found = false;
   int loop_count = 0;
-  time_t find_time = mktime(&next_time_);
-  struct tm old_next_time = *localtime(&find_time);
-  while (!found && should_continue_loop(loop_count, ret)) {
+  time_t find_time = timegm(&next_time_);
+  struct tm old_next_time;
+  gmtime_r(&find_time, &old_next_time);
+  while (!found && should_continue_loop(loop_count, ret, find_time)) {
     found = find_second();
     // 修正进位
     if (!found && next_time_.tm_min != old_next_time.tm_min) {
       next_time_.tm_min -= 1;
-      find_time = mktime(&next_time_);
+      find_time = timegm(&next_time_);
       next_time_.tm_min = old_next_time.tm_min + interval_num_;
-      find_time = mktime(&next_time_);
-      old_next_time = *localtime(&find_time);
+      find_time = timegm(&next_time_);
+      gmtime_r(&find_time, &old_next_time);
     }
   }
   return ret;
@@ -802,10 +880,10 @@ int ObDBMSSchedTimeUtil::hand_secondly()
 {
   int ret = OB_SUCCESS;
   int loop_count = 0;
-  time_t find_time = mktime(&next_time_);
-  while (find_time <= mktime(&return_time_after_) && should_continue_loop(loop_count, ret)) {
+  time_t find_time = timegm(&next_time_);
+  while (find_time <= timegm(&return_time_after_) && should_continue_loop(loop_count, ret, find_time)) {
     next_time_.tm_sec += interval_num_;
-    find_time = mktime(&next_time_);
+    find_time = timegm(&next_time_);
   }
   return ret;
 }
