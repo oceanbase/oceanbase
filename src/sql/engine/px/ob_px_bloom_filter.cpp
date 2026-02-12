@@ -86,7 +86,7 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t 
     bits_array_length_ = ceil((double)bits_count_ / 64);
     fit_l3_cache_ = bits_array_length_ * sizeof(int64_t) < get_level3_cache_size();
     void *bits_array_buf = NULL;
-    bool simd_support = blocksstable::is_avx512_valid();
+    bool simd_support = common::is_arch_supported(ObTargetArch::AVX512);
     might_contain_ = simd_support ? &ObPxBloomFilter::might_contain_simd
                      : &ObPxBloomFilter::might_contain_nonsimd;
     if (OB_ISNULL(bits_array_buf = allocator.alloc(
@@ -527,7 +527,7 @@ OB_DEF_DESERIALIZE(ObPxBloomFilter)
     }
     if (OB_SUCC(ret)) {
       bits_array_ = bits_array;
-      might_contain_ = blocksstable::is_avx512_valid() ? &ObPxBloomFilter::might_contain_simd
+      might_contain_ = common::is_arch_supported(ObTargetArch::AVX512) ? &ObPxBloomFilter::might_contain_simd
                        : &ObPxBloomFilter::might_contain_nonsimd;
     }
   }

@@ -2448,7 +2448,7 @@ extern void mark_filtered_datums_simd(const ObDatum *datums,
 
 MarkFilterdDatumsFunc get_mark_filterd_datums_func()
 {
-  return blocksstable::is_avx512_valid()
+  return common::is_arch_supported(ObTargetArch::AVX512)
       ? mark_filtered_datums_simd
       : mark_filtered_datums;
 }
