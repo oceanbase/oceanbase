@@ -2454,7 +2454,7 @@ int ObMultiTenant::get_tenant_with_tenant_lock(
       // assign tenant when get rdlock succ
       tenant = tenant_tmp;
     }
-    if (OB_UNLIKELY(tenant_tmp->has_stopped())) {
+    if (OB_UNLIKELY(tenant_tmp->has_stopped() && REACH_TIME_INTERVAL(1 * 1000 * 1000L))) {
       LOG_WARN("get rdlock when tenant has stopped", K(tenant_id), K(lbt()));
     }
   }
@@ -2480,7 +2480,7 @@ int ObMultiTenant::get_active_tenant_with_tenant_lock(
       // assign tenant when get rdlock succ
       tenant = tenant_tmp;
     }
-    if (OB_UNLIKELY(tenant_tmp->has_stopped())) {
+    if (OB_UNLIKELY(tenant_tmp->has_stopped() && REACH_TIME_INTERVAL(1 * 1000 * 1000L))) {
       LOG_WARN("get rdlock when tenant has stopped", K(tenant_id), K(lbt()));
     }
   }
