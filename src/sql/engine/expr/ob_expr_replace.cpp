@@ -53,7 +53,10 @@
       LOG_WARN("failed to get string data:to_vec", K(ret), K(expr.args_[2]->datum_meta_)); \
     } \
   } \
-  INIT_SEARCHER; \
+  if (common::is_arch_supported(ObTargetArch::AVX2)) { \
+    INIT_SEARCHER; \
+  } \
+  \
   if (OB_SUCC(ret)) { \
     should_preserve_text_when_empty_from = (is_enable && COMPAT_MYSQL57 == compat_type && from_val.empty()); \
   } \
