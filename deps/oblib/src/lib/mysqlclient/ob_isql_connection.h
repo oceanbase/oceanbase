@@ -196,7 +196,7 @@ public:
   // dblink
   virtual ObCommonServerConnectionPool *get_common_server_pool() = 0;
   void set_dblink_id(uint64_t dblink_id) { dblink_id_ = dblink_id; }
-  uint64_t get_dblink_id() { return dblink_id_; }
+  uint64_t get_dblink_id() const { return dblink_id_; }
   void set_sessid(uint32_t sessid) { sessid_ = sessid; }
   uint32_t get_sessid() { return sessid_; }
   void set_dblink_driver_proto(DblinkDriverProto dblink_driver_proto) { dblink_driver_proto_ = dblink_driver_proto; }
