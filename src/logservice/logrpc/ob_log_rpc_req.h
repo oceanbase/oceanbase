@@ -25,6 +25,11 @@ namespace oceanbase
 namespace logservice
 {
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+enum class LSReplicaReplayReachingStatus;
+struct LSReplicaReplayReachingMachine;
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+
 enum LogConfigChangeCmdType {
   INVALID_CONFIG_CHANGE_CMD = 0,
   CHANGE_REPLICA_NUM_CMD,
@@ -332,6 +337,67 @@ public:
   share::ObLSID ls_id_;
   palf::LSN base_lsn_;
 };
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+struct LSReplicaReplayReachingMachineWrapper {
+public:
+  OB_UNIS_VERSION(1);
+public:
+  LSReplicaReplayReachingMachineWrapper();
+  explicit LSReplicaReplayReachingMachineWrapper(const LSReplicaReplayReachingMachine &machine);
+  LSReplicaReplayReachingMachine unwrap() const;
+  ~LSReplicaReplayReachingMachineWrapper();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(ls_id), K_(status), K_(last_reach_to_sync_scn), K_(is_active_follower),
+      K_(max_replayed_scn), K_(min_unreplayed_lsn), K_(election_leader), K_(proposal_id));
+public:
+  share::ObLSID ls_id_;
+  LSReplicaReplayReachingStatus status_;
+  share::SCN last_reach_to_sync_scn_;
+  bool is_active_follower_;
+  share::SCN max_replayed_scn_;
+  palf::LSN min_unreplayed_lsn_;
+  ObAddr election_leader_;
+  int64_t proposal_id_;
+};
+
+struct LogFollowerReportReplayReachingMachineReq {
+public:
+  OB_UNIS_VERSION(1);
+public:
+  LogFollowerReportReplayReachingMachineReq();
+  LogFollowerReportReplayReachingMachineReq(const common::ObAddr &src,
+                                            const share::ObLSID &ls_id,
+                                            const LSReplicaReplayReachingMachine &replay_reaching_machine);
+  ~LogFollowerReportReplayReachingMachineReq();
+  bool is_valid() const;
+  void reset();
+  LSReplicaReplayReachingMachine to_machine() const;
+  TO_STRING_KV(K_(src), K_(ls_id), K_(replay_reaching_machine));
+public:
+  common::ObAddr src_;
+  share::ObLSID ls_id_;
+  LSReplicaReplayReachingMachineWrapper replay_reaching_machine_;
+};
+
+struct LogNotifyFollowerMoveOutFromRTOGroupResp {
+  OB_UNIS_VERSION(1);
+public:
+  LogNotifyFollowerMoveOutFromRTOGroupResp();
+  LogNotifyFollowerMoveOutFromRTOGroupResp(const common::ObAddr &src,
+                                           const share::ObLSID &ls_id,
+                                           const share::SCN &replica_last_reach_to_sync_scn);
+  ~LogNotifyFollowerMoveOutFromRTOGroupResp();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(src), K_(ls_id), K_(replica_last_reach_to_sync_scn));
+public:
+  common::ObAddr src_;
+  share::ObLSID ls_id_;
+  share::SCN replica_last_reach_to_sync_scn_;
+};
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 
 } // end namespace logservice
 }// end namespace oceanbase

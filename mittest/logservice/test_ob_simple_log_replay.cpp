@@ -129,7 +129,7 @@ TEST_F(TestObSimpleLogReplayFunc, basic_replay)
   ObReplayStatus *rp_st = NULL;
   PalfEnv *palf_env;
   EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
-  rp_sv.init(palf_env, &ls_adapter, get_cluster()[0]->get_allocator());
+  rp_sv.init(palf_env, NULL, &ls_adapter, get_cluster()[0]->get_allocator());
   rp_sv.start();
   get_cluster()[0]->get_tenant_base()->update_thread_cnt(10);
   EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id));
@@ -229,7 +229,7 @@ TEST_F(TestObSimpleLogReplayFunc, test_flashback_to_padding)
   ObReplayStatus *rp_st = NULL;
   PalfEnv *palf_env;
   EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
-  rp_sv.init(palf_env, &ls_adapter, get_cluster()[0]->get_allocator());
+  rp_sv.init(palf_env, NULL, &ls_adapter, get_cluster()[0]->get_allocator());
   rp_sv.start();
   get_cluster()[0]->get_tenant_base()->update_thread_cnt(10);
   LSN iterator_end_lsn(0);
@@ -381,7 +381,7 @@ TEST_F(TestObSimpleLogReplayFunc, test_wait_replay_done)
   ObReplayStatus *rp_st = NULL;
   PalfEnv *palf_env;
   EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
-  rp_sv.init(palf_env, &ls_adapter, get_cluster()[0]->get_allocator());
+  rp_sv.init(palf_env, NULL, &ls_adapter, get_cluster()[0]->get_allocator());
   rp_sv.start();
   get_cluster()[0]->get_tenant_base()->update_thread_cnt(10);
   LSN iterator_end_lsn(0);
@@ -441,7 +441,7 @@ TEST_F(TestObSimpleLogReplayFunc, replay_big_log)
   ObReplayStatus *rp_st = NULL;
   PalfEnv *palf_env;
   EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx, palf_env));
-  rp_sv.init(palf_env, &ls_adapter, get_cluster()[0]->get_allocator());
+  rp_sv.init(palf_env, NULL, &ls_adapter, get_cluster()[0]->get_allocator());
   rp_sv.start();
   get_cluster()[0]->get_tenant_base()->update_thread_cnt(10);
   EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id));

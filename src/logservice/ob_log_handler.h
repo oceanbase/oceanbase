@@ -33,7 +33,10 @@
 
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "close_modules/shared_log_service/logservice/libpalf/libpalf_proposer_config_mgr.h"
-#endif
+#include "logservice/replayservice/ob_log_replay_reporter.h"
+#include "logservice/ob_log_submit_log_rate_limiter.h"
+#include "logservice/logrpc/ob_log_rpc_proxy.h"
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 
 namespace oceanbase
 {
@@ -229,6 +232,9 @@ public:
            ObRoleChangeService *rc_service,
            ipalf::IPalfEnv *palf_env,
            palf::PalfLocationCacheCb *lc_cb,
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+           ObLogLSSubmitLogRateLimiter *shared_log_submit_log_rate_limiter,
+#endif // OB_BUILD_SHARED_LOG_SERVICE
            obrpc::ObLogServiceRpcProxy *rpc_proxy,
            common::ObILogAllocator *alloc_mgr);
   bool is_valid() const;
@@ -870,16 +876,6 @@ public:
       const LogConfigChangeCmd &req,
       LogConfigChangeCmdResp &resp);
   int stat(palf::PalfStat &palf_stat) const;
-#ifdef OB_BUILD_SHARED_LOG_SERVICE
-  void refresh_proposer_member_info() const;
-  // @brief: whether election is allowed with ignoring proposer list.
-  // @return:
-  // OB_NOT_INIT: not inited
-  // OB_NOT_RUNNING: in stop state
-  // OB_ERR_UNEXPECTED: ffi is null
-  // OB_INVALID_ARGUMENT: ffi is invalid
-  int set_allow_election_without_memlist(const bool allow_election_without_memlist);
-#endif
   template<typename StartPoint, typename IteratorType>
   friend int init_log_iterator(
     ObLogHandler *log_handler,
@@ -941,10 +937,22 @@ private:
   ObLogCompressorWrapper compressor_wrapper_;
 #endif
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
+public:
+  void refresh_proposer_member_info() const;
+  // @brief: whether election is allowed with ignoring proposer list.
+  // @return:
+  // OB_NOT_INIT: not inited
+  // OB_NOT_RUNNING: in stop state
+  // OB_ERR_UNEXPECTED: ffi is null
+  // OB_INVALID_ARGUMENT: ffi is invalid
+  int set_allow_election_without_memlist(const bool allow_election_without_memlist);
+  int report_replica_replay_process(const common::ObAddr &replica, const share::ObLSID &ls_id, const LSReplicaReplayReachingMachine &replay_reaching_machine);
+private:
   libpalf::LibPalfProposerConfigMgr libpalf_proposer_config_mgr_;
-#endif
-  mutable int64_t get_max_decided_scn_debug_time_;
-  mutable SCN max_decided_scn_snapshot_;
+  ObLogLSSubmitLogRateLimiter *shared_log_submit_log_rate_limiter_;
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+mutable int64_t get_max_decided_scn_debug_time_;
+mutable SCN max_decided_scn_snapshot_;
 };
 
 struct ObLogStat

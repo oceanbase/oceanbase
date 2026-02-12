@@ -93,6 +93,9 @@ ObLogRestoreHandler::ObLogRestoreHandler() :
   last_delay_count_(0),
   cur_stat_info_(),
   last_stat_info_()
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  , shared_log_submit_log_rate_limiter_(NULL)
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 {}
 
 ObLogRestoreHandler::~ObLogRestoreHandler()
@@ -100,17 +103,32 @@ ObLogRestoreHandler::~ObLogRestoreHandler()
   destroy();
 }
 
-int ObLogRestoreHandler::init(const int64_t id, ipalf::IPalfEnv *palf_env)
+int ObLogRestoreHandler::init(const int64_t id, ipalf::IPalfEnv *palf_env
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+                               , ObLogLSSubmitLogRateLimiter *shared_log_submit_log_rate_limiter
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+                               )
 {
   int ret = OB_SUCCESS;
   ipalf::IPalfHandle *palf_handle = NULL;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
-  } else if (NULL == palf_env) {
+  } else if (NULL == palf_env
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+             || (GCONF.enable_logservice && OB_ISNULL(shared_log_submit_log_rate_limiter))
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+             ) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid arguments", K(ret), KP(palf_env));
+    CLOG_LOG(WARN, "invalid arguments", K(ret), KP(palf_env)
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+             , KP(shared_log_submit_log_rate_limiter)
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+             );
   } else if (OB_FAIL(palf_env->open(id, palf_handle))) {
     CLOG_LOG(WARN, "get palf_handle failed", K(ret), K(id));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (GCONF.enable_logservice && FALSE_IT(shared_log_submit_log_rate_limiter_ = shared_log_submit_log_rate_limiter)) {
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   } else {
     id_ = id;
     palf_handle_ = palf_handle;
@@ -136,6 +154,11 @@ int ObLogRestoreHandler::stop()
   WLockGuard guard(lock_);
   if (IS_INIT) {
     is_in_stop_state_ = true;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    if (OB_NOT_NULL(shared_log_submit_log_rate_limiter_)) {
+      shared_log_submit_log_rate_limiter_ = nullptr;
+    }
+#endif // OB_BUILD_SHARED_LOG_SERVICE
     if (OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
       palf_env_->close(palf_handle_);
     }
@@ -150,6 +173,11 @@ void ObLogRestoreHandler::destroy()
   if (IS_INIT) {
     is_in_stop_state_ = true;
     is_inited_ = false;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    if (OB_NOT_NULL(shared_log_submit_log_rate_limiter_)) {
+      shared_log_submit_log_rate_limiter_ = nullptr;
+    }
+#endif // OB_BUILD_SHARED_LOG_SERVICE
     if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
       palf_env_->close(palf_handle_);
     }
@@ -380,6 +408,14 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
       } else if (NULL == parent_ || restore_to_end_unlock_()) {
         ret = OB_RESTORE_LOG_TO_END;
         CLOG_LOG(INFO, "submit log to end, just skip", K(ret), K(lsn), KPC(this));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+      } else if (enable_logservice_ && OB_FAIL(shared_log_submit_log_rate_limiter_->try_acquire(buf_size, scn.get_val_for_logservice() / 1000, buf_size))) {
+        if (OB_EAGAIN == ret && REACH_TIME_INTERVAL(1*1000*1000)) {
+          CLOG_LOG(WARN, "[RTO.REPLAY] try_acquire failed, rate limit exceeded", KR(ret), KPC(this), K(scn));
+        } else if (OB_EAGAIN != ret) {
+          CLOG_LOG(WARN, "try_acquire failed", KR(ret), KPC(this), K(scn));
+        }
+#endif // OB_BUILD_SHARED_LOG_SERVICE
       } else {
         opts.proposal_id = proposal_id_;
         // errsim fake error

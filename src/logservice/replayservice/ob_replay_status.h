@@ -534,6 +534,15 @@ public:
                          int64_t &unsubmitted_log_size,
                          int64_t &replayed_log_size,
                          int64_t &unreplayed_log_size);
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int get_replay_process(share::SCN &max_replayed_scn,
+                         palf::LSN &min_unreplayed_lsn,
+                         ObRole &role,
+                         int64_t &proposal_id,
+                         ObAddr &election_leader,
+                         bool &is_active_follower,
+                         bool &is_in_sync);
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   //提交日志检查barrier状态
   int check_submit_barrier();
   //回放日志检查barrier状态

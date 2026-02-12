@@ -2611,6 +2611,9 @@ DEF_STR_WITH_CHECKER(_ss_local_cache_evict_old_sstable_policy, OB_TENANT_PARAMET
         "MAJOR_SSTABLE: evict old major sstable data.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "OFF, MAJOR_SSTABLE");
+DEF_BOOL(_enable_ss_log_submit_rate_limit, OB_TENANT_PARAMETER, "True",
+         "Control whether enable log submit rate limit in shared storage mode",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // obkv feature switch
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",

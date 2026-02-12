@@ -32,6 +32,7 @@
 #endif
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "logservice/ob_log_service_garbage_collector.h"
+#include "logservice/ob_log_submit_log_rate_limiter.h"
 #endif
 #include "ob_reporter_adapter.h"
 #include "ob_ls_adapter.h"
@@ -301,6 +302,7 @@ private:
   SharedGarbageCollector shared_gc_;
   // for logservice mode, cache configured log disk size to make get_palf_stable_disk_usage() work as shared nothing mode
   int64_t configured_log_disk_size_;
+  ObLogSSRTOKeeper shared_log_rto_keeper_;
 #endif
   ObLocalityAdapter locality_adapter_;
 private:

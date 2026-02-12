@@ -27,90 +27,52 @@ using namespace storage;
 namespace logservice
 {
 //---------------ReplayProcessStat---------------//
-ReplayProcessStat::ReplayProcessStat()
-  : last_replayed_log_size_(-1),
+ReplayProcessStat::ReplayProcessStat() :
+    is_inited_(false),
+    last_dump_replay_process_ts_us_(common::OB_INVALID_TIMESTAMP),
+    last_replayed_log_size_(-1),
     last_submitted_log_size_(-1),
-    rp_sv_(NULL),
-    tg_id_(-1),
-    is_inited_(false)
+    rp_sv_(NULL)
   {}
 
 ReplayProcessStat::~ReplayProcessStat()
 {
-  last_replayed_log_size_ = -1;
-  last_submitted_log_size_ = -1;
-  rp_sv_ = NULL;
-  tg_id_ = -1;
-  is_inited_ = false;
+  destroy();
 }
 
 int ReplayProcessStat::init(ObLogReplayService *rp_sv)
 {
   int ret = OB_SUCCESS;
-  int tg_id = lib::TGDefIDs::ReplayProcessStat;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "ReplayProcessStat init twice", K(ret));
   } else if (NULL == rp_sv) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "rp_sv is NULL", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(tg_id, tg_id_))) {
-    CLOG_LOG(ERROR, "ReplayProcessStat create failed", K(ret));
   } else {
+    last_dump_replay_process_ts_us_ = common::OB_INVALID_TIMESTAMP;
     last_replayed_log_size_ = -1;
+    last_submitted_log_size_ = -1;
     rp_sv_ = rp_sv;
-    CLOG_LOG(INFO, "ReplayProcessStat init success", K(rp_sv_), K(tg_id_), K(tg_id));
     is_inited_ = true;
+    CLOG_LOG(INFO, "ReplayProcessStat init success", K(rp_sv));
   }
   return ret;
-}
-
-int ReplayProcessStat::start()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(TG_START(tg_id_))) {
-    CLOG_LOG(WARN, "ReplayProcessStat TG_START failed", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, *this, SCAN_TIMER_INTERVAL, true))) {
-    CLOG_LOG(WARN, "ReplayProcessStat TG_SCHEDULE failed", K(ret));
-  } else {
-    CLOG_LOG(INFO, "ReplayProcessStat start success", K(tg_id_), K(rp_sv_));
-  }
-  return ret;
-}
-
-void ReplayProcessStat::stop()
-{
-  if (IS_INIT) {
-    TG_STOP(tg_id_);
-    CLOG_LOG(INFO, "ReplayProcessStat stop finished", K(tg_id_), K(rp_sv_));
-  }
-}
-
-void ReplayProcessStat::wait()
-{
-  if (IS_INIT) {
-    TG_WAIT(tg_id_);
-    CLOG_LOG(INFO, "ReplayProcessStat wait finished", K(tg_id_), K(rp_sv_));
-  }
 }
 
 void ReplayProcessStat::destroy()
 {
   if (IS_INIT) {
-    CLOG_LOG(INFO, "ReplayProcessStat destroy finished", K(tg_id_), K(rp_sv_));
     is_inited_ = false;
-    if (-1 != tg_id_) {
-      TG_DESTROY(tg_id_);
-      tg_id_ = -1;
-    }
     rp_sv_ = NULL;
+    last_dump_replay_process_ts_us_ = common::OB_INVALID_TIMESTAMP;
     last_replayed_log_size_ = -1;
+    last_submitted_log_size_ = -1;
+    CLOG_LOG(INFO, "ReplayProcessStat destroy finished", K(rp_sv_));
   }
 }
 
-void ReplayProcessStat::runTimerTask()
+void ReplayProcessStat::run()
 {
   int ret = OB_SUCCESS;
   int64_t submitted_log_size = 0;
@@ -118,7 +80,9 @@ void ReplayProcessStat::runTimerTask()
   int64_t replayed_log_size = 0;
   int64_t unreplayed_log_size = 0;
   int64_t estimate_time = 0;
-  if (NULL == rp_sv_) {
+  if (!palf_reach_time_interval(DUMP_REPLAY_PROCESS_INTERVAL, last_dump_replay_process_ts_us_)) {
+    //do nothing
+  } else if (NULL == rp_sv_) {
     CLOG_LOG(ERROR, "rp_sv_ is NULL, unexpected error");
   } else if (OB_FAIL(rp_sv_->stat_all_ls_replay_process(submitted_log_size, unsubmitted_log_size,
                                                         replayed_log_size, unreplayed_log_size))) {
@@ -132,7 +96,7 @@ void ReplayProcessStat::runTimerTask()
     CLOG_LOG(TRACE, "initial last_replayed_log_size_", K(ret), K(last_replayed_log_size_));
   } else {
     constexpr int64_t MB = 1024 * 1024;
-    int64_t round_cost_time = SCAN_TIMER_INTERVAL / 1000 / 1000; //second
+    int64_t round_cost_time = DUMP_REPLAY_PROCESS_INTERVAL / 1000 / 1000; //second
     int64_t last_submitted_log_size_MB = last_submitted_log_size_/MB;
     int64_t last_replayed_log_size_MB = last_replayed_log_size_/MB;
     int64_t submitted_log_size_MB = submitted_log_size/MB;
@@ -176,12 +140,268 @@ void ReplayProcessStat::runTimerTask()
   }
 }
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+//---------------ReplayProcessWatcherRunner---------------//
+ReplayProcessWatcherRunner::ReplayProcessWatcherRunner() :
+    is_inited_(false),
+    enable_logservice_(false),
+    rp_sv_(NULL),
+    replay_process_watcher_()
+  {}
+
+ReplayProcessWatcherRunner::~ReplayProcessWatcherRunner()
+{
+  destroy();
+}
+
+int ReplayProcessWatcherRunner::init(ObLogReplayService *rp_sv,
+                                     obrpc::ObLogServiceRpcProxy *rpc_proxy,
+                                     const bool enable_logservice)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    CLOG_LOG(WARN, "ReplayProcessWatcherRunner init twice", K(ret));
+  } else if (NULL == rp_sv) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "rp_sv is NULL", K(ret));
+  } else if (OB_ISNULL(rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "rpc_proxy is NULL", K(ret));
+  } else if (OB_FAIL(replay_process_watcher_.init(rpc_proxy))) {
+    CLOG_LOG(ERROR, "ReplayProcessWatcherRunner init failed", K(ret));
+  } else {
+    rp_sv_ = rp_sv;
+    enable_logservice_ = enable_logservice;
+    is_inited_ = true;
+    CLOG_LOG(INFO, "ReplayProcessWatcherRunner init success", K(rp_sv_), K(enable_logservice_));
+  }
+  return ret;
+}
+
+void ReplayProcessWatcherRunner::destroy()
+{
+  if (is_inited_) {
+    is_inited_ = false;
+    enable_logservice_ = false;
+    rp_sv_ = NULL;
+    replay_process_watcher_.destroy();
+    CLOG_LOG(INFO, "ReplayProcessWatcherRunner destroy finished");
+  }
+}
+
+void ReplayProcessWatcherRunner::run()
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ReplayProcessWatcherRunner not init", K(ret));
+  } else if (!enable_logservice_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "shared log service is not enabled", K(ret));
+  } else if (NULL == rp_sv_) {
+    CLOG_LOG(ERROR, "rp_sv_ is NULL, unexpected error");
+  } else if (OB_FAIL(rp_sv_->update_ls_replica_replay_reaching_machine(replay_process_watcher_))) {
+    CLOG_LOG(WARN, "update_ls_replica_replay_reaching_machine failed", K(ret));
+  } else if (OB_FAIL(replay_process_watcher_.report_replay_reaching_machine_status())) {
+    CLOG_LOG(WARN, "report_replay_reaching_machine_status failed", K(ret));
+  } else {
+    CLOG_LOG(INFO, "run_replay_process_watcher success", K(ret));
+  }
+}
+
+int ReplayProcessWatcherRunner::add_ls(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ReplayProcessWatcherRunner not init", K(ret));
+  } else if (!enable_logservice_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "shared log service is not enabled", K(ret));
+  } else if (OB_FAIL(replay_process_watcher_.add_ls(ls_id))) {
+    CLOG_LOG(ERROR, "add_ls failed", K(ret));
+  } else {
+    CLOG_LOG(INFO, "add_ls success", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ReplayProcessWatcherRunner::remove_ls(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ReplayProcessWatcherRunner not init", K(ret));
+  } else if (!enable_logservice_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "shared log service is not enabled", K(ret));
+  } else if (OB_FAIL(replay_process_watcher_.remove_ls(ls_id))) {
+    CLOG_LOG(ERROR, "remove_ls failed", K(ret));
+  } else {
+    CLOG_LOG(INFO, "remove_ls success", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ReplayProcessWatcherRunner::notify_follower_move_out_from_rto_group(const share::ObLSID &ls_id, const share::SCN &replica_last_reach_to_sync_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ReplayProcessWatcherRunner not init", K(ret));
+  } else if (!enable_logservice_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "shared log service is not enabled", K(ret));
+  } else {
+    ret = replay_process_watcher_.notify_follower_move_out_from_rto_group(ls_id, replica_last_reach_to_sync_scn);
+  }
+  return ret;
+}
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+
+//---------------ReplayBackgroundTask---------------//
+ReplayBackgroundTask::ReplayBackgroundTask() :
+    tg_id_(-1),
+    is_inited_(false),
+    enable_logservice_(GCONF.enable_logservice),
+    replay_process_stat_()
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    , replay_process_watcher_runner_()
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+  {}
+
+ReplayBackgroundTask::~ReplayBackgroundTask()
+{
+  destroy();
+}
+
+int ReplayBackgroundTask::init(ObLogReplayService *rp_sv, obrpc::ObLogServiceRpcProxy *rpc_proxy)
+{
+  int ret = OB_SUCCESS;
+  int tg_id = lib::TGDefIDs::ReplayProcessStat;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    CLOG_LOG(WARN, "ReplayBackgroundTask init twice", K(ret));
+  } else if (NULL == rp_sv) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "rp_sv is NULL", K(ret));
+  } else if (OB_FAIL(replay_process_stat_.init(rp_sv))) {
+    CLOG_LOG(ERROR, "ReplayProcessStat init failed", K(ret));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (enable_logservice_ && OB_ISNULL(rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "rpc_proxy is NULL when enable_logservice", K(ret));
+  } else if (enable_logservice_ && OB_FAIL(replay_process_watcher_runner_.init(rp_sv, rpc_proxy, enable_logservice_))) {
+    CLOG_LOG(ERROR, "ReplayProcessWatcherRunner init failed", K(ret));
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+  } else if (OB_FAIL(TG_CREATE_TENANT(tg_id, tg_id_))) {
+    CLOG_LOG(ERROR, "ReplayBackgroundTask create failed", K(ret));
+  } else {
+    is_inited_ = true;
+    CLOG_LOG(INFO, "ReplayBackgroundTask init success", K(tg_id_), K(tg_id), K(enable_logservice_));
+  }
+  return ret;
+}
+
+int ReplayBackgroundTask::start()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(TG_START(tg_id_))) {
+    CLOG_LOG(WARN, "ReplayBackgroundTask TG_START failed", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, *this, SCAN_TIMER_INTERVAL, true))) {
+    CLOG_LOG(WARN, "ReplayBackgroundTask TG_SCHEDULE failed", K(ret));
+  } else {
+    CLOG_LOG(INFO, "ReplayBackgroundTask start success", K(tg_id_));
+  }
+  return ret;
+}
+
+void ReplayBackgroundTask::stop()
+{
+  if (IS_INIT) {
+    TG_STOP(tg_id_);
+    CLOG_LOG(INFO, "ReplayBackgroundTask stop finished", K(tg_id_));
+  }
+}
+
+void ReplayBackgroundTask::wait()
+{
+  if (IS_INIT) {
+    TG_WAIT(tg_id_);
+    CLOG_LOG(INFO, "ReplayBackgroundTask wait finished", K(tg_id_));
+  }
+}
+
+void ReplayBackgroundTask::destroy()
+{
+  if (IS_INIT) {
+    is_inited_ = false;
+    if (-1 != tg_id_) {
+      TG_DESTROY(tg_id_);
+      tg_id_ = -1;
+    }
+    replay_process_stat_.destroy();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    replay_process_watcher_runner_.destroy();
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+    CLOG_LOG(INFO, "ReplayBackgroundTask destroy finished", K(tg_id_));
+  }
+}
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int ReplayBackgroundTask::add_ls(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ReplayBackgroundTask not init", K(ret));
+  } else if (OB_FAIL(replay_process_watcher_runner_.add_ls(ls_id))) {
+    CLOG_LOG(ERROR, "add_ls failed", K(ret));
+  } else {
+    CLOG_LOG(INFO, "add_ls success", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ReplayBackgroundTask::remove_ls(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ReplayBackgroundTask not init", K(ret));
+  } else if (OB_FAIL(replay_process_watcher_runner_.remove_ls(ls_id))) {
+    CLOG_LOG(ERROR, "remove_ls failed", K(ret));
+  } else {
+    CLOG_LOG(INFO, "remove_ls success", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ReplayBackgroundTask::notify_follower_move_out_from_rto_group(const share::ObLSID &ls_id, const share::SCN &replica_last_reach_to_sync_scn)
+{
+  return replay_process_watcher_runner_.notify_follower_move_out_from_rto_group(ls_id, replica_last_reach_to_sync_scn);
+}
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+
+void ReplayBackgroundTask::runTimerTask()
+{
+  replay_process_stat_.run();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (enable_logservice_) {
+    replay_process_watcher_runner_.run();
+  }
+#endif // OB_BUILD_SHARED_LOG_SERVICE
+}
+
 //---------------ObLogReplayService---------------//
 ObLogReplayService::ObLogReplayService()
   : is_inited_(false),
     is_running_(false),
     tg_id_(-1),
-    replay_stat_(),
+    replay_bg_task_(),
     ls_adapter_(NULL),
     palf_env_(NULL),
     allocator_(NULL),
@@ -198,6 +418,7 @@ ObLogReplayService::~ObLogReplayService()
 }
 
 int ObLogReplayService::init(ipalf::IPalfEnv *palf_env,
+                             obrpc::ObLogServiceRpcProxy *rpc_proxy,
                              ObLSAdapter *ls_adapter,
                              ObILogAllocator *allocator)
 {
@@ -210,18 +431,19 @@ int ObLogReplayService::init(ipalf::IPalfEnv *palf_env,
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "ObLogReplayService init twice", K(ret));
   } else if (OB_ISNULL(palf_env_ = palf_env)
+             || (GCONF.enable_logservice && OB_ISNULL(rpc_proxy))
              || OB_ISNULL(ls_adapter_ = ls_adapter)
              || OB_ISNULL(allocator_ = allocator)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), KP(palf_env), KP(ls_adapter), KP(allocator));
+    CLOG_LOG(WARN, "invalid argument", K(ret), KP(palf_env), KP(rpc_proxy), KP(ls_adapter), KP(allocator));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::ReplayService, tg_id_))) {
     CLOG_LOG(WARN, "fail to create thread group", K(ret));
   } else if (OB_FAIL(MTL_REGISTER_THREAD_DYNAMIC(thread_quota, tg_id_))) {
     CLOG_LOG(WARN, "MTL_REGISTER_THREAD_DYNAMIC failed", K(ret), K(tg_id_));
   } else if (OB_FAIL(replay_status_map_.init("REPLAY_STATUS", MAP_TENANT_ID))) {
     CLOG_LOG(WARN, "replay_status_map_ init error", K(ret));
-  } else if (OB_FAIL(replay_stat_.init(this))) {
-    CLOG_LOG(WARN, "replay_stat_ init error", K(ret));
+  } else if (OB_FAIL(replay_bg_task_.init(this, rpc_proxy))) {
+    CLOG_LOG(WARN, "replay_bg_task_ init error", K(ret));
   } else {
     replayable_point_ = SCN::min_scn();
     pending_replay_log_size_ = 0;
@@ -254,9 +476,9 @@ int ObLogReplayService::start()
   } else {
     is_running_ = true;
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = replay_stat_.start())) {
+    if (OB_SUCCESS != (tmp_ret = replay_bg_task_.start())) {
       //不影响回放线程工作
-      CLOG_LOG(WARN, "replay_stat start failed", K(tmp_ret));
+      CLOG_LOG(WARN, "replay_bg_task start failed", K(tmp_ret));
     }
     CLOG_LOG(INFO, "start ObLogReplayService success", K(ret), K(tg_id_));
   }
@@ -266,7 +488,7 @@ int ObLogReplayService::start()
 void ObLogReplayService::stop()
 {
   CLOG_LOG(INFO, "replay service stop begin");
-  replay_stat_.stop();
+  replay_bg_task_.stop();
   is_running_ = false;
   CLOG_LOG(INFO, "replay service stop finish");
   return;
@@ -275,7 +497,7 @@ void ObLogReplayService::stop()
 void ObLogReplayService::wait()
 {
   CLOG_LOG(INFO, "replay service wait begin");
-  replay_stat_.wait();
+  replay_bg_task_.wait();
   int64_t num = 0;
 
   int ret = OB_SUCCESS;
@@ -295,6 +517,9 @@ void ObLogReplayService::wait()
 
 void ObLogReplayService::destroy()
 {
+  // Ensure background timer task is stopped before tearing down state it may access.
+  replay_bg_task_.stop();
+  replay_bg_task_.wait();
   (void)remove_all_ls_();
   is_inited_ = false;
   CLOG_LOG(INFO, "replay service destroy");
@@ -304,7 +529,7 @@ void ObLogReplayService::destroy()
     tg_id_ = -1;
   }
   replayable_point_.reset();
-  replay_stat_.destroy();
+  replay_bg_task_.destroy();
   pending_replay_log_size_ = 0;
   allocator_ = NULL;
   ls_adapter_ = NULL;
@@ -389,6 +614,7 @@ void ObLogReplayService::handle(void *task)
 int ObLogReplayService::add_ls(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObReplayStatus *replay_status = NULL;
   LSKey hash_map_key(id.id());
   ObMemAttr attr(MTL_ID(), ObModIds::OB_LOG_REPLAY_STATUS);
@@ -398,6 +624,10 @@ int ObLogReplayService::add_ls(const share::ObLSID &id)
   } else if (OB_UNLIKELY(!id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "Invalid argument", K(id));
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (replay_bg_task_.is_enable_logservice() && OB_FAIL(replay_bg_task_.add_ls(id))) {
+    CLOG_LOG(ERROR, "add_ls to replay_bg_task_ failed", K(ret));
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   } else if (NULL == (replay_status = static_cast<ObReplayStatus*>(mtl_malloc(sizeof(ObReplayStatus), attr)))){
     ret = OB_ALLOCATE_MEMORY_FAILED;
     CLOG_LOG(WARN, "failed to alloc replay status", K(ret), K(id));
@@ -419,6 +649,15 @@ int ObLogReplayService::add_ls(const share::ObLSID &id)
       }
     }
   }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (OB_FAIL(ret)) {
+    if (OB_SUCCESS != (tmp_ret = replay_bg_task_.remove_ls(id)) && OB_NOT_INIT != tmp_ret) {
+      CLOG_LOG(ERROR, "remove_ls from replay_bg_task_ failed", K(tmp_ret), K(ret), K(id));
+    } else {
+      CLOG_LOG(INFO, "remove_ls from replay_bg_task_ success", K(tmp_ret), K(ret), K(id));
+    }
+  }
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   return ret;
 }
 
@@ -444,6 +683,10 @@ int ObLogReplayService::remove_ls(const share::ObLSID &id)
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     }
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  } else if (replay_bg_task_.is_enable_logservice() && OB_FAIL(replay_bg_task_.remove_ls(id))) {
+    CLOG_LOG(ERROR, "remove_ls from replay_bg_task_ failed", K(ret));
+#endif // OB_BUILD_SHARED_LOG_SERVICE
   } else {
     CLOG_LOG(INFO, "replay service remove ls", K(ret), K(id));
   }
@@ -855,6 +1098,61 @@ int ObLogReplayService::stat_all_ls_replay_process(int64_t &submitted_log_size,
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+int ObLogReplayService::update_ls_replica_replay_reaching_machine(ObLogReplayProcessWatcher &replay_process_watcher)
+{
+  int ret = OB_SUCCESS;
+  UpdateLSReplicaReplayReachingMachineFunctor functor(replay_process_watcher);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "replay service not init", K(ret));
+  } else if (OB_FAIL(replay_status_map_.for_each(functor))) {
+    CLOG_LOG(WARN, "failed to update ls replica replay reaching machine", K(ret));
+  }
+  return ret;
+}
+
+int ObLogReplayService::notify_follower_move_out_from_rto_group(const share::ObLSID &ls_id, const share::SCN &replica_last_reach_to_sync_scn)
+{
+  return replay_bg_task_.notify_follower_move_out_from_rto_group(ls_id, replica_last_reach_to_sync_scn);
+}
+
+bool ObLogReplayService::UpdateLSReplicaReplayReachingMachineFunctor::operator()(const palf::LSKey &id,
+  ObReplayStatus *replay_status)
+{
+  int ret = OB_SUCCESS;
+  int64_t submitted_log_size = 0;
+  int64_t unsubmitted_log_size = 0;
+  int64_t replayed_log_size = 0;
+  int64_t unreplayed_log_size = 0;
+  share::SCN max_replayed_scn = share::SCN::min_scn();
+  palf::LSN min_unreplayed_lsn = palf::LSN(0);
+  ObRole role = ObRole::INVALID_ROLE;
+  int64_t proposal_id = 0;
+  ObAddr election_leader;
+  bool is_in_sync = false;
+  bool is_active_follower = false;
+  const share::ObLSID ls_id(id.id_);
+  if (OB_ISNULL(replay_status)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "replay status is NULL", K(id), KR(ret), KPC(replay_status));
+  } else if (OB_FAIL(replay_status->get_replay_process(max_replayed_scn, min_unreplayed_lsn, role, proposal_id,
+    election_leader, is_active_follower, is_in_sync))) {
+    CLOG_LOG(WARN, "get_replay_process failed", K(id), KR(ret), KPC(replay_status));
+    // It's OK if `ret` is overwritten below: this function always returns `true` and only logs errors.
+    // Mark this follower inactive: it might be selected as a migration target, and a lagging/troubled follower
+    // should not slow down the RTO group.
+    if (OB_FAIL(replay_process_watcher_.mark_follower_active_flag(ls_id, false))) {
+      CLOG_LOG(WARN, "mark_follower_active_flag failed", K(id), KR(ret));
+    } else { } // do nothing
+  } else {
+    (void) replay_process_watcher_.update_ls_replica_replay_reaching_machine(ls_id, max_replayed_scn, min_unreplayed_lsn,
+      election_leader, proposal_id, is_in_sync, is_active_follower);
+  }
+  return true;
+}
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 
 void ObLogReplayService::inc_pending_task_size(const int64_t log_size)
 {

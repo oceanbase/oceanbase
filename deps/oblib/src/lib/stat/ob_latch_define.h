@@ -976,7 +976,16 @@ LATCH_DEF(SNAPSHOT_TABLE_PROXY_LOCK, 942, "ob snapshot table proxy lock", LATCH_
 LATCH_DEF(OPT_STAT_SQL_SERVICE_LOCK, 943, "ob opt stat sql service lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(S2M_QUEUE_THREAD_LOCK, 944, "ob s2m queue thread lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_CO_MERGE_DAG_NET_CTX_LOCK, 945, "co merge dag net ctx lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 946, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_REPLAY_REPORTER_LOCK, 946, "ob log replay reporter lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_SUBMIT_LOG_RATE_LIMITER_PASS_ONE_LOG_TO_KEEP_ALIVE_LOCK, 947, "ob log submit log rl pass one keep alive lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_SUBMIT_LOG_RATE_LIMITER_FORCE_ALLOWS_UPDATE_LOCK, 948, "ob log submit log rl force allows update lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_SUBMIT_LOG_RATE_LIMITER_LAST_LEADER_POINT_UPDATE_LOCK, 949, "ob log submit log rl last leader point update lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_SUBMIT_LOG_RATE_LIMITER_TICK_LAST_SAMPLE_LOCK, 950, "ob log submit log rl tick last sample lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_SUBMIT_LOG_RATE_LIMITER_RTO_KEEPER_LOCK, 951, "ob log submit log rate limiter rto keeper lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_REPLAY_REPORTER_RWLOCK, 952, "ob log replay reporter rwlock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_FOLLOWER_REPLAY_PROCESS_CACHE_RWLOCK, 953, "ob log follower replay process cache rwlock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_LOG_FOLLOWER_REPLAY_PROCESS_CACHE_VALIDITY_CHECK_LOCK, 954, "ob log follower replay proc cache valid check lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 955, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

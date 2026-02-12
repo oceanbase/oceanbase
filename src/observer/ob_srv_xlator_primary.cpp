@@ -219,6 +219,10 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(logservice::LogProbeRsP);
 #endif
   RPC_PROCESSOR(logservice::LogGetCkptReqP);
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  RPC_PROCESSOR(logservice::LogReportReplayReachingMachineP);
+  RPC_PROCESSOR(logservice::LogNotifyFollowerMoveOutFromRTOGroupP);
+#endif // OB_BUILD_SHARED_LOG_SERVICE
 }
 
 void oceanbase::observer::init_srv_xlator_for_palfenv(ObSrvRpcXlator *xlator)
