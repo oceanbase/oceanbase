@@ -371,6 +371,13 @@ int ObFilePreBuffer::async_read_range(RangeCacheEntry &cache_range)
       LOG_TRACE("async read range", K(cache_range.range_));
     }
     if (OB_FAIL(ret) && nullptr != cache_range.buf_ ) {
+      // 即使 IO 失败了，也需要 wait() 才能释放。
+      // 因为底下会拆 IO，可能部分 IO 成功，部分 IO 失败。
+      // 这时候你需要 wait 成功的 IO ，才能释放 buffer
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(cache_range.wait(metrics_))) {
+        LOG_WARN("failed to wait");
+      }
       SAFE_DELETE(cache_range.buf_);
     }
   }
