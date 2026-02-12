@@ -46,14 +46,17 @@ namespace storage
 struct ObRangePrecision
 {
   static constexpr int64_t DEFAULT_DYNAMIC_RANGE_PRECISION_HINT = 0;
+  static constexpr int64_t DEFAULT_ROW_COUNT_PRECISION_HINT = 120; // which means the max task's row count is in [100, avg row count * 120]
 
-  ObRangePrecision() : range_precision_(DEFAULT_DYNAMIC_RANGE_PRECISION_HINT) {}
-  ObRangePrecision(const int64_t range_precision) : range_precision_(range_precision) {}
+  ObRangePrecision(const int64_t range_precision = DEFAULT_DYNAMIC_RANGE_PRECISION_HINT, const int64_t row_count_precision = DEFAULT_ROW_COUNT_PRECISION_HINT)
+      : range_precision_(range_precision), row_count_precision_(row_count_precision)
+  {
+  }
 
   OB_INLINE bool is_valid() const
   {
-    return (range_precision_ > 0 && range_precision_ <= 10000)
-           || range_precision_ == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT;
+    return ((range_precision_ > 0 && range_precision_ <= 10000) || range_precision_ == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT)
+           && (row_count_precision_ >= 100 && row_count_precision_ <= 10000);
   }
 
   OB_INLINE int recalc_range_precision(const int64_t range_count)
@@ -83,11 +86,18 @@ struct ObRangePrecision
     return ret;
   }
 
-  OB_INLINE int64_t get_sample_step() const { return max(1, 10000 / max(1, range_precision_)); }
+  OB_INLINE int64_t calc_row_count_upper_limit(const int64_t split_row_count) const
+  {
+    return split_row_count * (1.0f * row_count_precision_ / 100);
+  }
 
-  TO_STRING_KV(K_(range_precision));
+  OB_INLINE int64_t get_sample_step() const { return max(1, 10000 / max(1, range_precision_)); }
+  OB_INLINE int64_t get_row_count_precision() const { return row_count_precision_; }
+
+  TO_STRING_KV(K_(range_precision), K_(row_count_precision));
 
   int64_t range_precision_;
+  int64_t row_count_precision_;
 };
 
 class ObIMultiRangeEstimateContext
@@ -146,16 +156,13 @@ public:
   // we should open this micro block to get more precise estimate result
   static constexpr int64_t OPEN_DATA_MICRO_BLOCK_ROW_LIMIT = 65536;
 
-  static constexpr int64_t OPEN_INDEX_MICRO_BLOCK_LIMIT = 100;
-
   ObIndexBlockTreeTraverser() : is_inited_(false) {}
 
   int init(ObSSTable &sstable, const ObITableReadInfo &index_read_info);
 
   void reuse();
 
-  int traverse(ObIMultiRangeEstimateContext &context,
-               const int64_t open_index_micro_block_limit = OPEN_INDEX_MICRO_BLOCK_LIMIT);
+  int traverse(ObIMultiRangeEstimateContext &context);
 
   OB_INLINE bool is_inited() const { return is_inited_; }
 
@@ -253,17 +260,16 @@ private:
 
   int inner_node_traverse(const ObMicroIndexInfo *micro_index_info,
                           const PathInfo &path_info,
-                          const int64_t level,
-                          const double open_index_micro_block_limit);
+                          const int64_t level);
 
   int leaf_node_traverse(const ObMicroIndexInfo &micro_index_info,
                          const PathInfo &path_info,
                          const int64_t level);
 
   int goto_next_level_node(const ObMicroIndexInfo &micro_index_info,
+                           const bool is_coverd_by_range,
                            const PathInfo &path_info,
-                           const int64_t level,
-                           double open_index_micro_block_limit);
+                           const int64_t level);
 
   int handle_overflow_ranges();
 
@@ -281,8 +287,6 @@ private:
   // statistics
   int64_t visited_node_count_;
   int64_t visited_macro_node_count_;
-  double avg_range_visited_node_cnt_;
-  double remain_can_visited_node_cnt_;
 
   bool is_inited_;
 };
@@ -661,8 +665,6 @@ public:
   static constexpr int64_t MIN_SPLIT_TABLE_ROW_COUNT = 65535; // 64K rows
   static constexpr int64_t TOO_MARY_RANGES_THRESHOLD = 20;
   static constexpr int64_t SPLIT_RANGE_FACTOR = 2;
-  static constexpr int64_t DEFAULT_MAX_SPLIT_TIME_COST = 10; // ms
-  static constexpr int64_t INDEX_BLOCK_PER_TIME = 3; // access 3 index block / ms
 
   /**
    * @brief Get the multi ranges row count
@@ -673,7 +675,7 @@ public:
    * @param row_count the row count of the multi ranges
    * @param macro_block_count the different macro block count of the multi ranges, if all ranges is
    *                          in the same macro block, the macro block count will be set to 1
-   * @param max_time
+   * @param row_count_precision (0, 100] which means the max task's row count is in [0, avg row count * 100 / row_count_precision]
    * @param range_precision
    * @return int
    */
@@ -682,21 +684,21 @@ public:
                                  ObTableStoreIterator &table_iter,
                                  int64_t &row_count,
                                  int64_t &macro_block_count,
-                                 const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                                 const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                                  const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   int get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
                            const ObITableReadInfo &index_read_info,
                            ObTableStoreIterator &table_iter,
                            int64_t &total_size,
-                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                           const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                            const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   int get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
                            const ObITableReadInfo &index_read_info,
                            const ObIArray<ObITable *> &tables,
                            int64_t &total_size,
-                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                           const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                            const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   template <typename ObRange>
@@ -707,7 +709,7 @@ public:
                              ObIAllocator &allocator,
                              ObArrayArray<ObRange> &multi_range_split_array,
                              const bool for_compaction = false,
-                             const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                             const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                              const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   template <typename ObRange>
@@ -718,7 +720,7 @@ public:
                              ObIAllocator &allocator,
                              ObArrayArray<ObRange> &multi_range_split_array,
                              const bool for_compaction = false,
-                             const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
+                             const int64_t row_count_precision = ObRangePrecision::DEFAULT_ROW_COUNT_PRECISION_HINT,
                              const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
 private:
@@ -728,8 +730,7 @@ private:
                            int64_t &total_size,
                            int64_t &total_row_count,
                            int64_t &total_macro_block_count,
-                           const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                           const ObRangePrecision &range_precision = ObRangePrecision());
+                           const ObRangePrecision &range_precision);
 
   bool all_range_is_single_rowkey(const ObIArray<ObStoreRange> &ranges);
 
@@ -747,7 +748,6 @@ private:
                         ObIAllocator &allocator,
                         ObArrayArray<ObRange> &multi_range_split_array,
                         const bool for_compaction = false,
-                        const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
                         const ObRangePrecision &range_precision = ObRangePrecision());
 
   int get_tables(ObTableStoreIterator &table_iter, ObIArray<ObITable *> &tables);
@@ -770,7 +770,6 @@ private:
                                     ObIAllocator &allocator,
                                     ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
                                     int64_t &estimate_rows_sum,
-                                    const int64_t max_time,
                                     const ObRangePrecision &range_precision);
 
   int split_ranges_for_memtable(const ObIArray<ObPairStoreAndDatumRange> &ranges,
@@ -784,7 +783,6 @@ private:
   int split_ranges_for_sstable(const ObIArray<ObPairStoreAndDatumRange> &sorted_ranges,
                                const ObITableReadInfo &read_info,
                                const int64_t expected_task_count,
-                               const int64_t open_index_block_limit,
                                ObSSTable &sstable,
                                ObIAllocator &allocator,
                                ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
