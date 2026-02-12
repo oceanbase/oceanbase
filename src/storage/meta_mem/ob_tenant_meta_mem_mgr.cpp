@@ -194,6 +194,7 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     external_tablet_cnt_map_(),
     ss_tablet_local_cache_map_(),
     tg_id_(-1),
+    oracle_temp_table_gc_tg_id_(-1),
     table_gc_task_(this),
     refresh_config_task_(),
     tablet_gc_task_(this),
@@ -288,6 +289,8 @@ int ObTenantMetaMemMgr::init()
     LOG_WARN("fail to initialize gc memtable map", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantMetaMemMgr, tg_id_))) {
     LOG_WARN("fail to create thread for t3m", K(ret));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::OracleTempTableGCTask, oracle_temp_table_gc_tg_id_))) {
+    LOG_WARN("fail to create thread for oracle temp table gc", K(ret), K(oracle_temp_table_gc_tg_id_));
   } else if (OB_FAIL(meta_cache_io_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE, "StorMetaCacheIO", tenant_id_, mem_limit))) {
     LOG_WARN("fail to init storage meta cache io allocator", K(ret), K_(tenant_id), K(mem_limit));
   } else if (OB_FAIL(fetch_tenant_config())) {
@@ -372,13 +375,15 @@ int ObTenantMetaMemMgr::start()
   } else if (OB_FAIL(TG_SCHEDULE(
       tg_id_, tablet_gc_task_, TABLE_GC_INTERVAL_US, true/*repeat*/))) {
     LOG_WARN("fail to schedule tablet gc task", K(ret));
+  } else if (OB_FAIL(TG_START(oracle_temp_table_gc_tg_id_))) {
+    LOG_WARN("fail to start thread for oracle temp table gc", K(ret), K(oracle_temp_table_gc_tg_id_));
   } else if (OB_FAIL(TG_SCHEDULE(
-      tg_id_, session_tablet_gc_task_, SESSION_TABLET_GC_INTERVAL_US, true/*repeat*/))) {
-    LOG_WARN("fail to schedule session tablet gc task", K(ret));
+      oracle_temp_table_gc_tg_id_, session_tablet_gc_task_, SESSION_TABLET_GC_INTERVAL_US, true/*repeat*/))) {
+    LOG_WARN("fail to schedule session tablet gc task", K(ret), K(oracle_temp_table_gc_tg_id_));
   } else if (OB_FAIL(bf_load_tg_.start())) {
     LOG_WARN("fail to lstart bloom filter load tg", K(ret));
   } else {
-    LOG_INFO("successfully to start t3m's three tasks", K(ret), K(tg_id_));
+    LOG_INFO("successfully to start t3m's tasks", K(ret), K(tg_id_), K(oracle_temp_table_gc_tg_id_));
   }
   return ret;
 }
@@ -413,9 +418,10 @@ void ObTenantMetaMemMgr::wait()
     }
 
     TG_STOP(tg_id_);
+    TG_STOP(oracle_temp_table_gc_tg_id_);
 
     TG_WAIT(tg_id_);
-
+    TG_WAIT(oracle_temp_table_gc_tg_id_);
     // Wait for bloom filter load tg.
     bf_load_tg_.wait();
   }
@@ -427,6 +433,10 @@ void ObTenantMetaMemMgr::destroy()
   if (tg_id_ != -1) {
     TG_DESTROY(tg_id_);
     tg_id_ = -1;
+  }
+  if (oracle_temp_table_gc_tg_id_ != -1) {
+    TG_DESTROY(oracle_temp_table_gc_tg_id_);
+    oracle_temp_table_gc_tg_id_ = -1;
   }
   full_tablet_creator_.reset(); // must reset after gc_tablets
   flying_tablet_map_.destroy();
