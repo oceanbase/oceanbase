@@ -255,6 +255,12 @@ struct ObMvccWriteResult {
   // It is decided by both can_insert_ and need_insert_
   bool has_insert() const { return can_insert_ && need_insert_ && !is_mvcc_undo_; }
 
+  // can_insert indicates whether the insert is allowed. This is used to determine if we need
+  // to wakeup waiters on failure paths (e.g., OB_ERR_PRIMARY_KEY_DUPLICATE,
+  // OB_TRANSACTION_SET_VIOLATION) even after mvcc_undo. Even if we wakeup more than necessary,
+  // it's acceptable to avoid missing wakeups.
+  bool can_insert() const { return can_insert_; }
+
   void reset()
   {
     can_insert_ = false;

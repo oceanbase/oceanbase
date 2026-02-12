@@ -2513,6 +2513,11 @@ int ObMemtable::multi_set_(
     // of memtable has no side effect at all
     (void)mvcc_undo_(mvcc_results);
 
+    // Step5.2: wakeup waiters if the node was inserted before being undone.
+    // This handles cases like OB_ERR_PRIMARY_KEY_DUPLICATE and OB_TRANSACTION_SET_VIOLATION
+    // where mvcc_undo is called but waiters still need to be notified.
+    wakeup_waiters_if_inserted_(ctx, mvcc_results);
+
     (void)cleanup_old_row_(mem_ctx, tx_node_args);
 
     if (!is_mvcc_write_related_error_(ret)) {
@@ -2665,7 +2670,12 @@ int ObMemtable::set_(
     // of memtable has no side effect at all
     (void)mvcc_undo_(mvcc_result);
 
-    // Step5.2: cleanup the old row whose life cycle is differennt from data and
+    // Step5.2: wakeup waiters if the node was inserted before being undone.
+    // This handles cases like OB_ERR_PRIMARY_KEY_DUPLICATE and OB_TRANSACTION_SET_VIOLATION
+    // where mvcc_undo is called but waiters still need to be notified.
+    wakeup_waiters_if_inserted_(ctx, mvcc_result);
+
+    // Step5.3: cleanup the old row whose life cycle is differennt from data and
     // need be reclaimed after failure
     (void)cleanup_old_row_(mem_ctx, tx_node_arg);
 
@@ -2784,6 +2794,11 @@ int ObMemtable::lock_(
     // of memtable has no side effect at all
     (void)mvcc_undo_(mvcc_results);
 
+    // Step5.2: wakeup waiters if the node was inserted before being undone.
+    // This handles cases like OB_ERR_PRIMARY_KEY_DUPLICATE and OB_TRANSACTION_SET_VIOLATION
+    // where mvcc_undo is called but waiters still need to be notified.
+    wakeup_waiters_if_inserted_(ctx, mvcc_results);
+
     if (!is_mvcc_write_related_error_(ret)) {
       TRANS_LOG(WARN, "lock end, fail",
                 "ret", ret,
@@ -2889,6 +2904,10 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
     int64_t permutation_idx = rows_info.get_permutation_idx(i);
     write_epoch = mem_ctx->get_write_epoch();
 
+    // Store the key and value early for potential failure path wakeup
+    mvcc_results[i].mtk_.encode(stored_kvs[i].key_);
+    mvcc_results[i].value_ = stored_kvs[i].value_;
+
     if (OB_FAIL(ctx.mvcc_acc_ctx_.get_write_seq(write_seq))) {
       TRANS_LOG(WARN, "get write seq failed", K(ret));
     } else if (is_delete_insert_table() && memtable_set_arg.new_row_[i].row_flag_.is_delete()) {
@@ -2983,14 +3002,6 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
       } else if (OB_FAIL(mvcc_engine_->ensure_kv(&stored_kvs[i].key_,
                                                 stored_kvs[i].value_))) {
         TRANS_LOG(WARN, "prepare kv after lock fail", K(ret));
-        // Step4: remember the stored key for later callback registration(pay
-        // attention to the life cycle between the stored key and local allocated
-        // memtable key) and value for later the follow-ups of mvcc-write
-      } else {
-        mvcc_results[i].mtk_.encode(stored_kvs[i].key_);
-        // value_ in the result is used to record the mvcc_row on success and
-        // mvcc_undo the insert on failure
-        mvcc_results[i].value_ = stored_kvs[i].value_;
       }
 
       pos += aligned_data_size;
@@ -3034,9 +3045,16 @@ int ObMemtable::mvcc_write_(ObStoreCtx &ctx,
                                       &stored_key,
                                       value))) {
     TRANS_LOG(WARN, "create kv failed", K(ret), K(tx_node_arg), K(memtable_key));
+  } else {
+    // Store the key and value early for potential failure path wakeup
+    res.mtk_.encode(stored_key);
+    res.value_ = value;
+  }
+
   // Step2: write the mvcc data into the memtable according to the concurrency
   // control algorithm which may report conflicts like write-write conflict,
   // lost-update, primary key duplication or other errors
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(mvcc_engine_->mvcc_write(ctx,
                                               *value,
                                               tx_node_arg,
@@ -3068,14 +3086,6 @@ int ObMemtable::mvcc_write_(ObStoreCtx &ctx,
   // scan performance
   } else if (OB_FAIL(mvcc_engine_->ensure_kv(&stored_key, value))) {
     TRANS_LOG(WARN, "prepare kv after lock fail", K(ret));
-  // Step4: remember the stored key for later callback registration(pay
-  // attention to the life cycle between the stored key and local allocated
-  // memtable key) and value for later the follow-ups of mvcc-write
-  } else {
-    res.mtk_.encode(stored_key);
-    // value_ in the result is used to record the mvcc_row on success and
-    // mvcc_undo the insert on failure
-    res.value_ = value;
   }
 
   // Step5: failure handler for mvcc write. we need ensure the atomicity of
@@ -3579,6 +3589,22 @@ void ObMemtable::mvcc_undo_(ObMvccWriteResult &res)
   if (res.has_insert()) {
     (void)mvcc_engine_->mvcc_undo(res.value_);
     res.is_mvcc_undo_ = true;
+  }
+}
+
+void ObMemtable::wakeup_waiters_if_inserted_(ObStoreCtx &ctx, ObMvccWriteResults &results)
+{
+  for (int64_t i = 0; i < results.count(); ++i) {
+    if (results[i].can_insert() && results[i].value_ != nullptr) {
+      results[i].value_->wakeup_waiter(ctx.tablet_id_, results[i].mtk_);
+    }
+  }
+}
+
+void ObMemtable::wakeup_waiters_if_inserted_(ObStoreCtx &ctx, ObMvccWriteResult &result)
+{
+  if (result.can_insert() && result.value_ != nullptr) {
+    result.value_->wakeup_waiter(ctx.tablet_id_, result.mtk_);
   }
 }
 
