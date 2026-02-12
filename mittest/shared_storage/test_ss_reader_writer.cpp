@@ -1970,9 +1970,13 @@ TEST_F(TestSSReaderWriter, test_read_callback_destructor_cleanup)
 {
   int ret = OB_SUCCESS;
 
-  // Create conflict info
+  ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObSegmentFileManager &seg_file_mgr = tenant_file_mgr->get_segment_file_mgr();
+
+  // Create conflict info via ObSegmentFileManager
   TmpFileConflictInfoHandle conflict_info_handle;
-  ASSERT_EQ(OB_SUCCESS, conflict_info_handle.set_tmpfile_conflict_info(false, 0));
+  ASSERT_EQ(OB_SUCCESS, seg_file_mgr.allocate_conflict_info_handle(false/*is_writing*/, 0/*active_readers_count*/, conflict_info_handle/*conflict_info_handle*/));
 
   // Acquire read access
   ASSERT_EQ(OB_SUCCESS, conflict_info_handle.try_acquire_read_access());
@@ -1990,10 +1994,8 @@ TEST_F(TestSSReaderWriter, test_read_callback_destructor_cleanup)
   read_callback = new (read_callback) ObSSTmpFileReadCallback(&allocator, nullptr, nullptr);
 
   TmpFileSegId seg_id(60009, 0);
-  // Create a mock segment file manager for testing
-  ObSegmentFileManager mock_seg_mgr;
   ASSERT_EQ(OB_SUCCESS, read_callback->set_ss_tmpfile_read_callback(
-      seg_id, &mock_seg_mgr, &allocator, conflict_info_handle));
+      seg_id, &seg_file_mgr, &allocator, conflict_info_handle));
 
   // Verify read access is still held
   ASSERT_EQ(1, conflict_info_handle.get_conflict_info()->active_readers_count_);
@@ -2004,6 +2006,9 @@ TEST_F(TestSSReaderWriter, test_read_callback_destructor_cleanup)
 
   // Verify read access was properly released
   ASSERT_EQ(0, conflict_info_handle.get_conflict_info()->active_readers_count_);
+
+  // Clean up
+  conflict_info_handle.reset();
 
   LOG_INFO("test_read_callback_destructor_cleanup passed - read access properly released");
 }
@@ -2020,9 +2025,13 @@ TEST_F(TestSSReaderWriter, test_concurrent_read_write_operations)
   std::atomic<int> write_conflicts(0);
   std::atomic<int> other_errors(0);
 
-  // Create shared conflict info
+  ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObSegmentFileManager &seg_file_mgr = tenant_file_mgr->get_segment_file_mgr();
+
+  // Create shared conflict info via ObSegmentFileManager
   TmpFileConflictInfoHandle shared_conflict_info;
-  ASSERT_EQ(OB_SUCCESS, shared_conflict_info.set_tmpfile_conflict_info(false, 0));
+  ASSERT_EQ(OB_SUCCESS, seg_file_mgr.allocate_conflict_info_handle(false/*is_writing*/, 0/*active_readers_count*/, shared_conflict_info/*conflict_info_handle*/));
 
   std::vector<std::thread> threads;
 
@@ -2092,6 +2101,9 @@ TEST_F(TestSSReaderWriter, test_concurrent_read_write_operations)
   // Verify we had some successful operations
   ASSERT_GT(successful_reads.load() + successful_writes.load(), 0);
 
+  // Clean up
+  shared_conflict_info.reset();
+
   LOG_INFO("test_concurrent_read_write_operations passed - no resource leaks detected");
 }
 
@@ -2100,9 +2112,13 @@ TEST_F(TestSSReaderWriter, test_write_callback_destructor_cleanup)
 {
   int ret = OB_SUCCESS;
 
-  // Create conflict info
+  ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager *);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  ObSegmentFileManager &seg_file_mgr = tenant_file_mgr->get_segment_file_mgr();
+
+  // Create conflict info via ObSegmentFileManager
   TmpFileConflictInfoHandle conflict_info_handle;
-  ASSERT_EQ(OB_SUCCESS, conflict_info_handle.set_tmpfile_conflict_info(false, 0));
+  ASSERT_EQ(OB_SUCCESS, seg_file_mgr.allocate_conflict_info_handle(false/*is_writing*/, 0/*active_readers_count*/, conflict_info_handle/*conflict_info_handle*/));
 
   // Acquire write access
   ASSERT_EQ(OB_SUCCESS, conflict_info_handle.try_acquire_write_access());
@@ -2136,6 +2152,9 @@ TEST_F(TestSSReaderWriter, test_write_callback_destructor_cleanup)
 
   // Verify write access was properly released
   ASSERT_FALSE(conflict_info_handle.get_conflict_info()->is_writing_);
+
+  // Clean up
+  conflict_info_handle.reset();
 
   LOG_INFO("test_write_callback_destructor_cleanup passed - write access properly released");
 }

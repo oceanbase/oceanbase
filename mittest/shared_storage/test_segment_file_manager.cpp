@@ -32,6 +32,11 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "storage/tmp_file/ob_tmp_file_global.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
+#include "lib/time/ob_time_utility.h"
+#include "lib/allocator/ob_small_allocator.h"
+#include "lib/allocator/ob_malloc.h"
+#include "lib/alloc/alloc_func.h"
+#include "lib/container/ob_array.h"
 
 #undef private
 #undef protected
@@ -356,6 +361,83 @@ TEST_F(TestSegmentFileManager, test_read_callback_cleanup_on_conflict)
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_tmp_file(file_id));
 
   LOG_INFO("Read callback cleanup test passed: callback not wrapped when conflict detected");
+}
+
+// Compare memory usage of TmpFileConflictInfo under "many concurrent reads" scenario:
+// OB_NEW (ob_malloc per object) vs small_allocator (block-based). small_allocator should use less memory.
+// Test N = 10000, 100000, 1000000 respectively.
+TEST_F(TestSegmentFileManager, test_conflict_info_memory_under_concurrent_reads)
+{
+  LOG_INFO("TEST_CASE: start test_conflict_info_memory_under_concurrent_reads");
+
+  const uint64_t tenant_id = MTL_ID();
+  const int64_t N_COUNTS[3] = {10000, 100000, 1000000};
+  const int64_t N_SIZE = sizeof(N_COUNTS) / sizeof(N_COUNTS[0]);
+
+  for (int64_t n_idx = 0; n_idx < N_SIZE; ++n_idx) {
+    const int64_t N = N_COUNTS[n_idx];
+
+    // Case A: OB_NEW only - memory = tenant hold delta (run first so allocator is cold and delta is non-zero)
+    int64_t mem_ob_new_bytes = 0;
+    {
+      int64_t hold_before = lib::get_tenant_memory_hold(tenant_id);
+      ObMemAttr attr(tenant_id, "TmpConfInfo");
+      SET_IGNORE_MEM_VERSION(attr);
+      common::ObArray<TmpFileConflictInfo *> ptrs;
+      ASSERT_EQ(OB_SUCCESS, ptrs.reserve(N));
+      for (int64_t i = 0; i < N; ++i) {
+        void *buf = common::ob_malloc(sizeof(TmpFileConflictInfo), attr);
+        ASSERT_NE(nullptr, buf);
+        TmpFileConflictInfo *ptr = new (buf) TmpFileConflictInfo(false, 0);
+        ASSERT_EQ(OB_SUCCESS, ptrs.push_back(ptr));
+      }
+      int64_t hold_after = lib::get_tenant_memory_hold(tenant_id);
+      mem_ob_new_bytes = hold_after - hold_before;
+      for (int64_t i = 0; i < ptrs.count(); ++i) {
+        TmpFileConflictInfo *p = ptrs.at(i);
+        if (OB_NOT_NULL(p)) {
+          p->~TmpFileConflictInfo();
+          common::ob_free(p);
+        }
+      }
+      ptrs.reset();
+    }
+
+    // Case B: ObSegmentFileManager::allocate_conflict_info_for_handle (production path, uses conflict_info_allocator_)
+    int64_t mem_small_allocator_bytes = 0;
+    {
+      // Note: mock_seg_mgr is not a real segment file manager, it is used to test the memory usage of the conflict info allocator
+      ObSegmentFileManager mock_seg_mgr;
+      ASSERT_EQ(OB_SUCCESS, mock_seg_mgr.init(MTL(ObTenantFileManager *)));
+      common::ObArray<TmpFileConflictInfoHandle> handles;
+      ASSERT_EQ(OB_SUCCESS, handles.reserve(N));
+      for (int64_t i = 0; i < N; ++i) {
+        TmpFileConflictInfoHandle h;
+        ASSERT_EQ(OB_SUCCESS, mock_seg_mgr.allocate_conflict_info_handle(false, 0, h));
+        ASSERT_EQ(OB_SUCCESS, handles.push_back(h));
+      }
+      mem_small_allocator_bytes = mock_seg_mgr.conflict_info_allocator_.block_alloc_.hold();
+      for (int64_t i = 0; i < handles.count(); ++i) {
+        handles.at(i).reset();
+      }
+      handles.reset();
+      mock_seg_mgr.destroy();
+    }
+
+    double bytes_per_obj_ob_new = static_cast<double>(mem_ob_new_bytes) / static_cast<double>(N);
+    double bytes_per_obj_small = static_cast<double>(mem_small_allocator_bytes) / static_cast<double>(N);
+    LOG_INFO("Memory comparison: TmpFileConflictInfo under many concurrent reads (N conflict infos)",
+             K(N),
+             "mem_ob_new_bytes", mem_ob_new_bytes,
+             "mem_small_allocator_bytes", mem_small_allocator_bytes,
+             "bytes_per_obj_ob_new", bytes_per_obj_ob_new,
+             "bytes_per_obj_small", bytes_per_obj_small);
+
+    EXPECT_LE(mem_small_allocator_bytes, mem_ob_new_bytes);
+    EXPECT_LE(bytes_per_obj_small, bytes_per_obj_ob_new);
+  }
+
+  LOG_INFO("TEST_CASE: finish test_conflict_info_memory_under_concurrent_reads");
 }
 
 } // namespace storage
