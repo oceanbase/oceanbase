@@ -490,14 +490,18 @@ int ObRepartSliceIdxCalc::check_partition_map_and_schema_match(bool &match)
   return ret;
 }
 
-int ObRepartSliceIdxCalc::check_no_partition_error()
+int ObRepartSliceIdxCalc::check_schema_not_match()
 {
   int ret = OB_SUCCESS;
   bool schema_match = true;
-  if (OB_FAIL(check_partition_map_and_schema_match(schema_match))) {
+  if (schema_consist_checked_) {
+    // do nothing
+  } else if (OB_FAIL(check_partition_map_and_schema_match(schema_match))) {
     LOG_WARN("check partition map and schema match", K(ret));
+  } else if (!schema_match) {
+    ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
   } else {
-    ret = schema_match ? OB_NO_PARTITION_FOR_GIVEN_VALUE : OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+    schema_consist_checked_ = true;
   }
   return ret;
 }
@@ -603,11 +607,10 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*>
     LOG_WARN("failed to get partition id", K(ret));
   } else if (OB_FAIL(get_task_idx_by_tablet_id(tablet_id, slice_idx_array.at(0)))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      if (tablet_id <= 0) {
-        // tablet_id <= means this row matches no partition
-        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+      if (OB_FAIL(check_schema_not_match())) {
+        LOG_WARN("schema not match", K(ret));
       } else {
-        ret = check_no_partition_error();
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       }
       LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(slice_idx_array.at(0)), K(repart_type_));
     }
@@ -637,16 +640,15 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_idx_batch_inner(const ObIArray<ObExpr
       }
       if (OB_FAIL(get_task_idx_by_tablet_id(tablet_ids_[i], slice_indexes_[i]))) {
         if (OB_HASH_NOT_EXIST == ret) {
-          if (tablet_ids_[i] <= 0) {
-            ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
+          if (tablet_ids_[i] <= 0 && table_schema_.is_interval_part()) {
             // interval partition is not supported to add partition by pdml, so change error code here
-            if (OB_UNLIKELY(table_schema_.is_interval_part())) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("add partition by pdml in interval partition table is not supported", K(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "add partition by pdml in interval partition table is");
-            }
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("add partition by pdml in interval partition table is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "add partition by pdml in interval partition table is");
+          } else if (OB_FAIL(check_schema_not_match())) {
+            LOG_WARN("schema not match", K(ret));
           } else {
-            ret = check_no_partition_error();
+            ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
           }
           LOG_WARN("can't get the right partition", K(ret), K(tablet_ids_[i]), K(repart_type_));
         }
@@ -704,15 +706,21 @@ int ObAffinitizedRepartSliceIdxCalc::get_slice_indexes_inner(const ObIArray<ObEx
   } else if (OB_FAIL(ObRepartSliceIdxCalc::get_tablet_id<USE_VEC>(eval_ctx, tablet_id, skip))) {
     LOG_WARN("fail to get partition id", K(ret));
   } else if (OB_FAIL(px_repart_ch_map_.get_refactored(tablet_id, slice_idx_array.at(0)))) {
-    if (OB_HASH_NOT_EXIST == ret && unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
+    int tmp_ret = ret;
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("get refactored failed", K(ret));
+    } else if (OB_TMP_FAIL(check_schema_not_match())) {
+      ret = tmp_ret;
+      LOG_WARN("schema not match", K(ret));
+    } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
       slice_idx_array.at(0) = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
       ret = OB_SUCCESS;
-    } else if (OB_HASH_NOT_EXIST == ret && unmatch_row_dist_method_ == ObPQDistributeMethod::RANDOM) {
+    } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::RANDOM) {
       slice_idx_array.at(0) = round_robin_idx_;
       round_robin_idx_++;
       round_robin_idx_ = round_robin_idx_ % task_count_;
       ret = OB_SUCCESS;
-    } else if (OB_HASH_NOT_EXIST == ret && unmatch_row_dist_method_ == ObPQDistributeMethod::HASH) {
+    } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::HASH) {
       ObHashSliceIdCalc slice_id_calc(exec_ctx_.get_allocator(), task_count_,
                                       ObNullDistributeMethod::NONE, hash_dist_exprs_, hash_funcs_,
                                       fast_calc_hash_slice_);
@@ -765,17 +773,21 @@ int ObAffinitizedRepartSliceIdxCalc::get_slice_idx_batch_inner(const ObIArray<Ob
       }
       batch_info_guard.set_batch_idx(i);
       if (OB_FAIL(px_repart_ch_map_.get_refactored(tablet_ids_[i], slice_indexes_[i]))) {
-        if (OB_HASH_NOT_EXIST == ret && unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
+        int tmp_ret = ret;
+        if (OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("get refactored failed", K(ret));
+        } else if (OB_TMP_FAIL(check_schema_not_match())) {
+          ret = tmp_ret;
+          LOG_WARN("schema not match", K(ret));
+        } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
           slice_indexes_[i] = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
           ret = OB_SUCCESS;
-        } else if (OB_HASH_NOT_EXIST == ret
-                   && unmatch_row_dist_method_ == ObPQDistributeMethod::RANDOM) {
+        } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::RANDOM) {
           slice_indexes_[i] = round_robin_idx_;
           round_robin_idx_++;
           round_robin_idx_ = round_robin_idx_ % task_count_;
           ret = OB_SUCCESS;
-        } else if (OB_HASH_NOT_EXIST == ret
-                   && unmatch_row_dist_method_ == ObPQDistributeMethod::HASH) {
+        } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::HASH) {
           ObHashSliceIdCalc slice_id_calc(exec_ctx_.get_allocator(), task_count_,
                                           null_row_dist_method_,
                                           hash_dist_exprs_, hash_funcs_,
@@ -1783,7 +1795,11 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
     LOG_WARN("failed to get partition id", K(ret));
   } else if (OB_FAIL(get_task_idx_by_tablet_id<USE_VEC>(eval_ctx, tablet_id, slice_idx_array.at(0), skip))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      if (unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
+      int tmp_ret = ret;
+      if (OB_TMP_FAIL(check_schema_not_match())) {
+        ret = tmp_ret;
+        LOG_WARN("schema not match", K(ret));
+      } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
         slice_idx_array.at(0) = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
         ret = OB_SUCCESS;
       } else if (unmatch_row_dist_method_ == ObPQDistributeMethod::RANDOM) {
@@ -1802,13 +1818,13 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
         } else {
           slice_idx_array.at(0) = part_ch_array.at(hash_idx).second_;
         }
-      } else if (tablet_id <= 0) {
-        // 没有找到对应的分区，返回OB_NO_PARTITION_FOR_GIVEN_VALUE
-        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
-        LOG_WARN("can't get the right partition", K(ret), K(tablet_id),
-                 K(unmatch_row_dist_method_));
+      } else if (tablet_id <= 0 && table_schema_.is_interval_part()) {
+        // interval partition is not supported to add partition by pdml, so change error code here
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("add partition by pdml in interval partition table is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "add partition by pdml in interval partition table is");
       } else {
-        ret = check_no_partition_error();
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
         LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(unmatch_row_dist_method_));
       }
     }

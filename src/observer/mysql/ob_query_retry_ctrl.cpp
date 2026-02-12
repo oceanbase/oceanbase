@@ -405,6 +405,14 @@ public:
           v.retry_type_ = RETRY_TYPE_NONE;
           v.no_more_test_ = true;
         }
+        LOG_WARN("schema error, check retry", K(v.retry_type_), K(v.err_),
+                 K(global_tenant_version_start),
+                 K(local_tenant_version_latest),
+                 K(local_tenant_version_start),
+                 K(global_sys_version_start),
+                 K(local_sys_version_latest),
+                 K(local_sys_version_start),
+                 K(local_schema_not_full));
       }
     }
   }
