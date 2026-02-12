@@ -11073,7 +11073,7 @@ int ObDDLResolver::resolve_partition_node(ObPartitionedStmt *stmt,
 
   if (OB_SUCC(ret) && !common::is_virtual_table(table_id_)) {
     int64_t partnum = 0;
-    if (stmt->use_def_sub_part()) {
+    if (stmt->use_def_sub_part() && PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
       partnum = table_schema.get_partition_num() * table_schema.get_def_sub_part_num();
     } else {
       partnum = table_schema.get_all_part_num();
