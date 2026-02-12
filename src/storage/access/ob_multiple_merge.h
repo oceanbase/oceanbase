@@ -146,7 +146,7 @@ private:
   int handle_lob_before_fuse_row();
   void reuse_lob_locator();
   void report_tablet_stat();
-  int update_and_report_tablet_stat();
+  void update_and_report_tablet_stat();
   void inner_reset();
   int refresh_filter_params_on_demand(const bool is_open);
   int prepare_truncate_filter();

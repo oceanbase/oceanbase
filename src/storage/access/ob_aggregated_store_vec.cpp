@@ -721,7 +721,6 @@ int ObAggregatedStoreVec::fill_output_rows(
     if (OB_UNLIKELY(IterEndState::LIMIT_ITER_END == iter_end_flag_)) {
       ret = OB_ITER_END;
     }
-    EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, count_);
   }
   LOG_TRACE("[Vectorized] aggregate store copy rows", K(ret),
             K(begin_index), K(end_index), K_(count), K(res),

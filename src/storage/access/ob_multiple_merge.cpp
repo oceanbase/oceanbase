@@ -536,16 +536,14 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
       }
     }
 
-    if (NULL != access_ctx_->table_scan_stat_) {
-      access_ctx_->table_scan_stat_->out_row_cnt_++;
+    if (OB_SUCC(ret)) {
+      ++access_ctx_->table_store_stat_.out_row_cnt_;
+      LOG_DEBUG("chaser debug get next", K(ret), K(unprojected_row_));
     }
     if (OB_ITER_END == ret) {
       update_and_report_tablet_stat();
       scan_state_ = ScanState::NONE;
     }
-  }
-  if (OB_SUCC(ret)) {
-    LOG_DEBUG("chaser debug get next", K(ret), K(unprojected_row_));
   }
   return ret;
 }
@@ -766,9 +764,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     }
 
     count = vector_store->get_row_count();
-    if (nullptr != access_ctx_->table_scan_stat_) {
-      access_ctx_->table_scan_stat_->out_row_cnt_ += count;
-    }
+    access_ctx_->table_store_stat_.out_row_cnt_ += count;
   }
   if (OB_ITER_END == ret) {
     update_and_report_tablet_stat();
@@ -1003,9 +999,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
       batch_row_store->ObBlockBatchedRowStore::set_end();
     }
 
-    if (nullptr != access_ctx_->table_scan_stat_) {
-      access_ctx_->table_scan_stat_->out_row_cnt_++;
-    }
+    ++access_ctx_->table_store_stat_.out_row_cnt_;
   }
   if (OB_ITER_END == ret) {
     update_and_report_tablet_stat();
@@ -1027,7 +1021,7 @@ void ObMultipleMerge::report_tablet_stat()
     tablet_stat.ls_id_ = access_ctx_->ls_id_.id();
     tablet_stat.tablet_id_ = access_ctx_->tablet_id_.id();
     tablet_stat.query_cnt_ = 1;
-    tablet_stat.scan_logical_row_cnt_ = access_ctx_->table_scan_stat_->out_row_cnt_ + access_ctx_->table_store_stat_.storage_filtered_row_cnt_;
+    tablet_stat.scan_logical_row_cnt_ = access_ctx_->table_store_stat_.out_row_cnt_ + access_ctx_->table_store_stat_.storage_filtered_row_cnt_;
     tablet_stat.scan_physical_row_cnt_ = access_ctx_->table_store_stat_.major_sstable_read_row_cnt_ +
                                          access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_ +
                                          access_ctx_->table_store_stat_.memstore_read_row_cnt_;
@@ -1041,50 +1035,55 @@ void ObMultipleMerge::report_tablet_stat()
   }
 }
 
-int ObMultipleMerge::update_and_report_tablet_stat()
+void ObMultipleMerge::update_and_report_tablet_stat()
 {
-  int ret = OB_SUCCESS;
-  EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
-  if (NULL != access_ctx_->table_scan_stat_) {
-    access_ctx_->table_scan_stat_->access_row_cnt_ += access_ctx_->table_scan_stat_->out_row_cnt_ +
-                                                      access_ctx_->table_store_stat_.storage_filtered_row_cnt_;
-    access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
-    access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
-    access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
-    access_ctx_->table_scan_stat_->empty_read_cnt_ += access_ctx_->table_store_stat_.empty_read_cnt_;
-    access_ctx_->table_scan_stat_->fuse_row_cache_hit_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->fuse_row_cache_miss_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_miss_cnt_;
-    access_ctx_->table_scan_stat_->block_cache_hit_cnt_ += access_ctx_->table_store_stat_.block_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
-    access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
-    access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
-    if (NULL != access_ctx_->table_scan_stat_->tsc_monitor_info_) {
-      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_base_read_row_cnt(access_ctx_->table_store_stat_.major_sstable_read_row_cnt_);
-      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_delta_read_row_cnt(access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_ +
-                                                                               access_ctx_->table_store_stat_.memstore_read_row_cnt_);
-      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_blockscan_block_cnt(access_ctx_->table_store_stat_.pushdown_micro_access_cnt_);
-      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_blockscan_row_cnt(access_ctx_->table_store_stat_.blockscan_row_cnt_);
-      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_storage_filtered_row_cnt(access_ctx_->table_store_stat_.storage_filtered_row_cnt_);
-      access_ctx_->table_scan_stat_->tsc_monitor_info_->add_skip_index_skip_block_cnt(access_ctx_->table_store_stat_.skip_index_skip_block_cnt_);
+  if (OB_ISNULL(access_ctx_)) {
+  } else if (0 == access_ctx_->table_store_stat_.out_row_cnt_ && 0 == access_ctx_->table_store_stat_.storage_filtered_row_cnt_) {
+    // if update_and_report_tablet_stat has been called before, and no new row has been processed, do nothing
+  } else {
+    EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
+    scan_cnt_ = 0;
+    if (NULL != access_ctx_->table_scan_stat_) {
+      access_ctx_->table_scan_stat_->out_row_cnt_ += access_ctx_->table_store_stat_.out_row_cnt_;
+      access_ctx_->table_scan_stat_->access_row_cnt_ += access_ctx_->table_store_stat_.out_row_cnt_ +
+                                                        access_ctx_->table_store_stat_.storage_filtered_row_cnt_;
+      access_ctx_->table_scan_stat_->rowkey_prefix_ = access_ctx_->table_store_stat_.rowkey_prefix_;
+      access_ctx_->table_scan_stat_->bf_filter_cnt_ += access_ctx_->table_store_stat_.bf_filter_cnt_;
+      access_ctx_->table_scan_stat_->bf_access_cnt_ += access_ctx_->table_store_stat_.bf_access_cnt_;
+      access_ctx_->table_scan_stat_->empty_read_cnt_ += access_ctx_->table_store_stat_.empty_read_cnt_;
+      access_ctx_->table_scan_stat_->fuse_row_cache_hit_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_hit_cnt_;
+      access_ctx_->table_scan_stat_->fuse_row_cache_miss_cnt_ += access_ctx_->table_store_stat_.fuse_row_cache_miss_cnt_;
+      access_ctx_->table_scan_stat_->block_cache_hit_cnt_ += access_ctx_->table_store_stat_.block_cache_hit_cnt_;
+      access_ctx_->table_scan_stat_->block_cache_miss_cnt_ += access_ctx_->table_store_stat_.block_cache_miss_cnt_;
+      access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
+      access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
+      if (NULL != access_ctx_->table_scan_stat_->tsc_monitor_info_) {
+        access_ctx_->table_scan_stat_->tsc_monitor_info_->add_base_read_row_cnt(access_ctx_->table_store_stat_.major_sstable_read_row_cnt_);
+        access_ctx_->table_scan_stat_->tsc_monitor_info_->add_delta_read_row_cnt(access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_ +
+                                                                                 access_ctx_->table_store_stat_.memstore_read_row_cnt_);
+        access_ctx_->table_scan_stat_->tsc_monitor_info_->add_blockscan_block_cnt(access_ctx_->table_store_stat_.pushdown_micro_access_cnt_);
+        access_ctx_->table_scan_stat_->tsc_monitor_info_->add_blockscan_row_cnt(access_ctx_->table_store_stat_.blockscan_row_cnt_);
+        access_ctx_->table_scan_stat_->tsc_monitor_info_->add_storage_filtered_row_cnt(access_ctx_->table_store_stat_.storage_filtered_row_cnt_);
+        access_ctx_->table_scan_stat_->tsc_monitor_info_->add_skip_index_skip_block_cnt(access_ctx_->table_store_stat_.skip_index_skip_block_cnt_);
+      }
+      EVENT_ADD(ObStatEventIds::MINOR_SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_);
+      EVENT_ADD(ObStatEventIds::MAJOR_SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.major_sstable_read_row_cnt_);
+      EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.major_sstable_read_row_cnt_ +
+                                                        access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_);
+      EVENT_ADD(ObStatEventIds::MEMSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.memstore_read_row_cnt_);
+      EVENT_ADD(ObStatEventIds::BLOCKSCAN_BLOCK_CNT, access_ctx_->table_store_stat_.pushdown_micro_access_cnt_);
+      EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, access_ctx_->table_store_stat_.blockscan_row_cnt_);
+      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, access_ctx_->table_store_stat_.storage_filtered_row_cnt_);
+      LOG_DEBUG("[CACHE_DYNAMIC_ADJUST] update tablet stat", K(access_ctx_->table_store_stat_), KPC(access_ctx_->table_scan_stat_));
     }
-    EVENT_ADD(ObStatEventIds::MINOR_SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_);
-    EVENT_ADD(ObStatEventIds::MAJOR_SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.major_sstable_read_row_cnt_);
-    EVENT_ADD(ObStatEventIds::SSSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.major_sstable_read_row_cnt_ +
-                                                      access_ctx_->table_store_stat_.minor_sstable_read_row_cnt_);
-    EVENT_ADD(ObStatEventIds::MEMSTORE_READ_ROW_COUNT, access_ctx_->table_store_stat_.memstore_read_row_cnt_);
-    EVENT_ADD(ObStatEventIds::BLOCKSCAN_BLOCK_CNT, access_ctx_->table_store_stat_.pushdown_micro_access_cnt_);
-    EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, access_ctx_->table_store_stat_.blockscan_row_cnt_);
-    EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, access_ctx_->table_store_stat_.storage_filtered_row_cnt_);
-    LOG_DEBUG("[ROW_CACHE_ADJUST] update tablet stat", K(access_ctx_->table_store_stat_), KPC(access_ctx_->table_scan_stat_));
+    const compaction::ObBasicMergeScheduler *scheduler = nullptr;
+    if (OB_ISNULL(scheduler = compaction::ObBasicMergeScheduler::get_merge_scheduler())) {
+      // may be during the start phase
+    } else if (scheduler->enable_adaptive_compaction()) {
+      report_tablet_stat();
+    }
+    access_ctx_->table_store_stat_.reuse();
   }
-  const compaction::ObBasicMergeScheduler *scheduler = nullptr;
-  if (OB_ISNULL(scheduler = compaction::ObBasicMergeScheduler::get_merge_scheduler())) {
-    // may be during the start phase
-  } else if (scheduler->enable_adaptive_compaction()) {
-    report_tablet_stat();
-  }
-  access_ctx_->table_store_stat_.reuse();
-  return ret;
 }
 
 int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
@@ -1150,6 +1149,7 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
 
 void ObMultipleMerge::reset()
 {
+  update_and_report_tablet_stat();
   reset_iter_array();
   inner_reset();
   tables_.reset();
@@ -1161,6 +1161,7 @@ void ObMultipleMerge::reset()
 
 void ObMultipleMerge::reuse()
 {
+  update_and_report_tablet_stat();
   reuse_iter_array();
   range_idx_delta_ = 0;
   unprojected_row_.row_flag_.reset();
@@ -1178,6 +1179,7 @@ void ObMultipleMerge::reuse()
 
 void ObMultipleMerge::reclaim()
 {
+  update_and_report_tablet_stat();
   reclaim_iter_array();
   inner_reset();
   tables_.reuse();
