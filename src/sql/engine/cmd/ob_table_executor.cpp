@@ -2606,6 +2606,7 @@ int ObTruncateTableExecutor::truncate_oracle_temp_table_v2(
   const bool is_data_table = !table_schema.is_oracle_tmp_table_v2_index_table();
   ObSessionTabletInfoKey info_key(table_schema.get_table_id(), sequence, session_id);
   ObSessionTabletInfo session_tablet_info;
+  ObSEArray<storage::ObSessionTabletInfo *, 1> tablet_infos;
   if (false == trans.is_started()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transaction is not started", K(ret));
@@ -2618,8 +2619,10 @@ int ObTruncateTableExecutor::truncate_oracle_temp_table_v2(
     }
   } else if (OB_FAIL(my_session.get_gtt_tablet_info_map().remove_session_tablet(table_schema.get_table_id()))) {
     LOG_WARN("failed to remove session tablet", K(ret));
+  } else if (OB_FAIL(tablet_infos.push_back(&session_tablet_info))) {
+    LOG_WARN("failed to push back tablet info", KR(ret), K(session_tablet_info));
   } else {
-    storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id, session_tablet_info, trans);
+    storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id, tablet_infos, trans);
     if (OB_FAIL(tablet_delete_helper.do_work())) {
       LOG_WARN("failed to delete session tablet", K(ret));
     } else {

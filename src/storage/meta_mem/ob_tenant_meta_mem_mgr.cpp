@@ -80,11 +80,13 @@ void ObTenantMetaMemMgr::TabletGCTask::runTimerTask()
   }
 }
 
+// Each tenant will find the LS leader on the current server.
+// Each server only deletes the temporary table tablets owned by its own LS leader,
+// thus avoiding remote transactions.
 void ObTenantMetaMemMgr::SessionTabletGCTask::runTimerTask()
 {
   ObDIActionGuard ag("SessionTabletGCTask");
   int ret = OB_SUCCESS;
-  bool is_leader = false;
   const uint64_t tenant_id = MTL_ID();
   ObSessionTabletGCHelper session_tablet_gc_helper(tenant_id);
   switch (compat_mode_) {
@@ -95,13 +97,8 @@ void ObTenantMetaMemMgr::SessionTabletGCTask::runTimerTask()
       break;
     }
     case lib::Worker::CompatMode::ORACLE: {
-      if (OB_FAIL(session_tablet_gc_helper.is_sys_ls_leader(is_leader))) {
-        LOG_WARN("fail to get ls leader", KR(ret));
-      } else if (is_leader && OB_FAIL(session_tablet_gc_helper.do_work())) {
+      if (OB_FAIL(session_tablet_gc_helper.do_work())) {
         LOG_WARN("fail to gc session tablet", K(ret));
-      }
-      if (false == is_leader && REACH_TIME_INTERVAL(60)) {
-        LOG_INFO("session tablet gc task on non-leader ls, skip", K(ret), K(tenant_id));
       }
       break;
     }

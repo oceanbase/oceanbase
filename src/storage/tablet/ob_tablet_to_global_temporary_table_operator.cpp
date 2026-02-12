@@ -75,9 +75,10 @@ int ObTabletToGlobalTmpTableOperator::batch_remove(
   return ret;
 }
 
-int ObTabletToGlobalTmpTableOperator::batch_get(
+int ObTabletToGlobalTmpTableOperator::batch_get_by_ls_ids(
     ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
+    const ObIArray<share::ObLSID> &ls_ids,
     ObIArray<storage::ObSessionTabletInfo> &infos)
 {
   int ret = OB_SUCCESS;
@@ -97,15 +98,31 @@ int ObTabletToGlobalTmpTableOperator::batch_get(
             tenant_id,
             OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID);
         ObSqlString sql;
-
+        ObSqlString ls_id_list;
+        ARRAY_FOREACH(ls_ids, idx) {
+          const share::ObLSID &ls_id = ls_ids.at(idx);
+          if (OB_UNLIKELY(!ls_id.is_valid())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid ls_id", KR(ret), K(tenant_id), K(ls_id));
+          } else if (OB_FAIL(ls_id_list.append_fmt(
+              "%s%lu",
+              idx == 0 ? "" : ",",
+              ls_id.id()))) {
+            LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(ls_id));
+          }
+        }
         if (FAILEDx(sql.append_fmt(
-            "SELECT %s FROM %s",
+            "SELECT %s FROM %s WHERE ls_id IN (",
             query_column_str,
             OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME))) {
           LOG_WARN("fail to assign sql", KR(ret), K(sql));
+        } else if (OB_FAIL(sql.append(ls_id_list.string()))) {
+          LOG_WARN("fail to assign sql", KR(ret), K(sql), K(ls_id_list));
+        } else if (OB_FAIL(sql.append_fmt(")"))) {
+          LOG_WARN("fail to assign sql", KR(ret), K(sql));
         }
 
-        if (OB_FAIL(sql_client_retry_weak.read(result, tenant_id, sql.ptr()))) {
+        if (FAILEDx(sql_client_retry_weak.read(result, tenant_id, sql.ptr()))) {
           LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
         } else if (OB_ISNULL(result.get_result())) {
           ret = OB_ERR_UNEXPECTED;
@@ -120,7 +137,6 @@ int ObTabletToGlobalTmpTableOperator::batch_get(
         }
       }
     }
-    return ret;
   }
   return ret;
 }
