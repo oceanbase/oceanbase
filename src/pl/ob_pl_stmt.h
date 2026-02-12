@@ -3468,6 +3468,25 @@ private:
   int64_t idx_; //routine表里的下标
 };
 
+struct ObPLGotoCursorInfo
+{
+  uint64_t package_id_;
+  uint64_t routine_id_;
+  int64_t cursor_index_;
+
+  ObPLGotoCursorInfo()
+    : package_id_(common::OB_INVALID_ID),
+      routine_id_(common::OB_INVALID_ID),
+      cursor_index_(common::OB_INVALID_INDEX) {}
+
+  ObPLGotoCursorInfo(uint64_t pkg_id, uint64_t routine_id, int64_t cursor_idx)
+    : package_id_(pkg_id),
+      routine_id_(routine_id),
+      cursor_index_(cursor_idx) {}
+
+  TO_STRING_KV(K_(package_id), K_(routine_id), K_(cursor_index));
+};
+
 class ObPLGotoStmt : public ObPLStmt
 {
 public:
@@ -3475,6 +3494,7 @@ public:
     : ObPLStmt(PL_GOTO),
     dst_stmt_(NULL),
     cursor_stmts_(allocator),
+    cursor_infos_(allocator),
     dst_label_(),
     in_exception_handler_(false) {}
 
@@ -3500,12 +3520,22 @@ public:
   inline void pop_cursor_stmt() { cursor_stmts_.pop_back(); }
   inline int64_t get_cursor_stmt_count() const { return cursor_stmts_.count(); }
 
-  TO_STRING_KV(K_(dst_stmt), K_(dst_label), K_(in_exception_handler), K_(cursor_stmts));
+  inline int push_cursor_info(uint64_t pkg_id, uint64_t routine_id, int64_t cursor_idx) {
+    return cursor_infos_.push_back(ObPLGotoCursorInfo(pkg_id, routine_id, cursor_idx));
+  }
+  inline const ObPLGotoCursorInfo* get_cursor_info(int64_t idx) const {
+    return (idx >= 0 && idx < cursor_infos_.count()) ? &cursor_infos_.at(idx) : NULL;
+  }
+  inline int64_t get_cursor_info_count() const { return cursor_infos_.count(); }
+
+  TO_STRING_KV(K_(dst_stmt), K_(dst_label), K_(in_exception_handler), K_(cursor_stmts), K_(cursor_infos));
 
 private:
   const ObPLStmt *dst_stmt_;
   // 这里保存goto跳出cursor的时候，所有需要关闭的cursor语句, 因为forloop cursor可能会多层嵌套
   ObPLSEArray<const ObPLStmt *> cursor_stmts_;
+  // 这里保存goto跳出时，需要关闭的普通cursor变量的三元组信息(package_id, routine_id, cursor_index)
+  ObPLSEArray<ObPLGotoCursorInfo> cursor_infos_;
   common::ObString dst_label_;
   bool in_exception_handler_;
 };

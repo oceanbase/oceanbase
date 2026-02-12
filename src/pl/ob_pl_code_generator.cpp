@@ -3535,6 +3535,25 @@ int ObPLCodeGenerateVisitor::visit(const ObPLGotoStmt &s)
                                           cs->get_cursor()->get_routine_id(), \
                                           cs->get_index())); \
           } \
+          if (OB_SUCC(ret) && OB_NOT_NULL(s.get_block())) { \
+            const ObPLBlockNS &ns = s.get_block()->get_namespace(); \
+            if (OB_NOT_NULL(ns.get_cursor_table())) { \
+              for (int64_t i = 0; OB_SUCC(ret) && i < s.get_cursor_info_count(); ++i) { \
+                const ObPLGotoCursorInfo *cursor_info = s.get_cursor_info(i); \
+                if (OB_NOT_NULL(cursor_info)) { \
+                  const ObPLCursor *cursor = ns.get_cursor_table()->get_cursor( \
+                      cursor_info->package_id_, \
+                      cursor_info->routine_id_, \
+                      cursor_info->cursor_index_); \
+                  if (OB_NOT_NULL(cursor)) { \
+                    OZ (generator_.generate_handle_ref_cursor(cursor, s, \
+                                                              s.get_block()->in_notfound(), \
+                                                              s.get_block()->in_warning())); \
+                  } \
+                } \
+              } \
+            } \
+          } \
           if (OB_SUCC(ret)) { \
             ObSEArray<ObLLVMValue, 1> args; \
             ObLLVMValue result; \

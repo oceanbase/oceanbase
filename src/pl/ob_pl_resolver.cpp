@@ -19238,6 +19238,7 @@ int ObPLResolver::check_goto(ObPLGotoStmt *stmt)
 
 // 这个函数主要解决goto跳出cursor for loop的时候，需要关闭对应的cursor，这里记录跳出的相关cursor stmts
 // 因为这个for loop可以多层嵌套，所以需要记录跳出了多少层。
+// 同时也要收集需要关闭的普通cursor变量
 int ObPLResolver::check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt, const ObPLStmt &dst_stmt)
 {
   int ret = OB_SUCCESS;
@@ -19267,6 +19268,20 @@ int ObPLResolver::check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt, const ObPLStm
         OZ (check_contain_goto_block(cfl_stmt->get_body(), goto_block, is_contain));
         if (OB_SUCC(ret) && is_contain) {
           OZ (goto_stmt.push_cursor_stmt(cfl_stmt));
+        }
+      }
+      if (OB_SUCC(ret) && !exit_flag && OB_NOT_NULL(parent_blk->get_namespace().get_cursor_table())) { // 如果已经到达目标block，则不再收集cursor变量
+        const ObIArray<int64_t> &cursors = parent_blk->get_namespace().get_cursors();
+        for (int64_t i = 0; OB_SUCC(ret) && i < cursors.count(); ++i) {
+          const ObPLCursor *cursor = parent_blk->get_cursor(cursors.at(i));
+          if (OB_NOT_NULL(cursor)) {
+            if (cursor->get_package_id() == parent_blk->get_namespace().get_package_id() &&
+                cursor->get_routine_id() == parent_blk->get_namespace().get_routine_id()) {
+              OZ (goto_stmt.push_cursor_info(cursor->get_package_id(),
+                                             cursor->get_routine_id(),
+                                             cursor->get_index()));
+            }
+          }
         }
       }
       if (OB_SUCC(ret)) {

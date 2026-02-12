@@ -932,11 +932,15 @@ enum ObPLCursorFlag {
   INVALID_CURSOR = 16, // this cursor is convert to a dbms cursor, invalid for dynamic cursor op.
   DBMS_SQL_CURSOR = 32, // this is a dbms_sql cursor
 };
+
+#define CURSOR_MAGIC_NUM 0x13572468
+
 class ObPLCursorInfo
 {
 public:
   ObPLCursorInfo(bool is_explicit = true) :
     id_(OB_INVALID_ID),
+    magic_num_(CURSOR_MAGIC_NUM),
     entity_(nullptr),
     is_explicit_(is_explicit),
     current_position_(OB_INVALID_ID),
@@ -960,6 +964,7 @@ public:
   }
   ObPLCursorInfo(ObIAllocator *allocator) :
     id_(OB_INVALID_ID),
+    magic_num_(CURSOR_MAGIC_NUM),
     entity_(nullptr),
     is_explicit_(true),
     current_position_(OB_INVALID_ID),
@@ -1083,6 +1088,7 @@ public:
     in_forall_ = false;
   }
   inline int64_t get_id() const { return id_; }
+  inline uint32_t get_magic_num() const { return magic_num_; }
   inline lib::MemoryContext &get_cursor_entity() { return entity_; }
   inline const lib::MemoryContext get_cursor_entity() const { return entity_; }
   inline bool get_in_forall() const { return in_forall_; }
@@ -1217,6 +1223,7 @@ public:
   inline void add_cursor_exec_time(int64_t time) { cursor_total_exec_time_ += time; }
 
   TO_STRING_KV(K_(id),
+               K_(magic_num),
                K_(is_explicit),
                K_(for_update),
                K_(has_hidden_rowid),
@@ -1248,6 +1255,7 @@ public:
 
 protected:
   int64_t id_;            // Cursor ID
+  uint32 magic_num_;
   lib::MemoryContext entity_;
   bool is_explicit_;      // 是否是显式游标
   bool for_update_;    //是否可更新游标
