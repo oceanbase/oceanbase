@@ -6402,7 +6402,8 @@ int ObDbmsStats::get_table_index_infos(share::schema::ObSchemaGetterGuard *schem
                                                             index_count,
                                                             false, /*with_mv*/
                                                             true, /*with_global_index*/
-                                                            false /*domain index*/))) {
+                                                            false /*domain index*/,
+                                                            false /*spatial index*/))) {
     LOG_WARN("failed to get can read index", K(ret));
   }
   return ret;
