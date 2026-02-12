@@ -12454,7 +12454,7 @@ int ObDDLService::create_aux_lob_table_if_need(ObTableSchema &data_table_schema,
     is_add_lob = true;
     if (OB_FAIL(get_last_schema_version(last_schema_version))) {
       LOG_WARN("fail to get last schema version", KR(ret));
-    } else if (!is_orcl_tmp_table_v2 && OB_FAIL(ObDDLLock::lock_for_add_lob_in_trans(data_table_schema, trans))) {
+    } else if (OB_FAIL(ObDDLLock::lock_for_add_lob_in_trans(data_table_schema, trans))) {
       LOG_WARN("failed to add lock online ddl lock", K(ret));
     } else if (OB_FAIL(table_creator.init(true/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init table creator", KR(ret));
