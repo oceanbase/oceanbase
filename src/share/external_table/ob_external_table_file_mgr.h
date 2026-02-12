@@ -130,7 +130,7 @@ public:
 class ObExternalTableFileListKey : public ObIKVCacheKey
 {
 public:
-  ObExternalTableFileListKey() : tenant_id_(OB_INVALID_ID), path_(nullptr)
+  ObExternalTableFileListKey() : tenant_id_(OB_INVALID_ID), path_(nullptr), pattern_(nullptr)
   {
   }
   virtual ~ObExternalTableFileListKey() = default;
@@ -139,7 +139,8 @@ public:
     const ObExternalTableFileListKey &other_key
         = reinterpret_cast<const ObExternalTableFileListKey &>(other);
     return this->tenant_id_ == other_key.tenant_id_
-           && this->path_.case_compare(other_key.path_) == 0;
+           && this->path_.case_compare(other_key.path_) == 0
+           && this->pattern_.case_compare(other_key.pattern_) == 0;
   }
   uint64_t hash() const override;
   uint64_t get_tenant_id() const override
@@ -148,14 +149,15 @@ public:
   }
   int64_t size() const override
   {
-    return sizeof(*this) + path_.length() + 1;
+    return sizeof(*this) + path_.length() + 1 + pattern_.length() + 1;
   }
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
-  TO_STRING_KV(K(tenant_id_), K(path_));
+  TO_STRING_KV(K(tenant_id_), K(path_), K(pattern_));
 
 public:
   uint64_t tenant_id_;
   ObString path_;
+  ObString pattern_;
 };
 
 class ObExternalTablePartitionsKey : public ObIKVCacheKey
@@ -647,12 +649,14 @@ private:
   int get_one_location_from_cache(const common::ObString &location,
                                   const uint64_t tenant_id,
                                   const int64_t &modify_ts,
+                                  const common::ObString &pattern,
                                   ObIAllocator &allocator,
                                   ObIArray<ObExternalTableFiles *> &external_table_files,
                                   int64_t refresh_interval_ms);
 
   int insert_one_location_to_cache(int64_t tenant_id,
                                    ObString location,
+                                   const common::ObString &pattern,
                                    ObExternalTableFiles &file_list);
 
 private:

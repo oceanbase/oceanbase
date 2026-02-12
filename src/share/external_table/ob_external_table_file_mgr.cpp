@@ -162,6 +162,7 @@ uint64_t ObExternalTableFileListKey::hash() const
   uint64_t hash_code = 0;
   hash_code = murmurhash(&tenant_id_, sizeof(uint64_t), hash_code);
   hash_code = path_.hash(hash_code);
+  hash_code = pattern_.hash(hash_code);
   return hash_code;
 }
 
@@ -176,6 +177,7 @@ int ObExternalTableFileListKey::deep_copy(char *buf, const int64_t buf_len, ObIK
   } else {
     new_value->tenant_id_ = this->tenant_id_;
     OZ(ob_write_string(allocator, this->path_, new_value->path_));
+    OZ(ob_write_string(allocator, this->pattern_, new_value->pattern_));
     OX(key = new_value);
   }
   return ret;
@@ -1818,6 +1820,7 @@ int ObExternalTableFileManager::get_one_location_from_cache(
     const common::ObString &location,
     const uint64_t tenant_id,
     const int64_t &modify_ts,
+    const common::ObString &pattern,
     ObIAllocator &allocator,
     ObIArray<ObExternalTableFiles *> &external_table_files,
     int64_t refresh_interval_ms)
@@ -1829,6 +1832,7 @@ int ObExternalTableFileManager::get_one_location_from_cache(
   ObExternalTableFileListKey key;
   key.tenant_id_ = tenant_id;
   key.path_ = location;
+  key.pattern_ = pattern;
   if (OB_FAIL(external_file_list_cache_.get(key, table_files_from_cache, handle))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get from external_file_list_cache", K(ret), K(key));
@@ -1871,12 +1875,14 @@ int ObExternalTableFileManager::get_one_location_from_cache(
 
 int ObExternalTableFileManager::insert_one_location_to_cache(int64_t tenant_id,
                                                              ObString location,
+                                                             const common::ObString &pattern,
                                                              ObExternalTableFiles &file_list)
 {
   int ret = OB_SUCCESS;
   ObExternalTableFileListKey key;
   key.tenant_id_ = tenant_id;
   key.path_ = location;
+  key.pattern_ = pattern;
 
   if (OB_FAIL(external_file_list_cache_.put(key, file_list, true))) {
     LOG_WARN("fail to put and get external file list to cache", K(ret), K(key));
@@ -1924,6 +1930,7 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
       ret = get_one_location_from_cache(location.at(i),
                                         tenant_id,
                                         modify_ts.at(i),
+                                        pattern,
                                         allocator,
                                         external_table_files,
                                         refresh_interval_ms);
@@ -1990,6 +1997,7 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
         } else if (OB_FAIL(insert_one_location_to_cache(
                        tenant_id,
                        tmp_location.at(i),
+                       pattern,
                        *external_table_files.at(cnt_from_cache + i)))) {
           LOG_WARN("failed to insert to cache", K(ret), K(tmp_location.at(i)));
         }
@@ -2080,7 +2088,6 @@ int ObExternalTableFileManager::collect_file_list_by_expr_parallel(
 
               EXTRACT_VARCHAR_FIELD_MYSQL(*res, "part_path", part_path);
               EXTRACT_VARCHAR_FIELD_MYSQL(*res, "file_list", output);
-
               if (OB_FAIL(ret)) {
               } else if (OB_FAIL(OB_ISNULL(file = OB_NEWx(ObExternalTableFiles, &allocator)))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
