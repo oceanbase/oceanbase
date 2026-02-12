@@ -30,7 +30,8 @@ public:
         refresh_method_(share::schema::ObVectorRefreshMethod::MAX),
         tmp_repeat_interval_(),
         domain_index_name_(),
-        database_id_(OB_INVALID_ID) {}
+        database_id_(OB_INVALID_ID),
+        need_major_merge_(false) {}
   bool is_valid() const {
     return OB_INVALID_TENANT_ID != tenant_id_ &&
            OB_INVALID_ID != domain_tb_id_ && OB_INVALID_ID != base_tb_id_ &&
@@ -64,6 +65,7 @@ public:
   ObString tmp_repeat_interval_;
   ObString domain_index_name_;
   uint64_t database_id_;
+  bool need_major_merge_;
 };
 
 class ObVectorIndexRefresher {

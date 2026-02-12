@@ -798,6 +798,7 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
               : 0;
       ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, adapter->get_tenant_id());
       ObVectorQueryAdaptorResultContext ada_ctx(adapter->get_tenant_id(), extra_info_column_count, &allocator, &tmp_allocator);
+      ada_ctx.set_scn(target_scn);
       if (OB_FAIL(adapter->check_delta_buffer_table_readnext_status(&ada_ctx, delta_buf_iter,target_scn))) {
         LOG_WARN("fail to check_delta_buffer_table_readnext_status.", K(ret));
       } else if (OB_FAIL(try_sync_vbitmap_memdata(ls_id, adapter, target_scn, allocator, ada_ctx))) {

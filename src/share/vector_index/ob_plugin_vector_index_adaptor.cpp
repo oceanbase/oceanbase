@@ -1993,6 +1993,14 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
   }
 
   if (OB_FAIL(ret)) {
+  } else if (is_mem_data_init_atomic(VIRT_BITMAP) && vbitmap_data_->scn_.is_valid()) {
+    if (ctx->scn_ < vbitmap_data_->scn_) {
+      ret = OB_SCHEMA_EAGAIN;
+      LOG_WARN("current bitmap has been refreshed, need retry", K(ret), KP(this), K(ctx->scn_), KPC(vbitmap_data_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (is_skip_4th_index) {
   } else if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
     if (ret == OB_ITER_END) {
@@ -2446,8 +2454,13 @@ int ObPluginVectorIndexAdaptor::merge_and_generate_bitmap(ObVectorQueryAdaptorRe
 #endif
     if (OB_SUCC(ret)) {
       TCRLockGuard rd_bitmap_lock_guard(vbitmap_data_->bitmap_rwlock_);
-      ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(ibitmap, vbitmap_data_->bitmap_->insert_bitmap_));
-      ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(dbitmap, vbitmap_data_->bitmap_->delete_bitmap_));
+      if (ctx->scn_ < vbitmap_data_->scn_) {
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_WARN("current bitmap has been refreshed, need retry", K(ret), KP(this), K(ctx->scn_), KPC(vbitmap_data_));
+      } else {
+        ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(ibitmap, vbitmap_data_->bitmap_->insert_bitmap_));
+        ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(dbitmap, vbitmap_data_->bitmap_->delete_bitmap_));
+      }
     }
 
     ROARING_TRY_CATCH(roaring64_bitmap_andnot_inplace(ibitmap, dbitmap));

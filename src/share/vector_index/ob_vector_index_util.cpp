@@ -3672,6 +3672,10 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
     } else if (OB_FAIL(ddl_service.generate_tablet_id(new_index_schema))) {
       LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(new_index_schema));
     } else {
+      if (new_index_schema.is_vec_delta_buffer_type() || new_index_schema.is_vec_index_id_type()) {
+        // set TABLE_MODE_QUEUING_EXTREME for delta_buffer and index_id table.
+        new_index_schema.set_table_mode_flag(share::schema::TABLE_MODE_QUEUING_EXTREME);
+      }
       if (!new_index_params.empty()) {
         new_index_schema.set_index_params(new_index_params);
         // only vec_delta_buffer_type\vec_index_id_type may need update extra_info columns.

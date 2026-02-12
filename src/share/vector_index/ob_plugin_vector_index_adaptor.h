@@ -271,7 +271,8 @@ public:
       tmp_allocator_(tmp_allocator),
       batch_allocator_("BATCHALLOC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       search_allocator_(tenant_id),
-      ls_leader_(true) {};
+      ls_leader_(true),
+      scn_() {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
   int init_prefilter(const int64_t &min, const int64_t &max);
@@ -306,6 +307,8 @@ public:
   void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
   bool get_ls_leader() { return ls_leader_; }
 
+  void set_scn(const SCN scn) { scn_ = scn; }
+
   void do_next_batch()
   {
     int64_t curr_cnt = get_vec_cnt();
@@ -326,6 +329,7 @@ private:
   ObArenaAllocator batch_allocator_; // Used to complete_delta_buffer_data in batches, reuse after each batch of data is completed
   ObVsagSearchAlloc search_allocator_;
   bool ls_leader_;
+  SCN scn_;
 };
 
 class ObVectorQueryConditions {
