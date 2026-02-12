@@ -329,13 +329,13 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_create_tx(
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
   share::SCN read_snapshot;
 
-  if (trans_state < mds::TwoPhaseCommitState::ON_PREPARE) {
+  if (trans_state < mds::TwoPhaseCommitState::BEFORE_PREPARE) {
     ret = OB_SNAPSHOT_DISCARDED;
     LOG_WARN("tablet creation transaction has not entered 2pc procedure",
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state), K(user_data));
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
-  } else if (trans_state >= mds::TwoPhaseCommitState::ON_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
+  } else if (trans_state >= mds::TwoPhaseCommitState::BEFORE_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
     if (read_snapshot < trans_version) {
       ret = OB_SNAPSHOT_DISCARDED;
       LOG_WARN("read snapshot is smaller than prepare version",
@@ -407,13 +407,13 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_in(
     ret = OB_SNAPSHOT_DISCARDED;
     LOG_WARN("read snapshot smaller than create commit version",
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
-  } else if (trans_state < mds::TwoPhaseCommitState::ON_PREPARE) {
+  } else if (trans_state < mds::TwoPhaseCommitState::BEFORE_PREPARE) {
     ret = OB_TABLET_NOT_EXIST;
     LOG_WARN("start transfer in transaction has not entered 2pc procedure, should retry",
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state));
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
-  } else if (trans_state >= mds::TwoPhaseCommitState::ON_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
+  } else if (trans_state >= mds::TwoPhaseCommitState::BEFORE_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
     if (read_snapshot < trans_version) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("read snapshot is smaller than prepare version, should retry",
@@ -491,13 +491,13 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_deleted_or_transfer_out(
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
   } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
-  } else if (trans_state < mds::TwoPhaseCommitState::ON_PREPARE) {
+  } else if (trans_state < mds::TwoPhaseCommitState::BEFORE_PREPARE) {
     if (read_snapshot.is_max()) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("read snapshot is MAX, maybe this is a write request, should retry on dst ls",
-          K(ret), K(ls_id), K(tablet_id), K(read_snapshot), K(user_data));
+          K(ret), K(ls_id), K(tablet_id), K(trans_state), K(read_snapshot), K(user_data));
     }
-  } else if (trans_state >= mds::TwoPhaseCommitState::ON_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
+  } else if (trans_state >= mds::TwoPhaseCommitState::BEFORE_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
     if (read_snapshot < trans_version) {
       // allow to read
     } else if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
