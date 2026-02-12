@@ -415,6 +415,19 @@ int ObTableAccessParam::check_valid_before_query_init(
   return ret;
 }
 
+int ObTableAccessParam::update_skip_scan_prefix_cnt(const ObTableScanParam &scan_param)
+{
+  int ret = OB_SUCCESS;
+  if (scan_param.use_index_skip_scan()) {
+    if (OB_FAIL(get_prefix_cnt_for_skip_scan(scan_param, iter_param_))) {
+      STORAGE_LOG(WARN, "Failed to update skip scan prefix count", K(ret));
+    }
+  } else {
+    iter_param_.ss_rowkey_prefix_cnt_ = 0;
+  }
+  return ret;
+}
+
 int ObTableAccessParam::get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param)
 {
   int ret = OB_SUCCESS;

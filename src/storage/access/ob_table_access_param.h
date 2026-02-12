@@ -294,6 +294,8 @@ public:
   OB_INLINE void set_use_global_iter_pool() { iter_param_.set_use_global_iter_pool(); }
   OB_INLINE void diable_use_global_iter_pool() { iter_param_.diable_use_global_iter_pool(); }
   OB_INLINE bool is_use_global_iter_pool() const { return iter_param_.is_use_global_iter_pool(); }
+  // update skip scan prefix count, used in rescan
+  int update_skip_scan_prefix_cnt(const ObTableScanParam &scan_param);
 private:
   int check_valid_before_query_init(const ObTableParam &table_param, const ObTabletHandle &tablet_handle);
   int get_prefix_cnt_for_skip_scan(const ObTableScanParam &scan_param, ObTableIterParam &iter_param);

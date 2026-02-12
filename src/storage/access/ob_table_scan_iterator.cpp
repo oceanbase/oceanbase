@@ -300,6 +300,8 @@ int ObTableScanIterator::rescan(ObTableScanParam &scan_param)
       STORAGE_LOG(WARN, "Failed to rescan reuse", K(ret));
     } else if (OB_FAIL(table_scan_range_.init(*scan_param_, *tablet, is_tablet_spliting))) {
       STORAGE_LOG(WARN, "Failed to init table scan range", K(ret));
+    } else if (OB_FAIL(main_table_param_.update_skip_scan_prefix_cnt(*scan_param_))) {
+      STORAGE_LOG(WARN, "Failed to update skip scan prefix count", K(ret));
     } else if (OB_FAIL(rescan_for_iter())) {
       STORAGE_LOG(WARN, "Failed to switch param for iter", K(ret), K(*this));
     } else if (OB_FAIL(table_scan_range_.get_query_iter_type(rescan_iter_type))) {
