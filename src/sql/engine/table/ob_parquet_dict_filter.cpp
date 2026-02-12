@@ -130,7 +130,7 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
                                                        parquet::Type::type parquet_type,
                                                        bool first_batch,
                                                        int64_t row_count,
-                                                       int64_t batch_size,
+                                                       int64_t max_batch_size,
                                                        bool has_null,
                                                        const int16_t *def_levels,
                                                        int16_t max_def_level,
@@ -252,6 +252,9 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
               dict_data->parquet_type_ = parquet_type;
               dict_data->dict_values_ = str_disc_vec;
               dict_data->has_null_ = has_null;
+              if (OB_FAIL(dict_data->indices_.prepare_allocate(max_batch_size))) {
+                LOG_WARN("fail to prepare allocate indices array", K(ret), K(max_batch_size));
+              }
             }
           }
         }
@@ -263,12 +266,7 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
 
     if (OB_SUCC(ret)) {
       if (first_batch) {
-        dict_data->indices_.clear();
         dict_data->indices_count_ = 0;
-        // 在 first_batch 时一次性分配足够的内存
-        if (OB_FAIL(dict_data->indices_.prepare_allocate(batch_size))) {
-          LOG_WARN("fail to prepare allocate indices array", K(ret), K(batch_size));
-        }
       }
 
       const int64_t row_offset = dict_data->indices_count_;
@@ -744,6 +742,7 @@ int ObParquetDictFilterPushdown::need_decode_dict_column(
     const common::ObIArray<std::pair<uint64_t, uint64_t>> &mapping_column_ids,
     const common::ObIArray<bool> &is_dup_project,
     bool is_eager_calc,
+    const common::ObIArray<bool> &column_need_conv,
     bool &need_decode)
 {
   int ret = OB_SUCCESS;
@@ -760,7 +759,19 @@ int ObParquetDictFilterPushdown::need_decode_dict_column(
     need_decode = true;
   }
 
-  // 条件2：该列有非字典优化的filter
+  // 条件2：列需要类型转换时，必须 decode 以便后续做 conv
+  if (OB_FAIL(ret) || need_decode) {
+  } else {
+    uint64_t column_expr_index = mapping_column_ids.at(col_idx).second;
+    if (column_expr_index != OB_INVALID_ID && column_expr_index < column_need_conv.count()
+        && !column_need_conv.at(column_expr_index)) {
+      need_decode = false;
+    } else {
+      need_decode = true;
+    }
+  }
+
+  // 条件3：该列有非字典优化的filter
   if (OB_FAIL(ret) || need_decode) {
   } else if (OB_FAIL(check_in_non_dict_filter(col_idx,
                                               filter_executor,
@@ -769,7 +780,7 @@ int ObParquetDictFilterPushdown::need_decode_dict_column(
     LOG_WARN("fail to check need decode dict for column", K(ret), K(col_idx));
   }
 
-  // 条件3：该列有失败的字典优化filter
+  // 条件4：该列有失败的字典优化filter
   if (OB_FAIL(ret) || need_decode) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < failed_dict_filters_.count(); ++i) {
@@ -977,16 +988,10 @@ int ObParquetDictFilterPushdown::eval_black_filter_on_dict_values(
     const int32_t distinct_ref_cnt = dict_data->get_distinct_ref_cnt();
     const int64_t batch_size = eval_ctx.max_batch_size_;
 
-    // 特殊情况：字典为空（全为 null），直接标记所有字典值为无效
-    if (OB_ISNULL(dict_data->dict_values_) || dict_data->dict_len_ <= 0) {
-      // do nothing
-    } else if (OB_FAIL(col_expr->init_vector_for_write(eval_ctx, VEC_DISCRETE, batch_size))) {
+    if (OB_FAIL(col_expr->init_vector_for_write(eval_ctx, VEC_DISCRETE, batch_size))) {
       LOG_WARN("fail to init vector for write", K(ret), K(batch_size));
     } else {
       if (dict_data->parquet_type_ == parquet::Type::BYTE_ARRAY) {
-        common::StrDiscVec *dict_values = dict_data->dict_values_;
-        char **dict_ptrs = dict_values->get_ptrs();
-        int32_t *dict_lens = dict_values->get_lens();
         ObArenaAllocator temp_allocator;
         common::ObBitmap batch_result(temp_allocator);
 
@@ -1006,20 +1011,26 @@ int ObParquetDictFilterPushdown::eval_black_filter_on_dict_values(
           if (OB_ISNULL(discrete_vec)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("buffer is null", K(ret), KP(discrete_vec));
-          }
+          // 特殊情况：字典为空（全为 null）
+          } else if (OB_ISNULL(dict_data->dict_values_) || dict_data->dict_len_ <= 0) {
+            discrete_vec->set_null(0);
+          } else {
+            common::StrDiscVec *dict_values = dict_data->dict_values_;
+            char **dict_ptrs = dict_values->get_ptrs();
+            int32_t *dict_lens = dict_values->get_lens();
 
-          const bool is_oracle_mode = lib::is_oracle_mode();
-          for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
-            int32_t dict_idx = static_cast<int32_t>(batch_start + i);
+            for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
+              int32_t dict_idx = static_cast<int32_t>(batch_start + i);
 
-            if (dict_idx < dict_data->dict_len_) {
-              if (OB_UNLIKELY(dict_values->is_null(dict_idx))) {
-                discrete_vec->set_null(i);
+              if (dict_idx < dict_data->dict_len_) {
+                if (OB_UNLIKELY(dict_values->is_null(dict_idx))) {
+                  discrete_vec->set_null(i);
+                } else {
+                  discrete_vec->set_string(i, dict_ptrs[dict_idx], dict_lens[dict_idx]);
+                }
               } else {
-                discrete_vec->set_string(i, dict_ptrs[dict_idx], dict_lens[dict_idx]);
+                discrete_vec->set_null(i);
               }
-            } else {
-              discrete_vec->set_null(i);
             }
           }
 
@@ -1034,6 +1045,12 @@ int ObParquetDictFilterPushdown::eval_black_filter_on_dict_values(
           } else if (OB_FAIL(black_filter->filter_batch(nullptr, 0, batch_count, batch_result))) {
             LOG_WARN("fail to filter batch", K(ret), K(batch_start), K(batch_count));
           } else {
+            // 清空filter表达式的评估标志
+            for (int64_t i = 0; i < black_filter->get_filter_node().filter_exprs_.count(); ++i) {
+              ObExpr *filter_expr = black_filter->get_filter_node().filter_exprs_.at(i);
+              filter_expr->get_evaluated_flags(eval_ctx).reset(batch_count);
+            }
+
             for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
               if (batch_result.test(i)) {
                 int32_t dict_idx = static_cast<int32_t>(batch_start + i);
@@ -1103,7 +1120,8 @@ int ObParquetDictFilterPushdown::decode_filtered_rows_to_exprs(
     ObEvalCtx &eval_ctx,
     const common::ObIArray<std::pair<uint64_t, uint64_t>> &mapping_column_ids,
     const common::ObIArray<bool> &is_dup_project,
-    bool is_eager_calc)
+    bool is_eager_calc,
+    const common::ObIArray<bool> &column_need_conv)
 {
   int ret = OB_SUCCESS;
 
@@ -1123,6 +1141,7 @@ int ObParquetDictFilterPushdown::decode_filtered_rows_to_exprs(
                                           mapping_column_ids,
                                           is_dup_project,
                                           is_eager_calc,
+                                          column_need_conv,
                                           need_decode))) {
         LOG_WARN("fail to check need decode dict column", K(ret), K(col_idx));
       } else if (need_decode) {

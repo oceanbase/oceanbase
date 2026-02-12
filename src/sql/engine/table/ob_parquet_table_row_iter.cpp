@@ -1723,7 +1723,7 @@ int ObParquetTableRowIterator::DataLoader::load_string_col_dict()
                                                               parquet::Type::BYTE_ARRAY,
                                                               first_batch_,
                                                               row_count_,
-                                                              batch_size_,
+                                                              eval_ctx_.max_batch_size_,
                                                               !(IS_PARQUET_COL_NOT_NULL),
                                                               def_levels_buf_.get_data(),
                                                               max_def_level,
@@ -2854,10 +2854,6 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   int64_t read_count = 0;
   ObMallocHookAttrGuard guard(mem_attr_);
 
-  if (OB_NOT_NULL(dict_filter_pushdown_)) {
-    dict_filter_pushdown_->clear_filter_arrays();
-  }
-
   if (OB_FAIL(next_sector(capacity, eval_ctx, read_count))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to get next sector", K(ret));
@@ -3659,6 +3655,7 @@ int ObParquetTableRowIterator::apply_dict_code_filters(const int64_t count,
 
   if (OB_NOT_NULL(curr_filter) && OB_NOT_NULL(dict_filter_pushdown_)
       && dict_filter_pushdown_->has_dict_columns()) {
+    dict_filter_pushdown_->clear_filter_arrays();
     ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
     bool applied_dict_filter = false;
 
@@ -3673,14 +3670,14 @@ int ObParquetTableRowIterator::apply_dict_code_filters(const int64_t count,
       LOG_WARN("fail to apply single column dict filters", K(ret));
       // ====== 【阶段2】解码字典列 ======
     } else {
-      scan_param_->op_->clear_evaluated_flag();
       if (applied_dict_filter && OB_FAIL(curr_filter->prepare_skip_filter(false))) {
         LOG_WARN("Failed to check parent skip filter", K(ret));
       } else if (OB_FAIL(dict_filter_pushdown_->decode_filtered_rows_to_exprs(curr_filter,
                                                                               eval_ctx,
                                                                               mapping_column_ids_,
                                                                               is_dup_project_,
-                                                                              is_eager_calc()))) {
+                                                                              is_eager_calc(),
+                                                                              column_need_conv_))) {
         LOG_WARN("fail to decode dict columns", K(ret));
       } else {
         LOG_DEBUG("dict columns decoded for all rows (has non-dict filters)");
