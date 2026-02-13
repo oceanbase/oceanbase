@@ -54,6 +54,7 @@ ObCreateTableExecutor::~ObCreateTableExecutor()
 
 int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
                                         const ObSQLSessionInfo &my_session,
+                                        ObSchemaGetterGuard *schema_guard,
                                         ObString &create_table_name)
 {
   int ret = OB_SUCCESS;
@@ -65,7 +66,21 @@ int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
   const int64_t timestamp = ObTimeUtility::current_time();
   obrpc::ObCreateTableArg &create_table_arg = stmt.get_create_table_arg();
   create_table_name = create_table_arg.schema_.get_table_name_str();
-  if (OB_FAIL(databuff_printf(buf, buf_len, pos, "__ctas_%ld_%ld", session_id, timestamp))) {
+  uint64_t tmp_table_id = OB_INVALID_ID;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null schema guard");
+  } else if (OB_FAIL(schema_guard->get_table_id(my_session.get_effective_tenant_id(),
+                                                stmt.get_database_name(),
+                                                create_table_name,
+                                                false /*is_index*/,
+                                                schema::ObSchemaGetterGuard::CheckTableType::ALL_NON_HIDDEN_TYPES,
+                                                tmp_table_id))) {
+    LOG_WARN("failed to get table id", K(stmt.get_database_name()), K(create_table_name));
+  } else if (OB_INVALID_ID != tmp_table_id) {
+    ret = OB_ERR_TABLE_EXIST;
+    LOG_USER_ERROR(OB_ERR_TABLE_EXIST, create_table_name.length(), create_table_name.ptr());
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "__ctas_%ld_%ld", session_id, timestamp))) {
     LOG_WARN("failed to print tmp table name", K(ret));
   } else {
     ObString tmp_table_name(pos, buf);
@@ -391,7 +406,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_WARN("pool is null", K(ret));
       } else if (OB_FAIL(oracle_sql_proxy.init(pool))) {
         LOG_WARN("init oracle sql proxy failed", K(ret));
-      } else if (OB_FAIL(prepare_stmt(stmt, *my_session, create_table_name))) {
+      } else if (OB_FAIL(prepare_stmt(stmt, *my_session, ctx.get_sql_ctx()->schema_guard_, create_table_name))) {
         LOG_WARN("failed to prepare stmt", K(ret));
       } else if (OB_FAIL(prepare_ins_arg(stmt, my_session, ctx.get_sql_ctx()->schema_guard_,
                                          &plan_ctx->get_param_store(), ins_sql, is_direct_load))) { //1, 参数准备;
@@ -543,10 +558,7 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           }
           while (OB_SUCC(ret) && !finish) {
             if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
-              LOG_WARN("failed to update table session", K(ret), K(alter_table_arg));
-              if (alter_table_arg.compat_mode_ == lib::Worker::CompatMode::ORACLE && OB_ERR_TABLE_EXIST == ret) {
-                ret = OB_ERR_EXIST_OBJECT;
-              } else if (OB_EAGAIN == ret) {
+              if (OB_EAGAIN == ret) {
                 ret = OB_SUCCESS; // maybe table lock conflict, retry
                 if (OB_UNLIKELY(THIS_WORKER.get_timeout_remain() <= 0)) {
                   ret = OB_TIMEOUT;
@@ -554,6 +566,8 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
                 } else if (OB_FAIL(THIS_WORKER.check_status())) {
                   LOG_WARN("failed to check status", K(ret));
                 }
+              } else {
+                LOG_WARN("failed to update table session", K(ret), K(alter_table_arg));
               }
             } else {
               finish = true;
@@ -585,13 +599,17 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           plan_ctx->set_affected_rows(affected_rows);
           LOG_DEBUG("CTAS all done", K(ins_sql), K(affected_rows), K(lib::is_oracle_mode()));
         }
-
-        if (OB_ERR_TABLE_EXIST == ret && create_table_arg.if_not_exist_) {
-          ret = OB_SUCCESS;
-          LOG_DEBUG("table exists, force return success after cleanup", K(create_table_name));
-        }
       } else {
         LOG_DEBUG("table exists, no need to CTAS", K(create_table_res.table_id_));
+      }
+
+      if (OB_UNLIKELY(OB_ERR_TABLE_EXIST == ret)) {
+        if (create_table_arg.if_not_exist_) {
+          ret = OB_SUCCESS;
+          LOG_DEBUG("table exists, force return success after cleanup", K(create_table_name));
+        } else if (is_oracle_mode()) {
+          ret = OB_ERR_EXIST_OBJECT;
+        }
       }
       if (OB_NOT_NULL(common_rpc_proxy)) {
         char table_info_buffer[256];

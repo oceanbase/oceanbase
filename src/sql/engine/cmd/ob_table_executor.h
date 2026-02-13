@@ -86,7 +86,10 @@ public:
   int set_index_arg_list(ObExecContext &ctx, ObCreateTableStmt &stmt);
   int execute_ctas(ObExecContext &ctx, ObCreateTableStmt &stmt, obrpc::ObCommonRpcProxy *common_rpc_proxy);
 private:
-  int prepare_stmt(ObCreateTableStmt &stmt, const ObSQLSessionInfo &my_session, ObString &create_table_name);
+  int prepare_stmt(ObCreateTableStmt &stmt,
+                   const ObSQLSessionInfo &my_session,
+                   ObSchemaGetterGuard *schema_guard,
+                   ObString &create_table_name);
   int prepare_ins_arg(ObCreateTableStmt &stmt,
                       const ObSQLSessionInfo *my_session,
                       ObSchemaGetterGuard *schema_guard,
