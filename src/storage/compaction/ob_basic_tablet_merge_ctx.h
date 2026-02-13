@@ -433,6 +433,7 @@ protected:
     const int64_t last_major_snapshot,
     const bool force_check);
   int try_update_storage_schema(ObStorageSchema &new_schema);
+  int get_table_schema(const uint64_t schema_version, const ObTableSchema *&table_schema, ObSchemaGetterGuard &schema_guard);
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
 public:

@@ -194,6 +194,28 @@ public:
         const share::schema::ObIndexType index_type,
         const int64_t original_parallelism,
         int64_t &decided_parallelism);
+  // Generate skip index attributes for FTS auxiliary table non-rowkey columns
+  // FTS auxiliary table has 4 fixed columns:
+  //   - doc_id (rowkey)
+  //   - word_segment (rowkey)
+  //   - word_count (stored, non-rowkey)
+  //   - doc_length (stored, non-rowkey)
+  // This method only generates skip index attributes for the last 2 columns (non-rowkey)
+  // @param[in] skip_idx_attrs  skip index attribute array
+  // @param[in] column_types    column types array
+  // @param[in] start_idx      start index in skip_idx_attrs array (points to first FTS column)
+  // @param[out] attr_idx      updated index pointer after processing
+  // @return OB_SUCCESS on success, other error codes on failure
+  static int generate_fts_aux_skip_index_attrs(
+      common::ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_attrs,
+      common::ObSEArray<common::ObObjMeta, 16> *column_types,
+      int64_t &attr_idx);
+  // generate non-rowkey column descs for FTS auxiliary table
+  // - word_count
+  // - doc_length
+  static int generate_fts_aux_non_rowkey_column_descs(
+      common::ObIArray<ObColDesc> &column_descs, const int64_t start_column_id);
+
 private:
   static int build_fts_aux_index_name(
     const ObIndexType type,

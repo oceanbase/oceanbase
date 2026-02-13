@@ -307,12 +307,16 @@ int ObColDataStoreDesc::init(
       schema_rowkey_col_cnt_ + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     full_stored_col_cnt_ += storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     row_column_count_ = full_stored_col_cnt_;
-    if (!merge_schema.is_column_info_simplified()) {
+    if (!merge_schema.is_column_info_simplified() ||
+        share::schema::is_fts_index_aux(merge_schema.get_index_type()) ||
+        share::schema::is_fts_doc_word_aux(merge_schema.get_index_type())) {
       if (OB_FAIL(col_desc_array_.init(row_column_count_))) {
         STORAGE_LOG(WARN, "Failed to reserve column desc array", K(ret));
-      } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(col_desc_array_))) {
+      } else if (OB_FAIL(merge_schema.get_multi_version_column_descs(
+                     col_desc_array_))) {
         STORAGE_LOG(WARN, "Failed to generate multi version column ids", K(ret));
-      } else if (OB_FAIL(generate_skip_index_meta(merge_schema, nullptr/*cg_schema*/, static_desc))) {
+      } else if (OB_FAIL(generate_skip_index_meta(
+                     merge_schema, nullptr /*cg_schema*/, static_desc))) {
         STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
       }
     } else {

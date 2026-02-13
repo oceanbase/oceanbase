@@ -15,6 +15,7 @@
 #include "ob_storage_schema.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
+#include "share/ob_fts_index_builder_util.h"
 
 namespace oceanbase
 {
@@ -2076,38 +2077,53 @@ int ObStorageSchema::get_skip_index_col_attr_by_schema(
   }
   attr_idx += ObMultiVersionExtraRowkeyIds::MAX_EXTRA_ROWKEY;
   // set non-rowkey columns
-  for (int64_t i = 0; OB_SUCC(ret) && !column_info_simplified_ && i < column_cnt_; ++i) {
-    skip_idx_attr.reset();
-    bool is_rowkey = false;
-    for (int64_t j = 0; OB_SUCC(ret) && j < rowkey_array_.count(); ++j) {
-      int64_t rowkey_col_idx = rowkey_array_[j].column_idx_ - common::OB_APP_MIN_COLUMN_ID;
-      if (rowkey_col_idx == i) {
-        is_rowkey = true;
-        break;
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (is_rowkey) {
-      //skip
-    } else if (!column_array_[i].is_column_stored_in_sstable()) {
-      //skip
-    } else {
-      const ObObjMeta &meta_type = column_array_[i].meta_type_;
-      for (int64_t skip_col_id = 0; OB_SUCC(ret) && skip_col_id < skip_idx_attr_array_.count(); ++skip_col_id) {
-        if (i == skip_idx_attr_array_.at(skip_col_id).col_idx_) {
-          skip_idx_attr.set_column_attr(skip_idx_attr_array_.at(skip_col_id).skip_idx_attr_.get_packed_value());
+  if (OB_FAIL(ret)) {
+  } else if (!column_info_simplified_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
+      skip_idx_attr.reset();
+      bool is_rowkey = false;
+      for (int64_t j = 0; OB_SUCC(ret) && j < rowkey_array_.count(); ++j) {
+        int64_t rowkey_col_idx = rowkey_array_[j].column_idx_ - common::OB_APP_MIN_COLUMN_ID;
+        if (rowkey_col_idx == i) {
+          is_rowkey = true;
           break;
         }
       }
-      if (OB_SUCC(ret)) {
-        if (only_set_fts) {
-          skip_idx_attrs.at(attr_idx++).set_column_fts_attr(skip_idx_attr);
-        } else {
-          skip_idx_attrs.at(attr_idx++).set_column_attr(skip_idx_attr.get_packed_value());
+      if (OB_FAIL(ret)) {
+      } else if (is_rowkey) {
+        //skip
+      } else if (!column_array_[i].is_column_stored_in_sstable()) {
+        //skip
+      } else {
+        const ObObjMeta &meta_type = column_array_[i].meta_type_;
+        for (int64_t skip_col_id = 0; OB_SUCC(ret) && skip_col_id < skip_idx_attr_array_.count(); ++skip_col_id) {
+          if (i == skip_idx_attr_array_.at(skip_col_id).col_idx_) {
+            skip_idx_attr.set_column_attr(skip_idx_attr_array_.at(skip_col_id).skip_idx_attr_.get_packed_value());
+            break;
+          }
         }
-        if (OB_NOT_NULL(column_types) && OB_FAIL(column_types->push_back(meta_type))) {
-          STORAGE_LOG(WARN, "failed to push back column type", K(ret), K(meta_type));
+        if (OB_SUCC(ret)) {
+          if (only_set_fts) {
+            skip_idx_attrs.at(attr_idx++).set_column_fts_attr(skip_idx_attr);
+          } else {
+            skip_idx_attrs.at(attr_idx++).set_column_attr(skip_idx_attr.get_packed_value());
+          }
+          if (OB_NOT_NULL(column_types) && OB_FAIL(column_types->push_back(meta_type))) {
+            STORAGE_LOG(WARN, "failed to push back column type", K(ret), K(meta_type));
+          }
         }
+      }
+    }
+  } else {
+    // column_info_simplified path
+    if (share::schema::is_fts_doc_word_aux(index_type_) ||
+        share::schema::is_fts_index_aux(index_type_)) {
+      // handle FTS index specially
+      // FTS auxiliary table: use ObFtsIndexBuilderUtil to generate skip index
+      // attr for non-rowkey columns
+      if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_skip_index_attrs(
+              skip_idx_attrs, column_types, attr_idx))) {
+        LOG_WARN("failed to generate FTS skip index attrs", K(ret));
       }
     }
   }
@@ -2326,8 +2342,27 @@ int ObStorageSchema::get_multi_version_column_descs(common::ObIArray<ObColDesc> 
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
   } else if (column_info_simplified_) {
-    ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "not support get multi version column desc array when column simplified", K(ret), KPC(this));
+    if (share::schema::is_fts_index_aux(index_type_) ||
+        share::schema::is_fts_doc_word_aux(index_type_)) {
+      if (OB_FAIL(get_mulit_version_rowkey_column_ids(column_descs))) {
+        LOG_WARN("failed to get rowkey column descs", K(ret));
+      } else {
+        const int64_t schema_rowkey_end =
+            column_descs.count() - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() - 1;
+        uint32_t schema_rowkey_max_column_id = OB_APP_MIN_COLUMN_ID;
+        for (int64_t i = 0; i < schema_rowkey_end; ++i) {
+          schema_rowkey_max_column_id = max(schema_rowkey_max_column_id, column_descs.at(i).col_id_);
+        }
+        const int64_t start_column_id = schema_rowkey_max_column_id + 1;
+        if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_non_rowkey_column_descs(
+                column_descs, start_column_id))) {
+          LOG_WARN("failed to generate FTS auxiliary table non-rowkey column descs", K(ret));
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      STORAGE_LOG(WARN, "not support get multi version column desc array when column simplified", K(ret), KPC(this));
+    }
   } else if (OB_FAIL(get_mulit_version_rowkey_column_ids(column_descs))) { // add rowkey columns
     STORAGE_LOG(WARN, "Fail to get rowkey column descs", K(ret));
   } else if (OB_FAIL(get_column_ids_without_rowkey(column_descs, !is_storage_index_table()))) { //add other columns
@@ -2411,8 +2446,15 @@ void ObStorageSchema::update_column_cnt_and_schema_version(
   column_cnt_ = MAX(column_cnt_, input_col_cnt);
   store_column_cnt_ = MAX(store_column_cnt_, input_store_col_cnt);
   schema_version_ = MAX(schema_version_, input_schema_version);
-  if (column_cnt_ != column_array_.count() || origin_store_column_cnt != store_column_cnt_ ||
-      (!is_fts_index() && origin_schema_version < schema_version_)) {
+  if (column_cnt_ != column_array_.count() || origin_store_column_cnt != store_column_cnt_ || origin_schema_version < schema_version_) {
+    // In the scenario of column modification that increase the width of integer column
+    // because cs encoding will discard MSB side data(truncate the integer to its width)
+    // if we use the stale storage schema for the encoding of mini / minor sstables
+    // the cs encoding will discard MSB side data, leading to data insconsistency.
+    // To avoid this, when the table is user data table(currently only user data table support minor encoding)
+    // if the schema version increases(there may be column modification that increase the width of integer column)
+    // it will simplify the storage schema.
+    // TODO @cuiyuntian.cyt cs encoding should not truncate interger
     column_info_simplified_ = true;
     STORAGE_LOG(INFO, "update column cnt",
       K(origin_column_cnt), K_(column_cnt),
@@ -2430,9 +2472,15 @@ int ObStorageSchema::update_column_info(const share::schema::ObTableSchema& inpu
     ret = OB_ERR_UNEXPECTED;
     input_schema.get_table_id();
     LOG_WARN("no need to update column info", K(is_column_info_simplified()), K(input_schema.get_table_id()),K(lbt()), K(input_schema), KPC(this));
+  } else if (get_column_count() > input_schema.get_column_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "column count is greater than input schema", K(ret), K(get_column_count()), K(input_schema.get_column_count()));
+  } else if (FALSE_IT(column_array_.reset())) {
+  } else if (OB_FAIL(column_array_.reserve(get_column_count()))) {
+    STORAGE_LOG(WARN, "failed to reserve column array", K(ret), K(input_schema.get_column_count()));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
-    const share::schema::ObColumnSchemaV2 *col_schema = input_schema.get_column_schema(i);
+    const share::schema::ObColumnSchemaV2 *col_schema = input_schema.get_column_schema_by_idx(i);
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "invalid column schema", K(ret), K(i));

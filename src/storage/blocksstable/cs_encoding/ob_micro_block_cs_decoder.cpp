@@ -1463,6 +1463,19 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_row(const int64_t index, ObDatu
   decoder_allocator_.reuse();
   if (OB_FAIL(get_row_impl(index, row))) {
     LOG_WARN("fail to get row", K(ret), K(index));
+  } else if (IS_MULTI_VERSION && OB_UNLIKELY(row.row_flag_.is_lock()) &&
+             OB_NOT_NULL(read_info_) &&
+             typeid(ObRowkeyReadInfo) != typeid(*read_info_)) {
+    // new_column_decoder will set default value for new added columns
+    // for lock row, we need to set nop value for new added columns
+    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
+    const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
+    for (int64_t i = 0; i < request_cnt_; ++i) {
+      int64_t store_idx = cols_index.at(i);
+      if (store_idx >= column_count_) {
+        row.storage_datums_[i].set_nop();
+      }
+    }
   }
   return ret;
 }

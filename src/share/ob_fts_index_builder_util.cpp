@@ -2654,6 +2654,76 @@ int ObFtsIndexBuilderUtil::add_skip_index_for_index_column(schema::ObColumnSchem
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::generate_fts_aux_skip_index_attrs(
+    common::ObIArray<share::schema::ObSkipIndexColumnAttr> &skip_idx_attrs,
+    common::ObSEArray<common::ObObjMeta, 16> *column_types,
+    int64_t &attr_idx)
+{
+  int ret = OB_SUCCESS;
+  // FTS auxiliary table non-rowkey columns: word_count and doc_length
+  // word_count: bm25_token_freq_param + sum
+  // doc_length: bm25_doc_len_param
+  constexpr int64_t non_rowkey_col_cnt = 2;
+  const int64_t total_needed = attr_idx + non_rowkey_col_cnt;
+
+  if (OB_UNLIKELY(total_needed > skip_idx_attrs.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments",
+             K(ret), K(attr_idx), K(non_rowkey_col_cnt), K(skip_idx_attrs.count()));
+  } else {
+    // word_count column (first non-rowkey column)
+    share::schema::ObSkipIndexColumnAttr word_count_attr;
+    word_count_attr.set_bm25_token_freq_param();
+    word_count_attr.set_sum();
+    skip_idx_attrs.at(attr_idx++).set_column_attr(word_count_attr.get_packed_value());
+
+    // doc_length column (second non-rowkey column)
+    share::schema::ObSkipIndexColumnAttr doc_length_attr;
+    doc_length_attr.set_bm25_doc_len_param();
+    skip_idx_attrs.at(attr_idx++).set_column_attr(doc_length_attr.get_packed_value());
+
+    // push column types
+    ObObjMeta meta_type;
+    meta_type.set_uint64();
+    if (OB_ISNULL(column_types)) {
+    } else if (OB_FAIL(column_types->push_back(meta_type))) {
+      LOG_WARN("failed to push word_count column type", K(ret));
+    } else if (OB_FAIL(column_types->push_back(meta_type))) {
+      LOG_WARN("failed to push doc_length column type", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObFtsIndexBuilderUtil::generate_fts_aux_non_rowkey_column_descs(
+    common::ObIArray<ObColDesc> &column_descs, const int64_t start_column_id)
+{
+  INIT_SUCC(ret);
+
+  // word count column
+  ObColDesc col_desc;
+  int64_t column_id = start_column_id;
+  col_desc.col_id_ = column_id++;
+  col_desc.col_type_.set_uint64();
+  col_desc.col_order_ = common::ObOrderType::ASC;
+
+  if (OB_FAIL(column_descs.push_back(col_desc))) {
+    LOG_WARN("failed to push back word count column desc", K(ret));
+  } else {
+    // doc length column
+    col_desc.col_id_ = column_id++;
+    col_desc.col_type_.set_uint64();
+    col_desc.col_order_ = common::ObOrderType::ASC;
+
+    if (OB_FAIL(column_descs.push_back(col_desc))) {
+      LOG_WARN("failed to push back doc length column desc", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObMulValueIndexBuilderUtil::generate_mulvalue_index_name(
     obrpc::ObCreateIndexArg &arg,
     ObIAllocator *allocator)
