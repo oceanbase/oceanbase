@@ -2894,6 +2894,16 @@ int check_decimalint_accuracy(const ObCastMode cast_mode,
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if(precision > 0 && scale>=0 && scale <= precision) {
+      int32_t expected_int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
+      if(OB_UNLIKELY(expected_int_bytes != int_bytes)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("decimal int length mismatch", K(ret), K(expected_int_bytes), K(int_bytes));
+      }
+    }
+  }
+
   return ret;
 }
 
