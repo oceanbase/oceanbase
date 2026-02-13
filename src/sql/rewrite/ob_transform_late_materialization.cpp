@@ -835,7 +835,6 @@ int ObTransformLateMaterialization::generate_pk_join_conditions(const uint64_t r
   const ObTableSchema *table_schema = NULL;
   ObSEArray<uint64_t, 4> key_col_ids;
   ObSEArray<uint64_t, 4> part_col_ids;
-  const bool is_mysql_mode = lib::is_mysql_mode();
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_) ||
       OB_ISNULL(schema_guard = ctx_->sql_schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -888,7 +887,7 @@ int ObTransformLateMaterialization::generate_pk_join_conditions(const uint64_t r
         }
       } else {
         if (OB_FAIL(ObRawExprUtils::create_null_safe_equal_expr(*ctx_->expr_factory_,
-                            ctx_->session_info_, is_mysql_mode, table_col, view_col, equal_expr))) {
+                            ctx_->session_info_, table_col, view_col, equal_expr))) {
           LOG_WARN("failed to create null safe equal expr", K(ret));
         } else if (OB_FAIL(select_stmt.get_condition_exprs().push_back(equal_expr))) {
           LOG_WARN("push back join condition failed", K(ret));
