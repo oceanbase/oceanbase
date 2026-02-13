@@ -8356,7 +8356,8 @@ bool ObOptimizerUtil::has_psedu_column(const ObRawExpr &expr)
          expr.has_flag(CNT_SEQ_EXPR) ||
          expr.has_flag(CNT_LEVEL) ||
          expr.has_flag(CNT_CONNECT_BY_ISLEAF) ||
-         expr.has_flag(CNT_CONNECT_BY_ISCYCLE);
+         expr.has_flag(CNT_CONNECT_BY_ISCYCLE) ||
+         expr.has_flag(CNT_PSEUDO_COLUMN);
 }
 
 bool ObOptimizerUtil::has_hierarchical_expr(const ObRawExpr &expr)

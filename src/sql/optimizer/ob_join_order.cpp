@@ -15439,7 +15439,7 @@ public:
       new_expr = new_query_ref;
     } else if (copier_->is_existed(old_expr)) {
       // do nothing
-    } else if ((old_expr->is_column_ref_expr() &&
+    } else if (((old_expr->is_column_ref_expr() || old_expr->is_pseudo_column_expr()) &&
                 old_expr->get_relation_ids().is_subset(*left_table_set_))
                || old_expr->has_flag(IS_LEVEL)
                || old_expr->has_flag(IS_PRIOR)) {
