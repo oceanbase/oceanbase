@@ -1282,7 +1282,6 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
     if (OB_SUCC(ret) && incr_vid_count > 0) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
       lib::ObLightBacktraceGuard light_backtrace_guard(false);
-      TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
       if (OB_FAIL(obvectorutil::add_index(incr_data_->index_,
                                               vectors,
                                               incr_vids,
@@ -1290,13 +1289,12 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
                                               extra_info_buf_ptr,
                                               incr_vid_count))) {
         LOG_WARN("failed to add index.", K(ret), K(dim), K(row_count));
-      } else {
-        incr_data_->set_vid_bound(vid_bound);
       }
     }
     if (OB_SUCC(ret)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPH"));
       TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
+      incr_data_->set_vid_bound(vid_bound);
       for (int64_t i = 0; OB_SUCC(ret) && i < incr_vid_count; i++) {
         ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, incr_vids[i]));
       }
@@ -1867,12 +1865,11 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
                                                  extra_info_buf,
                                                  count))) {
         LOG_WARN("failed to add index.", K(ret), K(ctx->get_dim()), K(count));
-      } else {
-        incr_data_->set_vid_bound(vid_bound);
       }
       if (OB_SUCC(ret)) {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPJ"));
         TCWLockGuard lock_guard(incr_data_->bitmap_rwlock_);
+        incr_data_->set_vid_bound(vid_bound);
         for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
           ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, vids[i]));
         }
