@@ -199,7 +199,6 @@ int ObWindowCompactionHelper::check_window_compaction_could_start(
   if (OB_UNLIKELY(!global_info.is_valid() || global_info.tenant_id_ != tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(global_info));
-  } else if (GCTX.is_shared_storage_mode()) { // window compaction is not supported in shared storage mode
   } else if (global_info.suspend_merging_.get_value()) { // window compaction is not supported when suspend merging
   } else if (global_info.frozen_scn() > global_info.last_merged_scn()) { // tenant major merge is not finished
   } else if (OB_FAIL(tenant_status.init_or_refresh())) {

@@ -1557,8 +1557,7 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
 
 bool ObTenantTabletScheduler::need_do_window_compaction() const
 {
-  return !GCTX.is_shared_storage_mode()
-      && !tenant_status_.is_skip_window_compaction_tenant()
+  return !tenant_status_.is_skip_window_compaction_tenant()
       && could_major_merge_start() //
       && !is_compacting()
       && is_global_during_window_compaction();

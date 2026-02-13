@@ -7,6 +7,7 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
+#include "ob_schedule_tablet_func.h"
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_medium_loop.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
@@ -64,6 +65,46 @@ int ObMediumLoop::init(const int64_t batch_size)
   return ret;
 }
 
+class ObScheduleTabletFuncGuard final
+{
+public:
+  ObScheduleTabletFuncGuard(const int64_t merge_version, int64_t &loop_cnt) {
+    func_ = NULL;
+#ifdef OB_BUILD_SHARED_STORAGE
+    ss_func_ = NULL;
+    if (GCTX.is_shared_storage_mode()) {
+      ss_func_ = MTL_NEW(ObSSScheduleTabletFunc, "SS_ScheTablet", merge_version, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, true, loop_cnt);
+      func_ = ss_func_;
+    } else {
+      func_ = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt);
+    }
+  #else
+    func_ = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt);
+  #endif
+  }
+  ObScheduleTabletFunc *get_func() const { return func_; }
+  ~ObScheduleTabletFuncGuard() {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (ss_func_) {
+      ss_func_->~ObSSScheduleTabletFunc();
+      mtl_free(ss_func_);
+      ss_func_ = nullptr;
+      func_ = nullptr;
+    }
+#endif
+    if (func_) {
+      func_->~ObScheduleTabletFunc();
+      mtl_free(func_);
+      func_ = nullptr;
+    }
+  }
+private:
+  ObScheduleTabletFunc *func_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSScheduleTabletFunc *ss_func_;
+#endif
+};
+
 int ObMediumLoop::loop()
 {
   int ret = OB_SUCCESS;
@@ -71,18 +112,10 @@ int ObMediumLoop::loop()
 
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ObScheduleTabletFunc *func = nullptr;
   // merge_version_ may be larger than loop_version_ by other thread,
   // keep using merge_version_ can make the medium loop faster
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode()) {
-    func = MTL_NEW(ObSSScheduleTabletFunc, "SS_ScheTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, true, loop_cnt_);
-  } else {
-    func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
-  }
-#else
-  func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
-#endif
+  ObScheduleTabletFuncGuard func_guard(merge_version_, loop_cnt_);
+  ObScheduleTabletFunc *func = func_guard.get_func();
   if (OB_ISNULL(func)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc SchedTabletFunc fail", K(ret));
@@ -120,18 +153,8 @@ int ObMediumLoop::loop()
     }
   } // while
   LOG_TRACE("finish schedule ls medium merge", K(tmp_ret), K(ret), K_(ls_tablet_iter), K(ls_id));
-  if (func) {
+  if (OB_NOT_NULL(func)) {
     add_event_and_diagnose(*func);
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      ((ObSSScheduleTabletFunc*)func)->~ObSSScheduleTabletFunc();
-    } else {
-      func->~ObScheduleTabletFunc();
-    }
-#else
-    func->~ObScheduleTabletFunc();
-#endif
-    mtl_free(func);
   }
   return ret;
 }

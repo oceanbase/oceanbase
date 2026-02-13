@@ -22,6 +22,9 @@
 #include "share/scheduler/ob_dag_scheduler_config.h"
 #include "share/compaction/ob_compaction_resource_manager.h"
 #include "share/compaction/ob_compaction_time_guard.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction_v2/ob_ss_schedule_tablet_func.h"
+#endif
 
 ERRSIM_POINT_DEF(EN_WINDOW_COMPACTION_DO_NOT_ADD_READY_LIST);
 ERRSIM_POINT_DEF(EN_WINDOW_COMPACTION_DO_NOT_PROCESS_READY_LIST);
@@ -228,6 +231,46 @@ private:
   ObWindowCompactionPriorityQueue &prio_queue_;
 };
 
+class ObWindowScheduleTabletFuncGuard final
+{
+public:
+  ObWindowScheduleTabletFuncGuard()  {
+    func_ = nullptr;
+#ifdef OB_BUILD_SHARED_STORAGE
+    ss_func_ = nullptr;
+    if (GCTX.is_shared_storage_mode()) {
+      ss_func_ = MTL_NEW(ObSSWindowScheduleTabletFunc, "SS_WinSchedFunc");
+      func_ = ss_func_;
+    } else {
+      func_ = MTL_NEW(ObWindowScheduleTabletFunc, "SN_WinSchedFunc");
+    }
+#else
+    func_ = MTL_NEW(ObWindowScheduleTabletFunc, "SN_WinSchedFunc");
+#endif
+  }
+  ObWindowScheduleTabletFunc *get_func() const { return func_; }
+  ~ObWindowScheduleTabletFuncGuard() {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (ss_func_) {
+      ss_func_->~ObSSWindowScheduleTabletFunc();
+      mtl_free(ss_func_);
+      ss_func_ = nullptr;
+      func_ = nullptr;
+    }
+#endif
+    if (func_) {
+      func_->~ObWindowScheduleTabletFunc();
+      mtl_free(func_);
+      func_ = nullptr;
+    }
+  }
+private:
+  ObWindowScheduleTabletFunc *func_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSWindowScheduleTabletFunc *ss_func_;
+#endif
+};
+
 int ObWindowLoop::loop_tablet_stats()
 {
   int ret = OB_SUCCESS;
@@ -235,18 +278,22 @@ int ObWindowLoop::loop_tablet_stats()
   tablet_analyzers.set_attr(ObMemAttr(MTL_ID(), "TbltAnlyrs"));
   ObTabletStatAnalyzerLSIDComparator cmp(ret);
   ObLSSortedIterator<storage::ObTabletStatAnalyzer> iterator;
-  ObWindowScheduleTabletFunc func; // only used to filter tablets
+  ObWindowScheduleTabletFuncGuard func_guard;
+  ObWindowScheduleTabletFunc *func = func_guard.get_func();
   TabletStatAnalyzerProcessor processor(score_prio_queue_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObWindowLoop is not inited", K(ret));
+  } else if (OB_ISNULL(func)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc SchedTabletFunc fail", K(ret));
   } else if (OB_FAIL(MTL(storage::ObTenantTabletStatMgr *)->get_all_tablet_analyzers(tablet_analyzers))) {
     LOG_WARN("failed to get all tablet analyzers", K(ret));
   } else if (tablet_analyzers.empty()) {
   } else if (FALSE_IT(lib::ob_sort(tablet_analyzers.begin(), tablet_analyzers.end(), cmp))) {
   } else if (OB_FAIL(ret)) {
     LOG_WARN("failed to sort tablet analyzers", K(ret));
-  } else if (OB_FAIL(iterator.iterate(func, tablet_analyzers, processor, true /*skip_follower*/))) {
+  } else if (OB_FAIL(iterator.iterate(*func, tablet_analyzers, processor, true /*skip_follower*/))) {
     LOG_WARN("failed to iterate tablet stat analyzers", K(ret));
   } else {
     LOG_INFO("[WIN-COMPACTION] Successfully loop tablet stats", K(ret), "tablet_cnt", tablet_analyzers.count(),
@@ -338,10 +385,14 @@ public:
   int operator()(ObScheduleTabletFunc &func, ObTabletCompactionScore *candidate, ObTabletHandle &tablet_handle)
   {
     int ret = OB_SUCCESS;
+    ObWindowScheduleTabletFunc *window_func = nullptr;
     if (OB_UNLIKELY(!func.is_window_compaction_func())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid func", K(ret), K(func));
-    } else if (OB_FAIL(window_loop_.process_ready_candidate(static_cast<ObWindowScheduleTabletFunc &>(func), candidate, tablet_handle, record_))) {
+    } else if (OB_ISNULL(window_func = dynamic_cast<ObWindowScheduleTabletFunc *>(&func))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid func", K(ret), K(func));
+    } else if (OB_FAIL(window_loop_.process_ready_candidate(*window_func, candidate, tablet_handle, record_))) {
       LOG_WARN("failed to process ready candidate", K(ret), KPC(candidate), K(tablet_handle));
     }
     return ret;
@@ -356,7 +407,8 @@ int ObWindowLoop::loop_ready_list(const int64_t ts_threshold)
   int ret = OB_SUCCESS;
   ObSEArray<ObTabletCompactionScore *, 4> candidates;  // capcity will be reserved when get_candidate_list
   ObLSSortedIterator<ObTabletCompactionScore *> iterator;
-  ObWindowScheduleTabletFunc func;
+  ObWindowScheduleTabletFuncGuard func_guard;
+  ObWindowScheduleTabletFunc *func = func_guard.get_func();
   LoopReadyListRecord loop_record;
   ReadyCandidateProcessor processor(*this, loop_record);
   ObWindowCompactionBaseContainerGuard list_guard(ready_list_); // for thread-safely access ready list
@@ -365,6 +417,9 @@ int ObWindowLoop::loop_ready_list(const int64_t ts_threshold)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObWindowLoop is not inited", K(ret));
+  } else if (OB_ISNULL(func)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc SchedTabletFunc fail", K(ret));
   } else if (OB_FAIL(list_guard.acquire())) {
     LOG_WARN("failed to init list guard", K(ret));
   } else if (FALSE_IT(old_weighted_size = ready_list_.get_current_weighted_size())) {
@@ -375,7 +430,7 @@ int ObWindowLoop::loop_ready_list(const int64_t ts_threshold)
   } else if (FALSE_IT(lib::ob_sort(candidates.begin(), candidates.end(), ObTabletCompactionScoreLSComparator(ret)))) {
   } else if (OB_FAIL(ret)) {
     LOG_WARN("failed to sort candidates", K(ret));
-  } else if (OB_FAIL(iterator.iterate(func, candidates, processor, false /*skip_follower*/))) {
+  } else if (OB_FAIL(iterator.iterate(*func, candidates, processor, false /*skip_follower*/))) {
     LOG_WARN("failed to iterate ready candidates", K(ret));
   } else if (OB_FAIL(loop_record.record_to_string(loop_info))) {
     LOG_WARN("failed to convert loop info to string", K(ret));

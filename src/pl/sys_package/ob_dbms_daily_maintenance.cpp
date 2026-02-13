@@ -133,11 +133,7 @@ int ObDBMSDailyMaintenance::check_supported(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  if (GCTX.is_shared_storage_mode()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("window compaction is not supported in shared storage mode", KR(ret), K(tenant_id));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "window compaction in shared storage mode");
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id));
   } else if (data_version < DATA_VERSION_4_5_1_0) {
     ret = OB_NOT_SUPPORTED;
