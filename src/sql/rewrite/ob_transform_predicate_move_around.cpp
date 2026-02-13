@@ -2568,29 +2568,43 @@ int ObTransformPredicateMoveAround::inner_add_split_in_exprs(ObRawExpr *in_expr,
   } else {
     ObRawExpr* left_expr = in_expr->get_param_expr(0);
     ObRawExpr* right_expr = in_expr->get_param_expr(1);
+    ObRawExpr* cur_table_first_expr = NULL;
+    ObSEArray<ObRawExpr*, 4> tmp_exprs;
     // for each i not extracted yet, create a new in expr with the same table id.
     for (int i = 0; OB_SUCC(ret) && i < left_expr->get_param_count(); i++) {
-      if (OB_ISNULL(left_expr->get_param_expr(i))) {
+      tmp_exprs.reuse();
+      if (skip_expr_set.has_member(i) ) {
+        // do nothing
+      } else if (OB_ISNULL(cur_table_first_expr = left_expr->get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null raw exprs", K(ret));
-      } else if (skip_expr_set.has_member(i) || !left_expr->get_param_expr(i)->is_column_ref_expr() ||
-                 !ObOptimizerUtil::find_item(target_exprs, left_expr->get_param_expr(i))) {
+        LOG_WARN("get null param expr", K(ret));
+      } else if (!cur_table_first_expr->is_deterministic() ||
+                 cur_table_first_expr->get_relation_ids().num_members() != 1) {
+        // do nothing
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(left_expr->get_param_expr(i), tmp_exprs))) {
+        LOG_WARN("failed to extract first column exprs", K(ret), KPC(left_expr->get_param_expr(i)));
+      } else if (!ObOptimizerUtil::is_subset(tmp_exprs, target_exprs)) {
         // do nothing
       } else {
         ObRawExpr *split_in_expr = NULL;
+        ObRawExpr* cur_table_expr = NULL;
         int last_split_idx = -1;
         split_expr_set.reuse();
         // for each j, add index of left_expr with the same table id into split_expr_set
         for (int j = i; OB_SUCC(ret) && j < left_expr->get_param_count(); j++) {
+          tmp_exprs.reuse();
           if (skip_expr_set.has_member(j)) {
             // do nothing.
-          } else if (OB_ISNULL(left_expr->get_param_expr(j))) {
+          } else if (OB_ISNULL(cur_table_expr = left_expr->get_param_expr(j))) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get null left expr param");
-          } else if (!left_expr->get_param_expr(j)->is_column_ref_expr() ||
-              static_cast<ObColumnRefRawExpr *>(left_expr->get_param_expr(j))->get_table_id() !=
-              static_cast<ObColumnRefRawExpr *>(left_expr->get_param_expr(i))->get_table_id()) {
-            // do nothing.
+            LOG_WARN("get null current table expr", K(ret));
+          } else if (!cur_table_expr->is_deterministic() ||
+                     cur_table_expr->get_relation_ids() != cur_table_first_expr->get_relation_ids()) {
+            // do nothing
+          } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(cur_table_expr, tmp_exprs))) {
+            LOG_WARN("failed to extract current column exprs", K(ret), KPC(left_expr->get_param_expr(j)));
+          } else if (!ObOptimizerUtil::is_subset(tmp_exprs, target_exprs)) {
+            // do nothing
           } else if (OB_FAIL(split_expr_set.add_member(j))) {
             LOG_WARN("failed to add idx to split expr set", K(ret));
           } else if (OB_FAIL(skip_expr_set.add_member(j))) {
