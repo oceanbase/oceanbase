@@ -17,9 +17,11 @@
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_zone_merge_info.h"
+#include "lib/string/ob_sql_string.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "src/observer/ob_srv_network_frame.h"
+#include "share/ob_errno.h"
 
 namespace oceanbase
 {
@@ -142,9 +144,11 @@ int ObMajorFreezeHelper::send_tablets_major_freeze_by_ls(
   const uint64_t tenant_id,
   const int64_t ls_id,
   const common::ObIArray<uint64_t> &tablet_ids,
-  const bool is_rebuild_column_group)
+  const bool is_rebuild_column_group,
+  obrpc::ObTableMajorFreezeResult &result)
 {
   int ret = OB_SUCCESS;
+  result.reset();
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || ls_id <= 0 || tablet_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument for send tablets major freeze by ls", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids.count()));
@@ -155,7 +159,6 @@ int ObMajorFreezeHelper::send_tablets_major_freeze_by_ls(
     const int64_t start_time = ObTimeUtility::fast_current_time();
     ObAddr leader;
     obrpc::ObTableMajorFreezeRequest req(tenant_id, ls_id, tablet_ids, is_rebuild_column_group);
-    obrpc::ObMajorFreezeResponse resp;
     share::ObLSID ls_id_obj(ls_id);
     for (int64_t i = 0; (OB_SUCC(ret) || OB_EAGAIN == ret || OB_LEADER_NOT_EXIST == ret || ret == OB_TIMEOUT) && (i <  MAX_RETRY_COUNT); ++i) {
       const int64_t LEADER_WAIT_TIMEOUT = 1000 * 1000; // 1s
@@ -166,8 +169,8 @@ int ObMajorFreezeHelper::send_tablets_major_freeze_by_ls(
                               .max_process_handler_time(MAX_PROCESS_TIME_US)
                               .by(tenant_id)
                               .dst_cluster_id(GCONF.cluster_id)
-                              .table_major_freeze(req, resp))) {
-        LOG_WARN("failed to send table major freeze command",  KR(ret), K(tenant_id), K(ls_id_obj), "ori_leader", leader, K(req), K(i));
+                              .table_major_freeze(req, result))) {
+        LOG_WARN("failed to send table major freeze command",  KR(ret), K(tenant_id), K(ls_id_obj), "ori_leader", leader, K(req), K(i), K(result));
         if (OB_LEADER_NOT_EXIST == ret || OB_EAGAIN == ret) {
           const int64_t idle_time = 200 * 1000 * (i + 1);
           USLEEP(idle_time);
@@ -176,12 +179,8 @@ int ObMajorFreezeHelper::send_tablets_major_freeze_by_ls(
         break;
       }
     } // end for
-    if (OB_SUCC(ret) && resp.err_code_ != OB_SUCCESS ) {
-      ret = resp.err_code_;
-      LOG_WARN("failed to send tablets major freeze by ls", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids), K(is_rebuild_column_group));
-    }
     const int64_t cost_time = ObTimeUtility::current_time() - start_time;
-    LOG_INFO("send tablets major freeze by ls finished", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids), K(is_rebuild_column_group), K(cost_time));
+    LOG_INFO("send tablets major freeze by ls finished", KR(ret), K(tenant_id), K(ls_id), K(tablet_ids), K(is_rebuild_column_group), K(cost_time), K(result));
   }
   return ret;
 }
@@ -251,6 +250,36 @@ int ObMajorFreezeHelper::get_ls_tablets_result_by_sql(
   return ret;
 }
 
+// Utility function to format table freeze error detail
+int ObMajorFreezeHelper::format_table_freeze_error_detail(
+  const obrpc::ObTableMajorFreezeResult &result,
+  common::ObSqlString &detail)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(detail.append_fmt("Table major freeze partially failed, total_count = %ld, success_count = %ld ",
+          result.total_tablets_, result.success_tablets_))) {
+    LOG_WARN("failed to append basic info", K(ret), K(result));
+  }
+  bool first_err_code = false;
+  for (int64_t idx = 0; idx < obrpc::ObTableMajorFreezeResult::MAX_FAIL_CODES && OB_SUCC(ret); ++idx) {
+    if (result.fail_err_codes_[idx] == OB_SUCCESS) { // do nothing
+    } else { // append error code
+      const char *err_name = ob_error_name(result.fail_err_codes_[idx]);
+      if (!first_err_code) { // append prefix
+        if (OB_FAIL(detail.append_fmt(", fail_err_codes = %s", err_name))) {
+          LOG_WARN("failed to append fail_err_codes prefix", K(ret));
+        }
+        first_err_code = true; // set flag
+      } else if (OB_FAIL(detail.append(", "))) {
+        LOG_WARN("failed to append comma", K(ret));
+      } else if (OB_FAIL(detail.append_fmt("%s", err_name))) { // append error name
+        LOG_WARN("failed to append error name", K(ret), K(idx), K(err_name));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMajorFreezeHelper::table_major_freeze(
   const ObTableMajorFreezeArg &param)
 {
@@ -272,25 +301,34 @@ int ObMajorFreezeHelper::table_major_freeze(
       } else {
         int64_t cur_ls_id = 0;
         bool no_need_call_next = false;
-        bool partial_failed = false;
+        // aggregated result for all tablets of table
+        obrpc::ObTableMajorFreezeResult aggregated_result;
         ObArray<uint64_t> batch_schedule_tablet_ids;
         while (OB_SUCC(ret)) {
+          obrpc::ObTableMajorFreezeResult response;
           if (OB_FAIL(get_next_batch_schedule_tablets(*result, no_need_call_next, cur_ls_id, batch_schedule_tablet_ids))) {
             LOG_WARN("failed to get next batch schedule tablets", KR(ret), K(cur_ls_id), K(batch_schedule_tablet_ids));
-          } else if (!batch_schedule_tablet_ids.empty()) {
-            int tmp_ret = OB_SUCCESS;
-            if (OB_TMP_FAIL(send_tablets_major_freeze_by_ls(proxy, param.tenant_id_, cur_ls_id, batch_schedule_tablet_ids, param.is_rebuild_column_group_))) {
-              partial_failed = true;
-              LOG_WARN("failed to send tablets major freeze by ls", KR(tmp_ret), K(param), K(cur_ls_id), K(batch_schedule_tablet_ids), K(batch_schedule_tablet_ids.count()));
-            }
-          } else { // no more tablets to freeze, break
+          } else if (batch_schedule_tablet_ids.empty()) {
             break;
+          } else if (OB_FAIL(send_tablets_major_freeze_by_ls(proxy, param.tenant_id_, cur_ls_id, batch_schedule_tablet_ids, param.is_rebuild_column_group_, response))) {
+            LOG_WARN("failed to send tablets major freeze by ls", KR(ret), K(param), K(cur_ls_id), K(batch_schedule_tablet_ids), K(batch_schedule_tablet_ids.count()), K(result));
+          }
+          aggregated_result.total_tablets_ += batch_schedule_tablet_ids.count();
+          aggregated_result.success_tablets_ += response.success_tablets_;
+          for (int64_t idx = 0; idx < ObTableMajorFreezeResult::MAX_FAIL_CODES; ++idx) {
+            aggregated_result.set_err_code(response.fail_err_codes_[idx]);
           }
         }
-        if (OB_SUCC(ret) && partial_failed) {
+        if (OB_SUCC(ret) && aggregated_result.success_tablets_ != aggregated_result.total_tablets_) {
           ret = OB_PARTIAL_FAILED;
-          LOG_WARN("[WARN] tablets of table do major freeze partially failed", KR(ret), K(param), K(cur_ls_id));
-          LOG_USER_ERROR(OB_PARTIAL_FAILED, "[WARN] tablets of table do major freeze partially failed");
+          LOG_WARN("[TableMajorFreeze] tablets of table do major freeze partially failed", KR(ret), K(param), K(cur_ls_id), K(aggregated_result));
+          common::ObSqlString detail;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(format_table_freeze_error_detail(aggregated_result, detail))) {
+            LOG_WARN("failed to format table freeze error detail", KR(tmp_ret), K(aggregated_result));
+          } else {
+            LOG_USER_ERROR(OB_PARTIAL_FAILED, detail.ptr());
+          }
         }
       }
     }

@@ -6590,6 +6590,21 @@ int ObRootMinorFreezeArg::assign(const ObRootMinorFreezeArg &other)
   return ret;
 }
 
+void ObTableMajorFreezeResult::set_err_code(int err_code)
+{
+  if (err_code == OB_SUCCESS) { // do nothing
+  } else {
+    for (int32_t i = 0; i < MAX_FAIL_CODES; ++i) {
+      if (fail_err_codes_[i] == OB_SUCCESS) {
+        fail_err_codes_[i] = err_code;
+        break;
+      } else if (fail_err_codes_[i] == err_code) {
+        break;
+      }
+    }
+  }
+}
+
 OB_SERIALIZE_MEMBER(ObTabletMajorFreezeArg,
                     tenant_id_,
                     ls_id_,
@@ -6600,6 +6615,61 @@ OB_SERIALIZE_MEMBER(ObTableMajorFreezeArg,
                     tenant_id_,
                     table_id_,
                     is_rebuild_column_group_);
+
+int ObTableMajorFreezeResult::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(total_tablets_);
+  OB_UNIS_ENCODE(success_tablets_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_FAIL_CODES; ++i) {
+    OB_UNIS_ENCODE(fail_err_codes_[i]);
+  }
+  return ret;
+}
+
+int ObTableMajorFreezeResult::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(total_tablets_);
+  OB_UNIS_DECODE(success_tablets_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < MAX_FAIL_CODES; ++i) {
+    OB_UNIS_DECODE(fail_err_codes_[i]);
+  }
+  return ret;
+}
+
+int64_t ObTableMajorFreezeResult::get_serialize_size() const
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(total_tablets_);
+  OB_UNIS_ADD_LEN(success_tablets_);
+  for (int64_t i = 0; i < MAX_FAIL_CODES; ++i) {
+    OB_UNIS_ADD_LEN(fail_err_codes_[i]);
+  }
+  return len;
+}
+
+int64_t ObTableMajorFreezeResult::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(total_tablets), K_(success_tablets));
+  J_COMMA();
+  J_NAME("fail_err_codes");
+  J_COLON();
+  J_ARRAY_START();
+  bool first = true;
+  for (int32_t i = 0; i < MAX_FAIL_CODES; ++i) {
+    if (fail_err_codes_[i] != OB_SUCCESS) {
+      if (!first) { J_COMMA(); }
+      BUF_PRINTO(fail_err_codes_[i]);
+      first = false;
+    }
+  }
+  J_ARRAY_END();
+  J_OBJ_END();
+  return pos;
+}
 
 OB_SERIALIZE_MEMBER(ObTableMajorFreezeRequest,
                     tenant_id_,

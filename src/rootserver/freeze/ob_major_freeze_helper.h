@@ -198,7 +198,11 @@ private:
       const uint64_t tenant_id,
       const int64_t ls_id,
       const common::ObIArray<uint64_t> &tablet_ids,
-      const bool is_rebuild_column_group);
+      const bool is_rebuild_column_group,
+      obrpc::ObTableMajorFreezeResult &result);
+  static int format_table_freeze_error_detail(
+      const obrpc::ObTableMajorFreezeResult &result,
+      common::ObSqlString &detail);
   static const int64_t MAX_PROCESS_TIME_US = 10 * 1000 * 1000L;
   static const int64_t BATCH_SCHEDULE_TABLET_COUNT = 100;
   static const int64_t MAX_RETRY_COUNT = 5;

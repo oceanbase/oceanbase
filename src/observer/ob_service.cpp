@@ -1167,11 +1167,10 @@ int ObService::tablet_major_freeze(const obrpc::ObTabletMajorFreezeArg &arg,
 }
 
 int ObService::table_major_freeze(const obrpc::ObTableMajorFreezeRequest &arg,
-                           obrpc::Int64 &result)
+                           obrpc::ObTableMajorFreezeResult &result)
 {
   int ret = OB_SUCCESS;
-  result = OB_SUCCESS;
-  int schedule_tablet_cnt = 0;
+  result.reset();
   const int64_t start_ts = ObTimeUtility::fast_current_time();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -1182,24 +1181,25 @@ int ObService::table_major_freeze(const obrpc::ObTableMajorFreezeRequest &arg,
   } else {
     MTL_SWITCH(arg.tenant_id_) {
       int tmp_ret = OB_SUCCESS;
-      for (int64_t i = 0; i < arg.tablet_ids_.count(); ++i) {
+      result.total_tablets_ = arg.tablet_ids_.count();
+      for (int64_t i = 0; i < result.total_tablets_; ++i) {
         const ObLSID ls_id(arg.ls_id_);
         const ObTabletID tablet_id(arg.tablet_ids_.at(i));
         if (OB_TMP_FAIL(MTL(compaction::ObTenantTabletScheduler *)->user_request_schedule_medium_merge(
           ls_id, tablet_id, arg.is_rebuild_column_group_))) {
-          LOG_WARN("failed to try schedule tablet major freeze", K(tmp_ret), K(arg), K(i));
+          result.set_err_code(tmp_ret);
+          LOG_WARN("failed to try schedule tablet major freeze", K(tmp_ret), K(arg), K(i), K(tablet_id));
         } else {
-          schedule_tablet_cnt++;
+          result.success_tablets_++;
         }
       }
-      if (schedule_tablet_cnt != arg.tablet_ids_.count()) {
-        result = OB_PARTIAL_FAILED;
-        LOG_WARN("failed to schedule tablet major freeze", K(ret), K(arg), K(schedule_tablet_cnt), K(arg.tablet_ids_.count()));
+      if (result.success_tablets_ != result.total_tablets_) {
+        LOG_WARN("[TableMajorFreeze] some tablets failed to schedule major freeze", K(OB_PARTIAL_FAILED), K(ret), K(arg), K(result));
       }
     }
   }
   const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
-  LOG_INFO("finish table major freeze request", K(ret), K(arg), K(cost_ts), K(schedule_tablet_cnt));
+  LOG_INFO("finish table major freeze request", K(ret), K(arg), K(cost_ts), K(result));
   return ret;
 }
 

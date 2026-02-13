@@ -193,7 +193,7 @@ public:
                    obrpc::Int64 &result);
   // ObRpcTableMajorFreezeP @RS table major freeze
   int table_major_freeze(const obrpc::ObTableMajorFreezeRequest &arg,
-                   obrpc::Int64 &result);
+                   obrpc::ObTableMajorFreezeResult &result);
   // ObRpcCheckSchemaVersionElapsedP @RS global index builder
   int check_schema_version_elapsed(
       const obrpc::ObCheckSchemaVersionElapsedArg &arg,

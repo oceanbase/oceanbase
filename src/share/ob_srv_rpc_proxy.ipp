@@ -277,7 +277,7 @@
   RPC_S(PR5 notify_tenant_thread, OB_NOTIFY_TENANT_THREAD, (obrpc::ObNotifyTenantThreadArg));
   RPC_S(PR5 admin_alter_ls, OB_ADMIN_ALTER_LS, (share::ObAlterLSArg), share::ObAlterLSRes);
   RPC_AP(PR5 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE, (ObTabletMajorFreezeArg), obrpc::Int64);
-  RPC_AP(PR5 table_major_freeze, OB_TABLE_MAJOR_FREEZE, (ObTableMajorFreezeRequest), obrpc::Int64);
+  RPC_AP(PR5 table_major_freeze, OB_TABLE_MAJOR_FREEZE, (ObTableMajorFreezeRequest), obrpc::ObTableMajorFreezeResult);
   RPC_AP(PR5 shared_storage_net_throt_predict, OB_SHARED_STORAGE_NET_THROT_PREDICT, (obrpc::ObSSNTEndpointArg), obrpc::ObSharedDeviceResourceArray);
   RPC_AP(PR5 shared_storage_net_throt_set, OB_SHARED_STORAGE_NET_THROT_SET, (obrpc::ObSharedDeviceResourceArray), obrpc::ObSSNTSetRes);
   RPC_AP(PR5 kill_client_session, OB_KILL_CLIENT_SESSION, (ObKillClientSessionArg), ObKillClientSessionRes);

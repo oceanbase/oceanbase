@@ -7885,6 +7885,27 @@ public:
   bool is_rebuild_column_group_;
 };
 
+struct ObTableMajorFreezeResult
+{
+public:
+  static constexpr int64_t MAX_FAIL_CODES = 3;
+  ObTableMajorFreezeResult() { reset();}
+  ~ObTableMajorFreezeResult() = default;
+  void set_err_code(int err_code);
+  void reset() {
+    total_tablets_ = 0;
+    success_tablets_ = 0;
+    MEMSET(fail_err_codes_, OB_SUCCESS, sizeof(fail_err_codes_));
+  }
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
+  int64_t get_serialize_size() const;
+  DECLARE_TO_STRING;
+  int64_t total_tablets_;
+  int64_t success_tablets_;
+  int32_t fail_err_codes_[MAX_FAIL_CODES];
+};
+
 struct ObSyncPGPartitionMTFinishArg
 {
   OB_UNIS_VERSION(1);
