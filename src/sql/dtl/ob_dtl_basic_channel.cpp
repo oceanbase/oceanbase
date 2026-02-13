@@ -662,9 +662,9 @@ int ObDtlBasicChannel::process1(
         mock_buffer.set_data_msg(true);
         ObDtlMsgType type = ObDtlMsgType::PX_DATUM_ROW;
         if (OB_ISNULL(result_info) || !result_info->is_rich_format()) {
-          mock_buffer.set_buf(reinterpret_cast<char *>(&datum_iter_));
+          mock_buffer.set_buf(reinterpret_cast<char *>(&datum_iter_), sizeof(datum_iter_));
         } else {
-          mock_buffer.set_buf(reinterpret_cast<char *>(&row_iter_));
+          mock_buffer.set_buf(reinterpret_cast<char *>(&row_iter_), sizeof(row_iter_));
           mock_buffer.set_row_meta(result_info->get_row_store()->get_row_meta());
           type = ObDtlMsgType::PX_VECTOR_ROW;
         }

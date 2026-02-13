@@ -97,10 +97,10 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
   void *buf = nullptr;
   if (size <= size_per_buffer) {
     if (OB_SUCC(free_queue_.pop(buf, 0)) && NULL != buf) {
-      int64_t real_size = (static_cast<ObDtlLinkedBuffer *> (buf))->size();
-      if (real_size >= size_per_buffer) {
+      int64_t capacity = (static_cast<ObDtlLinkedBuffer *> (buf))->capacity();
+      if (capacity >= size_per_buffer) {
         allocated_buf = new (buf) ObDtlLinkedBuffer(
-        static_cast<char *>(buf) + sizeof (ObDtlLinkedBuffer), real_size);
+        static_cast<char *>(buf) + sizeof (ObDtlLinkedBuffer), capacity, capacity);
         allocated_buf->allocated_chid() = chid;
       } else {
         real_free(static_cast<ObDtlLinkedBuffer *> (buf));
@@ -130,9 +130,10 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else {
+      int64_t capacity = alloc_size - sizeof(ObDtlLinkedBuffer);
       allocated_buf = new (buf) ObDtlLinkedBuffer(
           buf + sizeof (ObDtlLinkedBuffer),
-          alloc_size - sizeof(ObDtlLinkedBuffer));
+          capacity, capacity);
       allocated_buf->allocated_chid() = chid;
       if (0 < get_free_queue_length()) {
         LOG_TRACE("Trace to allocate buffer", K(ret), K(seqno_), K(allocated_buf), K(lbt()),
@@ -163,7 +164,7 @@ int ObDtlChannelMemManager::free(ObDtlLinkedBuffer *buf, bool auto_free)
   int ret = OB_SUCCESS;
   if (NULL != buf) {
     buf->reset_batch_info();
-    if (auto_free && buf->size() == size_per_buffer_) {
+    if (auto_free && buf->capacity() == size_per_buffer_) {
       if (OB_FAIL(free_queue_.push(buf))) {
         LOG_TRACE("failed to push back buffer", K(ret), K(seqno_), K(free_queue_.size()));
       } else {

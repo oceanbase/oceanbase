@@ -215,6 +215,8 @@ int ObDtlTenantMemManager::auto_free_on_time()
   int64_t reserve_buffer_min_size = get_min_buffer_size();
   int64_t buffer_size = 0;
   int64_t max_reserve_count = 1;
+  int64_t max_free_queue_size = 0;
+  int64_t min_free_queue_size = INT64_MAX;
   for (int i = 0; i < mem_mgrs_.count(); ++i) {
     ObDtlChannelMemManager *mem_mgr = mem_mgrs_.at(i);
     if (0 == buffer_size) {
@@ -225,8 +227,12 @@ int ObDtlTenantMemManager::auto_free_on_time()
       ret = tmp_ret;
       LOG_TRACE("failed to auto free memory buffer manager", K(ret));
     }
+    max_free_queue_size = std::max(max_free_queue_size, mem_mgr->get_free_queue_length());
+    min_free_queue_size = std::min(min_free_queue_size, mem_mgr->get_free_queue_length());
   }
-  LOG_INFO("auto free to reserve buffer count", K(reserve_buffer_min_size), K(max_reserve_count), K(buffer_size), K(ret));
+  LOG_INFO("auto free to reserve buffer count", K(reserve_buffer_min_size), K(max_reserve_count),
+                                                K(buffer_size), K(max_free_queue_size), K(min_free_queue_size),
+                                                K(ret));
   return ret;
 }
 
