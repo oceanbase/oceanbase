@@ -534,6 +534,8 @@ int ObMajorMergeProgressChecker::check_progress()
   } else if (OB_UNLIKELY(expected_epoch_ < 0 || !freeze_info_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cached info may be cleared", KR(ret), K_(expected_epoch), "compaction_scn", get_compaction_scn());
+  } else if (OB_FAIL(ObMajorFreezeUtil::check_epoch_immediately(*sql_proxy_, tenant_id_, expected_epoch_))) {
+    LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K_(expected_epoch));
   } else if (OB_FAIL(prepare_check_progress(tmp_time_guard, exist_uncompacted_table))) {
     LOG_WARN("failed to prepare check progress", KR(ret));
   } else {
