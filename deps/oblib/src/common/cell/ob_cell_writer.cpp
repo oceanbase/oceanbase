@@ -12,6 +12,8 @@
 
 #include "common/cell/ob_cell_writer.h"
 #include "common/object/ob_object.h"
+#include "share/ob_cluster_version.h"
+#include "share/rc/ob_tenant_base.h"
 namespace oceanbase
 {
 namespace common
@@ -107,29 +109,47 @@ int ObCellWriter::write_number(const enum ObObjType meta_type, const number::ObN
 int ObCellWriter::write_char(const ObObj &obj, const enum ObObjType meta_type, const ObString &str, ObObj *clone_obj)
 {
   int ret = OB_SUCCESS;
-  uint32_t str_len = static_cast<uint32_t> (str.length());
+  uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (cluster_version >= CLUSTER_CURRENT_VERSION) {
+    ret = write_char_v2_(obj, meta_type, str, clone_obj);
+  } else {
+    ret = write_char_v1_(obj, meta_type, str, clone_obj);
+  }
+  return ret;
+}
+
+int ObCellWriter::write_char_v2_(const ObObj &obj, const enum ObObjType meta_type, const ObString &str, ObObj *clone_obj)
+{
+  int ret = OB_SUCCESS;
+  uint32_t str_len = static_cast<uint32_t>(str.length());
   int64_t len = sizeof(ObCellWriter::CellMeta) + sizeof(uint32_t) + str_len;
   ObCellWriter::CellMeta meta;
 
   meta.type_ = static_cast<uint8_t>(meta_type);
   if (CS_TYPE_UTF8MB4_GENERAL_CI == obj.get_collation_type()) {
-    meta.attr_ = 0;
-  } else {
-    meta.attr_ = 1;
+    meta.attr_ = CHAR_NO_COLL;
+  } else if (obj.get_collation_type() <= CS_TYPE_UTF8MB4_0900_AI_CI) {
+    meta.attr_ = CHAR_COLL;
     len += sizeof(uint8_t);
+  } else {
+    meta.attr_ = CHAR_LATE_COLL;
+    len += 2 * sizeof(uint8_t);
   }
 
   if (pos_ + len > buf_size_) {
     ret = OB_BUF_NOT_ENOUGH;
   } else {
-    *(reinterpret_cast<ObCellWriter::CellMeta*> (buf_ + pos_)) = meta;
+    *(reinterpret_cast<ObCellWriter::CellMeta*>(buf_ + pos_)) = meta;
     pos_ += sizeof(ObCellWriter::CellMeta);
 
-    if (1 == meta.attr_) {
-      *(reinterpret_cast<uint8_t*> (buf_ + pos_)) = static_cast<uint8_t>(obj.get_collation_type());
+    if (CHAR_COLL == meta.attr_) {
+      *(reinterpret_cast<uint8_t*>(buf_ + pos_)) = static_cast<uint8_t>(obj.get_collation_type());
       pos_ += sizeof(uint8_t);
+    } else if (CHAR_LATE_COLL == meta.attr_) {
+      *(reinterpret_cast<uint16_t*>(buf_ + pos_)) = static_cast<uint16_t>(obj.get_collation_type());
+      pos_ += sizeof(uint16_t);
     }
-    *(reinterpret_cast<uint32_t*> (buf_ + pos_)) = str_len;
+    *(reinterpret_cast<uint32_t*>(buf_ + pos_)) = str_len;
     pos_ += sizeof(uint32_t);
 
     MEMCPY(buf_ + pos_, str.ptr(), str_len);
@@ -145,7 +165,65 @@ int ObCellWriter::write_char(const ObObj &obj, const enum ObObjType meta_type, c
   return ret;
 }
 
+int ObCellWriter::write_char_v1_(const ObObj &obj, const enum ObObjType meta_type, const ObString &str, ObObj *clone_obj)
+{
+  int ret = OB_SUCCESS;
+  if (obj.get_collation_type() > CS_TYPE_UTF8MB4_0900_AI_CI) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "not supported collation type", K(ret), K(meta_type), K(obj));
+  } else {
+    uint32_t str_len = static_cast<uint32_t>(str.length());
+    int64_t len = sizeof(ObCellWriter::CellMeta) + sizeof(uint32_t) + str_len;
+    ObCellWriter::CellMeta meta;
+
+    meta.type_ = static_cast<uint8_t>(meta_type);
+    if (CS_TYPE_UTF8MB4_GENERAL_CI == obj.get_collation_type()) {
+      meta.attr_ = 0;
+    } else {
+      meta.attr_ = 1;
+      len += sizeof(uint8_t);
+    }
+
+    if (pos_ + len > buf_size_) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else {
+      *(reinterpret_cast<ObCellWriter::CellMeta*>(buf_ + pos_)) = meta;
+      pos_ += sizeof(ObCellWriter::CellMeta);
+
+      if (1 == meta.attr_) {
+        *(reinterpret_cast<uint8_t*>(buf_ + pos_)) = static_cast<uint8_t>(obj.get_collation_type());
+        pos_ += sizeof(uint8_t);
+      }
+      *(reinterpret_cast<uint32_t*>(buf_ + pos_)) = str_len;
+      pos_ += sizeof(uint32_t);
+
+      MEMCPY(buf_ + pos_, str.ptr(), str_len);
+      if (OB_UNLIKELY(NULL != clone_obj)) {
+        if (0 != str_len) {
+          clone_obj->set_string(meta_type, buf_ + pos_, str_len);
+        } else {
+          clone_obj->set_string(meta_type, NULL, str_len);
+        }
+      }
+      pos_ += str_len;
+    }
+  }
+  return ret;
+}
+
 int ObCellWriter::write_text(const ObObj &obj, const enum ObObjType store_type, const ObString &char_value, ObObj *clone_obj)
+{
+  int ret = OB_SUCCESS;
+  uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (cluster_version >= CLUSTER_CURRENT_VERSION) {
+    ret = write_text_v2_(obj, store_type, char_value, clone_obj);
+  } else {
+    ret = write_text_v1_(obj, store_type, char_value, clone_obj);
+  }
+  return ret;
+}
+
+int ObCellWriter::write_text_v2_(const ObObj &obj, const enum ObObjType store_type, const ObString &char_value, ObObj *clone_obj)
 {
   int ret = OB_SUCCESS;
   CellMeta meta;
@@ -157,9 +235,11 @@ int ObCellWriter::write_text(const ObObj &obj, const enum ObObjType store_type, 
   }
 
   meta.type_ = CellMeta::SF_MASK_TYPE & static_cast<uint8_t>(store_type);
+  const bool is_late_charset = (obj.get_collation_type() > CS_TYPE_UTF8MB4_0900_AI_CI);
   if (CS_TYPE_UTF8MB4_GENERAL_CI == obj.get_collation_type()) {
     meta.attr_ = old_text_format() ? TEXT_VARCHAR_NO_COLL : TEXT_SCALE_NO_COLL;
   } else {
+    // charset <= 255 和 > 255 都使用 COLL attr, 通过 version 区分
     meta.attr_ = old_text_format() ? TEXT_VARCHAR_COLL : TEXT_SCALE_COLL;
   }
 
@@ -169,7 +249,8 @@ int ObCellWriter::write_text(const ObObj &obj, const enum ObObjType store_type, 
       COMMON_LOG(WARN, "lob value is overflow", K(ret), "length", char_value.length(), K(max_length));
     } else if (OB_FAIL(append<CellMeta>(meta))) {
     } else if (meta.need_collation()) {
-      if (OB_FAIL(append<uint8_t>(static_cast<uint8_t>(obj.get_collation_type())))) {
+      // 写 collation 低 8 位 (version=2 时是低字节)
+      if (OB_FAIL(append<uint8_t>(static_cast<uint8_t>(obj.get_collation_type() & 0xFF)))) {
       }
     }
   }
@@ -182,9 +263,15 @@ int ObCellWriter::write_text(const ObObj &obj, const enum ObObjType store_type, 
     }
     if (OB_FAIL(append<uint8_t>(static_cast<uint8_t>(lob_scale.get_scale())))) {
       COMMON_LOG(WARN, "fail to append scale, ",
-         K(ret), K(lob_scale));
-    } else if (OB_FAIL(append<uint8_t>(TEXT_CELL_META_VERSION))) {
+        K(ret), K(lob_scale));
+    } else if (OB_FAIL(append<uint8_t>(is_late_charset ? TEXT_CELL_META_VERSION_V2 : TEXT_CELL_META_VERSION))) {
       COMMON_LOG(WARN, "fail to append lob version", K(ret));
+    }
+    // version=2: 在 version 字节后追加 collation 高字节
+    if (OB_SUCC(ret) && is_late_charset) {
+      if (OB_FAIL(append<uint8_t>(static_cast<uint8_t>((obj.get_collation_type() >> 8) & 0xFF)))) {
+        COMMON_LOG(WARN, "fail to append collation high byte", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -201,6 +288,72 @@ int ObCellWriter::write_text(const ObObj &obj, const enum ObObjType store_type, 
         }
       }
       pos_ += char_value.length();
+    }
+  }
+  return ret;
+}
+
+int ObCellWriter::write_text_v1_(const ObObj &obj, const enum ObObjType store_type, const ObString &char_value, ObObj *clone_obj)
+{
+  int ret = OB_SUCCESS;
+  if (obj.get_collation_type() > CS_TYPE_UTF8MB4_0900_AI_CI) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "not supported collation type", K(ret), K(store_type), K(obj));
+  } else {
+    CellMeta meta;
+    ObLength max_length = 0;
+    if (old_text_format()) {
+      max_length = ObAccuracy::MAX_ACCURACY_OLD[obj.get_type()].get_length();
+    } else {
+      max_length = ObAccuracy::MAX_ACCURACY[obj.get_type()].get_length();
+    }
+
+    meta.type_ = CellMeta::SF_MASK_TYPE & static_cast<uint8_t>(store_type);
+    if (CS_TYPE_UTF8MB4_GENERAL_CI == obj.get_collation_type()) {
+      meta.attr_ = old_text_format() ? TEXT_VARCHAR_NO_COLL : TEXT_SCALE_NO_COLL;
+    } else {
+      meta.attr_ = old_text_format() ? TEXT_VARCHAR_COLL : TEXT_SCALE_COLL;
+    }
+
+    if (OB_SUCC(ret)) {
+      if (char_value.length() > (max_length)) {
+        ret = OB_SIZE_OVERFLOW;
+        COMMON_LOG(WARN, "lob value is overflow", K(ret), "length", char_value.length(), K(max_length));
+      } else if (OB_FAIL(append<CellMeta>(meta))) {
+      } else if (meta.need_collation()) {
+        if (OB_FAIL(append<uint8_t>(static_cast<uint8_t>(obj.get_collation_type())))) {
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !old_text_format()) {
+      ObLobScale lob_scale(obj.get_scale());
+      if (obj.has_lob_header()) {
+        lob_scale.set_has_lob_header();
+      } else if (!lob_scale.is_in_row()) {
+        lob_scale.set_in_row();
+      }
+      if (OB_FAIL(append<uint8_t>(static_cast<uint8_t>(lob_scale.get_scale())))) {
+        COMMON_LOG(WARN, "fail to append scale, ",
+          K(ret), K(lob_scale));
+      } else if (OB_FAIL(append<uint8_t>(TEXT_CELL_META_VERSION))) {
+        COMMON_LOG(WARN, "fail to append lob version", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(append<uint32_t>(static_cast<uint32_t>(char_value.length())))) {
+      } else if (pos_ + char_value.length() >= buf_size_) {
+        ret = OB_BUF_NOT_ENOUGH;
+      } else {
+        MEMCPY(buf_ + pos_, char_value.ptr(), char_value.length());
+        if (NULL != clone_obj) {
+          if (char_value.empty()) {
+            clone_obj->set_string((store_type), NULL, 0);
+          } else {
+            clone_obj->set_string((store_type), buf_ + pos_, char_value.length());
+          }
+        }
+        pos_ += char_value.length();
+      }
     }
   }
   return ret;

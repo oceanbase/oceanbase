@@ -36,6 +36,7 @@ enum ObCompactStoreType
 };
 
 const uint8_t TEXT_CELL_META_VERSION = 1;
+const uint8_t TEXT_CELL_META_VERSION_V2 = 2;  // extended collation: collation > 255
 
 class ObCellWriter
 {
@@ -58,12 +59,20 @@ public:
       return ObCellWriter::TEXT_VARCHAR_NO_COLL == attr_ || ObCellWriter::TEXT_VARCHAR_COLL == attr_;
     }
   };
+  enum CharAttr
+  {
+    CHAR_NO_COLL = 0,        // CS_TYPE_UTF8MB4_GENERAL_CI, 不存储 collation
+    CHAR_COLL = 1,           // collation <= 255, 存储 1 字节 collation_type
+    CHAR_LATE_COLL = 2       // collation > 255, 存储 cs_type(1B) + cs_level(1B)
+  };
   enum TextAttr
   {
     TEXT_VARCHAR_NO_COLL = 0,
     TEXT_VARCHAR_COLL = 1,
     TEXT_SCALE_NO_COLL = 2,
     TEXT_SCALE_COLL = 3
+    // charset > 255 使用 version=2 扩展, 不在 attr_ 中编码
+    // TEXT_VARCHAR_LATE_COLL / TEXT_SCALE_LATE_COLL 不再需要作为 attr 值
   };
   enum ExtendAttr
   {
@@ -105,7 +114,11 @@ private:
   inline int write_int(const ObObj &obj, const enum common::ObObjType meta_type, const int64_t value);
   inline int write_number(const enum common::ObObjType meta_type, const common::number::ObNumber &number, ObObj *clone_obj);
   inline int write_char(const ObObj &obj, const enum common::ObObjType meta_type, const ObString &str, ObObj *clone_obj);
+  inline int write_char_v2_(const ObObj &obj, const enum common::ObObjType meta_type, const ObString &str, ObObj *clone_obj);
+  inline int write_char_v1_(const ObObj &obj, const enum common::ObObjType meta_type, const ObString &str, ObObj *clone_obj);
   inline int write_text(const ObObj &obj, const enum common::ObObjType meta_type, const ObString &str, ObObj *clone_obj);
+  inline int write_text_v2_(const ObObj &obj, const enum common::ObObjType meta_type, const ObString &str, ObObj *clone_obj);
+  inline int write_text_v1_(const ObObj &obj, const enum common::ObObjType meta_type, const ObString &str, ObObj *clone_obj);
   inline int write_binary(const enum common::ObObjType meta_type, const ObString &str, ObObj *clone_obj);
   inline int write_oracle_timestamp(const common::ObObj &obj, const common::ObOTimestampMetaAttrType otmat);
   inline int write_interval_ym(const ObObj &obj);

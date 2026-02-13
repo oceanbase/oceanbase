@@ -461,7 +461,12 @@ public:
     return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY:
               static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4));
   }
-
+  OB_INLINE ObCollationType get_collation_type() const {
+    // ObUserDefinedSQLType reused cs_type as part of sub schema id,
+    // ObDecimalIntType reuse cs_type as precision, therefore always return CS_TYPE_BINARY.
+    return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY :
+                static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4) );
+  }
   OB_INLINE void set_default_collation_type() { set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())); }
   OB_INLINE ObCollationLevel get_collation_level() const {
     // ObUserDefinedSQLType and ObCollectionSQLType reused cs_level as part of sub schema id,
@@ -469,12 +474,7 @@ public:
     return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_LEVEL_EXPLICIT:
               static_cast<ObCollationLevel>(cs_level_ & 0x0F);
   }
-  OB_INLINE ObCollationType get_collation_type() const {
-    // ObUserDefinedSQLType reused cs_type as part of sub schema id,
-    // ObDecimalIntType reuse cs_type as precision, therefore always return CS_TYPE_BINARY.
-    return (is_user_defined_sql_type() || is_collection_sql_type() || is_decimal_int()) ? CS_TYPE_BINARY :
-                static_cast<ObCollationType>((uint16_t)cs_type_ | (((uint16_t)cs_level_ & 0xF0) << 4) );
-  }
+
   OB_INLINE ObCharsetType get_charset_type() const {
     return ObCharset::charset_type_by_coll(get_collation_type());
   }

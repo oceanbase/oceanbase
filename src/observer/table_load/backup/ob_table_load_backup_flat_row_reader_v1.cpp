@@ -149,6 +149,10 @@ int ObFlatRowReaderV1::read_text_store(
   return ret;
 }
 
+/*
+   this function is used to import data from 2.x or 3.x so
+   we don't need to consider those collation types larger than 255
+*/
 int ObFlatRowReaderV1::read_column_no_meta(
     const ObObjMeta &src_meta,
     ObIAllocator &allocator,

@@ -63,14 +63,21 @@ namespace common
   { \
     const uint32_t *len = NULL; \
     ObString value; \
-    if (0 == meta->attr_) { \
+    if (ObCellWriter::CHAR_NO_COLL == meta->attr_) { \
       object.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI); \
-    } else if (1 == meta->attr_) { \
-      const uint8_t *collation_type = NULL; \
-      if (OB_FAIL(read<uint8_t>(collation_type))) { \
-        COMMON_LOG(WARN, "row reader fail to read collation_type.", K(ret)); \
+    } else if (ObCellWriter::CHAR_COLL == meta->attr_) { \
+      const uint8_t *cs_type = NULL; \
+      if (OB_FAIL(read<uint8_t>(cs_type))) { \
+        COMMON_LOG(WARN, "row reader fail to read cs_type.", K(ret)); \
       } else { \
-        object.set_collation_type(static_cast<ObCollationType>(*collation_type)); \
+        object.set_collation_type(static_cast<ObCollationType>(*cs_type)); \
+      } \
+    } else if (ObCellWriter::CHAR_LATE_COLL == meta->attr_) { \
+      const uint16_t *cs_type = NULL; \
+      if (OB_FAIL(read<uint16_t>(cs_type))) { \
+        COMMON_LOG(WARN, "row reader fail to read cs_type.", K(ret)); \
+      } else { \
+        object.set_collation_type(static_cast<ObCollationType>(*cs_type)); \
       } \
     } \
     if (OB_SUCC(ret)) { \
@@ -191,56 +198,67 @@ int ObCellReader::read_decimal_int(ObObj &obj)
 }
 
 #define READ_TEXT(obj_type, object) \
-  { \
-    const uint32_t *len = NULL; \
-    ObString value; \
-    if (!meta->need_collation()) { \
-      object.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI); \
+{ \
+  const uint32_t *len = NULL; \
+  ObString value; \
+  uint8_t collation_low = 0; \
+  if (!meta->need_collation()) { \
+    object.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI); \
+  } else { \
+    const uint8_t *cs_type = NULL; \
+    if (OB_FAIL(read<uint8_t>(cs_type))) { \
+      COMMON_LOG(WARN, "row reader fail to read collation_type.", K(ret)); \
     } else { \
-      const uint8_t *collation_type = NULL; \
-      if (OB_FAIL(read<uint8_t>(collation_type))) { \
-        COMMON_LOG(WARN, "row reader fail to read collation_type.", K(ret)); \
-      } else { \
-        object.set_collation_type(static_cast<ObCollationType>(*collation_type)); \
+      collation_low = *cs_type; \
+      object.set_collation_type(static_cast<ObCollationType>(collation_low)); \
+    } \
+  } \
+  bool has_header = false; \
+  if (OB_SUCC(ret) && !meta->is_varchar_text()) {\
+    const uint8_t *scale = NULL;\
+    const uint8_t *version = NULL;\
+    if (OB_FAIL(read<uint8_t>(scale))) { \
+      COMMON_LOG(WARN, "row reader fail to read scale.", K(ret)); \
+    } else if (OB_FAIL(read<uint8_t>(version))) { \
+      COMMON_LOG(WARN, "row reader fail to read version.", K(ret)); \
+    } else { \
+      object.set_scale(static_cast<ObScale>(*scale));\
+      ObLobScale lob_scale(*scale);\
+      if (!lob_scale.is_in_row() || !lob_scale.has_lob_header()) { \
+        COMMON_LOG(WARN, "Unexpected lob scale", K(*version), K(*scale), K(ret)); \
+      }\
+      if (lob_scale.has_lob_header()) { \
+        has_header = true; \
+      } \
+      if (TEXT_CELL_META_VERSION_V2 == *version) { \
+        /* version=2: 读取 collation 高字节, 拼回完整 collation_type */ \
+        const uint8_t *collation_high = NULL; \
+        if (OB_FAIL(read<uint8_t>(collation_high))) { \
+          COMMON_LOG(WARN, "row reader fail to read collation high byte.", K(ret)); \
+        } else { \
+          uint16_t full_collation = (static_cast<uint16_t>(*collation_high) << 8) | collation_low; \
+          object.set_collation_type(static_cast<ObCollationType>(full_collation)); \
+        } \
+      } else if (TEXT_CELL_META_VERSION != *version) { \
+        COMMON_LOG(WARN, "Unexpected lob version", K(*version), K(*scale), K(ret)); \
       } \
     } \
-    bool has_header = false; \
-    if (OB_SUCC(ret) && !meta->is_varchar_text()) {\
-      const uint8_t *scale = NULL;\
-      const uint8_t *version = NULL;\
-      if (OB_FAIL(read<uint8_t>(scale))) { \
-        COMMON_LOG(WARN, "row reader fail to read scale.", K(ret)); \
-      } else if (OB_FAIL(read<uint8_t>(version))) { \
-        COMMON_LOG(WARN, "row reader fail to read scale.", K(ret)); \
-      } else { \
-        object.set_scale(static_cast<ObScale>(*scale));\
-        ObLobScale lob_scale(*scale);\
-        if (!lob_scale.is_in_row() || !lob_scale.has_lob_header()) { \
-          COMMON_LOG(WARN, "Unexpected lob scale", K(*version), K(*scale), K(ret)); \
-        }\
-        if (lob_scale.has_lob_header()) { \
-          has_header = true; \
-        } \
-        if (TEXT_CELL_META_VERSION != *version) { \
-          COMMON_LOG(WARN, "Unexpected lob version", K(*version), K(*scale), K(ret)); \
-        } \
+  } \
+  if (OB_SUCC(ret)) { \
+    if (OB_FAIL(read<uint32_t>(len))) { \
+      COMMON_LOG(WARN, "row reader fail to read value.", K(ret)); \
+    } else if (pos_ + *len > buf_size_) { \
+      ret = OB_BUF_NOT_ENOUGH; \
+      COMMON_LOG(WARN, "buffer not enough, ", K(ret), K_(pos), K_(buf_size), "length", *len); \
+    } else { \
+      object.set_lob_value(obj_type, (char*)(buf_ + pos_), *len);\
+      if (has_header) { \
+        object.set_has_lob_header(); \
       } \
+      pos_ += *len; \
     } \
-    if (OB_SUCC(ret)) { \
-      if (OB_FAIL(read<uint32_t>(len))) { \
-        COMMON_LOG(WARN, "row reader fail to read value.", K(ret)); \
-      } else if (pos_ + *len > buf_size_) { \
-        ret = OB_BUF_NOT_ENOUGH; \
-        COMMON_LOG(WARN, "buffer not enough, ", K(ret), K_(pos), K_(buf_size), "length", *len); \
-      } else { \
-        object.set_lob_value(obj_type, (char*)(buf_ + pos_), *len);\
-        if (has_header) { \
-          object.set_has_lob_header(); \
-        } \
-        pos_ += *len; \
-      } \
-    } \
-  }
+  } \
+}
 
 #define READ_BINARY(obj_set_fun, object) \
   { \

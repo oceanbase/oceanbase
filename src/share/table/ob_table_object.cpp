@@ -283,7 +283,7 @@ int ObTableObjFunc<ObTableTimestampType>::deserialize(const char *buf, const int
   OB_UNIS_DECODE(cs_level);
   OB_UNIS_DECODE(cs_type);
   OB_UNIS_DECODE(scale);
-
+  /* do not use collation level larger than 255*/
   obj.set_collation_level(static_cast<ObCollationLevel>(cs_level));
   obj.set_collation_type(static_cast<ObCollationType>(cs_type));
   obj.set_scale(scale);
@@ -302,6 +302,7 @@ int ObTableObjFunc<ObTableTimestampType>::serialize(char *buf, const int64_t buf
 {
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(ObTableTimestampType);
+  /* do not use collation type larger than 255*/
   OB_UNIS_ENCODE(static_cast<uint8_t>(obj.get_collation_level()));
   OB_UNIS_ENCODE(static_cast<uint8_t>(obj.get_collation_type()));
   OB_UNIS_ENCODE(static_cast<int8_t>(obj.get_scale()));
@@ -350,6 +351,7 @@ int ObTableObjFunc<ObTableDateTimeType>::serialize(char *buf, const int64_t buf_
 {
   int ret = OB_SUCCESS;
   OB_UNIS_ENCODE(ObTableDateTimeType);
+  /* do not use collation type larger than 255*/
   OB_UNIS_ENCODE(static_cast<uint8_t>(obj.get_collation_level()));
   OB_UNIS_ENCODE(static_cast<uint8_t>(obj.get_collation_type()));
   OB_UNIS_ENCODE(static_cast<int8_t>(obj.get_scale()));
