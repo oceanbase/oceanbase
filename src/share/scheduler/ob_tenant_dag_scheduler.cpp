@@ -4279,13 +4279,15 @@ int ObDagNetScheduler::loop_blocking_dag_net_list()
 }
 
 int ObDagNetScheduler::check_dag_net_exist(
-    const ObDagId &dag_id, bool &exist)
+    const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   const ObIDagNet *dag_net = nullptr;
-  ObMutexGuard guard(dag_net_map_lock_);
+  ObMutexGuardWithTimeout guard(dag_net_map_lock_, abs_timeout_us);
 
-  if (OB_FAIL(dag_net_id_map_.get_refactored(dag_id, dag_net))) {
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_WARN("failed to lock dag_net_map_lock_", K(ret), K(dag_id));
+  } else if (OB_FAIL(dag_net_id_map_.get_refactored(dag_id, dag_net))) {
     if (OB_HASH_NOT_EXIST == ret) {
       exist = false;
       ret = OB_SUCCESS;
@@ -5634,14 +5636,14 @@ int ObTenantDagScheduler::cancel_dag(const ObIDag *dag, const bool force_cancel)
 }
 
 int ObTenantDagScheduler::check_dag_net_exist(
-    const ObDagId &dag_id, bool &exist)
+    const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_FAIL(dag_net_sche_.check_dag_net_exist(dag_id, exist))) {
+  } else if (OB_FAIL(dag_net_sche_.check_dag_net_exist(dag_id, exist, abs_timeout_us))) {
     COMMON_LOG(WARN, "fail to check dag net exist", K(ret));
   }
   return ret;

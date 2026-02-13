@@ -1192,7 +1192,7 @@ int ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
     }
     LOG_INFO("leader_addr_set to be notified archive:", K(notify_addr_set));
     for (hash::ObHashSet<ObAddr>::const_iterator it = notify_addr_set.begin(); it != notify_addr_set.end(); it++) {
-      if (OB_TMP_FAIL(rpc_proxy_->to(it->first).notify_archive(arg))) {
+      if (OB_TMP_FAIL(rpc_proxy_->to(it->first).by(tenant_id_).notify_archive(arg))) {
         LOG_WARN("failed to notify ls leader archive", K(tmp_ret), K(arg));
       } else {
         LOG_INFO("succeed to notify ls leader archive", K(arg), K(it->first));

@@ -177,7 +177,7 @@ bool ObHATabletGroupCOConvertCtx::ready_to_check() const
       if (OB_FAIL(inner_get_valid_convert_ctx_idx(tablet_id, ctx_idx))) {
         LOG_WARN("failed to get convert ctx idx", K(ret), K(tablet_id));
       } else if (convert_ctxs_[ctx_idx].is_progressing()) {
-        if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_net_exist(convert_ctxs_[ctx_idx].co_dag_net_id_, is_exist))) {
+        if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_net_exist(convert_ctxs_[ctx_idx].co_dag_net_id_, is_exist, INT64_MAX/*abs_timeout_us*/))) {
           LOG_WARN("failed to check dag exists", K(ret), K(tablet_id), K(convert_ctxs_[ctx_idx]));
         } else if (!is_exist) {
           bret = true;
@@ -364,7 +364,7 @@ int ObHATabletGroupCOConvertCtx::inner_check_and_schedule(ObLS &ls, const ObTabl
   } else if (!tablet->is_row_store()) {
     inner_set_convert_finish(convert_ctxs_[idx]);
     LOG_INFO("[CS-Replica] Finish co merge dag net for switching column store", K(ls_id), K(tablet_id), K(tablet_handle));
-  } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_net_exist(convert_ctxs_[idx].co_dag_net_id_, is_dag_net_exist))) {
+  } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_net_exist(convert_ctxs_[idx].co_dag_net_id_, is_dag_net_exist, INT64_MAX/*abs_timeout_us*/))) {
     LOG_WARN("failed to check dag exists", K(ret), K(convert_ctxs_[idx]), K(tablet_id));
   } else if (is_dag_net_exist) {
   } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, convert_ctxs_[idx].retry_cnt_, convert_ctxs_[idx].co_dag_net_id_, schedule_ret))) {

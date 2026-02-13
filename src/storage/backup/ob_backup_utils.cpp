@@ -528,7 +528,7 @@ int ObBackupUtils::report_task_result(const int64_t job_id, const int64_t task_i
   } else if (OB_FAIL(report_ctx.location_service_->get_leader_with_retry_until_timeout(
       cluster_id, meta_tenant_id, ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
     LOG_WARN("failed to get leader address", K(ret));
-  } else if (OB_FAIL(report_ctx.rpc_proxy_->to(leader_addr).report_backup_over(backup_ls_res))) {
+  } else if (OB_FAIL(report_ctx.rpc_proxy_->to(leader_addr).by(tenant_id).report_backup_over(backup_ls_res))) {
     LOG_WARN("failed to post backup ls data res", K(ret), K(backup_ls_res));
   } else {
     SERVER_EVENT_ADD("backup_data", "report_result",

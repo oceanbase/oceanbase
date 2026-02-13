@@ -342,7 +342,7 @@ int ObLSMigrationHandler::check_task_exist_(bool &is_exist)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KPC(ls_));
-  } else if (OB_FAIL(scheduler->check_dag_net_exist(ls_migration_task.task_id_, is_exist))) {
+  } else if (OB_FAIL(scheduler->check_dag_net_exist(ls_migration_task.task_id_, is_exist, INT64_MAX/*abs_timeout_us*/))) {
     LOG_WARN("failed to check dag net exist", K(ret));
   }
 

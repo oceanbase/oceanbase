@@ -1813,7 +1813,7 @@ int ObSysTenantBackupJobMgr::do_handle_user_tenant_backupdatabase_(const uint64_
       LOG_WARN("rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
     } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
       LOG_WARN("failed to get rootservice address", K(ret));
-    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).backup_database(backup_database_arg))) {
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).by(tenant_id).backup_database(backup_database_arg))) {
       LOG_WARN("failed to post backup ls data res", K(ret), K(backup_database_arg));
     } else {
       LOG_INFO("succeed handle user backup tenant", K(backup_database_arg));

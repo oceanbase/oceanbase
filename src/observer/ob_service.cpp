@@ -868,7 +868,7 @@ int ObService::check_backup_task_exist(const ObBackupCheckTaskArg &arg, bool &re
       if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, dag scheduler must not be nullptr", K(ret));
-      } else if (OB_FAIL(dag_scheduler->check_dag_net_exist(arg.trace_id_, res))) {
+      } else if (OB_FAIL(dag_scheduler->check_dag_net_exist(arg.trace_id_, res, THIS_WORKER.get_timeout_ts()))) {
         LOG_WARN("failed to check dag net exist", K(ret), K(arg));
       }
     }

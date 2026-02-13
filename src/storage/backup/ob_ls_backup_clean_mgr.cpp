@@ -509,7 +509,7 @@ int ObLSBackupCleanTask::post_rpc_result_(const int64_t result)
   } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
         cluster_id, meta_tenant_id, ObLSID(ObLSID::SYS_LS_ID), leader_addr))) {
     LOG_WARN("failed to get leader address", K(ret));
-  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).report_backup_clean_over(clean_ls_res))) {
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id_).report_backup_clean_over(clean_ls_res))) {
     LOG_WARN("failed to post backup ls data res", K(ret), K(clean_ls_res));
   } else {
     LOG_INFO("[BACKUP_CLEAN] success finish task post rpc result", K(clean_ls_res));

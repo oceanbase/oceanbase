@@ -2303,7 +2303,7 @@ int ObSysTenantBackupDeleteMgr::do_handle_user_tenant_backup_delete_(const uint6
       LOG_WARN("rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
     } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
       LOG_WARN("failed to get rootservice address", K(ret));
-    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).backup_delete(backup_delete_arg))) {
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).by(tenant_id).backup_delete(backup_delete_arg))) {
       LOG_WARN("backup clean rpc failed", K(ret), K(backup_delete_arg));
     } else {
       LOG_INFO("succeed handle user backup delete tenant", K(backup_delete_arg));

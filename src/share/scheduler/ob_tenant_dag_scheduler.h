@@ -1024,7 +1024,7 @@ public:
   int loop_finished_dag_net_list();
   int loop_blocking_dag_net_list();
   int check_dag_net_exist(
-    const ObDagId &dag_id, bool &exist);
+    const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us);
   int cancel_dag_net(const ObDagId &dag_id);
   int get_first_dag_net(ObIDagNet *&dag_net);
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
@@ -1412,7 +1412,7 @@ public:
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
   int check_dag_net_exist(
-      const ObDagId &dag_id, bool &exist);
+      const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us);
   int cancel_dag_net(const ObDagId &dag_id);
   int deal_with_finish_task(ObITask *&task, ObTenantDagWorker &worker, int error_code);
   bool try_switch(ObTenantDagWorker &worker);
