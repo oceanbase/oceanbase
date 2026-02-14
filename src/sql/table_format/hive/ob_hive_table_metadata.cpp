@@ -14,6 +14,7 @@
 #include "ob_hive_table_metadata.h"
 
 #include "lib/file/ob_string_util.h"
+#include "lib/utility/utility.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "share/schema/ob_external_table_column_schema_helper.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
@@ -125,8 +126,9 @@ int ObHiveTableMetadata::setup_tbl_schema(const uint64_t tenant_id,
     std::map<std::string, std::string>::const_iterator params_iter
         = table.parameters.find("last_modified_time");
     if (params_iter != table.parameters.end()) {
-      lake_table_metadata_version_
-          = ::obsys::ObStringUtil::str_to_int(params_iter->second.c_str(), 0);
+      if (OB_FAIL(ob_atoll(params_iter->second.c_str(), lake_table_metadata_version_))) {
+        LOG_WARN("failed to get ll from string");
+      }
     } else {
       lake_table_metadata_version_ = table.createTime;
     }

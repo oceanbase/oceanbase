@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_external_table_file_mgr.h"
 
-#include "lib/file/ob_string_util.h"
+#include "lib/utility/utility.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "rootserver/ob_system_admin_util.h"
 #include "share/catalog/hive/ob_hive_metastore.h"
@@ -2414,7 +2414,9 @@ int ObExternalTableFileManager::get_partitions_info(const ObTableSchema &table_s
           if (OB_SUCC(ret)) {
             params_iter = hive_part.parameters.find(share::LAST_DDL_TIME);
             if (OB_UNLIKELY(params_iter != hive_part.parameters.end())) {
-              p_info.modify_ts_ = ::obsys::ObStringUtil::str_to_int(params_iter->second.c_str(), 0);
+              if (OB_SUCCESS != ob_atoll(params_iter->second.c_str(), p_info.modify_ts_)) {
+                p_info.modify_ts_ = 0;
+              }
               LOG_TRACE("get latest ddl time", K(ret), K(p_info.modify_ts_));
             } else {
               p_info.modify_ts_ = 0;

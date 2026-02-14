@@ -16,6 +16,7 @@
 #include "lib/file/ob_string_util.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/utility/utility.h"
 #include "ob_hive_metastore.h"
 #include "share/catalog/hive/ob_kerberos.h"
 #include "share/catalog/hive/thrift/transport/ob_t_sasl_client_transport.h"
@@ -198,14 +199,16 @@ void GetLatestPartitionDdlTimeOperation::execute_impl(ThriftHiveMetastoreClient 
     format_qualified_db_name(f_db_name, cat_name_, db_name_);
     client->get_partitions(partitions, f_db_name, tb_name_, max_parts_);
   }
-  int64_t tmp_ddl_time;
+  int64_t tmp_ddl_time = 0;
   std::map<String, String>::iterator params_iter;
 
   for (Partitions::iterator iter = partitions.begin(); OB_SUCC(ret) && iter != partitions.end();
        iter++) {
     params_iter = iter->parameters.find(LAST_DDL_TIME);
     if (OB_UNLIKELY(params_iter != iter->parameters.end())) {
-      tmp_ddl_time = ::obsys::ObStringUtil::str_to_int(params_iter->second.c_str(), 0);
+      if (OB_SUCCESS != ob_atoll(params_iter->second.c_str(), tmp_ddl_time)) {
+        tmp_ddl_time = 0;
+      }
       if (OB_LIKELY(latest_ddl_time_ < tmp_ddl_time)) {
         latest_ddl_time_ = tmp_ddl_time;
       }
@@ -654,10 +657,8 @@ int ObHiveMetastoreClient::extract_host_and_port(const ObString &uri, char *host
 int64_t ObHiveMetastoreClient::handle_ddl_time(String &time_str)
 {
   int64_t ddl_time = 0;
-  if (!::obsys::ObStringUtil::is_int(time_str.c_str())) {
-    // DO NOTHING
-  } else {
-    ddl_time = ::obsys::ObStringUtil::str_to_int(time_str.c_str(), 0);
+   if (OB_SUCCESS != ob_atoll(time_str.c_str(), ddl_time)) {
+    ddl_time = 0;
   }
   return ddl_time;
 }
@@ -702,18 +703,24 @@ void ObHiveMetastoreClient::extract_basic_stats_from_parameters(const std::map<s
   basic_stats.reset();
 
   std::map<std::string, std::string>::const_iterator it = parameters.find("numFiles");
-  if (it != parameters.end() && ::obsys::ObStringUtil::is_int(it->second.c_str())) {
-    basic_stats.num_files_ = ::obsys::ObStringUtil::str_to_int(it->second.c_str(), 0);
+  if (it != parameters.end()) {
+    if (OB_SUCCESS != ob_atoll(it->second.c_str(), basic_stats.num_files_)) {
+      basic_stats.num_files_ = 0;
+    }
   }
 
   it = parameters.find("numRows");
-  if (it != parameters.end() && ::obsys::ObStringUtil::is_int(it->second.c_str())) {
-    basic_stats.num_rows_ = ::obsys::ObStringUtil::str_to_int(it->second.c_str(), 0);
+  if (it != parameters.end()) {
+    if (OB_SUCCESS != ob_atoll(it->second.c_str(), basic_stats.num_rows_)) {
+      basic_stats.num_rows_ = 0;
+    }
   }
 
   it = parameters.find("totalSize");
-  if (it != parameters.end() && ::obsys::ObStringUtil::is_int(it->second.c_str())) {
-    basic_stats.total_size_ = ::obsys::ObStringUtil::str_to_int(it->second.c_str(), 0);
+  if (it != parameters.end()) {
+    if (OB_SUCCESS != ob_atoll(it->second.c_str(), basic_stats.total_size_)) {
+      basic_stats.total_size_ = 0;
+    }
   }
 
   LOG_TRACE("extracted basic stats from parameters", K(basic_stats));
