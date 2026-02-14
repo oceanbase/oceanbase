@@ -606,3 +606,7 @@ int sql_stmt_start_hook(const ObXATransID &xid,
                         const uint32_t session_id,
                         const uint32_t real_session_id);
 int sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx);
+
+int set_app_trace_id(ObTxDesc &tx,
+                     const common::ObString &app_trace_id,
+                     const bool is_plain_select);

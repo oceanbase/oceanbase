@@ -210,15 +210,40 @@ int ObTraceInfo::set_app_trace_id(const ObString &app_trace_id)
   if (len < 0 || len > OB_MAX_TRACE_ID_BUFFER_SIZE) {
     TRANS_LOG(WARN, "unexpected trace id str", K(app_trace_id));
     ret = OB_INVALID_ARGUMENT;
-  } else if (0 != app_trace_id_.length()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "different app trace id", K(ret), K(app_trace_id_), K(app_trace_id));
+  } else if (app_trace_id_confirmed_) {
+    // do nothing
   } else {
+    app_trace_id_.reset();
+    (void)app_trace_id_.assign_buffer(app_trace_id_buffer_, sizeof(app_trace_id_buffer_));
+    (void)app_trace_id_.write(app_trace_id.ptr(), len);
+    app_trace_id_buffer_[len] = '\0';
+    app_trace_id_confirmed_ = true;
+  }
+
+  return ret;
+}
+
+int ObTraceInfo::set_app_trace_id_without_confirm(const ObString &app_trace_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t len = app_trace_id.length();
+
+  if (len < 0 || len > OB_MAX_TRACE_ID_BUFFER_SIZE) {
+    TRANS_LOG(WARN, "unexpected trace id str", K(app_trace_id));
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    app_trace_id_.reset();
+    (void)app_trace_id_.assign_buffer(app_trace_id_buffer_, sizeof(app_trace_id_buffer_));
     (void)app_trace_id_.write(app_trace_id.ptr(), len);
     app_trace_id_buffer_[len] = '\0';
   }
 
   return ret;
+}
+
+void ObTraceInfo::set_app_trace_id_confirm()
+{
+  app_trace_id_confirmed_ = true;
 }
 
 const ObString ObTransIsolation::LEVEL_NAME[ObTransIsolation::MAX_LEVEL] =

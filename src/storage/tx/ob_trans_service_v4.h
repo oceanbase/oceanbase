@@ -331,7 +331,8 @@ int local_ls_commit_tx_(const ObTransID &tx_id,
                         const share::SCN commit_start_scn,
                         const int64_t epoch,
                         share::SCN &commit_version,
-                        const common::ObAddr &caller);
+                        const common::ObAddr &caller,
+                        const common::ObString &app_trace_id);
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
                                 int64_t &state,
@@ -357,7 +358,8 @@ int sub_prepare_local_ls_(const ObTransID &tx_id,
                           const int64_t &expire_ts,
                           const common::ObString & app_trace_info,
                           const int64_t &request_id,
-                          const ObXATransID &xid);
+                          const ObXATransID &xid,
+                          const common::ObString &app_trace_id);
 int handle_sub_prepare_timeout_(ObTxDesc &tx, const int64_t delay);
 int handle_sub_rollback_timeout_(ObTxDesc &tx, const int64_t delay);
 int handle_sub_commit_timeout_(ObTxDesc &tx, const int64_t delay);

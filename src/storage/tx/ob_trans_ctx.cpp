@@ -359,13 +359,19 @@ int ObTransCtx::set_app_trace_id_(const ObString &app_trace_id)
   int ret = OB_SUCCESS;
   const int64_t len = app_trace_id.length();
 
-  if (OB_UNLIKELY(len < 0) || OB_UNLIKELY(len > OB_MAX_TRACE_ID_BUFFER_SIZE)) {
+  if (!GCONF.enable_record_trace_id) {
+    // do nothing
+  } else if (OB_UNLIKELY(len < 0) || OB_UNLIKELY(len > OB_MAX_TRACE_ID_BUFFER_SIZE)) {
     TRANS_LOG(WARN, "invalid argument", K(app_trace_id), "context", *this);
     ret = OB_INVALID_ARGUMENT;
   } else if (0 == trace_info_.get_app_trace_id().length()) {
     // set for the first time
     if (OB_FAIL(trace_info_.set_app_trace_id(app_trace_id))) {
       TRANS_LOG(WARN, "set app trace id error", K(ret), K(app_trace_id), K(*this));
+    } else {
+      if (0 < len) {
+        TRANS_LOG(DEBUG, "set app trace id", K(app_trace_id), K(len), K(trace_info_));
+      }
     }
   } else if (trace_info_.get_app_trace_id().length() != app_trace_id.length()) {
     // in big trans case, leader may change if redo log is not persisted successfully

@@ -2328,6 +2328,21 @@ int ObTransService::refresh_read_snapshot_tx_state(ObTxReadSnapshot &snapshot, c
   return ret;
 }
 
+int ObTransService::set_app_trace_id(
+    ObTxDesc &tx,
+    const common::ObString &app_trace_id,
+    const bool is_plain_select)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(tx.lock_);
+  if (tx.is_tx_active() || !is_plain_select) {
+    // if app_trace_id is empty, confirm app_trace_id
+    tx.trace_info_.set_app_trace_id(app_trace_id);
+    TRANS_LOG(DEBUG, "set app trace id", K(app_trace_id));
+  }
+  return ret;
+}
+
 } // transaction
 } // namespace
 #undef TXN_API_SANITY_CHECK_FOR_TXN_FREE_ROUTE

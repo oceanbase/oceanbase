@@ -745,6 +745,16 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OX (is_plain_select = plan->is_plain_select());
   OX (tx_desc->clear_interrupt());
   OX (tx_desc->reset_conflict_info_array());
+  if (OB_SUCC(ret)
+      && GCONF.enable_record_trace_id) {
+    // if app_trace_id is empty, then set empty
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = txs->set_app_trace_id(*tx_desc,
+            session->get_app_trace_id(), is_plain_select))) {
+      LOG_WARN("set app trace id failed", K(tmp_ret));
+    }
+  }
+
   if (OB_SUCC(ret) && !is_plain_select) {
     OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs, nested_level, is_for_sslog), session_id, *tx_desc);
     OZ (acquire_table_lock_if_needed_(session, plan, exec_ctx), session_id, *tx_desc);
@@ -796,9 +806,9 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     session->set_reserved_snapshot_version(das_ctx.get_snapshot().core_.version_);
   }
 
-bool print_log = false;
+  bool print_log = false;
 #ifndef NDEBUG
- print_log = true;
+  print_log = true;
 #else
  if (OB_FAIL(ret)) { print_log = true; }
 #endif

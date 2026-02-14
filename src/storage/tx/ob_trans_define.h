@@ -614,6 +614,8 @@ public:
   const common::ObString &get_app_trace_info() const { return app_trace_info_; }
   //app trace id
   int set_app_trace_id(const common::ObString &app_trace_id);
+  int set_app_trace_id_without_confirm(const common::ObString &app_trace_id);
+  void set_app_trace_id_confirm();
   const common::ObString &get_app_trace_id() const { return app_trace_id_; }
   common::ObString &get_app_trace_id() { return app_trace_id_; }
   TO_STRING_KV(K_(app_trace_info), K_(app_trace_id), K_(app_trace_id_confirmed));

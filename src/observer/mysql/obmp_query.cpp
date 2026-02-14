@@ -197,6 +197,7 @@ int ObMPQuery::process()
         ObSEArray<ObString, 1> queries;
         ObMPParseStat parse_stat;
         if (GCONF.enable_record_trace_id) {
+          // the defalut value of enable_record_trace_id is false in 4.x
           PreParseResult pre_parse_result;
           if (OB_FAIL(ObParser::pre_parse(sql_, pre_parse_result))) {
             LOG_WARN("fail to pre parse", K(ret));
