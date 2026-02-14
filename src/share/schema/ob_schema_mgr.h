@@ -860,6 +860,9 @@ private:
   inline bool check_inner_stat() const;
 
   int remove_aux_table(const ObSimpleTableSchemaV2 &schema_to_del, const bool is_aux_vp);
+  int collect_aux_schemas_by_data_table_id(const TableInfos &infos,
+                                           const ObTenantTableId &tenant_data_table_id,
+                                           common::ObIArray<const ObSimpleTableSchemaV2 *> &aux_schemas) const;
 
   int add_foreign_keys_in_table(const common::ObIArray<ObSimpleForeignKeyInfo> &fk_info_array,
                                 const int over_write);
@@ -990,6 +993,7 @@ private:
   TablegroupInfos tablegroup_infos_;
   TableInfos table_infos_;
   TableInfos index_infos_;
+  TableInfos vec_index_infos_;
   TableInfos aux_vp_infos_;
   TableInfos lob_meta_infos_;
   TableInfos lob_piece_infos_;

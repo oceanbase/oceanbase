@@ -109,12 +109,12 @@ void ObPluginVectorIndexLoadScheduler::clean_deprecated_adapters()
       FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
         ObPluginVectorIndexAdaptor *adapter = iter->second;
         ObSchemaGetterGuard schema_guard;
-        const ObTableSchema *table_schema;
+        const ObSimpleTableSchemaV2 *table_schema = NULL;
         ObTabletID tablet_id = iter->first;
         ObTabletHandle tablet_handle;
         if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
           LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
-        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adapter->get_vbitmap_table_id(), table_schema))) {
+        } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, adapter->get_vbitmap_table_id(), table_schema))) {
           LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(adapter->get_vbitmap_table_id()));
         } else if (OB_ISNULL(table_schema) || table_schema->is_in_recyclebin()) {
           // remove adapter if tablet not exist or is in recyclebin
@@ -603,7 +603,6 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance(ObIArray<uint6
   int ret = OB_SUCCESS;
   ObTimeGuard guard("ObPluginVectorIndexLoadScheduler::check_and_generate_tablet_tasks",
                     VEC_INDEX_LOAD_TIME_NORMAL_THRESHOLD);
-  const schema::ObTableSchema *table_schema = nullptr;
 
   ObVecIdxSharedTableInfoMap shared_table_info_map;
   ObMemAttr memattr(tenant_id_, "VecIdxInfo");
@@ -748,14 +747,14 @@ int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors(bool &has_iv
     if (OB_FAIL(ivf_task_exec_.check_schema_version_changed(schema_changed))) {
       //only when schema changed, load ivf task
       LOG_WARN("fail to check schema version changed", K(ret));
-    } else if (!schema_changed || !has_ivf_index) {
+    } else if (!schema_changed) {
       // schema not changed, only do cleanup if needed, skip thread pool check and task loading
       if (OB_FAIL(ivf_task_exec_.clear_old_task_ctx_if_need())) {
         LOG_WARN("fail to clear old ivf task ctx", K(ret));
       } else {
         LOG_TRACE("schema not changed, skip ivf task loading", K(ret));
       }
-    } else if (OB_FAIL(ivf_task_exec_.check_and_set_thread_pool())) {
+    } else if (has_ivf_index && OB_FAIL(ivf_task_exec_.check_and_set_thread_pool())) {
       LOG_WARN("fail to check and open thread pool", K(ret));
     } else if (OB_FAIL(ivf_task_exec_.clear_old_task_ctx_if_need())) {
       LOG_WARN("fail to clear old task ctx", K(ret));

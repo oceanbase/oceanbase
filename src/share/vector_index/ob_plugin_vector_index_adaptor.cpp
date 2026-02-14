@@ -4539,10 +4539,10 @@ int ObPluginVectorIndexAdaptor::check_can_sync_to_follower(ObPluginVectorIndexMg
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *snapshot_table_schema;
+  const ObSimpleTableSchemaV2 *snapshot_table_schema = NULL;
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, get_snapshot_table_id(), snapshot_table_schema))) {
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, get_snapshot_table_id(), snapshot_table_schema))) {
     LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(get_snapshot_table_id()));
   } else if (OB_ISNULL(snapshot_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;

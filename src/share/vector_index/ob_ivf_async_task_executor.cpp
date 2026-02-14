@@ -477,9 +477,10 @@ int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObSchemaGetterGuard &sche
 int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObIvfAuxTableInfoMap &aux_table_info_map)
 {
   int ret = OB_SUCCESS;
+  bool has_ivf_index = false;
   ObSEArray<uint64_t, DEFAULT_TABLE_ID_ARRAY_SIZE> table_id_array;
   ObMemAttr memattr(tenant_id_, "IvfTaskExec");
-  if (OB_FAIL(ObTTLUtil::get_tenant_table_ids(tenant_id_, table_id_array))) {
+  if (OB_FAIL(ObPluginVectorIndexUtils::get_tenant_vector_index_ids(tenant_id_, has_ivf_index, table_id_array))) {
     LOG_WARN("fail to get tenant table ids", KR(ret), K_(tenant_id));
   } else if (!table_id_array.empty()
              && OB_FAIL(aux_table_info_map.create(DEFAULT_TABLE_ID_ARRAY_SIZE, memattr, memattr))) {
@@ -488,7 +489,7 @@ int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObIvfAuxTableInfoMap &aux
 
   int64_t start_idx = 0;
   int64_t end_idx = 0;
-  while (OB_SUCC(ret) && start_idx < table_id_array.count()) {
+  while (OB_SUCC(ret) && start_idx < table_id_array.count() && has_ivf_index) {
     ObSchemaGetterGuard schema_guard;
     start_idx = end_idx;
     end_idx = MIN(table_id_array.count(), start_idx + DEFAULT_TABLE_ID_ARRAY_SIZE);
