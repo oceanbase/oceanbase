@@ -255,6 +255,7 @@ void ObPhysicalPlan::reset()
   is_batch_params_execute_ = false;
   mview_ids_.reset();
   enable_inc_direct_load_ = false;
+  enable_inc_major_ = false;
   enable_replace_ = false;
   insert_overwrite_ = false;
   online_sample_percent_ = 1.;
@@ -931,7 +932,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     extend_sql_plan_monitor_metrics_,
                     is_online_gather_statistics_,
                     phy_hint_.table_lock_mode_,
-                    route_to_column_replica_);
+                    route_to_column_replica_,
+                    enable_inc_major_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
