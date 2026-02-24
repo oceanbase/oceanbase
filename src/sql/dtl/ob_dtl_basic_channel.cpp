@@ -240,8 +240,14 @@ int ObDtlBasicChannel::wait_response()
 {
   int ret = OB_SUCCESS;
   if (msg_response_.is_in_process()) {
+    if (belong_to_transmit_data()) {
+      channel_loop_->begin_wait_time_counting();
+    }
     if (OB_FAIL(msg_response_.wait(get_channel_type()))) {
       LOG_WARN("send previous message fail", K(ret));
+    }
+    if (belong_to_transmit_data()) {
+      channel_loop_->end_wait_time_counting();
     }
     if (OB_HASH_NOT_EXIST == ret) {
       if (is_drain()) {
