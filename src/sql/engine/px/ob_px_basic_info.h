@@ -96,6 +96,10 @@ namespace sql
    (type) == PHY_LOCK || \
    (type) == PHY_TABLE_DIRECT_INSERT)
 
+#define IS_SAMPLE_SCAN(type) \
+      ((type) == PHY_BLOCK_SAMPLE_SCAN || \
+      (type) == PHY_ROW_SAMPLE_SCAN)
+
 enum JoinFilterMode
 {
   NOT_INIT,

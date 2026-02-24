@@ -1933,7 +1933,7 @@ int ObTableScanOp::inner_open()
       if (PHY_TABLE_SCAN == MY_SPEC.get_type()) {
         // heap table ddl doesn't have sample scan, report checksum directly
         report_checksum_ = true;
-      } else if (PHY_BLOCK_SAMPLE_SCAN == MY_SPEC.get_type() || PHY_ROW_SAMPLE_SCAN == MY_SPEC.get_type()) {
+      } else if (IS_SAMPLE_SCAN(MY_SPEC.get_type())) {
         // normal ddl need sample scan first, report_cheksum_ will be marked as true when rescan
         report_checksum_ = false;
       }
