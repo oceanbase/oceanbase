@@ -1710,7 +1710,7 @@ int ObBasicTabletMergeCtx::prepare_from_medium_compaction_info(const ObMediumCom
       } else {
         static_param_.co_static_param_.is_cs_replica_force_full_merge_ = only_use_row_store();
       }
-    } else {
+    } else if (!medium_info->storage_schema_.is_row_store()) {
       medium_info->get_co_major_merge_strategy(co_major_merge_strategy);
     }
     if (medium_info->contain_window_decision_log_info_) {
