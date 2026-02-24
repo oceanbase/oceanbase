@@ -183,6 +183,11 @@ public:
                                           const uint64_t column_id,
                                           bool allow_not_exist,
                                           const share::schema::ObSensitiveRuleSchema *&schema) const;
+  int get_location_id_name(const uint64_t tenant_id,
+                           common::ObString &location_name,
+                           uint64_t &location_id,
+                           ObIAllocator *allocator = NULL,
+                           bool allow_not_exist = false) const;
   //int get_local_table_id(const uint64_t tenant_id,
   //                       const uint64_t database_id,
   //                       const common::ObString &table_name,

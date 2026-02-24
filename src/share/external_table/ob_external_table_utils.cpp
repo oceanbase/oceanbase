@@ -2228,9 +2228,9 @@ int ObExternalTableUtils::resolve_location_for_load_and_select_into(ObSchemaGett
       } else if (OB_FAIL(schema_guard.check_location_access(
                                 session_priv,
                                 session_info.get_enable_role_array(),
-                                location_name))) {
+                                schema_ptr->get_location_name_str()))) {
         LOG_WARN("failed to check location access", K(ret),
-                 K(session_info.get_enable_role_array()), K(location_name));
+                 K(session_info.get_enable_role_array()), K(schema_ptr->get_location_name_str()));
       } else {
         ObSqlString full_path_str;
         if (OB_FAIL(concat_external_file_location(location_url, sub_path, full_path_str))) {

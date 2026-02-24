@@ -2114,37 +2114,6 @@ int ObSchemaGetterGuard::check_priv_or(const ObSessionPrivInfo &session_priv,
   return ret;
 }
 
-int ObSchemaGetterGuard::check_location_access(const ObNameCaseMode &case_mode,
-                                               const ObSessionPrivInfo &session_priv,
-                                               const common::ObIArray<uint64_t> &enable_role_id_array,
-                                               const ObString &location_name,
-                                               const bool is_need_write_priv)
-{
-  int ret = OB_SUCCESS;
-  ObCollationType cs_type = CS_TYPE_UTF8MB4_BIN;
-  ObArenaAllocator tmp_allocator;
-  ObString lower_location_name;
-  ObString real_location_name;
-  if (lib::is_mysql_mode()
-      && OB_LOWERCASE_AND_INSENSITIVE == case_mode) {
-    if (OB_FAIL(ObCharset::tolower(cs_type, location_name, lower_location_name, tmp_allocator))) {
-      LOG_WARN("failed to lower string", K(ret));
-    } else {
-      real_location_name = lower_location_name;
-    }
-  } else {
-    real_location_name = location_name;
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(check_location_access(session_priv, enable_role_id_array, real_location_name, is_need_write_priv))) {
-    LOG_WARN("failed to check location access", K(ret), K(session_priv), K(enable_role_id_array), K(real_location_name));
-  }
-
-  return ret;
-}
-
 int ObSchemaGetterGuard::check_location_access(const ObSessionPrivInfo &session_priv,
                                                const common::ObIArray<uint64_t> &enable_role_id_array,
                                                const ObString &location_name,

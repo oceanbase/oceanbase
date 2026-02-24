@@ -2038,15 +2038,12 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                   static_cast<ObString::obstr_size_t>(parse_tree.children_[0]->str_len_));
           ObSchemaGetterGuard *schema_guard = NULL;
           uint64_t location_id = OB_INVALID_ID;
-          ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
           if(OB_ISNULL(schema_checker_) || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got null ptr", K(ret));
-          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+          } else if (OB_FAIL(schema_checker_->get_location_id_name(real_tenant_id, location_name, location_id))) {
             LOG_WARN("failed to get location id", K(ret));
-          } else if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
-            LOG_WARN("failed to get name case mode", K(ret));
-          } else if (OB_FAIL(schema_guard->check_location_access(case_mode, session_priv, enable_role_id_array, location_name))) {
+          } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
             LOG_WARN("failed to check location access", K(ret));
           }
           if (OB_SUCC(ret)) {
@@ -2077,18 +2074,15 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           ParseNode *child_node = parse_tree.children_[0];
           location_name.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
           ObSchemaGetterGuard *schema_guard = NULL;
-          ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
           if(OB_ISNULL(schema_checker_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got null ptr", K(ret));
-          } else if (OB_FAIL(schema_checker_->get_location_id(real_tenant_id, location_name, location_id))) {
+          } else if (OB_FAIL(schema_checker_->get_location_id_name(real_tenant_id, location_name, location_id))) {
             LOG_WARN("get location id failed", K(ret), K(real_tenant_id), K(location_name));
           } else if(OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got null ptr", K(ret));
-          } else if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
-            LOG_WARN("failed to get name case mode", K(ret));
-          } else if (OB_FAIL(schema_guard->check_location_access(case_mode, session_priv, enable_role_id_array, location_name))) {
+          } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
             LOG_WARN("failed to check location access", K(ret), K(session_priv), K(enable_role_id_array), K(location_name));
           }
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
