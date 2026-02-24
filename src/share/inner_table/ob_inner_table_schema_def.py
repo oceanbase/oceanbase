@@ -39596,21 +39596,7 @@ def_table_schema(
       CAST(IF(D.TABLE_MODE & 66048 = 66048, 'YES', 'NO') AS  CHAR(3)) AS ROWIDS,
       CAST(IF(D.TABLE_MODE & 66048 = 0, 'YES', 'NO') AS  CHAR(3)) AS PRIMARY_KEY,
       CAST('NO' AS CHAR(3)) AS OBJECT_ID,
-      CAST(
-        IF((
-          SELECT COUNT(*)
-            FROM oceanbase.__all_virtual_column C1,
-                 oceanbase.__all_virtual_column C2
-            WHERE B.TENANT_ID = C1.TENANT_ID
-              AND B.TABLE_ID = C1.TABLE_ID
-              AND C1.COLUMN_ID >= 16
-              AND C1.COLUMN_ID < 65520
-              AND D.TENANT_ID = C2.TENANT_ID
-              AND D.TABLE_ID = C2.TABLE_ID
-              AND C2.ROWKEY_POSITION != 0
-              AND C1.COLUMN_ID != C2.COLUMN_ID
-          ) = 0, 'NO', 'YES') AS CHAR(3)
-      ) AS FILTER_COLUMNS,
+      CAST('YES' AS CHAR(3)) AS FILTER_COLUMNS,
       CAST('YES' AS CHAR(3)) AS SEQUENCE,
       CAST('YES' AS CHAR(3)) AS INCLUDE_NEW_VALUES,
       CAST(IF(C.PURGE_MODE = 1, 'YES', 'NO') AS CHAR(3)) AS PURGE_ASYNCHRONOUS,
