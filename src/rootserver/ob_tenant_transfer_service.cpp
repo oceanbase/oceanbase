@@ -1085,6 +1085,7 @@ int ObTenantTransferService::get_tablet_ids_for_oracle_tmp_table_v2_(
   common::ObIArray<common::ObTabletID> &temporary_tablet_ids)
 {
   int ret = OB_SUCCESS;
+  const int64_t tablet_count_threshold = OB_MIN(100, get_tablet_count_threshold_());
   common::ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
@@ -1092,17 +1093,20 @@ int ObTenantTransferService::get_tablet_ids_for_oracle_tmp_table_v2_(
   } else if (OB_UNLIKELY(table_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(table_ids));
-  } else if (OB_FAIL(ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(
+  } else if (OB_FAIL(ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids( // result is sorted by tablet_id in ascending order
       *sql_proxy_,
       tenant_id_,
       table_ids,
       session_tablet_infos))) {
     LOG_WARN("get session tablet infos by table id failed", KR(ret), K(table_ids));
-  } else if (OB_FAIL(temporary_tablet_ids.reserve(session_tablet_infos.count()))) {
+  } else if (OB_FAIL(temporary_tablet_ids.reserve(tablet_count_threshold))) {
     LOG_WARN("reserve failed", KR(ret), K(session_tablet_infos));
   } else {
+    // The number should not exceed tablet_count_threshold
     ARRAY_FOREACH(session_tablet_infos, idx) {
-      if (OB_FAIL(temporary_tablet_ids.push_back(session_tablet_infos.at(idx).get_tablet_id()))) {
+      if (temporary_tablet_ids.count() >= tablet_count_threshold) {
+        break;
+      } else if (OB_FAIL(temporary_tablet_ids.push_back(session_tablet_infos.at(idx).get_tablet_id()))) {
         LOG_WARN("push back failed", KR(ret), K(session_tablet_infos.at(idx)), K(temporary_tablet_ids));
       }
     }
@@ -1333,7 +1337,6 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
   } else if (related_table_schemas.empty()) {
     // skip
   } else {
-    const int64_t limit_tablet_count = get_tablet_count_threshold_();
     ObArray<ObTableID> table_ids;
     ObArray<storage::ObSessionTabletInfo> session_tablet_infos;
     ARRAY_FOREACH(related_table_schemas, idx) {
@@ -1427,14 +1430,14 @@ int ObTenantTransferService::generate_related_tablet_ids_for_oracle_tmp_table_v2
             }
           }
 
-          // If this group can be transferred, add all tablet_ids to the result
+          // If this group can be transferred, add all tablet_ids to the result,
+          // if data table will be transferred, its related table tablets must be transferred too.
+          // Pruning has already been completed in get_temp_tablet_ids_can_be_transferred_for_oracle_tmp_table_v2_;
+          // Further pruning is not allowed here.
           if (can_migrate) {
             if (OB_UNLIKELY(group.count() > related_table_schemas.count() + 1)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("single group count exceeds expected", KR(ret), K(group.count()), K(related_table_schemas.count()), K(i), K(session_keys.at(i)));
-            } else if (tablet_ids.count() + group.count() > limit_tablet_count) {
-              LOG_INFO("tablet count exceeds limit", KR(ret), K(tablet_ids.count()), K(group.count()), K(limit_tablet_count));
-              break;
             } else {
               for (int64_t j = 0; OB_SUCC(ret) && j < group.count(); j++) {
                 const ObTabletID &tablet_id = group.at(j).get_tablet_id();

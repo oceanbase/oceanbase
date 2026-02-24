@@ -106,7 +106,7 @@ public:
   // @param [in] tenant_id, tenant for query
   // @param [in] table_ids, table_ids for getting
   // @param [out] infos, ObSessionTabletInfo for getting
-  // @return OB_SUCCESS if success
+  // @return OB_SUCCESS if success, result infos is sorted by tablet_id in ascending order
   static int batch_get_by_table_ids(
     ObISQLClient &sql_proxy,
     const uint64_t tenant_id,

@@ -462,7 +462,7 @@ int ObTabletToGlobalTmpTableOperator::inner_batch_get_by_sql(
         LOG_WARN("fail to assign sql", KR(ret), K(sql), K(table_id_list));
       }
 
-      if (FAILEDx(sql.append_fmt(")"))) {
+      if (FAILEDx(sql.append_fmt(") ORDER BY tablet_id ASC"))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
       } else if (OB_FAIL(sql_client_retry_weak.read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
