@@ -116,6 +116,7 @@ public:
     ObMediumCompactionInfo &medium_info,
     bool &skip);
   int check_tablet_inc_data(
+    const int64_t merge_version,
     ObTablet &tablet,
     ObMediumCompactionInfo &medium_info,
     bool &no_inc_data);

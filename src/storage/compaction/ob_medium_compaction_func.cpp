@@ -1687,6 +1687,7 @@ int ObMediumCompactionScheduleFunc::fill_window_decision_log_info(ObMediumCompac
 
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
+    const int64_t merge_version,
     ObTablet &tablet,
     ObMediumCompactionInfo &medium_info,
     bool &no_inc_data)
@@ -1698,7 +1699,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
   const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
   ObMdsInfoDistinctMgr mds_info_mgr;
-  ObVersionRange read_version_range(medium_info.last_medium_snapshot_, medium_info.medium_snapshot_);
+  ObVersionRange read_version_range(last_major_snapshot, merge_version);
   const bool read_mds = medium_info.storage_schema_.is_global_index_table()
     || tablet_handle_.get_obj()->has_merged_with_mds_info()
     || medium_info.storage_schema_.has_ttl_definition()
@@ -1785,7 +1786,7 @@ int ObMediumCompactionScheduleFunc::try_skip_merge_for_ss(
                                                medium_info.storage_schema_,
                                                table_id_))) {
     LOG_WARN("failed to get table schema", K(ret), K(tablet_id), K(freeze_info), K(medium_info));
-  } else if (OB_FAIL(check_tablet_inc_data(tablet, medium_info, no_inc_data))) {
+  } else if (OB_FAIL(check_tablet_inc_data(merge_version, tablet, medium_info, no_inc_data))) {
     LOG_WARN("failed to check if inc data exists", K(ret));
   } else if (no_inc_data) {
     merge_reason = ObAdaptiveMergePolicy::NO_INC_DATA;
