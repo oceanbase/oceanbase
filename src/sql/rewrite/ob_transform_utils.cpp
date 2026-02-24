@@ -15203,7 +15203,8 @@ int ObTransformUtils::convert_preds_vector_to_scalar(ObTransformerCtx &ctx,
 int ObTransformUtils::check_can_replace(ObRawExpr *expr,
                                         ObIArray<ObRawExpr *> &parent_exprs,
                                         bool used_in_compare,
-                                        bool &can_replace)
+                                        bool &can_replace,
+                                        bool for_const_propagate /* false */)
 {
   int ret = OB_SUCCESS;
   can_replace = false;
@@ -15224,7 +15225,7 @@ int ObTransformUtils::check_can_replace(ObRawExpr *expr,
         LOG_WARN("failed to check is bypass string expr", K(ret));
       } else if (is_bypass) {
         // do nothing
-      } else if (OB_FAIL(check_convert_string_safely(cur_expr, expr, can_replace))) {
+      } else if (OB_FAIL(check_convert_string_safely(cur_expr, expr, can_replace, for_const_propagate))) {
         LOG_WARN("failed to check is convert string expr", K(ret));
       } else {
         found_convert = true;
@@ -15310,9 +15311,12 @@ int ObTransformUtils::is_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &
 // 1. the param is string type and result is not string type
 // 2. the content of input string is not just copied to result, such as charset convert, upper
 // to simplify the implementation, this function only check functions in mysql mode
+// 3. for like predicate, need to check type and collation validity in different cases
+// (ConstPropagate/PushDownThroughGroupBY/PushDownIntoSet)
 int ObTransformUtils::check_convert_string_safely(const ObRawExpr *expr,
                                                   const ObRawExpr *src_expr,
-                                                  bool &is_safe)
+                                                  bool &is_safe,
+                                                  bool check_like_validity_for_const_propagate)
 {
   int ret = OB_SUCCESS;
   is_safe = false;
@@ -15326,6 +15330,39 @@ int ObTransformUtils::check_convert_string_safely(const ObRawExpr *expr,
     } else if (T_FUN_SYS_CAST == op_type || T_FUN_SYS_CONVERT == op_type) {
       if (!ob_is_string_or_lob_type(expr->get_result_type().get_type())) {
         is_safe = true;
+      }
+    }
+    if (T_OP_LIKE == op_type && src_expr->get_param_count() == 0) {
+      bool is_pad = false;
+      const ObRawExprResType src_type = src_expr->get_result_type();
+      if (OB_FAIL(ObCharset::is_pad_charset(src_type.get_collation_type(), is_pad))) {
+        LOG_WARN("failed to check the pad attribute", K(ret));
+      } else if (check_like_validity_for_const_propagate) {
+        /*
+          For Const Propagate:
+          1. In MySQL mode, the LIKE predicate cannot be replaced if the involved
+          column is CHAR or VARCHAR type and its character set is PAD SPACE.
+          e.g. select * from t1 where c1 = 'a ' and c1 like '% '; (char) false positive case
+          e.g. select * from t1 where c1 = 'a' and c1 like '% '; (varchar) false negative case
+          2. In Oracle mode, the LIKE predicate cannot be replaced if the involved
+          column is CHAR type.
+          e.g. select * from t1 where c1 = 'a' and c1 like '% '; (char) false negative case
+        */
+        if (is_oracle_mode() && src_type.is_fixed_len_char_type()) {
+          is_safe = false;
+        } else if (!is_oracle_mode() && is_pad) {
+          is_safe = false;
+        }
+      } else if (!is_oracle_mode() && src_type.is_varchar() && is_pad) {
+        /*
+          For PushDownThroughGroupBy/PushDownIntoSet:
+          In MySQL mode, the LIKE predicate cannot be pushdown through group by
+          or pushdown into set if the involved column is VARCHAR type and its
+          character set is PAD SPACE.
+          e.g. select count(*) from t1 group by c having c like '% ';
+          e.g. select * from (select * from t1 union select * from t2) where c like '% ';
+        */
+        is_safe = false;
       }
     }
   }

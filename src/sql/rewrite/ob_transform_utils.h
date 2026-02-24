@@ -1932,7 +1932,8 @@ public:
   static int check_can_replace(ObRawExpr *expr,
                                ObIArray<ObRawExpr *> &parent_exprs,
                                bool used_in_compare,
-                               bool &can_replace);
+                               bool &can_replace,
+                               bool for_const_propagate = false);
 
   static int check_pushdown_into_set_valid(const ObSelectStmt* child_stmt,
                                            ObRawExpr *expr,
@@ -2209,7 +2210,8 @@ private:
 
   static int check_convert_string_safely(const ObRawExpr *expr,
                                          const ObRawExpr *src_expr,
-                                         bool &is_safe);
+                                         bool &is_safe,
+                                         bool check_like_validity_for_const_propagate);
 
   static int get_idx_from_table_ids(const ObIArray<uint64_t> &src_table_ids,
                                     const ObIArray<TableItem *> &target_tables,

@@ -1816,6 +1816,20 @@ bool ObCharset::is_valid_charset(int64_t cs_type_int)
   return charset_type > CHARSET_INVALID && charset_type < CHARSET_MAX;
 }
 
+int ObCharset::is_pad_charset(ObCollationType collation_type, bool &is_pad)
+{
+  int ret = OB_SUCCESS;
+  is_pad = false;
+  if (OB_UNLIKELY(!is_valid_collation(collation_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid collation type", K(ret), K(collation_type));
+  } else {
+    ObCharsetInfo *cs = static_cast<ObCharsetInfo *>(ObCharset::charset_arr[collation_type]);
+    is_pad = ObCharsetPadAttr::PAD_SPACE == cs->pad_attribute;
+  }
+  return ret;
+}
+
 static ObCollationType non_bin_coll_marks[NLS_COLLATION_MAX] = {
   CS_TYPE_INVALID,
   CS_TYPE_PINYIN_BEGIN_MARK,

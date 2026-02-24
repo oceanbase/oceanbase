@@ -741,6 +741,22 @@ int ObPredicateDeduce::deduce_general_predicates(ObTransformerCtx &ctx,
                                                   general_preds.at(i),
                                                   new_pred))) {
         LOG_WARN("failed to copy the predicate", K(ret));
+      } else if (OB_ISNULL(new_pred) ||
+                 OB_UNLIKELY(new_pred->get_param_count() == 0) ||
+                 OB_ISNULL(new_pred->get_param_expr(0))||
+                 OB_ISNULL(equal_exprs.at(j))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), KPC(new_pred), KPC(equal_exprs.at(j)));
+      } else if (is_oracle_mode() && T_OP_LIKE == new_pred->get_expr_type() &&
+                 new_pred->get_param_expr(0)->get_result_type().is_fixed_len_char_type() &&
+                 equal_exprs.at(j)->get_result_type().is_fixed_len_char_type() &&
+                 new_pred->get_param_expr(0)->get_result_type().get_length() !=
+                 equal_exprs.at(j)->get_result_type().get_length()) {
+        /* do nothing
+          In Oracle mode, if the column involved in the LIKE predicate is CHAR(LenA),
+          and another column in the equivalence class is also CHAR(LenB) but the lengths
+          are inconsistent (LenA != LenB), equivalent predicates cannot be derived.
+        */
       } else {
         new_pred->get_param_expr(0) = equal_exprs.at(j);
         if (OB_FAIL(new_pred->formalize(ctx.session_info_))) {

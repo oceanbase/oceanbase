@@ -2307,6 +2307,76 @@ int ObTransformPredicateMoveAround::pushdown_into_qualify_filter(ObIArray<ObRawE
   return ret;
 }
 
+/**
+ * @brief
+ * For PredicateDeduction
+ * In MySQL mode, if the column involved in the LIKE predicate is VARCHAR type
+ * and its collation is PAD SPACE, it cannot participate in predicate equivalence derivation.
+ * e.g. select * from t1, t2 where t1.c = t2.c and t1.c like '% ';
+ * @return
+*/
+int ObTransformPredicateMoveAround::check_validity_for_like_predicate(ObRawExpr *expr,
+  bool &is_valid_for_like)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode()) {
+    return ret;
+  }
+  ObArray<ObRawExpr *> queue;
+  ObSEArray<ObRawExpr *, 4> generalized_columns;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (OB_FAIL(queue.push_back(expr))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid_for_like && i < queue.count(); ++i) {
+    ObRawExpr *cur = queue.at(i);
+    if (OB_ISNULL(cur)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (T_OP_LIKE == cur->get_expr_type() || T_OP_NOT_LIKE == cur->get_expr_type()) {
+      generalized_columns.reuse();
+      if (OB_UNLIKELY(cur->get_param_count() == 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("like expr's param is null", K(ret), KPC(cur));
+      } else if (OB_FAIL(extract_generalized_column(cur->get_param_expr(0), generalized_columns))) {
+        LOG_WARN("failed to extract generalized columns", K(ret));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && is_valid_for_like && j < generalized_columns.count(); ++j) {
+          bool is_pad = false;
+          ObRawExpr* col = generalized_columns.at(j);
+          if (OB_ISNULL(col)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (!col->get_result_type().is_varchar()) {
+            // do nothing
+          } else if (OB_FAIL(ObCharset::is_pad_charset(col->get_result_type().get_collation_type(), is_pad))) {
+            LOG_WARN("failed to check the pad attribute", K(ret));
+          } else if (is_pad) {
+            is_valid_for_like = false;
+          }
+        }
+      }
+    } else if (!cur->is_set_op_expr()) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < cur->get_param_count(); ++j) {
+        ObRawExpr *param = NULL;
+        if (OB_ISNULL(param = cur->get_param_expr(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param expr is null", K(ret), K(param));
+        } else if (!param->has_flag(CNT_COLUMN) &&
+                   !param->has_flag(CNT_AGG) &&
+                   !param->has_flag(CNT_WINDOW_FUNC)) {
+          // do nothing
+        } else if (OB_FAIL(queue.push_back(param))) {
+          LOG_WARN("failed to push back param expr", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSelectStmt &stmt,
   ObRawExpr *having_expr, bool &is_valid)
 {
@@ -2327,6 +2397,13 @@ int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSe
   } else if (ObOptimizerUtil::overlap_exprs(
                generalized_columns, stmt.get_rollup_exprs())) {
     block_by_rollup = true;
+  } else if (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_2)) {
+    if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(having_expr, stmt.get_group_exprs(),
+            true, true, is_valid))) {
+      LOG_WARN("failed to check if can pass through group by", K(ret));
+    } else if (!is_valid) {
+      block_by_groupby = true;
+    }
   } else {
     is_valid = true;
   }
@@ -3622,6 +3699,7 @@ int ObTransformPredicateMoveAround::transform_predicates(
   ObSEArray<ObRawExpr *, 4> input_preds;
   ObSEArray<ObRawExpr *, 4> valid_preds;
   ObSEArray<ObRawExpr *, 4> invalid_preds;
+  ObSEArray<ObRawExpr *, 4> invalid_like_preds;
   ObSEArray<ObRawExpr *, 4> simple_preds;
   ObSEArray<ObRawExpr *, 4> general_preds;
   ObSEArray<ObRawExpr *, 4> aggr_bound_preds;
@@ -3667,8 +3745,15 @@ int ObTransformPredicateMoveAround::transform_predicates(
                                                   cast_expr, input_preds.at(i))))) {
         LOG_WARN("failed to push back preds", K(ret));
       }
-    } else if (OB_FAIL(invalid_preds.push_back(input_preds.at(i)))) {
-      LOG_WARN("failed to push back complex predicates", K(ret));
+    } else {
+      bool is_valid_for_like = true;
+      if (OB_FAIL(OB_FAIL(check_validity_for_like_predicate(input_preds.at(i), is_valid_for_like)))) {
+        LOG_WARN("failed to check validity for like predicate", K(ret));
+      } else if (is_valid_for_like && OB_FAIL(invalid_preds.push_back(input_preds.at(i)))) {
+        LOG_WARN("failed to push back complex predicates", K(ret));
+      } else if (!is_valid_for_like && OB_FAIL(invalid_like_preds.push_back(input_preds.at(i)))) {
+        LOG_WARN("failed to push back invalid like predicate", K(ret));
+      }
     }
   }
   while (OB_SUCC(ret) && is_happened && visited.num_members() < valid_preds.count()) {
@@ -3706,6 +3791,8 @@ int ObTransformPredicateMoveAround::transform_predicates(
       LOG_WARN("failed to assign result", K(ret));
     } else if (OB_FAIL(append(output_preds, invalid_preds))) {
       LOG_WARN("failed to append other predicates", K(ret));
+    } else if (OB_FAIL(append(output_preds, invalid_like_preds))) {
+      LOG_WARN("failed to append invalid like predicates", K(ret));
     } else if (OB_FAIL(append(output_preds, general_preds))) {
       LOG_WARN("failed to append speical predicates", K(ret));
     } else if (OB_FAIL(append(output_preds, aggr_bound_preds))) {
