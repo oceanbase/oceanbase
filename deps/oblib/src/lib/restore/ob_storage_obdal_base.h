@@ -63,6 +63,10 @@ static const char* OBJECT_STORAGE_IF_MATCH_WHITELIST[] =
 
 bool is_in_object_storage_if_match_whitelist(const ObString &uri);
 
+// @brief: ObDalMemoryManager is a singleton class that manages obdal memory.
+// System tenant's memory is allocated from this manager, while user tenant's memory is allocated
+// from ob_malloc. This is manager is no longer used due to memory fragment issues that casued
+// system tenant's memory always reach the limit.
 class ObDalMemoryManager
 {
 public:

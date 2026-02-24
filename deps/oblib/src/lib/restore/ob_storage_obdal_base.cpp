@@ -131,6 +131,8 @@ ObDalEnvIniter &ObDalEnvIniter::get_instance()
   return initer;
 }
 
+// @brief: ObDalMallocHeader indentify the memory was allocated by ob_malloc or ObDalMemoryManager.
+// This is no longer used since ObDalMemoryManager's fragment issue.
 struct ObDalMallocHeader
 {
   static const uint32_t MAGIC_CODE = 0XA1B2C3D1;
@@ -143,67 +145,40 @@ struct ObDalMallocHeader
 
 // This function is used to replace rust global allocator in obdal.
 // There are two cases that need to be classified:
-// 1. when size is less than OBDAL_MALLOC_BIG_SIZE, use ObDalMemoryManager to allocate memory,
-//    and ObVSliceAlloc is used at the bottom, which is friendly to small memory alloc.
-// 2. otherwise, use ob_malloc_align to allocate memory and split under user tenant's memory.
-//
-// Therefore, we must construct a header to indicate the situation, allowing us to invoke the
-// appropriate free function.
+// 1. when size is less than OBDAL_MALLOC_BIG_SIZE, use SERVER_TENANT_ID to allocate memory.
+// 2. otherwise, use user tenant to allocate memory.
 void *obdal_malloc(std::size_t size, std::size_t align)
 {
   void *ptr = nullptr;
   ObMemAttr attr;
   attr.label_ = OB_DAL_SDK;
-  const int64_t real_align = lib::align_up2(align, 16);
-  const int64_t real_size = real_align + size + sizeof(ObDalMallocHeader);
+  const int64_t origin_tenant_id = ob_get_tenant_id();
   const int64_t tenant_id = ObDalAccessor::obdal_get_tenant_id();
-  if (real_size < OBDAL_MALLOC_BIG_SIZE) {
+  ob_get_tenant_id() = tenant_id;
+  if (size < OBDAL_MALLOC_BIG_SIZE) {
     attr.tenant_id_ = OB_SERVER_TENANT_ID;
   } else {
     attr.tenant_id_ = tenant_id;
   }
   SET_IGNORE_MEM_VERSION(attr);
   do {
-    if (real_size < OBDAL_MALLOC_BIG_SIZE) {
-      ptr = ObDalMemoryManager::get_instance().allocate(real_size, align);
-    } else {
-      ptr = ob_malloc_align(align, real_size, attr);
-    }
+    ptr = ob_malloc_align(align, size, attr);
     if (OB_ISNULL(ptr)) {
       ob_usleep(10000);   // 10ms
       if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "obdal failed to allocate memory", K(size), K(align), K(real_size));
+        OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "obdal failed to allocate memory", K(size), K(align), K(tenant_id), K(attr.tenant_id_));
       }
     }
   } while (OB_ISNULL(ptr));
 
-  if (OB_NOT_NULL(ptr)) {
-    void *tmp_ptr = ptr;
-    ptr = (void*)lib::align_up2((int64_t)tmp_ptr + sizeof(ObDalMallocHeader), real_align);
-    ObDalMallocHeader *header = (ObDalMallocHeader*)ptr - 1;
-    header->magic_code_ = ObDalMallocHeader::MAGIC_CODE;
-    header->offset_ = (char*)header - (char*)tmp_ptr;
-    if (real_size < OBDAL_MALLOC_BIG_SIZE) {
-      header->is_use_vslice_alloc_ = true;
-    } else {
-      header->is_use_vslice_alloc_ = false;
-    }
-  }
+  ob_get_tenant_id() = origin_tenant_id;
   return ptr;
 }
 
 void obdal_free(void *ptr)
 {
   if (ptr != nullptr) {
-    ObDalMallocHeader *header = (ObDalMallocHeader*)ptr - 1;
-    abort_unless(header->check_magic_code());
-    header->mark_unused();
-    char *orig_ptr = (char*)header - header->offset_;
-    if (header->is_use_vslice_alloc_) {
-      ObDalMemoryManager::get_instance().free(orig_ptr);
-    } else {
-      ob_free_align(orig_ptr);
-    }
+    ob_free_align(ptr);
   }
 }
 
