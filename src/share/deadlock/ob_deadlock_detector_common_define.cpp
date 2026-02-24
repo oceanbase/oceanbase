@@ -396,8 +396,9 @@ int ObDetectorUserReportInfo::set_columns_(const int64_t idx,
     }
   } else if (ValueType::COLUMN_VALUE == type) {
     if (OB_FAIL(extra_columns_values_guard_.push_back(column_info))) {
-    } else if (extra_columns_values_.push_back(ObString(strlen(column_info.get_ptr()), column_info.get_ptr()))) {
+    } else if (OB_FAIL(extra_columns_values_.push_back(ObString(strlen(column_info.get_ptr()), column_info.get_ptr())))) {
       extra_columns_values_guard_.pop_back();
+      DETECT_LOG(WARN, "push value string failed", PRINT_WRAPPER);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
