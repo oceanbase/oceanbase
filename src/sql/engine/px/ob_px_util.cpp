@@ -3716,6 +3716,10 @@ int ObPxEstimateSizeUtil::prepare_px_tablets_info(ObExecContext &ctx,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("null schema, may be deleted", K(tenant_id), K(ref_table_id));
+  } else if (table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table()) {
+    // not support for oracle temporary table
+    is_opt_stat_valid = false;
+    LOG_INFO("not support for oracle temporary table", K(ref_table_id));
   } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(table_schema, idx_map))) {
     LOG_WARN("fail to build tablet idx map");
   } else if (OB_FAIL(fill_px_tablets_info_with_stat(ctx, scan_op, locations, idx_map,
