@@ -18049,6 +18049,8 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+# 12597: __all_virtual_object_storage_stat
+# 12598: __all_virtual_object_storage_error_record
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
