@@ -2451,7 +2451,8 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
                                           common::ObIArray<ObRawExpr*> &ordering,
                                           ObOrderDirection &direction,
                                           bool &force_direction,
-                                          const bool is_index_back)
+                                          const bool is_index_back,
+                                          const bool is_inner_path)
 {
   int ret = OB_SUCCESS;
   direction = default_asc_direction();
@@ -2490,6 +2491,8 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
   } else if (UNORDERED != hint_direction) {
     direction = hint_direction;
     force_direction = true;
+  } else if (is_inner_path) {
+    // for inner path, no need to get index scan direction
   } else if (OB_FAIL(get_index_scan_direction(ordering, stmt,
                                               get_plan()->get_equal_sets(), direction))) {
     LOG_WARN("failed to get index scan direction", K(ret));
@@ -3120,7 +3123,8 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
                                            entry->get_ordering_info().get_ordering(),
                                            direction,
                                            force_direction,
-                                           is_index_back))) {
+                                           is_index_back,
+                                           helper.is_inner_path_))) {
         LOG_WARN("get access path ordering ", K(ret));
       } else {
         entry->set_is_index_global(is_index_global);
