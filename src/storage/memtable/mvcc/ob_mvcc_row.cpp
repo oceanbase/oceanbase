@@ -248,13 +248,13 @@ int ObMvccRowFilter::read_row_and_check(
       TRANS_LOG(WARN, "failed to check filter row complete", KR(ret), K_(datum_row), K(complete));
     }
     if (OB_FAIL(ret) || !complete) {
-      ObTaskController::get().allow_next_syslog();
-      TRANS_LOG(TRACE, "not complete", KR(ret), K_(datum_row), K(filtered), K(complete)); // DEBUG log, remove later
+      ObTaskController::get().allow_next_syslog(); // just a thread_local variable increment, don't worry about performance
+      TRANS_LOG(TRACE, "not complete", KR(ret), K_(datum_row), K(filtered), K(complete));
     } else if (nullptr != mds_filter_.mds_filter_mgr_ && OB_FAIL(mds_filter_.mds_filter_mgr_->filter(datum_row_, filtered, true/*check_filter*/, true/*check_version*/))) {
       TRANS_LOG(WARN, "failed to check filtered by mds_filter_mgr", KR(ret), K_(datum_row), K_(mds_filter));
     } else {
       ObTaskController::get().allow_next_syslog();
-      TRANS_LOG(INFO, "success to check trans node filtered", KR(ret), K_(datum_row), K(filtered)); // DEBUG log, remove later
+      TRANS_LOG(TRACE, "success to check trans node filtered", KR(ret), K_(datum_row), K(filtered));
     }
   }
   return ret;
@@ -825,7 +825,9 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
   blocksstable::ObDmlFlag &lock_dml_flag = res.lock_state_.lock_dml_flag_;
   bool need_retry = true;
   ObMvccRowFilter row_filter(ctx.get_mds_filter());
-  if (ctx.get_mds_filter().is_valid() && OB_FAIL(row_filter.init())) {
+  if (ctx.get_mds_filter().is_valid()
+      && !ctx.get_mds_filter().is_mds_filter_empty()
+      && OB_FAIL(row_filter.init())) {
     TRANS_LOG(WARN, "failed to init row filter", KR(ret), K(ctx.get_mds_filter()));
   }
   while (OB_SUCC(ret) && need_retry) {
@@ -1125,7 +1127,9 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
   ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
   bool need_retry = true;
   ObMvccRowFilter row_filter(ctx.mds_filter_);
-  if (ctx.mds_filter_.is_valid() && OB_FAIL(row_filter.init())) {
+  if (ctx.mds_filter_.is_valid()
+      && !ctx.mds_filter_.is_mds_filter_empty()
+      && OB_FAIL(row_filter.init())) {
     TRANS_LOG(WARN, "failed to init row filter", KR(ret), K(ctx.mds_filter_));
   }
   while (OB_SUCC(ret) && need_retry) {

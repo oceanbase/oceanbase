@@ -128,6 +128,7 @@ public:
     combined_child_count_ = -1;
   }
 
+  OB_INLINE bool is_empty() const { return build_filter_flags_.is_empty(); }
   OB_INLINE void set_should_combine_filters_flag(const ObMDSFilterFlags &mds_filter_flags)
   {
     build_filter_flags_ = mds_filter_flags;

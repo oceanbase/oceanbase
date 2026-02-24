@@ -47,8 +47,9 @@ struct ObMvccMdsFilter final
       mds_filter_mgr_(nullptr)
   {}
   ~ObMvccMdsFilter() { reset(); }
-  bool is_valid() const { return nullptr != read_info_ && nullptr != mds_filter_mgr_; }
-  void reset() { read_info_ = nullptr; mds_filter_mgr_ = nullptr; }
+  OB_INLINE bool is_valid() const { return nullptr != read_info_ && nullptr != mds_filter_mgr_; }
+  OB_INLINE void reset() { read_info_ = nullptr; mds_filter_mgr_ = nullptr; }
+  bool is_mds_filter_empty() const;
   int init(ObMvccMdsFilter &mds_filter);
   TO_STRING_KV(KP_(read_info), KP_(mds_filter_mgr));
   const storage::ObITableReadInfo *read_info_;

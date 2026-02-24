@@ -11,7 +11,8 @@
  */
 
 #include "ob_mvcc_acc_ctx.h"
-#include "storage/memtable/ob_memtable_context.h"
+#include "storage/access/ob_mds_filter_mgr.h"
+
 namespace oceanbase
 {
 using namespace transaction;
@@ -29,6 +30,11 @@ int ObMvccMdsFilter::init(ObMvccMdsFilter &mds_filter)
     read_info_ = mds_filter.read_info_;
   }
   return ret;
+}
+
+bool ObMvccMdsFilter::is_mds_filter_empty() const
+{
+  return nullptr == mds_filter_mgr_ || mds_filter_mgr_->is_empty();
 }
 
 int ObMvccAccessCtx::get_write_seq(ObTxSEQ &seq) const
