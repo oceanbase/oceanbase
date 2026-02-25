@@ -600,6 +600,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               compat_type,
                               enable_mysql_compatible_dates,
                               session_info.get_min_const_integer_precision(),
+                              session_info.get_exec_min_cluster_version(),
                               ctx.is_from_pl_,
                               fmt_int_or_ch_decint))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
