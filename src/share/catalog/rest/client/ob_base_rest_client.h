@@ -28,7 +28,7 @@ namespace share
 class ObBaseRestClient
 {
 public:
-  explicit ObBaseRestClient(common::ObIAllocator &allocator)
+  explicit ObBaseRestClient(common::ObIAllocator *allocator)
       : is_inited_(false), uri_(),
         client_pool_(nullptr), allocator_(allocator)
   {
@@ -44,7 +44,7 @@ protected:
   bool is_inited_;
   ObString uri_;         // base uri
   void *client_pool_;
-  common::ObIAllocator &allocator_;
+  common::ObIAllocator *allocator_;
 
 private:
   virtual int do_init(const ObRestCatalogProperties &properties) = 0;

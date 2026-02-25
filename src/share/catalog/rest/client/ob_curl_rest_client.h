@@ -24,7 +24,7 @@ namespace share
 class ObCurlRestClient : public ObBaseRestClient
 {
 public:
-  ObCurlRestClient(common::ObIAllocator &allocator)
+  explicit ObCurlRestClient(common::ObIAllocator *allocator)
       : ObBaseRestClient(allocator), curl_(nullptr),
         header_list_(nullptr)
   {

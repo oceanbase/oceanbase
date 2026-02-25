@@ -658,7 +658,7 @@ int ObRestAuthMgr::curl_oauth2_credential(const ObRestOAuth2Key &oauth2_key,
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator("oauth2_cre_tmp");
-  ObCurlRestClient client(tmp_allocator);
+  ObCurlRestClient client(&tmp_allocator);
   ObRestCatalogProperties properties;
   properties.uri_.assign_ptr(oauth2_key.oauth2_svr_uri_.ptr(), oauth2_key.oauth2_svr_uri_.length());
   if (OB_FAIL(client.init(properties))) {

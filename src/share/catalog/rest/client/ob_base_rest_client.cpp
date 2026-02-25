@@ -25,7 +25,10 @@ int ObBaseRestClient::init(const ObRestCatalogProperties &properties)
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("base rest client already initialized");
-  } else if (OB_FAIL(ob_write_string(allocator_, properties.uri_, uri_, true /*c_style*/))) {
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_FAIL(ob_write_string(*allocator_, properties.uri_, uri_, true /*c_style*/))) {
     LOG_WARN("failed to write uri", K(ret), K(properties.uri_));
   } else if (OB_FAIL(do_init(properties))) {
     LOG_WARN("failed to init client", K(ret));
@@ -46,7 +49,10 @@ int ObBaseRestClient::destroy()
   } else {
     is_inited_ = false;
     client_pool_ = nullptr;
-    allocator_.free(uri_.ptr());
+    if (OB_NOT_NULL(allocator_)) {
+      allocator_->free(uri_.ptr());
+      allocator_ = nullptr;
+    }
     uri_.reset();
   }
   return ret;

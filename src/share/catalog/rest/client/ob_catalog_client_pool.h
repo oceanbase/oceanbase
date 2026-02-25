@@ -80,13 +80,28 @@ private:
   uint64_t catalog_id_;
 };
 
+template<typename ClientInstance>
+struct CatalogPropertiesTraits;
+
+template<>
+struct CatalogPropertiesTraits<ObCurlRestClient> {
+  using PropertiesType = ObRestCatalogProperties;
+};
+
+template<>
+struct CatalogPropertiesTraits<ObHiveMetastoreClient> {
+  using PropertiesType = ObHMSCatalogProperties;
+};
+
 template <typename ClientInstance>
 class ObCatalogClientPool
 {
 public:
+  using PropertiesType = typename CatalogPropertiesTraits<ClientInstance>::PropertiesType;
   ObCatalogClientPool(ObIAllocator *allocator)
    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
      catalog_id_(OB_INVALID_ID), allocator_(allocator),
+     props_allocator_("ClientPoolProps"),
      idle_clients_(*allocator), cond_(), size_(0), capacity_(0),
      waiting_cnt_(0), ref_cnt_(0), last_access_ts_(0)
   {}
@@ -96,7 +111,21 @@ public:
     destroy();
   }
 
-  int resolve_properties(const ObString &properties);
+  int resolve_properties(const ObString &properties)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(properties_.load_from_string(properties, props_allocator_))) {
+      SHARE_LOG(WARN, "fail to init properties", K(ret), K(properties));
+    } else if (OB_FAIL(properties_.decrypt(props_allocator_))) {
+      SHARE_LOG(WARN, "fail to decrypt properties", K(ret));
+    } else {
+      capacity_ = properties_.max_client_pool_size_;
+      if (OB_FAIL(ob_write_string(props_allocator_, properties_.uri_, uri_, true /*c_style*/))) {
+        SHARE_LOG(WARN, "failed to write uri", K(ret), K(properties_.uri_));
+      }
+    }
+    return ret;
+  }
 
   int init(const uint64_t &tenant_id,
            const uint64_t &catalog_id,
@@ -305,26 +334,6 @@ public:
     }
     return ret;
   }
-  int init_client(void *ptr, ObCurlRestClient *&obj)
-  {
-    int ret = OB_SUCCESS;
-    obj = new(ptr) ClientInstance(*allocator_);
-    if (OB_FAIL(obj->init(rest_properties_))) {
-      allocator_->free(ptr);
-      SHARE_LOG(WARN, "failed to init object", K(ret));
-    }
-    return ret;
-  }
-  int init_client(void *ptr, ObHiveMetastoreClient *&obj)
-  {
-    int ret = OB_SUCCESS;
-    obj = new(ptr) ClientInstance(allocator_);
-    if (OB_FAIL(obj->init(hms_properties_))) {
-      allocator_->free(ptr);
-      SHARE_LOG(WARN, "failed to init object", K(ret));
-    }
-    return ret;
-  }
 private:
   int create_client(ClientInstance *&obj)
   {
@@ -338,11 +347,15 @@ private:
       if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SHARE_LOG(WARN, "failed to allocate memory for object", K(ret), K(sizeof(ClientInstance)));
-      } else if (OB_FAIL(init_client(ptr, obj))) {
-        SHARE_LOG(WARN, "failed to init client", K(ret));
       } else {
-        obj->set_client_pool(this);
-        ATOMIC_INC(&size_);
+        obj = new(ptr) ClientInstance(allocator_);
+        if (OB_FAIL(obj->init(properties_))) {
+          allocator_->free(ptr);
+          SHARE_LOG(WARN, "failed to init object", K(ret));
+        } else {
+          obj->set_client_pool(this);
+          ATOMIC_INC(&size_);
+        }
       }
     }
     return ret;
@@ -375,6 +388,7 @@ private:
   uint64_t tenant_id_;
   uint64_t catalog_id_;
   ObIAllocator *allocator_;
+  ObArenaAllocator props_allocator_;  // 用于分配properties和uri的内存, 以方便释放内存
   ObList<ClientInstance*, ObIAllocator> idle_clients_;
   ObThreadCond cond_;
   volatile int64_t size_;
@@ -382,48 +396,12 @@ private:
   volatile int64_t waiting_cnt_;  // 等待线程的数量
   volatile int64_t ref_cnt_;      // pool对象的引用计数
   int64_t last_access_ts_;        // 最后一次从pool取/还client的时间
-
-  union {
-    ObRestCatalogProperties rest_properties_;
-    ObHMSCatalogProperties hms_properties_;
-  };
+  PropertiesType properties_;
   ObString uri_;  // 深拷贝为c-style字符串, 避免展示池化信息时乱码
   static constexpr int64_t IDLE_THRESHOLD_US = 5LL * 60LL * 1000LL * 1000LL;  // 5 minutes, 2 minutes for debug
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCatalogClientPool);
 };
-
-template<typename ClientInstance>
-inline int ObCatalogClientPool<ClientInstance>::resolve_properties(const ObString &properties) {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(rest_properties_.load_from_string(properties, *allocator_))) {
-    SHARE_LOG(WARN, "fail to init rest properties", K(ret), K(properties));
-  } else if (OB_FAIL(rest_properties_.decrypt(*allocator_))) {
-    SHARE_LOG(WARN, "fail to decrypt rest properties", K(ret));
-  } else {
-    capacity_ = rest_properties_.max_client_pool_size_;
-    if (OB_FAIL(ob_write_string(*allocator_, rest_properties_.uri_, uri_, true /*c_style*/))) {
-      SHARE_LOG(WARN, "failed to write uri", K(ret), K(rest_properties_.uri_));
-    }
-  }
-  return ret;
-}
-
-template<>
-inline int ObCatalogClientPool<ObHiveMetastoreClient>::resolve_properties(const ObString &properties) {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(hms_properties_.load_from_string(properties, *allocator_))) {
-    SHARE_LOG(WARN, "fail to init hms properties", K(ret), K(properties));
-  } else if (OB_FAIL(hms_properties_.decrypt(*allocator_))) {
-    SHARE_LOG(WARN, "fail to decrypt hms properties", K(ret));
-  } else {
-    capacity_ = hms_properties_.max_client_pool_size_;
-    if (OB_FAIL(ob_write_string(*allocator_, hms_properties_.uri_, uri_, true /*c_style*/))) {
-      SHARE_LOG(WARN, "failed to write uri", K(ret), K(hms_properties_.uri_));
-    }
-  }
-  return ret;
-}
 
 template <typename ClientInstance>
 class ObCatalogClientPoolClearTask : public common::ObTimerTask
