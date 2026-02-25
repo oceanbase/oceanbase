@@ -1064,7 +1064,17 @@ int ObTransDeadlockDetectorAdapter::autonomous_register_to_deadlock(const ObTran
   #define PRINT_WRAPPER KR(ret), K(last_trans_id), K(now_trans_id), K(query_timeout)
   CHECK_DEADLOCK_ENABLED();
   int ret = OB_SUCCESS;
-  if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->register_key(last_trans_id,
+  bool exist = false;
+  if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->check_detector_exist(last_trans_id, exist))) {
+    DETECT_LOG(WARN, "fail to check detector exist", PRINT_WRAPPER);
+  } else if (exist) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(MTL(ObDeadLockDetectorMgr*)->unregister_key(last_trans_id))) {
+      DETECT_LOG(WARN, "fail to unregister key", PRINT_WRAPPER, K(tmp_ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->register_key(last_trans_id,
                                                         autonomous_detect_callback,
                                                         AutoNomousCollectCallback(last_trans_id),
                                                         DummyFillCallBack(),
