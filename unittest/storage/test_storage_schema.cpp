@@ -393,6 +393,102 @@ TEST_F(TestStorageSchema, test_clipped_schema_for_tablet_split)
   }
 }
 
+TEST_F(TestStorageSchema, test_update_column_info_fix_column_cnt)
+{
+  int ret = OB_SUCCESS;
+
+  // Step 1: Build a base table schema with virtual columns
+  // 3 rowkey + 3 stored non-rowkey + 2 virtual = 8 total, 6 stored
+  share::schema::ObTableSchema base_table_schema;
+  TestSchemaPrepare::prepare_schema(base_table_schema, 3/*rowkey*/, 6/*column*/);
+
+  int64_t next_col_id = common::OB_APP_MIN_COLUMN_ID + 6;
+  share::schema::ObColumnSchemaV2 column;
+  char name[OB_MAX_FILE_NAME_LENGTH];
+  memset(name, 0, sizeof(name));
+  for (int i = 0; i < 2; ++i) {
+    column.reset();
+    column.set_table_id(base_table_schema.get_table_id());
+    column.set_column_id(next_col_id);
+    sprintf(name, "virtual_col%020ld", next_col_id);
+    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
+    column.set_data_type(ObIntType);
+    column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    column.set_data_length(10);
+    column.set_rowkey_position(0);
+    column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+    ASSERT_EQ(OB_SUCCESS, base_table_schema.add_column(column));
+    ++next_col_id;
+  }
+  base_table_schema.set_max_used_column_id(next_col_id);
+  ASSERT_EQ(8, base_table_schema.get_column_count());
+
+  // Step 2: Init storage schema from base table schema
+  ObStorageSchema storage_schema;
+  ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, base_table_schema, lib::Worker::CompatMode::MYSQL));
+  ASSERT_EQ(8, storage_schema.column_cnt_);
+  ASSERT_EQ(6, storage_schema.store_column_cnt_);
+  ASSERT_EQ(8, storage_schema.column_array_.count());
+  ASSERT_FALSE(storage_schema.column_info_simplified_);
+
+  // Step 3: Simulate update_column_cnt_and_schema_version from memtable
+  // (a new stored column was added, memtable recorded 7 stored columns)
+  storage_schema.store_column_cnt_ = 7;
+  storage_schema.column_info_simplified_ = true;
+
+  // Step 4: Build the new table schema with one more stored column (DDL add column)
+  // 3 rowkey + 4 stored non-rowkey + 2 virtual = 9 total, 7 stored
+  share::schema::ObTableSchema new_table_schema;
+  TestSchemaPrepare::prepare_schema(new_table_schema, 3/*rowkey*/, 7/*column*/);
+
+  for (int i = 0; i < 2; ++i) {
+    column.reset();
+    column.set_table_id(new_table_schema.get_table_id());
+    column.set_column_id(next_col_id + i);
+    sprintf(name, "virtual_col%020ld", next_col_id + i);
+    ASSERT_EQ(OB_SUCCESS, column.set_column_name(name));
+    column.set_data_type(ObIntType);
+    column.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    column.set_data_length(10);
+    column.set_rowkey_position(0);
+    column.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+    ASSERT_EQ(OB_SUCCESS, new_table_schema.add_column(column));
+  }
+  new_table_schema.set_max_used_column_id(next_col_id + 2);
+  ASSERT_EQ(9, new_table_schema.get_column_count());
+
+  // Step 5: Call update_column_info — this is the function under test
+  ret = storage_schema.update_column_info(new_table_schema, DATA_CURRENT_VERSION);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // Step 6: Verify the fix
+  ASSERT_FALSE(storage_schema.column_info_simplified_);
+  ASSERT_EQ(9, storage_schema.column_cnt_);
+  ASSERT_EQ(9, storage_schema.column_array_.count());
+  ASSERT_EQ(7, storage_schema.store_column_cnt_);
+
+  // Verify store_column_cnt_ matches actual stored columns in column_array_
+  int64_t actual_stored = 0;
+  for (int64_t i = 0; i < storage_schema.column_array_.count(); ++i) {
+    if (storage_schema.column_array_[i].is_column_stored_in_sstable_) {
+      ++actual_stored;
+    }
+  }
+  ASSERT_EQ(storage_schema.store_column_cnt_, actual_stored);
+
+  // Verify skip index attr works correctly (the original crash site)
+  int64_t stored_col_cnt_in_sstable = 0;
+  ASSERT_EQ(OB_SUCCESS, storage_schema.get_stored_column_count_in_sstable(stored_col_cnt_in_sstable));
+  ObArray<share::schema::ObSkipIndexColumnAttr> skip_idx_attrs;
+  ASSERT_EQ(OB_SUCCESS, skip_idx_attrs.prepare_allocate(stored_col_cnt_in_sstable));
+  ret = storage_schema.get_skip_index_col_attr_by_schema(skip_idx_attrs);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  COMMON_LOG(INFO, "test_update_column_info_fix_column_cnt passed",
+      K(storage_schema.column_cnt_), K(storage_schema.store_column_cnt_),
+      K(storage_schema.column_array_.count()), K(actual_stored));
+}
+
 } // namespace unittest
 } // namespace oceanbase
 

@@ -2283,10 +2283,10 @@ int ObMemtable::get_schema_info(
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
   } else if (get_max_column_cnt() >= input_column_cnt) {
-    TRANS_LOG(INFO, "column cnt or schema version is updated by memtable", KPC(this),
-      K(max_column_cnt_on_memtable), K(max_schema_version_on_memtable));
-    max_column_cnt_on_memtable = MAX(max_column_cnt_on_memtable, get_max_column_cnt());
     max_schema_version_on_memtable = MAX(max_schema_version_on_memtable, get_max_data_schema_version());
+    max_column_cnt_on_memtable = MAX(max_column_cnt_on_memtable, get_max_column_cnt());
+    TRANS_LOG(INFO, "column cnt or schema version is updated by memtable", KPC(this),
+      K(input_column_cnt), K(get_max_column_cnt()), K(max_schema_version_on_memtable), K(max_column_cnt_on_memtable));
   }
   return ret;
 }

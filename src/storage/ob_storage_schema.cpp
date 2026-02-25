@@ -2460,7 +2460,8 @@ void ObStorageSchema::update_column_cnt_and_schema_version(
       K(origin_column_cnt), K_(column_cnt),
       K(origin_store_column_cnt), K_(store_column_cnt),
       "column_array_size", column_array_.count(),
-      K(origin_schema_version), K_(schema_version));
+      K(origin_schema_version), K_(schema_version),
+      K(input_col_cnt), K(input_store_col_cnt), K(input_schema_version));
   }
 }
 
@@ -2476,10 +2477,10 @@ int ObStorageSchema::update_column_info(const share::schema::ObTableSchema& inpu
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "column count is greater than input schema", K(ret), K(get_column_count()), K(input_schema.get_column_count()));
   } else if (FALSE_IT(column_array_.reset())) {
-  } else if (OB_FAIL(column_array_.reserve(get_column_count()))) {
+  } else if (OB_FAIL(column_array_.reserve(input_schema.get_column_count()))) {
     STORAGE_LOG(WARN, "failed to reserve column array", K(ret), K(input_schema.get_column_count()));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < input_schema.get_column_count(); ++i) {
     const share::schema::ObColumnSchemaV2 *col_schema = input_schema.get_column_schema_by_idx(i);
     if (OB_ISNULL(col_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2490,6 +2491,8 @@ int ObStorageSchema::update_column_info(const share::schema::ObTableSchema& inpu
   }
 
   if (OB_SUCC(ret)) {
+    column_cnt_ = column_array_.count();
+    store_column_cnt_ = get_store_column_count_by_column_array();
     column_info_simplified_ = false;
   }
 

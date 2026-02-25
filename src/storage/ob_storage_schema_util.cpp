@@ -108,7 +108,7 @@ int ObStorageSchemaUtil::update_storage_schema(
 {
   int ret = OB_SUCCESS;
   int64_t src_schema_stored_col_cnt = 0;
-  if (OB_FAIL(src_schema.get_stored_column_count_in_sstable(src_schema_stored_col_cnt))) {
+  if (OB_FAIL(src_schema.get_store_column_count(src_schema_stored_col_cnt, true/*full_col*/))) {
     LOG_WARN("failed to get stored column count from schema", KR(ret), K(src_schema));
   } else {
     dst_schema.update_column_cnt_and_schema_version(

@@ -198,7 +198,7 @@ int ObMergeSchema::get_skip_index_col_attr(
       }
     } else {
       if (OB_FAIL(get_skip_index_col_attr_by_schema(skip_idx_attrs, nullptr, need_set_fts_only))) {
-        LOG_WARN("failed to set skip index col attr by schema", K(ret), K(skip_idx_attrs));
+        LOG_WARN("failed to set skip index col attr by schema", K(ret), K(need_delta_skip_index), K(need_set_fts_only), K(skip_idx_attrs));
       }
     }
   }
