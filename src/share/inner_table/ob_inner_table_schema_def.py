@@ -4488,7 +4488,8 @@ def_table_schema(
     ('this_exec_date', 'timestamp', 'true'),
     ('this_exec_addr', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
     ('this_exec_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
-    ('job_config', 'longtext', 'true')
+    ('job_config', 'longtext', 'true'),
+    ('this_exec_sess_id', 'uint', 'true')
   ],
 )
 
@@ -46647,6 +46648,9 @@ def_table_schema(
 )
 # 21718: DBA_JAVA_POLICY
 # 21719: USER_JAVA_POLICY
+# 21720: DBA_SCHEDULER_RUNNING_JOBS
+# 21721: CDB_SCHEDULER_RUNNING_JOBS
+# 21722: CDB_SCHEDULER_JOBS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
