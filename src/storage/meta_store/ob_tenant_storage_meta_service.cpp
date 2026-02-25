@@ -1510,5 +1510,17 @@ int ObTenantStorageMetaService::get_max_meta_version_from_wait_gc_map(
   return ret;
 }
 
+int ObTenantStorageMetaService::get_tenant_meta_with_lock(omt::ObTenant &tenant, /*out*/omt::ObTenantMeta &meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ckpt_slog_handler_.get_tenant_meta_with_lock(tenant, /*out*/meta))) {
+    LOG_WARN("fail to get tenant meta with lock", K(ret));
+  }
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase

@@ -121,6 +121,8 @@ public:
       const int64_t ls_epoch,
       const ObTabletID &tablet_id,
       /*out*/ int64_t &max_meta_version);
+  /// @brief: get tenant meta within the scope of @c super_block_mutex
+  int get_tenant_meta_with_lock(omt::ObTenant &tenant, /*out*/omt::ObTenantMeta &meta);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   // for shared storage gc operation

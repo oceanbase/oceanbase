@@ -1589,6 +1589,23 @@ int ObTenantCheckpointSlogHandler::update_real_sys_tenant_super_block_to_hidden(
   return ret;
 }
 
+int ObTenantCheckpointSlogHandler::get_tenant_meta_with_lock(omt::ObTenant &tenant, /*out*/omt::ObTenantMeta &meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
+  } else {
+    lib::ObMutexGuard guard(super_block_mutex_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("failed to hold super block mutex", K(ret));
+    } else {
+      meta = tenant.get_tenant_meta();
+    }
+  }
+  return ret;
+}
 
 int ObTenantCheckpointSlogHandler::create_tenant_ls_item(const ObLSID ls_id, int64_t &ls_epoch)
 {

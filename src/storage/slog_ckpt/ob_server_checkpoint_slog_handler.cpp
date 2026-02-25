@@ -678,7 +678,6 @@ int ObServerCheckpointSlogHandler::inner_write_checkpoint(bool is_force)
     }
     SERVER_EVENT_ADD("storage", "write slog checkpoint", "tenant_id", OB_SERVER_TENANT_ID,
         "ret", ret, "cursor", cur_cursor, "cost_time(us)", cost_time);
-
     LOG_INFO("finish write server checkpoint", K(ret), K(last_slog_cursor_), K(cur_cursor),
         K_(last_write_time), K(start_time), K(is_force), K(cost_time));
   }

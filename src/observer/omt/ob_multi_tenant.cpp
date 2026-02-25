@@ -1939,14 +1939,31 @@ int ObMultiTenant::get_tenant_metas_for_ckpt(common::ObIArray<ObTenantMeta> &met
     LOG_WARN("fail to try rlock all tenant for ckpt", K(ret));
   } else {
     SpinRLockGuard guard(lock_);
-    for (TenantList::iterator it = tenants_.begin(); it != tenants_.end() && OB_SUCC(ret); it++) {
-      if (OB_ISNULL(*it)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("tenant is nullptr", K(ret));
-      } else if (is_virtual_tenant_id((*it)->id())) {
-        // skip
-      } else if (OB_FAIL(metas.push_back((*it)->get_tenant_meta()))) {
-        LOG_WARN("fail to push back tenant meta", K(ret));
+    SMART_VAR(ObTenantMeta, meta) {
+      for (TenantList::iterator it = tenants_.begin(); it != tenants_.end() && OB_SUCC(ret); it++) {
+        ObTenant *tenant = *it;
+        int64_t tenant_id = 0;
+        if (OB_ISNULL(tenant)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("tenant is nullptr", K(ret));
+        } else if (FALSE_IT(tenant_id = tenant->id())) {
+        } else if (is_virtual_tenant_id(tenant_id)) {
+          // skip
+        } else {
+          MTL_SWITCH(tenant_id) {
+            ObTenantStorageMetaService *tsms = nullptr;
+            if (OB_ISNULL(tsms = MTL(ObTenantStorageMetaService *))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null tenant meta service", K(ret), KP(tsms));
+            } else if (OB_FAIL(tsms->get_tenant_meta_with_lock(*tenant, /*out*/meta))) {
+              LOG_WARN("fail to get tenant meta with lock", K(ret));
+            } else if (OB_FAIL(metas.push_back(meta))) {
+              LOG_WARN("fail to push back tenant meta", K(ret));
+            }
+          } else {
+            LOG_WARN("fail to switch tenant", K(ret), K(tenant_id));
+          }
+        }
       }
     }
   }

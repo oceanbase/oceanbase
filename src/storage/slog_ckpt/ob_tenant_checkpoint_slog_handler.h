@@ -144,6 +144,7 @@ public:
   int read_empty_shell_file(const ObMetaDiskAddr &phy_addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
   int update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant);
   int update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant);
+  int get_tenant_meta_with_lock(omt::ObTenant &tenant, /*out*/omt::ObTenantMeta &meta);
 
 private:
   friend class ObTenantSlogCheckpointWorkflow;
