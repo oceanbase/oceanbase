@@ -17,6 +17,7 @@
 #include "object/ob_object.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "lib/udt/ob_collection_type.h"
 
 namespace oceanbase
 {
@@ -66,7 +67,7 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     vec_embedded_col_id_(OB_INVALID_ID),
     search_idx_included_cids_(allocator),
     search_idx_included_cid_idxes_(allocator),
-    search_idx_included_extended_type_infos_(allocator)
+    search_idx_arr_types_(allocator)
 {
 }
 
@@ -115,7 +116,7 @@ void ObTableSchemaParam::reset()
   inc_pk_doc_id_col_id_ = OB_INVALID_ID;
   search_idx_included_cids_.reset();
   search_idx_included_cid_idxes_.reset();
-  search_idx_included_extended_type_infos_.reset();
+  search_idx_arr_types_.reset();
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -701,7 +702,20 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(vec_embedded_col_id_);
   OB_UNIS_ENCODE(search_idx_included_cids_);
   OB_UNIS_ENCODE(search_idx_included_cid_idxes_);
-  OB_UNIS_ENCODE(search_idx_included_extended_type_infos_);
+  // serialize search_idx_arr_types_
+  {
+    int64_t arr_types_count = search_idx_arr_types_.count();
+    OB_UNIS_ENCODE(arr_types_count);
+    for (int64_t i = 0; OB_SUCC(ret) && i < arr_types_count; ++i) {
+      bool has_type = (search_idx_arr_types_.at(i) != nullptr);
+      OB_UNIS_ENCODE(has_type);
+      if (OB_SUCC(ret) && has_type) {
+        if (OB_FAIL(search_idx_arr_types_.at(i)->serialize(buf, buf_len, pos))) {
+          LOG_WARN("failed to serialize arr type", K(ret), K(i));
+        }
+      }
+    }
+  }
   OB_UNIS_ENCODE(fts_index_type_);
   OB_UNIS_ENCODE(is_rowscn_ttl_table_);
   return ret;
@@ -876,17 +890,29 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(vec_embedded_col_id_);
   OB_UNIS_DECODE(search_idx_included_cids_);
   OB_UNIS_DECODE(search_idx_included_cid_idxes_);
-  OB_UNIS_DECODE(search_idx_included_extended_type_infos_);
-  if (OB_SUCC(ret) && search_idx_included_extended_type_infos_.count() > 0) {
-    // ObString decoded from buffer points to rpc buffer, deep copy to allocator_ to avoid dangling pointer
-    for (int64_t i = 0; OB_SUCC(ret) && i < search_idx_included_extended_type_infos_.count(); ++i) {
-      const ObString &src = search_idx_included_extended_type_infos_.at(i);
-      if (!src.empty()) {
-        ObString dst;
-        if (OB_FAIL(ob_write_string(allocator_, src, dst))) {
-          LOG_WARN("failed to deep copy extended type info after deserialize", K(ret), K(i), K(src));
+  // deserialize search_idx_arr_types_
+  {
+    int64_t arr_types_count = 0;
+    OB_UNIS_DECODE(arr_types_count);
+    if (OB_SUCC(ret) && arr_types_count > 0) {
+      if (OB_FAIL(search_idx_arr_types_.prepare_allocate(arr_types_count))) {
+        LOG_WARN("failed to allocate arr types", K(ret), K(arr_types_count));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < arr_types_count; ++i) {
+        bool has_type = false;
+        OB_UNIS_DECODE(has_type);
+        if (OB_SUCC(ret) && has_type) {
+          ObCollectionArrayType *arr_type = OB_NEWx(ObCollectionArrayType, &allocator_, allocator_);
+          if (OB_ISNULL(arr_type)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate ObCollectionArrayType", K(ret), K(i));
+          } else if (OB_FAIL(arr_type->deserialize(buf, data_len, pos))) {
+            LOG_WARN("failed to deserialize arr type", K(ret), K(i));
+          } else {
+            search_idx_arr_types_.at(i) = arr_type;
+          }
         } else {
-          search_idx_included_extended_type_infos_.at(i) = dst;
+          search_idx_arr_types_.at(i) = nullptr;
         }
       }
     }
@@ -952,7 +978,18 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(vec_embedded_col_id_);
   OB_UNIS_ADD_LEN(search_idx_included_cids_);
   OB_UNIS_ADD_LEN(search_idx_included_cid_idxes_);
-  OB_UNIS_ADD_LEN(search_idx_included_extended_type_infos_);
+  // search_idx_arr_types_ serialize size
+  {
+    int64_t arr_count = search_idx_arr_types_.count();
+    OB_UNIS_ADD_LEN(arr_count);
+    for (int64_t i = 0; i < arr_count; ++i) {
+      bool has_type = (search_idx_arr_types_.at(i) != nullptr);
+      OB_UNIS_ADD_LEN(has_type);
+      if (has_type) {
+        len += search_idx_arr_types_.at(i)->get_serialize_size();
+      }
+    }
+  }
   OB_UNIS_ADD_LEN(fts_index_type_);
   OB_UNIS_ADD_LEN(is_rowscn_ttl_table_);
   return len;
