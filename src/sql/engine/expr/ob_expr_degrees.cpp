@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "lib/ob_define.h"
 #include "sql/engine/expr/ob_expr_degrees.h"
 
 using namespace oceanbase::common;
@@ -47,6 +48,19 @@ int ObExprDegrees::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
+int ObExprDegrees::check_overflow(const double res, const double val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(isinf(res))) {
+    char expr_str[OB_MAX_FUNC_EXPR_LENGTH];
+    int64_t pos = 0;
+    ret = OB_OPERATE_OVERFLOW;
+    databuff_printf(expr_str, OB_MAX_FUNC_EXPR_LENGTH, pos, "degrees(%e)", val);
+    LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "DOUBLE", expr_str);
+  }
+  return ret;
+}
+
 int ObExprDegrees::calc_degrees_expr(const ObExpr &expr, ObEvalCtx &ctx,
                       ObDatum &res_datum)
 {
@@ -58,8 +72,12 @@ int ObExprDegrees::calc_degrees_expr(const ObExpr &expr, ObEvalCtx &ctx,
     res_datum.set_null();
   } else {
     const double val = radian->get_double();
-    // cal result;
-    res_datum.set_double(val * degrees_ratio_);
+    const double res = val * degrees_ratio_;
+    if (OB_FAIL(check_overflow(res, val))) {
+      LOG_WARN("double out of range", K(val), K(res), K(ret));
+    } else {
+      res_datum.set_double(res);
+    }
   }
   return ret;
 }
@@ -87,17 +105,26 @@ int ObExprDegrees::vector_degrees(const ObExpr &expr,
         = reinterpret_cast<double *>(double_res_vec->get_data()) + bound.start();
     uint16_t length = bound.end() - bound.start();
 
-    for (uint16_t i = 0; i < length; i++) {
+    for (uint16_t i = 0; OB_SUCC(ret) && i < length; i++) {
       start_res[i] = start_arg[i] * degrees_ratio_;
+      if (OB_FAIL(check_overflow(start_res[i], start_arg[i]))) {
+        LOG_WARN("double out of range", K(start_arg[i]), K(start_res[i]), K(ret));
+      }
     }
   } else {
-    for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
       } else if (arg_vec->is_null(idx)) {
         res_vec->set_null(idx);
       } else {
-        res_vec->set_double(idx, arg_vec->get_double(idx) * degrees_ratio_);
+        const double arg = arg_vec->get_double(idx);
+        const double res = arg * degrees_ratio_;
+        if (OB_FAIL(check_overflow(res, arg))) {
+          LOG_WARN("double out of range", K(arg), K(res), K(ret));
+        } else {
+          res_vec->set_double(idx, res);
+        }
       }
     }
   }

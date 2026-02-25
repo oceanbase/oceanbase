@@ -28,6 +28,7 @@ public:
   virtual int calc_result_type1(ObExprResType &type,
                                 ObExprResType &radian,
                                 common::ObExprTypeCtx &type_ctx) const;
+  static int check_overflow(const double res, const double val);
   static int calc_degrees_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                ObDatum &res_datum);
   template <typename ArgVec, typename ResVec>
