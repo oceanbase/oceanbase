@@ -165,6 +165,9 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
         dict_data->dict_values_ = nullptr;
         dict_data->parquet_type_ = parquet_type;
         dict_data->has_null_ = true;
+        if (OB_FAIL(dict_data->indices_.prepare_allocate(max_batch_size))) {
+          LOG_WARN("fail to prepare allocate indices array", K(ret), K(max_batch_size));
+        }
       } else if (parquet_type == parquet::Type::BYTE_ARRAY) {
         const parquet::ByteArray *src_dict = static_cast<const parquet::ByteArray *>(dict_values);
         const bool is_large_text = ob_is_large_text(file_col_expr->datum_meta_.type_);
@@ -988,83 +991,78 @@ int ObParquetDictFilterPushdown::eval_black_filter_on_dict_values(
     const int32_t distinct_ref_cnt = dict_data->get_distinct_ref_cnt();
     const int64_t batch_size = eval_ctx.max_batch_size_;
 
-    if (OB_FAIL(col_expr->init_vector_for_write(eval_ctx, VEC_DISCRETE, batch_size))) {
-      LOG_WARN("fail to init vector for write", K(ret), K(batch_size));
-    } else {
-      if (dict_data->parquet_type_ == parquet::Type::BYTE_ARRAY) {
-        ObArenaAllocator temp_allocator;
-        common::ObBitmap batch_result(temp_allocator);
+    if (dict_data->parquet_type_ == parquet::Type::BYTE_ARRAY) {
+      ObArenaAllocator temp_allocator;
+      common::ObBitmap batch_result(temp_allocator);
+      OZ(batch_result.init(batch_size));
 
-        if (OB_FAIL(batch_result.init(batch_size))) {
-          LOG_WARN("fail to init batch result bitmap", K(ret), K(batch_size));
-        }
+      // 批量处理：每次处理batch_size个字典值
+      for (int64_t batch_start = 0; OB_SUCC(ret) && batch_start < distinct_ref_cnt;
+           batch_start += batch_size) {
 
-        // 批量处理：每次处理batch_size个字典值
-        for (int64_t batch_start = 0; OB_SUCC(ret) && batch_start < distinct_ref_cnt;
-             batch_start += batch_size) {
-          int64_t batch_end = MIN(batch_start + batch_size, static_cast<int64_t>(distinct_ref_cnt));
-          int64_t batch_count = batch_end - batch_start;
+        int64_t batch_end = MIN(batch_start + batch_size, static_cast<int64_t>(distinct_ref_cnt));
+        int64_t batch_count = batch_end - batch_start;
 
-          common::StrDiscVec *discrete_vec
-              = static_cast<common::StrDiscVec *>(col_expr->get_vector(eval_ctx));
-
-          if (OB_ISNULL(discrete_vec)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("buffer is null", K(ret), KP(discrete_vec));
+        OZ(col_expr->init_vector_for_write(eval_ctx, VEC_DISCRETE, batch_size));
+        common::StrDiscVec *discrete_vec
+            = static_cast<common::StrDiscVec *>(col_expr->get_vector(eval_ctx));
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(discrete_vec)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("buffer is null", K(ret), KP(discrete_vec));
           // 特殊情况：字典为空（全为 null）
-          } else if (OB_ISNULL(dict_data->dict_values_) || dict_data->dict_len_ <= 0) {
-            discrete_vec->set_null(0);
-          } else {
-            common::StrDiscVec *dict_values = dict_data->dict_values_;
-            char **dict_ptrs = dict_values->get_ptrs();
-            int32_t *dict_lens = dict_values->get_lens();
+        } else if (OB_ISNULL(dict_data->dict_values_) || dict_data->dict_len_ <= 0) {
+          discrete_vec->set_null(0);
+        } else {
+          common::StrDiscVec *dict_values = dict_data->dict_values_;
+          char **dict_ptrs = dict_values->get_ptrs();
+          int32_t *dict_lens = dict_values->get_lens();
 
-            for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
-              int32_t dict_idx = static_cast<int32_t>(batch_start + i);
+          for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
+            int32_t dict_idx = static_cast<int32_t>(batch_start + i);
 
-              if (dict_idx < dict_data->dict_len_) {
-                if (OB_UNLIKELY(dict_values->is_null(dict_idx))) {
-                  discrete_vec->set_null(i);
-                } else {
-                  discrete_vec->set_string(i, dict_ptrs[dict_idx], dict_lens[dict_idx]);
-                }
-              } else {
+            if (dict_idx < dict_data->dict_len_) {
+              if (OB_UNLIKELY(dict_values->is_null(dict_idx))) {
                 discrete_vec->set_null(i);
+              } else {
+                discrete_vec->set_string(i, dict_ptrs[dict_idx], dict_lens[dict_idx]);
               }
+            } else {
+              discrete_vec->set_null(i);
             }
           }
+        }
 
-          if (OB_SUCC(ret)) {
-            col_expr->set_evaluated_projected(eval_ctx);
+        if (OB_SUCC(ret)) {
+          col_expr->set_evaluated_projected(eval_ctx);
+        }
+
+        // 每次迭代重置bitmap
+        batch_result.reuse(false);
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(black_filter->filter_batch(nullptr, 0, batch_count, batch_result))) {
+          LOG_WARN("fail to filter batch", K(ret), K(batch_start), K(batch_count));
+        } else {
+          // 清空filter表达式的评估标志
+          for (int64_t i = 0; i < black_filter->get_filter_node().filter_exprs_.count(); ++i) {
+            ObExpr *filter_expr = black_filter->get_filter_node().filter_exprs_.at(i);
+            filter_expr->get_evaluated_flags(eval_ctx).reset(batch_count);
           }
 
-          // 每次迭代重置bitmap
-          batch_result.reuse(false);
-
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(black_filter->filter_batch(nullptr, 0, batch_count, batch_result))) {
-            LOG_WARN("fail to filter batch", K(ret), K(batch_start), K(batch_count));
-          } else {
-            // 清空filter表达式的评估标志
-            for (int64_t i = 0; i < black_filter->get_filter_node().filter_exprs_.count(); ++i) {
-              ObExpr *filter_expr = black_filter->get_filter_node().filter_exprs_.at(i);
-              filter_expr->get_evaluated_flags(eval_ctx).reset(batch_count);
-            }
-
-            for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
-              if (batch_result.test(i)) {
-                int32_t dict_idx = static_cast<int32_t>(batch_start + i);
-                if (OB_FAIL(valid_dict_codes.set(dict_idx))) {
-                  LOG_WARN("fail to set valid dict code", K(ret), K(dict_idx));
-                }
+          for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
+            if (batch_result.test(i)) {
+              int32_t dict_idx = static_cast<int32_t>(batch_start + i);
+              if (OB_FAIL(valid_dict_codes.set(dict_idx))) {
+                LOG_WARN("fail to set valid dict code", K(ret), K(dict_idx));
               }
             }
           }
         }
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("dict opt only supports string type now", K(ret), K(dict_data->parquet_type_));
       }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("dict opt only supports string type now", K(ret), K(dict_data->parquet_type_));
     }
   }
 
