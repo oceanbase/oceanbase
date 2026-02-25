@@ -26,6 +26,8 @@ namespace oceanbase
 namespace share
 {
 
+ERRSIM_POINT_DEF(ERRSIM_HOLD_TENANT_READABLE_SCN);
+
 bool is_valid_tenant_scn(
   const SCN &sync_scn,
   const SCN &replayable_scn,
@@ -475,9 +477,13 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("meta tenant no need init tenant info", KR(ret), K(tenant_id));
   } else {
+    SCN real_readable_scn = readable_scn;
+    if (ERRSIM_HOLD_TENANT_READABLE_SCN) {
+      real_readable_scn = old_tenant_info.get_readable_scn();
+    }
     SCN new_sync_scn = gen_new_sync_scn(old_tenant_info.get_sync_scn(), sync_scn, old_tenant_info.get_recovery_until_scn());
     SCN new_replayable_scn = gen_new_replayable_scn(old_tenant_info.get_replayable_scn(), replay_scn, new_sync_scn);
-    SCN new_readable_scn = gen_new_readable_scn(old_tenant_info.get_readable_scn(), readable_scn, new_replayable_scn);
+    SCN new_readable_scn = gen_new_readable_scn(old_tenant_info.get_readable_scn(), real_readable_scn, new_replayable_scn);
 
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (OB_UNLIKELY(!tenant_config.is_valid())) {
@@ -496,7 +502,6 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
           && new_replayable_scn.is_valid()
           && new_readable_scn_plus_gap.is_valid()
           && new_replayable_scn > new_readable_scn_plus_gap
-          && new_readable_scn_plus_gap >= old_tenant_info.get_replayable_scn()
           && old_tenant_info.get_readable_scn() > SCN::base_scn()) {
         // condition: !old_tenant_info.get_max_ls_id().is_sys_ls()
         // If max_ls_id is sys ls, this logic is not needed.
@@ -507,7 +512,12 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
         // sys ls's readable_scn starts from base_scn
         // replayable_scn cannot start from base_scn, it's too slow when we restore tenant
         // At the beginning time, replayable_scn should be sync_scn
-        new_replayable_scn = new_readable_scn_plus_gap;
+        if (new_readable_scn_plus_gap >= old_tenant_info.get_replayable_scn()) {
+          new_replayable_scn = new_readable_scn_plus_gap;
+        } else {
+          // When the gap is tightened, keep replayable_scn stable until readable_scn catches up.
+          new_replayable_scn = old_tenant_info.get_replayable_scn();
+        }
       }
     }
 
