@@ -23,6 +23,7 @@
 #include "sql/resolver/ob_stmt_type.h"
 #include "share/schema/ob_dependency_info.h"      // ObReferenceObjTable
 #include "lib/allocator/ob_pooled_allocator.h"
+#include "share/catalog/ob_catalog_properties.h"
 namespace oceanbase
 {
 namespace sql
@@ -548,10 +549,13 @@ public:
         || stmt_type == stmt::T_DROP_CATALOG);
   }
 
-  static inline bool is_catalog_supported_dml_stmt(stmt::StmtType stmt_type)
+  static inline bool is_catalog_supported_dml_stmt(stmt::StmtType stmt_type,
+                                                   share::ObCatalogProperties::CatalogType catalog_type)
   {
+    bool is_insert_supported = (catalog_type == share::ObCatalogProperties::CatalogType::HMS_TYPE
+                                || catalog_type == share::ObCatalogProperties::CatalogType::FILESYSTEM_TYPE);
     return stmt_type == stmt::T_SELECT
-           || stmt_type == stmt::T_INSERT
+           || (stmt_type == stmt::T_INSERT && is_insert_supported)
            // || stmt_type == stmt::T_INSERT_ALL
            // || stmt_type == stmt::T_REPLACE
            // || stmt_type == stmt::T_MERGE

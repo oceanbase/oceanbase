@@ -179,7 +179,7 @@ protected:
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStmtResolver);
-  bool is_catalog_supported_stmt_();
+  bool is_catalog_supported_stmt_(share::ObCatalogProperties::CatalogType catalog_type);
 public:
   // data members
   common::ObIAllocator *allocator_;

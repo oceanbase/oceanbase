@@ -160,10 +160,26 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
     LOG_WARN("fail to get collation_connection", K(ret));
   } else if (OB_FAIL(resolve_catalog_node(catalog_node, catalog_id, catalog_name))) {
     LOG_WARN("fail to resolve catalog node", K(ret), K(catalog_id), K(catalog_name));
-  } else if (OB_UNLIKELY(is_external_catalog_id(catalog_id) && !is_catalog_supported_stmt_())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this operation in catalog is");
-  } else {
+  } else if (OB_UNLIKELY(is_external_catalog_id(catalog_id))) {
+    share::ObCatalogProperties::CatalogType catalog_type = share::ObCatalogProperties::CatalogType::INVALID_TYPE;
+    const ObCatalogSchema *catalog_schema = nullptr;
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    CK(OB_NOT_NULL(schema_checker_));
+    CK(OB_NOT_NULL(schema_checker_->get_schema_guard()));
+    if (OB_FAIL(schema_checker_->get_schema_guard()->get_catalog_schema_by_id(tenant_id, catalog_id, catalog_schema))) {
+      LOG_WARN("failed to get catalog schema by id", K(ret), K(tenant_id), K(catalog_id));
+    } else if (OB_ISNULL(catalog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("catalog schema is null", K(ret), K(catalog_id));
+    } else if (OB_FAIL(share::ObCatalogProperties::parse_catalog_type(catalog_schema->get_catalog_properties_str(), catalog_type))) {
+      LOG_WARN("failed to parse catalog type", K(ret));
+    } else if (!is_catalog_supported_stmt_(catalog_type)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this operation in catalog is");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     bool perserve_lettercase = lib::is_oracle_mode() ?
         true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
     int tmp_ret = ObSQLUtils::check_and_convert_table_name(cs_type, perserve_lettercase, table_name);
@@ -325,7 +341,7 @@ int ObStmtResolver::resolve_catalog_node(const ParseNode *catalog_node, uint64_t
   return ret;
 }
 
-bool ObStmtResolver::is_catalog_supported_stmt_()
+bool ObStmtResolver::is_catalog_supported_stmt_(share::ObCatalogProperties::CatalogType catalog_type)
 {
   bool is_supported = true;
   stmt::StmtType stmt_type;
@@ -334,7 +350,7 @@ bool ObStmtResolver::is_catalog_supported_stmt_()
     // 比如 desc catalog.db.tbl，此时这里的 stmt_ 还没有被设置
   } else if (OB_FALSE_IT(stmt_type = stmt_->get_stmt_type())) {
   } else if (ObStmt::is_dml_stmt(stmt_type)) {
-    is_supported = ObStmt::is_catalog_supported_dml_stmt(stmt_type);
+    is_supported = ObStmt::is_catalog_supported_dml_stmt(stmt_type, catalog_type);
   } else if (ObStmt::is_ddl_stmt(stmt_type, stmt_->has_global_variable())) {
     is_supported = ObStmt::is_catalog_supported_ddl_stmt(stmt_type, stmt_->has_global_variable());
   }
