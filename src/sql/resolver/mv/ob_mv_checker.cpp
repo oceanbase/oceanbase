@@ -1206,13 +1206,10 @@ int ObMVChecker::collect_tables_primary_key_for_select(const ObSelectStmt &stmt,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column expr is null", K(ret), KPC(table_item), K(pk_ids.at(j)), KPC(col_item));
         } else {
-          col_expr->set_ref_id(table_item->table_id_, col_schema->get_column_id());
+          col_expr->set_table_item_info(*table_item);
+          col_expr->set_column_id(col_schema->get_column_id());
+          col_expr->set_column_name(col_schema->get_column_name_str());
           col_expr->get_relation_ids().reuse();
-          col_expr->set_column_attr(table_item->get_table_name(), col_schema->get_column_name_str());
-          col_expr->set_database_name(table_item->database_name_);
-          if (!table_item->alias_name_.empty()) {
-            col_expr->set_table_alias_name();
-          }
           if (OB_FAIL(col_expr->formalize(session_info_))) {
             LOG_WARN("formalize col_expr failed", K(ret));
           }
