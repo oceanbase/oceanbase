@@ -805,7 +805,8 @@ TEST_F(ObTestSSLogMetaService, test_update_tablet_table_store_update)
     schema,
     ls_handle,
     orig_tablet_handle,
-    compaction::ObMergeType::MDS_MINOR_MERGE,
+    // Keep this test on non-MDS merge path; mock sstable has no tablet-status MDS row.
+    compaction::ObMergeType::MAJOR_MERGE,
     table_handle,
     update_param);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -814,7 +815,7 @@ TEST_F(ObTestSSLogMetaService, test_update_tablet_table_store_update)
       ls_id_,
       cur_tablet_id,
       orig_tablet_handle.get_obj()->get_reorganization_scn(),
-      ObMetaUpdateReason::TABLET_COMPACT_ADD_MDS_MINOR_SSTABLE,
+      ObMetaUpdateReason::TABLET_COMPACT_ADD_DATA_MAJOR_SSTABLE,
       100,
       update_param);
   ASSERT_EQ(OB_SUCCESS, ret);
