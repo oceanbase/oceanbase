@@ -2648,7 +2648,8 @@ int ObVecIndexAsyncTask::execute_exchange()
       LOG_WARN("fail to exchange snap index rows", K(ret), K(ctx_));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
       LOG_WARN("get tenant data version failed", K(ret));
-    } else if (ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_) && tenant_data_version >= DATA_VERSION_4_5_1_0) {
+    } else if (old_adapter_->check_has_meta()
+        || (ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_) && tenant_data_version >= DATA_VERSION_4_5_1_0)) {
       ObString meta_data;
       if (OB_FAIL(snap_table_handler.init(ls_id_, new_adapter_->get_data_table_id(), new_adapter_->get_snapshot_table_id(), new_adapter_->get_snap_tablet_id()))) {
         LOG_WARN("init snap table handler fail", K(ret));
@@ -2657,6 +2658,7 @@ int ObVecIndexAsyncTask::execute_exchange()
       } else if (OB_FAIL(snap_table_handler.insertup_meta_row(new_adapter_, tx_desc, timeout_us))) {
         LOG_WARN("insertup_meta_row fail", K(ret));
       } else {
+        new_snap->meta_.is_persistent_ = true;
         LOG_INFO("insertup meta row success", K(ret), K(new_snap));
       }
     }

@@ -896,6 +896,9 @@ public:
     return is_sparse;
   }
 
+  inline bool is_support_meta() { return ! is_hybrid_index() && ! is_sparse_vector_index_type(); }
+  inline bool check_has_meta() { return is_support_meta() && snap_data_.is_valid() && snap_data_->meta_.is_persistent(); }
+
   int parse_sparse_vector(char *data, int num, uint32_t *sparse_byte_lens, ObArenaAllocator *allocator, uint32_t **lens,
     uint32_t **dims, float **vals);
 

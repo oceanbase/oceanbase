@@ -890,7 +890,7 @@ int ObVecIdxSnapTableSegAddOp::prepare_meta_for_insert(ObVectorIndexMeta &new_me
   if (OB_ISNULL(new_seg_meta_) || OB_ISNULL(fake_old_meta_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("meta is null", KP(new_seg_meta_), KP(fake_old_meta_));
-  } else if (fake_old_meta_->is_fake() && fake_old_meta_->bases_.count() > 0) {
+  } else if (!fake_old_meta_->is_persistent_ && fake_old_meta_->bases_.count() > 0) {
     if (fake_old_meta_->bases_.count() > 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected bases count", K(fake_old_meta_->bases_.count()), KPC(fake_old_meta_));
@@ -904,6 +904,7 @@ int ObVecIdxSnapTableSegAddOp::prepare_meta_for_insert(ObVectorIndexMeta &new_me
   } else if (OB_FAIL(new_meta.incrs_.push_back(*new_seg_meta_))) {
     LOG_WARN("push back seg meta fail", K(ret));
   } else {
+    new_meta.is_persistent_ = true;
     new_meta.header_.scn_ = snapshot_version;
     LOG_INFO("prepare meta for insert success", K(new_meta));
   }
@@ -922,6 +923,7 @@ int ObVecIdxSnapTableSegAddOp::prepare_meta_for_update(ObVectorIndexMeta &new_me
     LOG_WARN("push back seg meta fail", K(ret));
   } else {
     new_meta.header_.scn_ = snapshot_version;
+    new_meta.is_persistent_ = true;
     LOG_INFO("prepare meta for update success", K(new_meta), K(old_meta));
   }
   return ret;
@@ -947,6 +949,7 @@ int ObVecIdxSnapTableSegMergeOp::prepare_meta_for_update(ObVectorIndexMeta &new_
   int ret = OB_SUCCESS;
   int64_t real_delete_cnt = 0;
   new_meta.header_.scn_ = snapshot_version;
+  new_meta.is_persistent_ = true;
   new_meta.bases_.reset();
   new_meta.incrs_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < old_meta.bases_.count(); ++i) {
@@ -1017,6 +1020,7 @@ int ObVecIdxSnapTableSegReplaceOp::prepare_meta_for_insert(ObVectorIndexMeta &ne
     LOG_WARN("push back seg meta fail", K(ret));
   } else {
     new_meta.header_.scn_ = snapshot_version;
+    new_meta.is_persistent_ = true;
     LOG_INFO("prepare meta for replace success", K(new_meta));
   }
   return ret;
@@ -1032,6 +1036,7 @@ int ObVecIdxSnapTableSegReplaceOp::prepare_meta_for_update(ObVectorIndexMeta &ne
     LOG_WARN("push back seg meta fail", K(ret));
   } else {
     new_meta.header_.scn_ = snapshot_version;
+    new_meta.is_persistent_ = true;
     LOG_INFO("prepare meta for replace success", K(new_meta));
   }
   return ret;

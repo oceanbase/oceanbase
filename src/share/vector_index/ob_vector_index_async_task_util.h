@@ -738,7 +738,6 @@ public:
 
   static int64_t get_processing_task_cnt(ObVecIndexAsyncTaskOption &task_opt);
   static bool check_can_do_work();
-
   static int fetch_new_task_id(const uint64_t tenant_id, int64_t &new_task_id);
   static int add_sys_task(ObVecIndexAsyncTaskCtx *task);
   static int remove_sys_task(ObVecIndexAsyncTaskCtx *task);

@@ -1066,6 +1066,8 @@ int ObVecIdxMergeTask::update_meta(
     // The observability should not alter the execution flow. So update task info here
     LOG_WARN("upadte task result segments info fail", K(ret));
     ret = OB_SUCCESS;
+  } else {
+    new_snap->meta_.is_persistent_ = true;
   }
   return ret;
 }

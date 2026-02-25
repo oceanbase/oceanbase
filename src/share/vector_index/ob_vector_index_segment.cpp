@@ -250,6 +250,7 @@ int64_t ObVectorIndexMeta::get_serialize_size() const
 {
   int64_t len = 0;
   len += ObVectorIndexMetaHeader::HEAD_LEN;
+  OB_UNIS_ADD_LEN(flags_);
   OB_UNIS_ADD_LEN_ARRAY(bases_, bases_.count());
   OB_UNIS_ADD_LEN_ARRAY(incrs_, incrs_.count());
   return len;
@@ -258,14 +259,17 @@ int64_t ObVectorIndexMeta::get_serialize_size() const
 int ObVectorIndexMeta::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  if (buf_len - pos < ObVectorIndexMetaHeader::HEAD_LEN) {
+  if (! is_persistent_) {
+    ret = OB_SERIALIZE_ERROR;
+    LOG_WARN("meta is not persistent", K(ret), KPC(this));
+  } else if (buf_len - pos < ObVectorIndexMetaHeader::HEAD_LEN) {
     ret = OB_SERIALIZE_ERROR;
     LOG_WARN("no enough buffer", K(ret), K(buf_len), K(pos));
   } else {
     MEMCPY(buf + pos, reinterpret_cast<const char*>(&header_), ObVectorIndexMetaHeader::HEAD_LEN);
     pos += ObVectorIndexMetaHeader::HEAD_LEN;
   }
-
+  OB_UNIS_ENCODE(flags_);
   OB_UNIS_ENCODE_ARRAY(bases_, bases_.count());
   OB_UNIS_ENCODE_ARRAY(incrs_, incrs_.count());
   return ret;
@@ -281,6 +285,7 @@ int ObVectorIndexMeta::deserialize(const char *buf, const int64_t data_len, int6
     MEMCPY(reinterpret_cast<char*>(&header_), buf + pos, ObVectorIndexMetaHeader::HEAD_LEN);
     pos += ObVectorIndexMetaHeader::HEAD_LEN;
   }
+  OB_UNIS_DECODE(flags_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(deserialize_seg_metas(buf, data_len, pos))) {
     LOG_WARN("deserialize seg metas fail", K(ret), K(data_len), K(pos));
@@ -350,6 +355,7 @@ int ObVectorIndexMeta::assign(const ObVectorIndexMeta& other)
 {
   int ret = OB_SUCCESS;
   header_ = other.header_;
+  flags_ = other.flags_;
   if (OB_FAIL(bases_.assign(other.bases_))) {
     LOG_WARN("assign base fail", K(ret));
   } else if (OB_FAIL(incrs_.assign(other.incrs_))) {
@@ -361,6 +367,7 @@ int ObVectorIndexMeta::assign(const ObVectorIndexMeta& other)
 void ObVectorIndexMeta::release(ObIAllocator *allocator, const uint64_t tenant_id)
 {
   header_.reset();
+  flags_ = 0;
   for (int64_t i = 0; i < incrs_.count(); ++i) {
     ObVectorIndexSegmentMeta &seg_meta = incrs_.at(i);
     seg_meta.release();

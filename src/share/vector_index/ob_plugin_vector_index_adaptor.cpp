@@ -1208,7 +1208,7 @@ int ObPluginVectorIndexAdaptor::init_snap_data_without_lock(ObVectorIndexAlgorit
     } else if (OB_FAIL(create_snap_segment(seg_meta.index_type_, seg_meta.segment_handle_))) {
       LOG_WARN("failed to create segment", K(ret), K(seg_meta));
     } else {
-      snap_data_->meta_.is_fake_ = true;
+      snap_data_->meta_.is_persistent_ = false;
       snap_data_->rb_flag_ = true;
       LOG_INFO("load snap data success.", K(ret), K(snap_data_), K(lbt()));
     }
@@ -1219,7 +1219,7 @@ int ObPluginVectorIndexAdaptor::init_snap_data_without_lock(ObVectorIndexAlgorit
     } else if (OB_FAIL(snap_data_->meta_.bases_.push_back(seg_meta))) {
       LOG_WARN("push back fail", K(ret));
     } else {
-      snap_data_->meta_.is_fake_ = true;
+      snap_data_->meta_.is_persistent_ = false;
       snap_data_->set_inited();
       LOG_INFO("create snap data success.", K(ret), K(snap_data_), K(lbt()));
     }
@@ -3182,6 +3182,7 @@ int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbPa
     } else if (OB_FAIL(snap_data_->build_finished(*get_allocator()))) {
       LOG_WARN("build_finished fail", K(ret));
     } else {
+      snap_data_->meta_.is_persistent_ = false;
       LOG_INFO("build without meta sucess", KP(this));
     }
   } else if (OB_FAIL(vctx->vals_.push_back(ObVecIdxSnapshotBlockData(true/*is_meta*/, ObString())))) {
@@ -5823,6 +5824,7 @@ int ObPluginVectorIndexAdaptor::build_and_serialize_meta_data(
   int ret = OB_SUCCESS;
   if (OB_FAIL(build_snap_meta(tablet_id, snapshot_version, data_block_cnt))) {
     LOG_WARN("build snap meta fail");
+  } else if (OB_FALSE_IT(snap_data_->meta_.is_persistent_ = true)) {
   } else if (OB_FAIL(snap_data_->meta_.serialize(allocator, meta_data))) {
     LOG_WARN("serialize meta fail", K(ret), K(snap_data_));
   }

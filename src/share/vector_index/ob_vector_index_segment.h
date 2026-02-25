@@ -195,15 +195,15 @@ public:
       ObString &meta_data);
 public:
   ObVectorIndexMeta():
-    is_fake_(false),
     header_(),
+    flags_(0),
     bases_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("VIBases", MTL_ID())),
     incrs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("VIIncrs", MTL_ID()))
   {}
   ~ObVectorIndexMeta() {}
 
   bool is_valid() const { return header_.is_valid(); }
-  bool is_fake() const { return is_fake_; }
+  bool is_persistent() const { return is_persistent_; }
   int64_t scn() const { return header_.scn_; }
 
   int assign(const ObVectorIndexMeta& other);
@@ -223,7 +223,7 @@ public:
   ObVectorIndexSegmentMeta& incr_seg_meta(int64_t index) { return incrs_.at(index); }
   const ObVectorIndexSegmentMeta& incr_seg_meta(int64_t index) const { return incrs_.at(index); }
 
-  TO_STRING_KV(K_(is_fake), K_(header), K_(bases), K_(incrs));
+  TO_STRING_KV(K_(header), K_(is_persistent), K_(reserved), K_(bases), K_(incrs));
 
 private:
   int deserialize_seg_metas(const char *buf, const int64_t data_len, int64_t &pos);
@@ -232,8 +232,14 @@ private:
   int copy_base_seg_metas(const ObVectorIndexMeta &other) { return bases_.assign(other.bases_); }
 
 public:
-  bool is_fake_;
   ObVectorIndexMetaHeader header_;
+  union {
+    uint64_t flags_;
+    struct {
+      uint64_t is_persistent_               : 1;
+      uint64_t reserved_                    : 63;
+    };
+  };
   ObSEArray<ObVectorIndexSegmentMeta, 1> bases_;
   ObSEArray<ObVectorIndexSegmentMeta, 1> incrs_;
 };
