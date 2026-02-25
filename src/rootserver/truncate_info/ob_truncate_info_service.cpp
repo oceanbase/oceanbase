@@ -665,7 +665,7 @@ int ObTruncatePartSchemaUtil::build_truncate_part_of_default_part(
 ObTruncatePartition::TruncatePartType ObTruncatePartSchemaUtil::get_truncate_part_type(const ObPartitionFuncType part_type)
 {
   ObTruncatePartition::TruncatePartType ret_type = ObTruncatePartition::PART_TYPE_MAX;
-  if (PARTITION_FUNC_TYPE_RANGE == part_type) {
+  if (PARTITION_FUNC_TYPE_RANGE == part_type || PARTITION_FUNC_TYPE_INTERVAL == part_type) {
     ret_type = ObTruncatePartition::RANGE_PART;
   } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type) {
     ret_type = ObTruncatePartition::RANGE_COLUMNS_PART;
