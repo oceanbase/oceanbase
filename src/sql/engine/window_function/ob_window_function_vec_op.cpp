@@ -3723,6 +3723,93 @@ private:
   const ObWindowFunctionVecSpec &spec_;
 };
 
+namespace {
+// manage prev rank result for rank functions
+class RdPrevRankRes {
+public:
+  RdPrevRankRes() : wf_idx_to_rank_func_idx_(), prev_rank_res_array_() {}
+  int init(
+      const common::ObSEArray<RDWinFuncPXPartialInfo *, 16,
+                              common::ModulePageAllocator> &infos,
+      const common::ObFixedArray<int64_t, common::ObIAllocator> &rd_wfs,
+      const common::ObFixedArray<WinFuncInfo, common::ObIAllocator> &wf_infos,
+      common::ObArenaAllocator &arena_alloc,
+      const common::ObFixedArray<ObExpr *, common::ObIAllocator>
+          &rd_coord_exprs) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(
+            wf_idx_to_rank_func_idx_.create(4, ObModIds::OB_SQL_WINDOW_FUNC))) {
+      LOG_WARN("create hash map failed", K(ret));
+    } else {
+      int rank_func_idx = 0;
+      for (int i = 0; OB_SUCC(ret) && i < rd_wfs.count(); i++) {
+        const WinFuncInfo &wf_info = wf_infos.at(rd_wfs.at(i));
+        if (wf_info.func_type_ == T_WIN_FUN_RANK ||
+            wf_info.func_type_ == T_WIN_FUN_DENSE_RANK) {
+          if (OB_FAIL(
+                  wf_idx_to_rank_func_idx_.set_refactored(i, rank_func_idx))) {
+            LOG_WARN("set refactored failed", K(ret));
+          }
+          rank_func_idx++;
+        }
+      }
+    }
+
+    for (int i = 0; OB_SUCC(ret) && i < wf_idx_to_rank_func_idx_.size(); i++) {
+      void *buf = arena_alloc.alloc(sizeof(LastCompactRow));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        LastCompactRow *prev_rank_res_row =
+            new (buf) LastCompactRow(arena_alloc);
+        if (OB_FAIL(prev_rank_res_row->init_row_meta(rd_coord_exprs,
+                                                     sizeof(int64_t), false))) {
+          LOG_WARN("init row meta failed", K(ret));
+        } else if (OB_FAIL(prev_rank_res_array_.push_back(prev_rank_res_row))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+      }
+    }
+
+    if (!OB_SUCC(ret)) {
+    } else if (wf_idx_to_rank_func_idx_.size() !=
+               prev_rank_res_array_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), K(wf_idx_to_rank_func_idx_.size()),
+               K(prev_rank_res_array_.count()));
+    } else {
+      LOG_TRACE("init prev rank res", K(wf_idx_to_rank_func_idx_.size()),
+                K(prev_rank_res_array_.count()), K(rd_wfs), K(wf_infos));
+    }
+
+    return ret;
+  }
+
+  int get_prev_rank_res(int wf_idx, LastCompactRow *&prev_rank_res) {
+    int ret = OB_SUCCESS;
+    int rank_func_idx = -1;
+    if (OB_FAIL(
+            wf_idx_to_rank_func_idx_.get_refactored(wf_idx, rank_func_idx))) {
+      LOG_WARN("get refactored failed", K(ret), K(wf_idx), K(rank_func_idx));
+      prev_rank_res = nullptr;
+    } else {
+      prev_rank_res = prev_rank_res_array_.at(rank_func_idx);
+    }
+    return ret;
+  }
+
+private:
+  // window function index in wf_list -> rank function index in
+  // rank_func_idx_array_
+  common::hash::ObHashMap<int, int> wf_idx_to_rank_func_idx_;
+  // store last compact rows
+  // each rank function need a LastCompactRow to store the last rank result in
+  // gen_rank_patches()
+  ObSEArray<LastCompactRow *, 4> prev_rank_res_array_;
+};
+} // namespace
+
 int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, ObEvalCtx &eval_ctx) const
 {
   int ret = OB_SUCCESS;
@@ -3770,7 +3857,10 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
   ObSEArray<patch_pair, 128> patch_pairs;
   LastCompactRow first_row_patch(msg_ctx.arena_alloc_);
   LastCompactRow last_row_patch(msg_ctx.arena_alloc_);
-  LastCompactRow prev_rank_res(msg_ctx.arena_alloc_); // record ranking of prev part info's last row
+  RdPrevRankRes prev_rank_res;
+  if (OB_FAIL(ret) || OB_FAIL(prev_rank_res.init(msg_ctx.infos_, rd_wfs_, wf_infos_, msg_ctx.arena_alloc_, rd_coord_exprs_))) {
+    LOG_WARN("init prev rank res failed", K(ret));
+  }
   // use uniform/uniform_const format as data format
   // PX Coordinator may not supported vectorization 2.0,
   // in this case, if vector headers are initilized as default formats (discrete/fixed_length formats)
@@ -3786,8 +3876,6 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
     if (OB_FAIL(first_row_patch.init_row_meta(rd_coord_exprs_, sizeof(int64_t), false))) {
       LOG_WARN("init row meta failed", K(ret));
     } else if (OB_FAIL(last_row_patch.init_row_meta(rd_coord_exprs_, sizeof(int64_t), false))) {
-      LOG_WARN("init row meta failed", K(ret));
-    } else if (OB_FAIL(prev_rank_res.init_row_meta(rd_coord_exprs_, sizeof(int64_t), false))) {
       LOG_WARN("init row meta failed", K(ret));
     }
   }
@@ -3808,7 +3896,13 @@ int ObWindowFunctionVecSpec::rd_generate_patch(RDWinFuncPXPieceMsgCtx &msg_ctx, 
       const bool is_range_frame = (wf_info.win_type_ == WINDOW_RANGE);
       int64_t res_idx = i + rd_sort_collations_.count();
       if (is_rank || is_dense_rank) {
-        if (OB_FAIL(rd_gen_rank_patches(msg_ctx, eval_ctx, idx, res_idx, wf_info, prev_rank_res,
+        LastCompactRow *prev_rank_res_ptr = nullptr;
+        if (OB_FAIL(prev_rank_res.get_prev_rank_res(i, prev_rank_res_ptr))) {
+          LOG_WARN("get prev rank res failed", K(ret), K(i), K(wf_info));
+        } else if (OB_ISNULL(prev_rank_res_ptr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("prev rank res is null", K(ret), K(i), K(wf_info), K(prev_rank_res_ptr));
+        } else if (OB_FAIL(rd_gen_rank_patches(msg_ctx, eval_ctx, idx, res_idx, wf_info, *prev_rank_res_ptr,
                                         first_row_patch, last_row_patch))) {
           LOG_WARN("gen rank patches failed", K(ret));
         }
