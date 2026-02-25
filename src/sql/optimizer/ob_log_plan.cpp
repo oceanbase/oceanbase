@@ -12935,9 +12935,11 @@ int ObLogPlan::add_direct_load_explain_note()
       if (direct_load_optimizer_ctx.is_full_direct_load()) {
         opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT, "full");
       } else if (direct_load_optimizer_ctx.is_inc_direct_load()) {
-        opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT, "inc");
+        opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT,
+            direct_load_optimizer_ctx.enable_inc_major_ ? "inc(major sstable)" : "inc(minor sstable)");
       } else if (direct_load_optimizer_ctx.is_inc_replace_direct_load()) {
-        opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT, "inc_replace");
+        opt_ctx.add_plan_note(DIRECT_MODE_INSERT_INTO_SELECT,
+            direct_load_optimizer_ctx.enable_inc_major_ ? "inc_replace(major sstable)" : "inc_replace(minor sstable)");
       }
     } else {
       if (direct_load_optimizer_ctx.is_disabled_by_transaction()) {
