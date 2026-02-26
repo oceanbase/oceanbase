@@ -75,7 +75,9 @@ function variables_prepare {
 function copy_sh {
   if [[ -f copy.sh ]]
   then
-  bash copy.sh $BUILD_PATH
+  local copy_args="$BUILD_PATH"
+  [[ "$WITH_JAVA" == "1" ]] && copy_args="$copy_args --with-java"
+  bash copy.sh $copy_args
   else
   echo 'can not find copy.sh'
   fi
@@ -599,6 +601,7 @@ Options:
 --ip IPADDRESS                           The ipaddress for server deployment, it can be changed in the yaml file.
 --port PORT_BEGIN                        The port starting point. All the ports can be changed in the yaml file.
 --with-local-obproxy                     Use local obproxy.
+--with-java                              Install java-extensions during prepare.
 --skip-copy                              Skip copy.sh.
 --cp                                     Exec copy.sh.
 --reboot                                 Redeploy cluster before mysqltest.
@@ -637,6 +640,7 @@ function main() {
       --cp ) EXEC_CP="1"; shift ;;
       --skip-copy ) SKIP_COPY="1"; shift ;;
       --mini) MINI="1"; shift ;;
+      --with-java) WITH_JAVA="1"; shift ;;
       --port ) export port_gen="$2"; extra_args="$extra_args $1"; shift ;;
       --observer ) OBSERVER_PATH="$2"; shift 2 ;;
       --rm ) RM_CLUSTER="1"; shift ;;

@@ -60,6 +60,7 @@ public:
 
 private:
   int setup_extra_runtime_lib_path();
+  int find_jni_packages_in_ld_library_path(ObString &out_path);
 
 private:
   bool is_inited_;
