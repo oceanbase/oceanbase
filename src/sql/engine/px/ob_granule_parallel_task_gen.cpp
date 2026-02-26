@@ -184,6 +184,9 @@ int GIOdpsParallelTaskGen::odps_one_task_processing(
     if (OB_ISNULL(odps_scan_task)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("odps scan task is null", K(ret));
+    } else if (odps_scan_task->file_url_.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
+      odps_scan_task->first_lineno_ = 0;
+      odps_scan_task->last_lineno_ = 0;
     } else {
       ObString session_id = odps_scan_task->session_id_;
       if (session_id.empty()) {
@@ -353,6 +356,8 @@ int GIOdpsParallelTaskGen::join_task_results(
     int64_t current_task_start_lineno = 0;
     ObOdpsScanTask *current_new_task = NULL;
     // 遍历所有原始 scan tasks，每个至少创建一个任务，大于 each_task_line_number 则切分
+    ObDASTabletLoc *dummy_tablet_loc  = NULL;
+    ObOdpsScanTask *dummy_task_ref = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_task_results.count(); ++i) {
       sql::ObIExtTblScanTask *original_task = all_task_results.at(i).scan_task_;
       ObDASTabletLoc *tablet_loc = all_task_results.at(i).tablet_loc_;
@@ -365,7 +370,10 @@ int GIOdpsParallelTaskGen::join_task_results(
         int64_t task_end = original_task->last_lineno_;
         int64_t task_total_lines = task_end - task_start;
         // 如果任务行数 <= each_task_line_number，直接创建一个任务
-        if (task_total_lines <= each_task_line_number) {
+        if (odps_original_task->file_url_.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
+          dummy_tablet_loc = tablet_loc;
+          dummy_task_ref = odps_original_task;
+        } else if (task_total_lines <= each_task_line_number) {
           ObIAllocator &allocator = exec_ctx_->get_allocator();
           ObOdpsScanTask *new_task = NULL;
           // pump args's ctx is exec_ctx_
@@ -445,6 +453,21 @@ int GIOdpsParallelTaskGen::join_task_results(
           } // while remaining_lines > 0
         } // task_total_lines <= each_task_line_number
       } // OB_ISNULL(original_task)
+    }
+
+    if (OB_FAIL(ret)) {
+
+    } else if (OB_UNLIKELY(final_task_args.scan_tasks_.count() == 0)) {
+      if (OB_ISNULL(dummy_task_ref) || OB_ISNULL(dummy_tablet_loc)) {
+         ret = OB_ERR_UNEXPECTED;
+         LOG_WARN("unexpected null ", K(ret));
+      } else if (OB_FAIL(final_task_args.scan_tasks_.push_back(dummy_task_ref))) {
+        LOG_WARN("failed to push back scan task", K(ret));
+      } else if (OB_FAIL(final_task_args.taskset_tablets_.push_back(dummy_tablet_loc))) {
+        LOG_WARN("failed to push back tablet", K(ret));
+      } else if (OB_FAIL(final_task_args.taskset_idxs_.push_back(0))) {
+        LOG_WARN("failed to push back task idx", K(ret));
+      }
     }
 
     if (OB_UNLIKELY(OB_LOGGER.get_log_level() >= OB_LOG_LEVEL_TRACE)) {

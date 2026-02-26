@@ -123,6 +123,117 @@ bool ObGranuleUtil::use_partition_granule(int64_t partition_count,
   return partition_granule;
 }
 
+int ObGranuleUtil::get_external_task_runner_rescan_status(
+    ObGranulePump &gi_pump,
+    int64_t tsc_op_id,
+    GITaskGenRunner *&runner,
+    bool &is_rescan_process)
+{
+  /*
+    odps和csv在 granule iter op open的时候会并行解析分区的一些数据信息用于分区
+
+    px batch rescan场景下，pump version增加后，需要调用split gi task。
+    执行次序如下
+      1、划分一次， 获取第一个参数，
+      2、划分 -> open -> scan -> 获取第二个参数,
+      3、划分 -> rescan -> scan。 open前会划分两次。
+    如果open过了，后面复用结果就可以了
+    如果没有open，第一次填充pump无效，第二次才有效。
+
+  */
+  int ret = OB_SUCCESS;
+  is_rescan_process = false;
+  runner = NULL;
+  gi_pump.find_external_task_runner(tsc_op_id, runner);
+  if (NULL != runner) {
+    bool is_finished = false;
+    if (OB_FAIL(runner->is_finished(is_finished))) {
+      LOG_WARN("failed to check runner is finished", K(ret));
+    } else if (is_finished) {
+      is_rescan_process = true;
+    }
+  }
+  return ret;
+}
+
+int ObGranuleUtil::fill_final_task(GITaskGenRunner *runner,
+                                   int64_t tsc_op_id,
+                                   common::ObIArray<ObDASTabletLoc *> &granule_tablets,
+                                   common::ObIArray<ObIExtTblScanTask *> &granule_tasks,
+                                   common::ObIArray<int64_t> &granule_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(runner) || OB_ISNULL(runner->get_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("runner ctx is null", K(ret), K(tsc_op_id));
+  } else {
+    ObTaskGenContext *ctx = runner->get_ctx();
+    if (OB_FAIL(granule_tasks.assign(ctx->final_task_args_.scan_tasks_))) {
+      LOG_WARN("failed to assign scan tasks", K(ret));
+    } else if (OB_FAIL(granule_tablets.assign(ctx->final_task_args_.taskset_tablets_))) {
+      LOG_WARN("failed to assign tablets", K(ret));
+    } else if (OB_FAIL(granule_idx.assign(ctx->final_task_args_.taskset_idxs_))) {
+      LOG_WARN("failed to assign task idxs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObGranuleUtil::create_runner_for_odps(ObExecContext &exec_ctx,
+                                          ObGranulePump &gi_pump,
+                                          int64_t tsc_op_id,
+                                          int64_t gi_op_id,
+                                          const ObString &properties,
+                                          int64_t parallelism,
+                                          GITaskGenRunner *&runner)
+{
+  int ret = OB_SUCCESS;
+  GIOdpsParallelTaskGen *generator = NULL;
+  if (OB_ISNULL(gi_pump.get_granule_pump_arg(gi_op_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("gi_op_id is invalid", K(ret), K(gi_op_id));
+  } else {
+    uint64_t gi_attri_flag = gi_pump.get_granule_pump_arg(gi_op_id)->gi_attri_flag_;
+    GITaskGenRunnerBuilder builder(tsc_op_id, exec_ctx, &gi_pump);
+    builder.add<GIOdpsParallelTaskGen, ObOdpsTaskGenContext>(
+              generator, properties, tsc_op_id, gi_attri_flag, &gi_pump, &exec_ctx, parallelism);
+    if (OB_FAIL(builder.build(runner))) {
+      LOG_WARN("failed to build task gen runner", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObGranuleUtil::create_runner_for_csv(ObExecContext &exec_ctx,
+                                         ObGranulePump &gi_pump,
+                                         int64_t tsc_op_id,
+                                         int64_t gi_op_id,
+                                         const ObString &location,
+                                         const ObString &access_info,
+                                         const ObString &format,
+                                         int64_t parallelism,
+                                         GITaskGenRunner *&runner)
+{
+  int ret = OB_SUCCESS;
+  GICsvGamblingParallelTaskGen *gambling_generator = NULL;
+  GICsvFullScanParallelTaskGen *full_scan_generator = NULL;
+  if (OB_ISNULL(gi_pump.get_granule_pump_arg(gi_op_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("gi_op_id is invalid", K(ret), K(gi_op_id));
+  } else {
+    uint64_t gi_attri_flag = gi_pump.get_granule_pump_arg(gi_op_id)->gi_attri_flag_;
+    GITaskGenRunnerBuilder builder(tsc_op_id, exec_ctx, &gi_pump);
+    builder.add<GICsvGamblingParallelTaskGen, ObCsvTaskGenContext>(
+              gambling_generator, format, tsc_op_id, gi_attri_flag, &gi_pump, &exec_ctx, parallelism, location, access_info)
+               .add<GICsvFullScanParallelTaskGen, ObCsvTaskGenContext>(
+              full_scan_generator, format, tsc_op_id, gi_attri_flag, &gi_pump, &exec_ctx, parallelism, location, access_info);
+    if (OB_FAIL(builder.build(runner))) {
+      LOG_WARN("failed to build task gen runner", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObGranuleUtil::split_granule_for_odps_by_line_tunnel_partition_for_range_prepare(
         ObExecContext &exec_ctx, common::ObIAllocator &args_ctx_allocator,
         const ObString &properties, int64_t parallelism, int64_t tsc_op_id,
@@ -145,39 +256,27 @@ int ObGranuleUtil::split_granule_for_odps_by_line_tunnel_partition_for_range_pre
     }
   } else {
     ObGranulePump &gi_pump = exec_ctx.get_sqc_handler()->get_sqc_ctx().gi_pump_;
-    GIOdpsParallelTaskGen *generator = NULL;
     GITaskGenRunner *runner = NULL;
+    bool is_rescan_process = false;
 
-    // 1. find runner
-    if (OB_FALSE_IT(gi_pump.find_external_task_runner(tsc_op_id, runner))) {
-      LOG_WARN("failed to find external task runner", K(ret), K(tsc_op_id));
-    } else if (OB_UNLIKELY(NULL != runner)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("pump version should no be changed", K(ret));
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(gi_pump.get_granule_pump_arg(gi_op_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("gi_op_id is invalid", K(ret), K(gi_op_id));
-    } else {
-      uint64_t gi_attri_flag = gi_pump.get_granule_pump_arg(gi_op_id)->gi_attri_flag_;
-      GITaskGenRunnerBuilder builder(tsc_op_id, exec_ctx, &gi_pump);
-      builder.add<GIOdpsParallelTaskGen, ObOdpsTaskGenContext>(
-                generator, properties, tsc_op_id, gi_attri_flag, &gi_pump, &exec_ctx, parallelism);
-      if (OB_FAIL(builder.build(runner))) {
-        LOG_WARN("failed to build task gen runner", K(ret));
+    if (OB_FAIL(get_external_task_runner_rescan_status(gi_pump, tsc_op_id, runner, is_rescan_process))) {
+      LOG_WARN("failed to get external task runner rescan status", K(ret));
+    } else if (is_rescan_process) {
+      if (OB_FAIL(fill_final_task(runner, tsc_op_id, granule_tablets, granule_tasks, granule_idx))) {
+        LOG_WARN("failed to fill final task", K(ret));
       }
-    }
-
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(split_granule_for_odps_by_line_tunnel_partition(
-        exec_ctx, args_ctx_allocator, properties, parallelism, tablets,
-        external_table_files, granule_tablets, granule_tasks,
-        granule_idx))) {
-      LOG_WARN("failed to split granule for odps by partition line tunnel",
-                K(ret));
+    } else {
+      if (OB_ISNULL(runner) && OB_FAIL(create_runner_for_odps(
+              exec_ctx, gi_pump, tsc_op_id, gi_op_id, properties, parallelism, runner))) {
+        LOG_WARN("failed to create runner for odps", K(ret));
+      }
+      // runner may created and rerun at regenerate_gi_task in ObPxTaskProcess::execute
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(split_granule_for_odps_by_line_tunnel_partition(
+              exec_ctx, args_ctx_allocator, properties, parallelism, tablets,
+              external_table_files, granule_tablets, granule_tasks, granule_idx))) {
+        LOG_WARN("failed to fill original tasks for odps", K(ret));
+      }
     }
   }
   return ret;
@@ -309,37 +408,29 @@ int ObGranuleUtil::split_granule_for_parallel_resolve_csv_for_range_prepare(
 {
   int ret = OB_SUCCESS;
   ObGranulePump &gi_pump = exec_ctx.get_sqc_handler()->get_sqc_ctx().gi_pump_;
-  GICsvGamblingParallelTaskGen *gambling_generator = NULL;
-  GICsvFullScanParallelTaskGen *full_scan_generator = NULL;
   GITaskGenRunner *runner = NULL;
+  bool is_rescan_process = false;
 
-  gi_pump.find_external_task_runner(tsc_op_id, runner);
-  if (OB_UNLIKELY(NULL != runner)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pump version should no be changed", K(ret));
-  } else if (OB_ISNULL(gi_pump.get_granule_pump_arg(gi_op_id))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("gi_op_id is invalid", K(ret), K(gi_op_id));
-  } else {
-    uint64_t gi_attri_flag = gi_pump.get_granule_pump_arg(gi_op_id)->gi_attri_flag_;
-    GITaskGenRunnerBuilder builder(tsc_op_id, exec_ctx, &gi_pump);
-    builder.add<GICsvGamblingParallelTaskGen, ObCsvTaskGenContext>(
-              gambling_generator, format, tsc_op_id, gi_attri_flag, &gi_pump, &exec_ctx, parallelism, location, access_info)
-           .add<GICsvFullScanParallelTaskGen, ObCsvTaskGenContext>(
-              full_scan_generator, format, tsc_op_id, gi_attri_flag, &gi_pump, &exec_ctx, parallelism, location, access_info);
-    if (OB_FAIL(builder.build(runner))) {
-      LOG_WARN("failed to build task gen runner", K(ret));
+  if (OB_FAIL(get_external_task_runner_rescan_status(gi_pump, tsc_op_id, runner, is_rescan_process))) {
+    LOG_WARN("failed to get external task runner rescan status", K(ret));
+  } else if (is_rescan_process) {
+    if (OB_FAIL(fill_final_task(runner, tsc_op_id, granule_tablets, granule_tasks, granule_idx))) {
+      LOG_WARN("failed to fill final task", K(ret));
     }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(split_granule_for_parallel_resolve_csv(
-                        exec_ctx, args_ctx_allocator,
-                        location, access_info, format,
-                        parallelism, runner, csv_large_file_size_threshold, tablets,
-                        external_table_files, granule_tablets, granule_tasks,
-                        granule_idx))) {
-    LOG_WARN("failed to split granule for parallel resolve csv", K(ret));
+  } else {
+    if (OB_ISNULL(runner) && OB_FAIL(create_runner_for_csv(
+            exec_ctx, gi_pump, tsc_op_id, gi_op_id, location, access_info, format,
+            parallelism, runner))) {
+      LOG_WARN("failed to create runner for csv", K(ret));
+    }
+    // runner may created and rerun at regenerate_gi_task in ObPxTaskProcess::execute
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(split_granule_for_parallel_resolve_csv(
+            exec_ctx, args_ctx_allocator, location, access_info, format,
+            parallelism, runner, csv_large_file_size_threshold, tablets,
+            external_table_files, granule_tablets, granule_tasks, granule_idx))) {
+      LOG_WARN("failed to split granule for parallel resolve csv", K(ret));
+    }
   }
 
   return ret;

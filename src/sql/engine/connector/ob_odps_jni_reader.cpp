@@ -325,7 +325,7 @@ int ObOdpsJniReader::do_open() {
       LOG_WARN("failed init table scanner", K(ret));
     } else if (is_schema_scanner_) {
       // If is schema scanner, then skip executing the init methods
-      LOG_INFO("skip to init more methods for schema scanner", K(ret));
+      LOG_TRACE("skip to init more methods for schema scanner", K(ret));
     } else if (OB_FAIL(init_jni_method_(env))) {
       LOG_WARN("failed to init jni method", K(ret));
     } else if (OB_ISNULL(jni_scanner_obj_)) {

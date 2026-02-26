@@ -442,6 +442,12 @@ public:
                                               common::ObIArray<ObIExtTblScanTask*> &granule_tasks,
                                               common::ObIArray<int64_t> &granule_idx);
 
+  static int get_external_task_runner_rescan_status(
+      ObGranulePump &gi_pump,
+      int64_t tsc_op_id,
+      GITaskGenRunner *&runner,
+      bool &is_rescan_process);
+
   static int split_granule_for_odps_by_line_tunnel_partition_for_range_prepare(
       ObExecContext &exec_ctx, common::ObIAllocator &args_ctx_allocator,
       const ObString &properties, int64_t parallelism, int64_t tsc_op_id, int64_t op_id,
@@ -510,6 +516,30 @@ public:
                                 int64_t total_size,
                                 int64_t &total_task_count);
   static ObGranuleSplitterType calc_split_type(uint64_t gi_attr_flag);
+
+  static int fill_final_task(GITaskGenRunner *runner,
+                             int64_t tsc_op_id,
+                             common::ObIArray<ObDASTabletLoc *> &granule_tablets,
+                             common::ObIArray<ObIExtTblScanTask *> &granule_tasks,
+                             common::ObIArray<int64_t> &granule_idx);
+
+  static int create_runner_for_odps(ObExecContext &exec_ctx,
+                                    ObGranulePump &gi_pump,
+                                    int64_t tsc_op_id,
+                                    int64_t gi_op_id,
+                                    const ObString &properties,
+                                    int64_t parallelism,
+                                    GITaskGenRunner *&runner);
+
+  static int create_runner_for_csv(ObExecContext &exec_ctx,
+                                   ObGranulePump &gi_pump,
+                                   int64_t tsc_op_id,
+                                   int64_t gi_op_id,
+                                   const ObString &location,
+                                   const ObString &access_info,
+                                   const ObString &format,
+                                   int64_t parallelism,
+                                   GITaskGenRunner *&runner);
 
 private:
   /**

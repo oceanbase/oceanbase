@@ -467,7 +467,7 @@ int ObJavaEnv::check_version_valid()
   int ret = OB_SUCCESS;
   if (OB_LIKELY(version_valid_ == VALID)) {
     ret = OB_SUCCESS;
-    LOG_INFO("java env version is valid", K(ret));
+    LOG_TRACE("java env version is valid", K(ret));
   } else if (OB_UNLIKELY(version_valid_ == NOT_INITED)) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(version_valid_ == NOT_VALID)) {
