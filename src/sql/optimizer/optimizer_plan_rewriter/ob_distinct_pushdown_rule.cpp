@@ -280,6 +280,7 @@ int ObDistinctPushDownPlanRewriter::visit_distinct(ObLogDistinct *distinct,
           LOG_WARN("failed to set distinct exprs", K(ret));
         } else {
           // mark it as pushed down, as it has been used to simplify current distinct
+          OPT_TRACE("distinct is simplified", K(distinct->get_op_id()));
           result->set_is_materialized(true);
           transform_happened_ = true;
         }
@@ -905,7 +906,8 @@ int ObDistinctPushDownPlanRewriter::visit_set(ObLogSet *set,
     bool pushdown_lower_and_check = false;
     if (OB_FAIL(set->get_set_exprs(select_exprs))) {
       LOG_WARN("failed to get set exprs", K(ret));
-    } else if (NULL == ctx || ctx->is_empty() || set->get_filter_exprs().count() > 0) {
+    } else if (NULL == ctx || ctx->is_empty() || set->get_filter_exprs().count() > 0
+               || ObSelectStmt::UNION != set->get_set_op()) {
       // get_current_context
       if (OB_FAIL(simplified_pushdown_context.distinct_exprs_.assign(select_exprs))) {
         LOG_WARN("failed to assign distinct context", K(ret));
