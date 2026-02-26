@@ -1114,6 +1114,8 @@ int ObCloneScheduler::clone_post_check(const share::ObCloneJob &job)
   const uint64_t source_tenant_id = job.get_source_tenant_id();
   bool sync_satisfied = true;
 
+  DEBUG_SYNC(HANG_IN_CLONE_USER_POST_CHECK);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
@@ -1912,10 +1914,19 @@ int ObCloneScheduler::convert_parameters_(
     } else if (OB_FAIL(ObRestoreCommonUtil::set_tde_parameters(sql_proxy_, user_tenant_id,
                                                                tde_method, kms_info))) {
       LOG_WARN("failed to set_tde_parameters", KR(ret), K(user_tenant_id), K(tde_method));
-    } else if (OB_FAIL(ObRestoreCommonUtil::rebuild_master_key_version(rpc_proxy_, user_tenant_id))) {
+    } else if (OB_FAIL(ObRestoreCommonUtil::activate_master_key_version(rpc_proxy_,
+                                                                        user_tenant_id,
+                                                                        true /* need_wait */))) {
       LOG_WARN("fail to rebuild master key version", K(ret), K(user_tenant_id));
     }
   }
+
+  LOG_INFO("convert_parameters", K(user_tenant_id),
+                                 K(source_tenant_id),
+                                 K(tde_method),
+                                 K(latest_master_key_id),
+                                 K(source_has_encrypt_info),
+                                 K(clone_has_encrypt_info));
 #endif
   return ret;
 }
