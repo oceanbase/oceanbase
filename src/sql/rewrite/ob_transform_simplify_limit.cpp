@@ -185,7 +185,8 @@ int ObTransformSimplifyLimit::check_pushdown_limit_offset_validity(ObSelectStmt 
              || upper_stmt->has_window_function()
              || upper_stmt->has_distinct()
              || upper_stmt->has_sequence()
-             || upper_stmt->has_order_by()) {
+             || upper_stmt->has_order_by()
+             || upper_stmt->is_calc_found_rows()) {
     is_valid = false;
   } else {
     is_valid = true;
@@ -302,7 +303,8 @@ int ObTransformSimplifyLimit::check_can_pushdown_limit_order(ObSelectStmt& upper
              upper_stmt.has_rollup() ||
              upper_stmt.has_window_function() ||
              upper_stmt.has_distinct() ||
-             upper_stmt.has_sequence()) {
+             upper_stmt.has_sequence() ||
+             upper_stmt.is_calc_found_rows()) {
     can_push = false;
   } else {
     // only push down generated table column in order by
