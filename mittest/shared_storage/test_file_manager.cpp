@@ -2109,6 +2109,153 @@ TEST_F(TestFileManager, test_server_tenant_ckpt_io_operator)
   ASSERT_FALSE(is_exist);
 }
 
+// list cluster_id/server_id/tenant_id_epoch_id/ckpt/object_id
+TEST_F(TestFileManager, test_list_private_ckpt_file)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFileManager* tenant_file_mgr = MTL(ObTenantFileManager*);
+  ASSERT_NE(nullptr, tenant_file_mgr);
+  MacroBlockId ckpt_file_id;
+  int64_t object_id = 201;
+  int64_t tenant_epoch_id = MTL_EPOCH_ID();
+  ObArray<int64_t> object_ids;
+
+  // test0: empty ckpt file list
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_ckpt_file(MTL_ID(), tenant_epoch_id, object_ids));
+  ASSERT_EQ(0, object_ids.count());
+
+  ckpt_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  ckpt_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_CKPT_FILE));
+  ckpt_file_id.set_second_id(MTL_ID());
+  ckpt_file_id.set_third_id(tenant_epoch_id);
+  ckpt_file_id.set_fourth_id(object_id);
+  ObStorageObjectHandle write_object_handle;
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(ckpt_file_id));
+  ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+  ASSERT_NE(nullptr, disk_space_mgr);
+  const int64_t write_io_size = 8 * 1024; // 8KB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'a', write_io_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = write_io_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = MTL_ID();
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(ckpt_file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(ckpt_file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+
+  // test1: write one ckpt file and list it
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_ckpt_file(MTL_ID(), tenant_epoch_id, object_ids));
+  ASSERT_EQ(1, object_ids.count());
+  ASSERT_EQ(object_id, object_ids.at(0));
+
+  // test2: write two ckpt files and list them
+  ckpt_file_id.set_fourth_id(object_id + 1);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(ckpt_file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(ckpt_file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_ckpt_file(MTL_ID(), tenant_epoch_id, object_ids));
+  ASSERT_EQ(2, object_ids.count());
+
+  // test3: write third ckpt file and list
+  ckpt_file_id.set_fourth_id(object_id + 2);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(ckpt_file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->is_exist_remote_file(ckpt_file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_ckpt_file(MTL_ID(), tenant_epoch_id, object_ids));
+  ASSERT_EQ(3, object_ids.count());
+
+  // test4: delete ckpt files and list them
+  ckpt_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_CKPT_FILE));
+  for (int64_t i = 0; i < 3; ++i) {
+    ckpt_file_id.set_fourth_id(object_id + i);
+    ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->delete_remote_file(ckpt_file_id, 0/*ls_epoch_id*/));
+  }
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->list_private_ckpt_file(MTL_ID(), tenant_epoch_id, object_ids));
+  ASSERT_EQ(0, object_ids.count());
+}
+
+// list cluster_id/server_id/server_ckpt/object_id (server tenant)
+TEST_F(TestFileManager, test_list_private_ckpt_file_server_tenant)
+{
+  int ret = OB_SUCCESS;
+  MacroBlockId ckpt_file_id;
+  int64_t object_id = 301;
+  int64_t tenant_epoch_id = MTL_EPOCH_ID();
+  ObArray<int64_t> object_ids;
+
+  // test0: empty ckpt file list for server tenant
+  // Now list_private_ckpt_file is in ObBaseFileManager and supports tenant_id parameter,
+  // so we can use OB_SERVER_FILE_MGR.list_private_ckpt_file to list server tenant ckpt files
+
+  ckpt_file_id.set_id_mode(static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_SHARE));
+  ckpt_file_id.set_storage_object_type(static_cast<uint64_t>(ObStorageObjectType::PRIVATE_CKPT_FILE));
+  ckpt_file_id.set_second_id(OB_SERVER_TENANT_ID);
+  ckpt_file_id.set_third_id(tenant_epoch_id);
+  ckpt_file_id.set_fourth_id(object_id);
+  ObStorageObjectHandle write_object_handle;
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(ckpt_file_id));
+  const int64_t write_io_size = 8 * 1024; // 8KB
+  char write_buf[write_io_size] = { 0 };
+  memset(write_buf, 'b', write_io_size);
+  ObStorageObjectWriteInfo write_info;
+  write_info.io_desc_.set_wait_event(1);
+  write_info.buffer_ = write_buf;
+  write_info.offset_ = 0;
+  write_info.size_ = write_io_size;
+  write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info.mtl_tenant_id_ = OB_SERVER_TENANT_ID;
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.is_exist_remote_file(ckpt_file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+
+  // test1: verify server tenant ckpt file path is correct
+  // The path should be: cluster_id/server_id/server_ckpt
+  char ckpt_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
+  ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_remote_private_ckpt_file_dir(
+                         ckpt_path, sizeof(ckpt_path), OB_SERVER_TENANT_ID, tenant_epoch_id));
+  // Verify the path contains "server_ckpt" for server tenant
+  ASSERT_NE(nullptr, STRSTR(ckpt_path, "server_ckpt"));
+
+  // test2: write two server tenant ckpt files
+  ckpt_file_id.set_fourth_id(object_id + 1);
+  write_object_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(ckpt_file_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info, write_object_handle));
+  is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.is_exist_remote_file(ckpt_file_id, 0/*ls_epoch_id*/, is_exist));
+  ASSERT_EQ(true, is_exist);
+
+  // test3: list server tenant ckpt files using list_private_ckpt_file
+  object_ids.reset();
+  ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.list_private_ckpt_file(OB_SERVER_TENANT_ID, tenant_epoch_id, object_ids));
+  ASSERT_EQ(2, object_ids.count());
+
+  // test4: delete server tenant ckpt files and list again
+  for (int64_t i = 0; i < 2; ++i) {
+    ckpt_file_id.set_fourth_id(object_id + i);
+    ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.delete_remote_file(ckpt_file_id, 0/*ls_epoch_id*/));
+  }
+  object_ids.reset();
+  ASSERT_EQ(OB_SUCCESS, OB_SERVER_FILE_MGR.list_private_ckpt_file(OB_SERVER_TENANT_ID, tenant_epoch_id, object_ids));
+  ASSERT_EQ(0, object_ids.count());
+}
+
 TEST_F(TestFileManager, test_delete_tenant)
 {
   // delete local tenant dir file
