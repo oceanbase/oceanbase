@@ -4346,9 +4346,9 @@ int ObVectorIndexUtil::reset_new_job_action(
 {
   int ret = OB_SUCCESS;
   
-  if (old_job_action.empty() || !job_info.valid()) {
+  if (old_job_action.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(old_job_action), K(job_info));
+    LOG_WARN("invalid argument", K(ret), K(old_job_action));
   } else {
     ObArray<ObString> tmp_old_param_strs;
     ObArray<ObString> tmp_new_param_strs;
