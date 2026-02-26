@@ -921,7 +921,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     } else if (!row_key.empty()) {
       ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snapshot_idx_iter);
       if ((is_meta_data && (meta_scn > adapter->get_snapshot_scn() || adapter->get_snap_rb_flag())) ||
-          (!is_meta_data && (adapter->get_snapshot_key_prefix().empty() || !row_key.prefix_match(adapter->get_snapshot_key_prefix())))) {
+          (!is_meta_data && (adapter->get_snapshot_key_prefix().empty() || !row_key.prefix_match(adapter->get_snapshot_key_prefix()) || adapter->get_snap_rb_flag()))) {
         ObString target_prefix;
         if (OB_ISNULL(vector_index_service)) {
           ret = OB_ERR_UNEXPECTED;
