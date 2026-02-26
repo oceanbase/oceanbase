@@ -99,7 +99,11 @@ public:
    *
    */
   static int resolve_ref_factor(const ParseNode *node, ObSQLSessionInfo *session_info, common::ObString &table_name, common::ObString &db_name);
-  static int resolve_dblink_name(const ParseNode *table_node, uint64_t tenant_id, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node);
+  int resolve_dblink_name(const ParseNode *table_node, uint64_t tenant_id, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node);
+  int resolve_dblink_name(const ParseNode *dblink_node, common::ObString &dblink_name, bool &is_reverse_link);
+  static int resolve_domain_names_list(const ParseNode *domain_names_list, ObSqlString &dblink_name_str);
+  static int resolve_connection_qualifier(const ParseNode *opt_connection_qualifier, ObSqlString &dblink_name_str);
+  static bool check_database_name_valid(const ObString &dblink_name_str);
   int resolve_database_factor(const ParseNode *node,
                               const uint64_t tenant_id,
                               const uint64_t catalog_id,

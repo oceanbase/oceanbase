@@ -15,6 +15,7 @@
 
 #include "share/catalog/ob_catalog_utils.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "lib/string/ob_sql_string.h"
 
 namespace oceanbase
 {
@@ -270,18 +271,189 @@ int ObStmtResolver::resolve_dblink_name(const ParseNode *table_node, uint64_t te
         LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
       }
     }
+
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (2 == dblink_node->num_child_ && !OB_ISNULL(dblink_node->children_) &&
-        !OB_ISNULL(dblink_node->children_[0])) {
+    } else if (OB_FAIL(resolve_dblink_name(dblink_node, dblink_name, is_reverse_link))) {
+        LOG_WARN("failed to resolve dblink name", K(ret));
+    }
+  }
+  return ret;
+}
+
+
+int ObStmtResolver::resolve_dblink_name(const ParseNode *dblink_node, common::ObString &dblink_name, bool &is_reverse_link)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is NULL", K(ret));
+  } else if (OB_ISNULL(dblink_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dblink_node is NULL", K(ret));
+  } else if (dblink_node->num_child_ == 0) {  // num_child_ == 0 and num_child_ == 2 是针对 mysql 模式
+    dblink_name.assign_ptr(dblink_node->str_value_, static_cast<int32_t>(dblink_node->str_len_));
+  } else if (dblink_node->num_child_ == 2) {
+    if (!OB_ISNULL(dblink_node->children_) && !OB_ISNULL(dblink_node->children_[0])) {
       int32_t dblink_name_len = static_cast<int32_t>(dblink_node->children_[0]->str_len_);
       dblink_name.assign_ptr(dblink_node->children_[0]->str_value_, dblink_name_len);
       if (!OB_ISNULL(dblink_node->children_[1])) {
         is_reverse_link = dblink_node->children_[1]->value_;
       }
     }
+  } else if (dblink_node->num_child_ == 4 && !OB_ISNULL(dblink_node->children_) &&
+             !OB_ISNULL(dblink_node->children_[0])) {
+      ParseNode *database_factor = dblink_node->children_[0];
+      ParseNode *opt_domain_list = dblink_node->children_[1];
+      ParseNode *opt_connection_qualifier = dblink_node->children_[2];
+      ParseNode *opt_reverse_link_flag = dblink_node->children_[3];
+
+    // 处理database_factor
+    ObSqlString dblink_name_str;
+    if (OB_ISNULL(database_factor->str_value_) || database_factor->str_len_ == 0) {
+      if (!opt_reverse_link_flag->value_) { // @!
+        ret = OB_ERR_DATABASE_LINK_EXPECTED;
+        SQL_RESV_LOG(WARN, "miss database link.", K(ret));
+        LOG_USER_ERROR(OB_ERR_DATABASE_LINK_EXPECTED);
+      }
+    } else if (OB_FAIL(dblink_name_str.append(ObString(database_factor->str_len_, database_factor->str_value_)))) {
+      LOG_WARN("failed to append database_factor", K(ret));
+    }
+
+    // 处理opt_domain_list
+    if (OB_FAIL(ret)) {
+      // pass
+    } else if (OB_ISNULL(opt_domain_list)) {
+      // pass
+    } else if (OB_FAIL(resolve_domain_names_list(opt_domain_list, dblink_name_str))) {
+      LOG_WARN("failed to resolve domain names list", K(ret));
+    }
+
+    // 处理opt_connection_qualifier
+    if (OB_FAIL(ret)) {
+      // pass
+    } else if (OB_ISNULL(opt_connection_qualifier)) {
+      // pass
+    } else if (OB_FAIL(resolve_connection_qualifier(opt_connection_qualifier, dblink_name_str))) {
+      LOG_WARN("failed to resolve connection qualifier", K(ret));
+    }
+
+    if (dblink_name_str.length() > OB_MAX_DBLINK_NAME_LENGTH) {
+      ret = OB_ERR_TOO_LONG_IDENT;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(dblink_name_str.length()), dblink_name_str.ptr());
+    } else if (!check_database_name_valid(dblink_name_str.string())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_USER_ERROR(OB_ERR_UNEXPECTED, "database name is missing a component or invalid");
+    } else {
+      const int64_t name_len = dblink_name_str.length();
+      char *name_buf = static_cast<char *>(allocator_->alloc(name_len + 1));
+      if (OB_ISNULL(name_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc dblink name buffer", K(ret), K(name_len));
+      } else {
+        MEMCPY(name_buf, dblink_name_str.ptr(), name_len);
+        name_buf[name_len] = '\0';
+        dblink_name.assign_ptr(name_buf, static_cast<int32_t>(name_len));
+      }
+    }
+
+    // 处理opt_reverse_link_flag
+    if (OB_SUCC(ret)) {
+      is_reverse_link = opt_reverse_link_flag->value_;
+    }
   }
   return ret;
+}
+
+int ObStmtResolver::resolve_domain_names_list(const ParseNode *domain_names_list, ObSqlString &dblink_name_str)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < domain_names_list->num_child_; i++) {
+    if (OB_ISNULL(domain_names_list->children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("domain_names_list child is null", K(ret));
+    } else if (domain_names_list->children_[i]->str_len_ > OB_MAX_DBLINK_NAME_LENGTH
+               || domain_names_list->children_[i]->str_len_ + dblink_name_str.length() > OB_MAX_DBLINK_NAME_LENGTH) {
+      ret = OB_ERR_TOO_LONG_IDENT;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(dblink_name_str.length()), dblink_name_str.ptr());
+    } else if (OB_FAIL(dblink_name_str.append("."))) {
+        LOG_WARN("failed to append dot", K(ret));
+    } else if (OB_FAIL(dblink_name_str.append(ObString(domain_names_list->children_[i]->str_len_,
+                                                        domain_names_list->children_[i]->str_value_)))) {
+      LOG_WARN("failed to append domain name", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObStmtResolver::resolve_connection_qualifier(const ParseNode *opt_connection_qualifier, ObSqlString &dblink_name_str)
+{
+  int ret = OB_SUCCESS;
+  if (opt_connection_qualifier->num_child_ != 2 || OB_ISNULL(opt_connection_qualifier->children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database link children is null", K(ret));
+  } else if (OB_ISNULL(opt_connection_qualifier->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database name is missing a component", K(ret));
+  } else {
+    ParseNode *part0 = opt_connection_qualifier->children_[0];
+    ParseNode *part1 = opt_connection_qualifier->children_[1];
+    if (OB_ISNULL(part1)) {
+      if (OB_ISNULL(part0->str_value_) || part0->str_len_ == 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database name is missing a component", K(ret));
+        LOG_USER_ERROR(OB_ERR_UNEXPECTED, "database name is missing a component");
+      } else if (part0->str_len_ > OB_MAX_DBLINK_NAME_LENGTH
+                 || part0->str_len_ + dblink_name_str.length() > OB_MAX_DBLINK_NAME_LENGTH) {
+        ret = OB_ERR_TOO_LONG_IDENT;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(dblink_name_str.length()), dblink_name_str.ptr());
+      } else if (OB_FAIL(dblink_name_str.append("@"))) {
+        LOG_WARN("failed to append @", K(ret));
+      } else if (OB_FAIL(dblink_name_str.append(ObString(part0->str_len_, part0->str_value_)))) {
+        LOG_WARN("failed to append connection qualifier", K(ret));
+      }
+    } else if (OB_NOT_NULL(part1->str_value_) && part1->str_len_ > 0) {
+      if (OB_NOT_NULL(part0->str_value_) && part0->str_len_ > 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database name link error", K(ret));
+      } else if (part1->str_len_ > OB_MAX_DBLINK_NAME_LENGTH
+                 || part1->str_len_ + dblink_name_str.length() > OB_MAX_DBLINK_NAME_LENGTH) {
+        ret = OB_ERR_TOO_LONG_IDENT;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, static_cast<int32_t>(dblink_name_str.length()), dblink_name_str.ptr());
+      } else if (OB_FAIL(dblink_name_str.append("@"))) {
+        LOG_WARN("failed to append @", K(ret));
+      } else if (OB_FAIL(dblink_name_str.append(ObString(part1->str_len_, part1->str_value_)))) {
+        LOG_WARN("failed to append connection qualifier", K(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("database name link error", K(ret));
+    }
+  }
+  return ret;
+}
+
+bool ObStmtResolver::check_database_name_valid(const ObString &dblink_name_str) {
+  bool is_valid = true;
+  bool has_at = false;
+  if (dblink_name_str.length() == 0) {
+
+  } else if (dblink_name_str[0] == '.' || dblink_name_str[0] == '@') {
+    is_valid = false;
+  } else {
+    for (int64_t i = 0; is_valid && i < dblink_name_str.length(); i++) {
+      if (dblink_name_str[i] == '.' || dblink_name_str[i] == '@') {
+        if (i + 1 < dblink_name_str.length() && (dblink_name_str[i + 1] == '.' || dblink_name_str[i + 1] == '@')) {
+          is_valid = false;
+        } else if (dblink_name_str[i] == '.' && has_at == true) {
+          is_valid = false;
+        } else if (dblink_name_str[i] == '@') {
+          has_at = true;
+        }
+      }
+    }
+  }
+  return is_valid;
 }
 
 // If catalog_node is null, we will deduce catalog_id/catalog_name from session

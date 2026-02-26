@@ -3061,6 +3061,8 @@ typedef enum ObItemType
   // for cache hint
   T_CACHE_HINT = 4970,
   T_NOCACHE_HINT = 4971,
+
+  T_DOMAIN_LIST = 4972, // for dblink yacc grammar
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
