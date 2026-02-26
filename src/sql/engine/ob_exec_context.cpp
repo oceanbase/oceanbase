@@ -432,7 +432,7 @@ int ObExecContext::build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCt
   int ret = OB_SUCCESS;
   uint64_t frame_cnt = 0;
   char **frames = NULL;
-  ObIAllocator &allocator = use_temp_expr_ctx_cache_ ? get_allocator() : temp_expr.allocator_;
+  ObIAllocator &allocator = get_allocator();
   char *mem = static_cast<char*>(allocator.alloc(sizeof(ObTempExprCtx)));
   ObArray<char *> tmp_param_frame_ptrs;
   if (OB_ISNULL(mem)) {
