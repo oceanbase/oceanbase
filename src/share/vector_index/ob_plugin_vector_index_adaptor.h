@@ -182,7 +182,7 @@ public:
                valid_vid_(nullptr) {}
   ~ObHnswBitmapFilter() {}
   void reset();
-  int init(const int64_t &min, const int64_t &max);
+  int init(const int64_t &min, const int64_t &max, bool is_sparse_vector_index = false);
   int init(void *adaptor,
            double selectivity,
            const ObIArray<const ObNewRange*> &range,

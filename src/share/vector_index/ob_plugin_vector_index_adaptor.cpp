@@ -255,7 +255,7 @@ int ObVectorQueryAdaptorResultContext::init_prefilter(const int64_t &min, const 
     if (OB_ISNULL(vsag_filter = OB_NEWx(ObHnswBitmapFilter, tmp_allocator_, tenant_id_, ObHnswBitmapFilter::FilterType::BYTE_ARRAY, 0, tmp_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create pre filter", K(ret));
-    } else if (OB_FAIL(vsag_filter->init(min, max))) {
+    } else if (OB_FAIL(vsag_filter->init(min, max, is_sparse_vector_))) {
       LOG_WARN("Fail to init pre_filter", K(ret), K(min), K(max));
     } else {
       pre_filter_ = vsag_filter;
@@ -4808,7 +4808,7 @@ bool ObHnswBitmapFilter::test(const char* data)
   }
   return bret;
 }
-int ObHnswBitmapFilter::init(const int64_t &min, const int64_t &max)
+int ObHnswBitmapFilter::init(const int64_t &min, const int64_t &max, bool is_sparse_vector_index)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(bitmap_)) {
@@ -4841,6 +4841,7 @@ int ObHnswBitmapFilter::init(const int64_t &min, const int64_t &max)
     }
   }
   if (OB_FAIL(ret)) {
+  } else if (!is_sparse_vector_index) {
   } else if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is nullptr for sparse vector index", K(ret));
