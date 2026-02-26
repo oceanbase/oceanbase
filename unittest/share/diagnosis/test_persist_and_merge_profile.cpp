@@ -423,7 +423,7 @@ void ProfilePrinter::print_selected_profile(const std::vector<int64_t> &selected
     profile_items.push_back(all_profiles_.at(op_id));
   }
   OZ(ObProfileUtil::get_merged_profiles(&arena_alloc_, profile_items, merged_items, execution_bounds));
-  pl::ProfilePrefixHelper prefix_helper(arena_alloc_);
+  pl::ProfilePrefixHelper prefix_helper;
   OZ(prefix_helper.prepare_pretty_prefix(merged_items));
   int64_t buf_len = 1024 * 1024;
   int64_t pos = 0;

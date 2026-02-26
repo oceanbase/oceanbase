@@ -136,25 +136,36 @@ int ObDbmsXprofile::format_profile_result(ObExecContext &ctx,
                                           const ObString &trace_id, ProfileText &profile_text)
 {
   int ret = OB_SUCCESS;
+  int64_t retry_count = 0;
   profile_text.buf_len_ = 1024 * 1024;
   profile_text.pos_ = 0;
-  if (profile_items.empty()) {
-  } else if (OB_ISNULL(profile_text.buf_ =
-                           static_cast<char *>(ctx.get_allocator().alloc(profile_text.buf_len_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("Failed to allocate buffer", "buffer size", profile_text.buf_len_);
-  } else if (ProfileDisplayType::ORIGINAL == profile_text.type_) {
-    if (OB_FAIL(flatten_op_profile(profile_items, profile_text))) {
-      LOG_WARN("failed to flatten op profile");
+  do {
+    if (profile_items.empty()) {
+    } else if (OB_ISNULL(profile_text.buf_ =
+                            static_cast<char *>(ctx.get_allocator().alloc(profile_text.buf_len_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Failed to allocate buffer", "buffer size", profile_text.buf_len_);
+    } else if (ProfileDisplayType::ORIGINAL == profile_text.type_) {
+      if (OB_FAIL(flatten_op_profile(profile_items, profile_text))) {
+        LOG_WARN("failed to flatten op profile");
+      }
+    } else if (ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_
+              || ProfileDisplayType::AGGREGATED_JSON == profile_text.type_) {
+      if (OB_FAIL(aggregate_op_profile(ctx, profile_items, trace_id, profile_text))) {
+        LOG_WARN("failed to aggregate op profile");
+      }
     }
-  } else if (ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_
-             || ProfileDisplayType::AGGREGATED_JSON == profile_text.type_) {
-    if (OB_FAIL(aggregate_op_profile(ctx, profile_items, trace_id, profile_text))) {
-      LOG_WARN("failed to aggregate op profile");
+    if (OB_SIZE_OVERFLOW == ret) {
+      LOG_WARN("retry format profile", K(retry_count), K(profile_text.buf_len_));
+      ctx.get_allocator().free(profile_text.buf_);
+      profile_text.buf_len_ = profile_text.buf_len_ * 2;
+      profile_text.pos_ = 0;
+      ++retry_count;
     }
-  }
+  } while (ret == OB_SIZE_OVERFLOW && retry_count <= 5) ;
   if (OB_SIZE_OVERFLOW == ret) {
     // overwrite error code to display truncated result.
+    LOG_WARN("print truncated profile", K(profile_text.buf_len_));
     ret = OB_SUCCESS;
   }
   return ret;
@@ -295,6 +306,7 @@ int ObDbmsXprofile::format_summary_info(const ObMergedProfileItem *compile_profi
       rate = double(cur->max_db_time_) / total_db_time * 100;
       cur->rate_ = rate;
       if (rate < 1) {
+        cur->color_ = ObMergedProfileItem::DEFAULT_COLOR;
         break;
       } else if (rate < 10) {
         cur->color_ = ObMergedProfileItem::DEFAULT_COLOR;
@@ -328,7 +340,7 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
   arena_alloc.set_tenant_id(MTL_ID());
   arena_alloc.set_label("ObXprofile");
 
-  ProfilePrefixHelper prefix_helper(arena_alloc);
+  ProfilePrefixHelper prefix_helper;
   if (OB_FAIL(ret)) {
   } else if (ProfileDisplayType::AGGREGATED_PRETTY == profile_text.type_) {
     if (OB_FAIL(prefix_helper.prepare_pretty_prefix(merged_items))) {
@@ -347,6 +359,7 @@ int ObDbmsXprofile::format_agg_profiles(const ObIArray<ObMergedProfileItem> &mer
     const ObMergedProfileItem &item = merged_items.at(i);
     int64_t format_size = item.profile_->get_format_size() + item.plan_depth_;
     if (format_size + pos > buf_len) {
+      ret = OB_SIZE_OVERFLOW;
       LOG_WARN("too many profile to print", K(merged_items.count()), K(pos), K(format_size),
                K(buf_len));
       break;
